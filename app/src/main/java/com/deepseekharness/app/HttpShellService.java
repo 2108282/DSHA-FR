@@ -1,4 +1,5 @@
 package com.deepseekharness.app;
+import com.deepseekharness.app.core.asr.XiaomiPureAsrClient;
 import com.deepseekharness.app.util.Compat;
 
 import com.deepseekharness.app.util.Constants;
@@ -562,6 +563,8 @@ public final class HttpShellService {
                 result = DeviceSense.torch(ctx, !"0".equals(on) && !"off".equalsIgnoreCase(on));
             } else if (path.startsWith("/app/export")) {
                 result = appExport(path);
+            } else if (path.startsWith("/app/asr")) {
+                result = appAsr(path);
             } else if (cmd.isEmpty()) {
                 result = "[NO_CMD]";
             } else if (path.startsWith("/confirm")) {
@@ -1008,6 +1011,12 @@ public final class HttpShellService {
             + "/app/torch?on=1 手电\n"
             + "这三类返回 DISABLED（用户没开该能力）或 NO_PERMISSION（没授系统权限）时，\n"
             + "照原话告诉用户去哪开，不要重试 —— 重试不会让开关自己变。\n"
+            + "\n"
+            + "== 小米原生 ASR 语音输入 ==\n"
+            + "/app/asr/start                        启动小米系统底层 ASR 录音识别\n"
+            + "/app/asr/stop                         停止录音并获取最终整句校准文本\n"
+            + "/app/asr/cancel                       取消录音识别会话\n"
+            + "/app/asr/status（加 wait_seq= 支持长轮询） 轮询当前识别状态与流式文本\n"
             + "\n"
             + "== 元信息 ==\n"
             + "/app/version                          桥协议版本 + App 版本（特性检测用）\n"
@@ -2485,6 +2494,123 @@ public final class HttpShellService {
             ch.enableLights(true);
             NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm != null) nm.createNotificationChannel(ch);
+        }
+    }
+
+    // ===== 小米纯 ASR 语音识别桥接 =====
+    private static XiaomiPureAsrClient sAsrClient;
+    private static volatile String sAsrState = "idle";
+    private static volatile String sAsrPartial = "";
+    private static volatile String sAsrFinal = "";
+    private static volatile String sAsrError = "";
+    private static volatile long sAsrSeq = 0;
+    private static final Object sAsrLock = new Object();
+
+    private synchronized XiaomiPureAsrClient getAsrClient() {
+        if (sAsrClient == null) {
+            sAsrClient = new XiaomiPureAsrClient(ctx);
+        }
+        return sAsrClient;
+    }
+
+    private String appAsr(String path) {
+        String sub = path.substring("/app/asr".length());
+        if (sub.startsWith("/")) sub = sub.substring(1);
+        int qIdx = sub.indexOf('?');
+        String action = qIdx >= 0 ? sub.substring(0, qIdx) : sub;
+
+        XiaomiPureAsrClient client = getAsrClient();
+
+        if ("start".equals(action)) {
+            synchronized (sAsrLock) {
+                sAsrState = "listening";
+                sAsrPartial = "";
+                sAsrFinal = "";
+                sAsrError = "";
+                sAsrSeq++;
+            }
+            client.startListening(new XiaomiPureAsrClient.AsrCallback() {
+                @Override
+                public void onReady() {
+                    synchronized (sAsrLock) {
+                        sAsrState = "listening";
+                        sAsrSeq++;
+                        sAsrLock.notifyAll();
+                    }
+                }
+
+                @Override
+                public void onBeginning() {
+                    synchronized (sAsrLock) {
+                        sAsrState = "listening";
+                        sAsrSeq++;
+                        sAsrLock.notifyAll();
+                    }
+                }
+
+                @Override
+                public void onPartialResult(String partialText) {
+                    synchronized (sAsrLock) {
+                        sAsrPartial = partialText != null ? partialText : "";
+                        sAsrSeq++;
+                        sAsrLock.notifyAll();
+                    }
+                }
+
+                @Override
+                public void onFinalResult(String finalText) {
+                    synchronized (sAsrLock) {
+                        sAsrFinal = finalText != null ? finalText : "";
+                        sAsrState = "idle";
+                        sAsrSeq++;
+                        sAsrLock.notifyAll();
+                    }
+                }
+
+                @Override
+                public void onError(int errorCode, String errorMessage) {
+                    synchronized (sAsrLock) {
+                        sAsrError = errorMessage != null ? errorMessage : ("错误代码: " + errorCode);
+                        sAsrState = "error";
+                        sAsrSeq++;
+                        sAsrLock.notifyAll();
+                    }
+                }
+            });
+            return "{\"status\":\"ok\",\"action\":\"start\",\"seq\":" + sAsrSeq + "}";
+        } else if ("stop".equals(action)) {
+            client.stopListening();
+            return "{\"status\":\"ok\",\"action\":\"stop\",\"seq\":" + sAsrSeq + "}";
+        } else if ("cancel".equals(action)) {
+            client.cancel();
+            synchronized (sAsrLock) {
+                sAsrState = "idle";
+                sAsrSeq++;
+                sAsrLock.notifyAll();
+            }
+            return "{\"status\":\"ok\",\"action\":\"cancel\",\"seq\":" + sAsrSeq + "}";
+        } else {
+            String waitSeqStr = getParam(queryOf(path), "wait_seq", "");
+            if (!waitSeqStr.isEmpty()) {
+                try {
+                    long waitSeq = Long.parseLong(waitSeqStr);
+                    synchronized (sAsrLock) {
+                        if (sAsrSeq <= waitSeq && "listening".equals(sAsrState)) {
+                            sAsrLock.wait(10000);
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("{");
+            sb.append("\"state\":\"").append(jsonEscape(sAsrState)).append("\",");
+            sb.append("\"partial\":\"").append(jsonEscape(sAsrPartial)).append("\",");
+            sb.append("\"final\":\"").append(jsonEscape(sAsrFinal)).append("\",");
+            sb.append("\"error\":\"").append(jsonEscape(sAsrError)).append("\",");
+            sb.append("\"seq\":").append(sAsrSeq);
+            sb.append("}");
+            return sb.toString();
         }
     }
 
