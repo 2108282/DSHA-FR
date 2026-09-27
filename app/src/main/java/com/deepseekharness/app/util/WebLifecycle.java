@@ -4,6 +4,7 @@ package com.deepseekharness.app.util;
 public final class WebLifecycle {
     private long generation;
     private boolean starting;
+    private boolean restarting;
     private boolean stopping;
     private boolean userStopped;
 
@@ -13,14 +14,25 @@ public final class WebLifecycle {
             return -1;
         }
         userStopped = false;
+        restarting = false;
         starting = true;
         return ++generation;
     }
 
-    /** 强制启动/重启：打破任何残留卡死状态，开启全新代次。 */
+    /** 强制启动：打破任何残留卡死状态，开启全新代次。 */
     public synchronized long forceBeginStart() {
         userStopped = false;
         stopping = false;
+        restarting = false;
+        starting = true;
+        return ++generation;
+    }
+
+    /** 强制重启：记录重启标志并打破旧状态，开启全新代次。 */
+    public synchronized long forceBeginRestart() {
+        userStopped = false;
+        stopping = false;
+        restarting = true;
         starting = true;
         return ++generation;
     }
@@ -30,6 +42,7 @@ public final class WebLifecycle {
         if (!stopping) {
             userStopped = true;
             starting = false;
+            restarting = false;
             stopping = true;
             generation++;
         }
@@ -39,11 +52,15 @@ public final class WebLifecycle {
     public synchronized boolean finishStart(long expected) {
         if (!isCurrent(expected) || !starting) return false;
         starting = false;
+        restarting = false;
         return true;
     }
 
     public synchronized void finishStop(long expected) {
-        if (isCurrent(expected)) stopping = false;
+        if (isCurrent(expected)) {
+            stopping = false;
+            restarting = false;
+        }
     }
 
     public synchronized boolean canAutoStart(boolean stopSentinelPresent) {
@@ -56,6 +73,7 @@ public final class WebLifecycle {
 
     public synchronized long generation() { return generation; }
     public synchronized boolean isStarting() { return starting; }
+    public synchronized boolean isRestarting() { return restarting; }
     public synchronized boolean isStopping() { return stopping; }
     public synchronized boolean isUserStopped() { return userStopped; }
 }

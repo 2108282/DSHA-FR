@@ -31,14 +31,14 @@
                     android:layout_height="wrap_content"
                     android:text="●"
                     android:textColor="@color/text_muted"
-                    android:textSize="@dimen/text_caption" />
+                    android:textSize="@dimen/text_caption"
+                    android:visibility="gone" />
 
                 <TextView
                     android:id="@+id/launch_run_state"
                     style="@style/DshaText.Title"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="@dimen/gap_tight"
                     android:layout_weight="1"
                     android:text="DSH 未运行" />
             </LinearLayout>

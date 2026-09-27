@@ -39,6 +39,7 @@ public class LaunchFragment extends Fragment {
     /** 本次启动开始时刻（显示耗时用）。 */
     private long startAtMs;
     private final android.os.Handler ui = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final HarnessController.StatusListener statusListener = () -> ui.post(this::refreshRunState);
     private final Runnable refreshState = new Runnable() {
         @Override public void run() {
             refreshRunState();
@@ -89,8 +90,15 @@ public class LaunchFragment extends Fragment {
 
         // 启动按钮：未就绪时是「启动」；鉴权链接就绪后自动变为「进入」，点击打开系统 Web 界面。
         start.setOnClickListener(x -> {
-            if ((webReady || !controller.getWebAuthUrl().isEmpty()) && controller.isWebRunning()) {
+            boolean running = controller.isWebRunning();
+            boolean hasUrl = !controller.getWebAuthUrl().isEmpty();
+            if (running && hasUrl) {
                 openExternalWeb();
+                return;
+            }
+            if (running && !hasUrl) {
+                Toast.makeText(requireContext(), "正在同步鉴权凭据，请稍候…", Toast.LENGTH_SHORT).show();
+                controller.tryRecoverRunningUrl();
                 return;
             }
             doStart(activity, status, start);
@@ -101,6 +109,8 @@ public class LaunchFragment extends Fragment {
         });
 
         stop.setOnClickListener(x -> {
+            status.setText("停止中…");
+            refreshRunState();
             controller.stopWeb(msg -> {
                 long generation = controller.getWebGeneration();
                 activity.runOnUiThread(() -> {
@@ -113,11 +123,6 @@ public class LaunchFragment extends Fragment {
                     }
                 });
             });
-            webReady = false;
-            start.setText("启动");
-            status.setText("停止中…");
-            refreshLanAddr();
-            refreshRunState();
             com.deepseekharness.app.HarnessService.stopServiceIfNecessary(requireContext());
         });
 
@@ -131,8 +136,6 @@ public class LaunchFragment extends Fragment {
         String time = new java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
                 .format(new java.util.Date());
         status.setText("重启中…（" + time + "）");
-        start.setText("启动");
-        webReady = false;
         appendLog("—— 强制重启 " + time + " ——");
         java.util.function.Consumer<String> startStatus = msg -> {
             long generation = controller.getWebGeneration();
@@ -252,17 +255,27 @@ public class LaunchFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
+        if (controller != null) {
+            controller.addStatusListener(statusListener);
+            controller.asyncRefreshStatus();
+        }
         ui.post(refreshState);
     }
 
     @Override
     public void onPause() {
+        if (controller != null) {
+            controller.removeStatusListener(statusListener);
+        }
         ui.removeCallbacks(refreshState);
         super.onPause();
     }
 
     @Override
     public void onDestroyView() {
+        if (controller != null) {
+            controller.removeStatusListener(statusListener);
+        }
         ui.removeCallbacks(refreshState);
         lanAddrText = null;
         launchOpenSheet = null;
@@ -274,13 +287,21 @@ public class LaunchFragment extends Fragment {
     private void refreshRunState() {
         try {
             View root = getView();
-            if (root == null) return;
+            if (root == null || !isAdded()) return;
             TextView runState = root.findViewById(R.id.launch_run_state);
+            TextView status = root.findViewById(R.id.launch_status);
+            android.widget.ProgressBar busy = root.findViewById(R.id.launch_busy);
             Button start = root.findViewById(R.id.launch_start);
+            Button restart = root.findViewById(R.id.launch_open);
+            Button stop = root.findViewById(R.id.launch_stop);
             if (runState == null) return;
+
             boolean starting = controller.isStarting();
+            boolean restarting = controller.isRestarting();
             boolean stopping = controller.isStopping();
-            boolean ready = !starting && !stopping && !controller.getWebAuthUrl().isEmpty();
+            boolean running = controller.isWebRunning();
+            boolean ready = !starting && !stopping && running && !controller.getWebAuthUrl().isEmpty();
+
             com.deepseekharness.app.util.StartupTrace.Snapshot trace = controller.startupDiagnostics().snapshot();
             if (launchLog != null && trace.revision != logRevision && !trace.log.isEmpty()) {
                 launchLog.setText(trace.log);
@@ -293,34 +314,79 @@ public class LaunchFragment extends Fragment {
                     }
                 }
             }
-            boolean running = controller.isWebRunning();
+
             if (!ready && !starting && !stopping && running) {
                 controller.tryRecoverRunningUrl();
             }
+
+            // 1. 运行状态大标题与进度条联动
             if (stopping) {
                 runState.setText("DSH 停止中…");
+                if (busy != null) busy.setVisibility(View.VISIBLE);
+            } else if (restarting) {
+                runState.setText("DSH 重启中…");
+                if (busy != null) busy.setVisibility(View.VISIBLE);
             } else if (starting) {
                 runState.setText("DSH 启动中…");
+                if (busy != null) busy.setVisibility(View.VISIBLE);
             } else if (ready) {
                 runState.setText("DSH 已就绪，可进入");
+                if (busy != null) busy.setVisibility(View.GONE);
             } else if (running) {
                 runState.setText("DSH 运行中，正在同步连接…");
+                if (busy != null) busy.setVisibility(View.VISIBLE);
             } else if (!controller.isEnvironmentReady()) {
                 runState.setText("⚠️ 未检测到 KernelSU 模块或未授权 Root");
+                if (busy != null) busy.setVisibility(View.GONE);
             } else if (controller.isUserStopped()) {
                 runState.setText("DSH 已停止");
+                if (busy != null) busy.setVisibility(View.GONE);
             } else {
-                runState.setText("DSH 未就绪");
+                runState.setText("DSH 未运行");
+                if (busy != null) busy.setVisibility(View.GONE);
             }
+
+            // 2. 启动/进入按钮控制
             if (start != null) {
                 webReady = ready;
-                start.setText(ready ? "进入" : "启动");
-                start.setEnabled(!starting && !stopping);
+                if (stopping || restarting) {
+                    start.setText("启动");
+                    start.setEnabled(false);
+                } else if (starting) {
+                    start.setText("启动中…");
+                    start.setEnabled(false);
+                } else if (ready || running) {
+                    start.setText("进入");
+                    start.setEnabled(true);
+                } else {
+                    start.setText("启动");
+                    start.setEnabled(true);
+                }
             }
-            Button restart = root.findViewById(R.id.launch_open);
-            if (restart != null) restart.setEnabled(!starting && !stopping);
-            Button stop = root.findViewById(R.id.launch_stop);
-            if (stop != null) stop.setEnabled(!stopping);
+
+            // 3. 重启按钮控制（仅在运行中且非启停中可用）
+            if (restart != null) {
+                if (restarting) {
+                    restart.setText("重启中…");
+                    restart.setEnabled(false);
+                } else {
+                    restart.setText("重启");
+                    restart.setEnabled(!starting && !stopping && running);
+                }
+                restart.setTextColor(requireContext().getColor(restart.isEnabled() ? R.color.text : R.color.text_muted));
+            }
+
+            // 4. 停止按钮控制（运行中或启动中可点击中止；已停止态禁用）
+            if (stop != null) {
+                if (stopping) {
+                    stop.setText("停止中…");
+                    stop.setEnabled(false);
+                } else {
+                    stop.setText("停止");
+                    stop.setEnabled(!stopping && (running || starting));
+                }
+                stop.setTextColor(requireContext().getColor(stop.isEnabled() ? R.color.err : R.color.text_muted));
+            }
         } catch (Throwable ignored) {
         }
     }
@@ -330,7 +396,7 @@ public class LaunchFragment extends Fragment {
         if (lanAddrText == null || !isAdded()) return;
         boolean lan = requireContext().getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE)
                 .getBoolean(Constants.KEY_LAN_MODE, false);
-        boolean ready = controller != null && !controller.getWebAuthUrl().isEmpty();
+        boolean ready = controller != null && controller.isWebRunning() && !controller.getWebAuthUrl().isEmpty();
 
         if (!lan && !ready) {
             lanAddrText.setVisibility(View.GONE);

@@ -95,82 +95,142 @@ public class HarnessController {
         return config != null ? config.getPortInt() : 3080;
     }
 
+    private static final android.os.Handler uiHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private static volatile boolean lastKnownWebRunning = false;
     private static volatile long lastStatusCheckMs = 0L;
     private static volatile long lastRecoverAttemptMs = 0L;
 
-    /** 异步执行 status.sh 探测并刷新后台状态与鉴权链接。 */
-    public void asyncRefreshStatus() {
-        if (!"ksu_chroot".equals(proot.runtime().id())) return;
-        long now = android.os.SystemClock.elapsedRealtime();
-        if (now - lastStatusCheckMs < 2000L) return;
-        lastStatusCheckMs = now;
-        io.execute(() -> {
-            try {
-                Process p = Runtime.getRuntime().exec(new String[]{"su", "-mm", "-c", "/data/adb/dsha/scripts/status.sh"});
-                String out = new String(Compat.readAllBytes(p.getInputStream()), StandardCharsets.UTF_8).trim();
-                boolean running = p.waitFor() == 0 || out.contains("STATUS:RUNNING");
-                lastKnownWebRunning = running;
-                if (running && webAuthUrl.isEmpty()) {
-                    String url = extractAuthUrl(out);
-                    if (url != null && !url.isEmpty()) {
-                        synchronized (lifecycle) {
-                            if (webAuthUrl.isEmpty()) {
-                                webAuthUrl = url;
-                            }
-                        }
-                    }
-                }
-            } catch (Throwable e) {
-                // 静默失败，维持原有状态
+    public interface StatusListener {
+        void onStatusChanged();
+    }
+    private static final java.util.concurrent.CopyOnWriteArrayList<StatusListener> statusListeners =
+            new java.util.concurrent.CopyOnWriteArrayList<>();
+
+    public void addStatusListener(StatusListener listener) {
+        if (listener != null && !statusListeners.contains(listener)) {
+            statusListeners.add(listener);
+        }
+    }
+
+    public void removeStatusListener(StatusListener listener) {
+        if (listener != null) {
+            statusListeners.remove(listener);
+        }
+    }
+
+    private void notifyStatusChanged() {
+        if (statusListeners.isEmpty()) return;
+        uiHandler.post(() -> {
+            for (StatusListener l : statusListeners) {
+                try {
+                    l.onStatusChanged();
+                } catch (Throwable ignored) {}
             }
         });
     }
 
-    /** Web 是否在运行（针对 ksu_chroot 使用 Socket 探活与 status.sh，严禁在主线程执行 su，且后台执行有 2s 节流）。 */
-    public boolean isWebRunning() {
-        if ("ksu_chroot".equals(proot.runtime().id())) {
+    /** 异步执行 status.sh / Socket 探测并刷新后台状态与鉴权链接。 */
+    public void asyncRefreshStatus() {
+        if (!"ksu_chroot".equals(proot.runtime().id())) return;
+        long now = android.os.SystemClock.elapsedRealtime();
+        if (isStarting() || isStopping()) return;
+        if (now - lastStatusCheckMs < 1200L) return;
+        lastStatusCheckMs = now;
+        io.execute(() -> {
+            boolean running = false;
+            String foundUrl = null;
             int currentPort = getPort();
-            // 1. 快速 Socket 探活（设为 250ms，稳健避免握手丢包误判）
+
+            // 1. 先用 Socket 极速尝试探活 (150ms 超时)
+            boolean socketAlive = false;
             try (java.net.Socket s = new java.net.Socket()) {
-                s.connect(new java.net.InetSocketAddress("127.0.0.1", currentPort), 250);
-                lastKnownWebRunning = true;
-                return true;
-            } catch (Throwable ignored) {
+                s.connect(new java.net.InetSocketAddress("127.0.0.1", currentPort), 150);
+                socketAlive = true;
+            } catch (Throwable ignored) {}
+
+            if (socketAlive) {
+                running = true;
+                if (webAuthUrl.isEmpty()) {
+                    // 若 Socket 存活但内存中无鉴权链接，调 status.sh 或查日志补齐
+                    try {
+                        Process p = Runtime.getRuntime().exec(new String[]{"su", "-mm", "-c", "/data/adb/dsha/scripts/status.sh"});
+                        String out = new String(Compat.readAllBytes(p.getInputStream()), StandardCharsets.UTF_8).trim();
+                        foundUrl = extractAuthUrl(out);
+                    } catch (Throwable ignored) {}
+                }
+            } else {
+                // Socket 未连上，调 status.sh 最终核验（防止进程刚起未监听）
+                try {
+                    Process p = Runtime.getRuntime().exec(new String[]{"su", "-mm", "-c", "/data/adb/dsha/scripts/status.sh"});
+                    String out = new String(Compat.readAllBytes(p.getInputStream()), StandardCharsets.UTF_8).trim();
+                    if (p.waitFor() == 0 || out.contains("STATUS:RUNNING")) {
+                        running = true;
+                        foundUrl = extractAuthUrl(out);
+                    }
+                } catch (Throwable ignored) {}
             }
 
-            // 2. 主线程调用：绝不在 UI 线程同步等待 su 进程，返回已知状态并异步触发一次核验刷新
+            boolean changed = false;
+            if (lastKnownWebRunning != running) {
+                lastKnownWebRunning = running;
+                changed = true;
+            }
+
+            if (running) {
+                if (foundUrl != null && !foundUrl.isEmpty()) {
+                    synchronized (lifecycle) {
+                        if (webAuthUrl.isEmpty() || !webAuthUrl.equals(foundUrl)) {
+                            webAuthUrl = foundUrl;
+                            changed = true;
+                        }
+                    }
+                }
+            } else {
+                // 后端未运行，彻底清空旧鉴权 URL，杜绝 UI 残留
+                synchronized (lifecycle) {
+                    if (!webAuthUrl.isEmpty()) {
+                        webAuthUrl = "";
+                        changed = true;
+                    }
+                }
+            }
+
+            if (changed) {
+                notifyStatusChanged();
+            }
+        });
+    }
+
+    /** Web 是否在运行（针对 ksu_chroot 严禁在主线程执行网络 Socket 或 su，子线程毫秒级探活）。 */
+    public boolean isWebRunning() {
+        if ("ksu_chroot".equals(proot.runtime().id())) {
+            // 1. 主线程调用：绝不能执行网络或同步 su，返回已知状态并异步触发刷新
             if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
                 asyncRefreshStatus();
                 return lastKnownWebRunning;
             }
 
-            // 3. 非主线程：有节流地执行 status.sh 探活
-            long now = android.os.SystemClock.elapsedRealtime();
-            if (now - lastStatusCheckMs < 2000L) {
-                return lastKnownWebRunning;
-            }
-            lastStatusCheckMs = now;
-            try {
-                Process p = Runtime.getRuntime().exec(new String[]{"su", "-mm", "-c", "/data/adb/dsha/scripts/status.sh"});
-                String out = new String(Compat.readAllBytes(p.getInputStream()), StandardCharsets.UTF_8).trim();
-                boolean running = p.waitFor() == 0 || out.contains("STATUS:RUNNING");
-                lastKnownWebRunning = running;
-                if (running && webAuthUrl.isEmpty()) {
-                    String url = extractAuthUrl(out);
-                    if (url != null && !url.isEmpty()) {
-                        synchronized (lifecycle) {
-                            if (webAuthUrl.isEmpty()) {
-                                webAuthUrl = url;
-                            }
-                        }
-                    }
+            // 2. 子线程调用：使用 150ms 快速 Socket 探活
+            int currentPort = getPort();
+            try (java.net.Socket s = new java.net.Socket()) {
+                s.connect(new java.net.InetSocketAddress("127.0.0.1", currentPort), 150);
+                if (!lastKnownWebRunning) {
+                    lastKnownWebRunning = true;
+                    notifyStatusChanged();
                 }
-                return running;
-            } catch (Throwable e) {
-                lastKnownWebRunning = false;
-                return false;
+                return true;
+            } catch (Throwable ignored) {
             }
+
+            // 连接失败
+            if (lastKnownWebRunning) {
+                lastKnownWebRunning = false;
+                synchronized (lifecycle) {
+                    webAuthUrl = "";
+                }
+                notifyStatusChanged();
+            }
+            return false;
         }
         try {
             java.io.File pidFile = new java.io.File(proot.getRootfsDir(),
@@ -333,14 +393,23 @@ public class HarnessController {
     /** 用户手动点击「重启」：强制清除旧状态与旧进程，重新发起一次启动。 */
     public boolean restartWeb(Consumer<String> onStatus) {
         synchronized (lifecycle) {
-            long generation = lifecycle.forceBeginStart();
+            long generation = lifecycle.forceBeginRestart();
             webAuthUrl = "";
+            lastKnownWebRunning = false;
+            notifyStatusChanged();
             try {
-                io.execute(() -> startWeb(generation, onStatus));
+                io.execute(() -> {
+                    try {
+                        webProc.stop();
+                        Thread.sleep(200);
+                    } catch (Throwable ignored) {}
+                    startWeb(generation, onStatus);
+                });
                 return true;
             } catch (RuntimeException e) {
                 lifecycle.finishStart(generation);
                 reportStatus(generation, onStatus, "重启排队失败：" + e.getMessage());
+                notifyStatusChanged();
                 return false;
             }
         }
@@ -560,6 +629,7 @@ public class HarnessController {
             }
             boolean hadAuth = !webAuthUrl.isEmpty();
             webAuthUrl = "";
+            lastKnownWebRunning = false;
             lifecycle.finishStart(generation);
             com.deepseekharness.app.LanProxyService.stop(generation);
             String exitReason = "dsh 进程已退出" + (hadAuth ? "（鉴权后）" : "（鉴权前）");
@@ -567,6 +637,7 @@ public class HarnessController {
             startupDiagnostics.preserveFailure(new File(proot.getRootfsDir(), "root/dsh-web.log"), exitReason);
             reportStatus(generation, onStatus, hadAuth ? "dsh 进程已退出"
                     : "dsh 进程已退出且未打印鉴权链接，日志见 /root/dsh-web.log");
+            notifyStatusChanged();
         }
     }
 
@@ -698,6 +769,9 @@ public class HarnessController {
             long previous = lifecycle.generation();
             long generation = lifecycle.beginStop();
             webAuthUrl = "";
+            lastKnownWebRunning = false;
+            lastStatusCheckMs = 0L;
+            notifyStatusChanged();
             // 宿主直接写小标记，不等可能仍在解压/注册插件的串行任务。
             try {
                 File sentinel = stopSentinel();
@@ -711,9 +785,12 @@ public class HarnessController {
                     com.deepseekharness.app.LanProxyService.stop(previous);
                 } finally {
                     synchronized (lifecycle) {
+                        lastKnownWebRunning = false;
+                        webAuthUrl = "";
                         lifecycle.finishStop(generation);
                         reportStatus(generation, onStatus, "停止操作已完成");
                     }
+                    notifyStatusChanged();
                 }
             });
             return stopTask;
@@ -726,6 +803,7 @@ public class HarnessController {
 
     private boolean hasStopSentinel() { return stopSentinel().exists(); }
     public boolean isStarting() { return lifecycle.isStarting(); }
+    public boolean isRestarting() { return lifecycle.isRestarting(); }
     public boolean isStopping() { return lifecycle.isStopping(); }
     public boolean isUserStopped() { return lifecycle.isUserStopped(); }
 
