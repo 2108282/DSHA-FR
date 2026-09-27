@@ -103,6 +103,14 @@ public class ConfigFragment extends Fragment {
         TextView asrStatus = v.findViewById(R.id.config_asr_status);
         Button asrCheck = v.findViewById(R.id.config_asr_btn_check);
         Button asrFix = v.findViewById(R.id.config_asr_btn_fix);
+        CheckBox asrContinuous = v.findViewById(R.id.config_asr_continuous);
+        if (asrContinuous != null) {
+            asrContinuous.setChecked(pref(ctx, "asr_continuous", false));
+            asrContinuous.setOnCheckedChangeListener((btn, checked) -> {
+                setPref(ctx, "asr_continuous", checked);
+                toast(checked ? "已开启长语音连续接力模式" : "已恢复短语音模式（默认）");
+            });
+        }
         if (asrStatus != null) {
             refreshAsrStatus(asrStatus);
             if (asrCheck != null) {

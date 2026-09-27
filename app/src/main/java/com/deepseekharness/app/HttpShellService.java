@@ -2602,12 +2602,15 @@ public final class HttpShellService {
                 } catch (Exception ignored) {}
             }
 
+            boolean continuous = ctx.getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE)
+                    .getBoolean("asr_continuous", false);
             StringBuilder sb = new StringBuilder();
             sb.append("{");
             sb.append("\"state\":\"").append(jsonEscape(sAsrState)).append("\",");
             sb.append("\"partial\":\"").append(jsonEscape(sAsrPartial)).append("\",");
             sb.append("\"final\":\"").append(jsonEscape(sAsrFinal)).append("\",");
             sb.append("\"error\":\"").append(jsonEscape(sAsrError)).append("\",");
+            sb.append("\"continuous\":").append(continuous).append(",");
             sb.append("\"seq\":").append(sAsrSeq);
             sb.append("}");
             return sb.toString();

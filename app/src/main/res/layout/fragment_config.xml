@@ -362,6 +362,23 @@
                 android:background="@drawable/bg_btn"
                 android:text="当前状态：未检测" />
 
+            <CheckBox
+                android:id="@+id/config_asr_continuous"
+                style="@style/DshaText.Body"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/gap_tight"
+                android:minHeight="@dimen/touch_min"
+                android:text="长语音连续接力模式" />
+
+            <TextView
+                style="@style/DshaText.Caption"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="@dimen/gap_tight"
+                android:layout_marginTop="-4dp"
+                android:text="默认关闭（单次短句识别，说停即止）。开启后长时间说话遇到停顿或单次时长上限自动分段定稿并无缝开启下一段，声浪不中断。" />
+
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
