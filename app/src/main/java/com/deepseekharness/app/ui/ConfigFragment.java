@@ -24,6 +24,7 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
 import com.deepseekharness.app.DshaAccessibilityService;
+import com.deepseekharness.app.HttpShellService;
 import com.deepseekharness.app.OverlayController;
 import com.deepseekharness.app.R;
 import com.deepseekharness.app.core.ConfigStore;
@@ -97,6 +98,23 @@ public class ConfigFragment extends Fragment {
         v.findViewById(R.id.config_a11y).setOnClickListener(x -> openA11ySettings(ctx));
         refreshA11yStatus(v.findViewById(R.id.config_a11y_status));
         v.findViewById(R.id.config_repo_link).setOnClickListener(x -> openRepo(ctx));
+
+        // 小米原生 ASR 语音配置与一键修复
+        TextView asrStatus = v.findViewById(R.id.config_asr_status);
+        Button asrCheck = v.findViewById(R.id.config_asr_btn_check);
+        Button asrFix = v.findViewById(R.id.config_asr_btn_fix);
+        if (asrStatus != null) {
+            refreshAsrStatus(asrStatus);
+            if (asrCheck != null) {
+                asrCheck.setOnClickListener(x -> {
+                    refreshAsrStatus(asrStatus);
+                    toast("ASR 状态检测已更新");
+                });
+            }
+            if (asrFix != null) {
+                asrFix.setOnClickListener(x -> applyAsrConfig(asrStatus));
+            }
+        }
 
         save.setOnClickListener(x -> {
             c.setPort(port.getText().toString());
@@ -465,5 +483,72 @@ public class ConfigFragment extends Fragment {
                 android.util.Log.w("DSHA", "动态应用 CPU 亲和度异常: " + e.getMessage());
             }
         }, "apply-taskset").start();
+    }
+
+    private void refreshAsrStatus(TextView statusView) {
+        if (statusView == null) return;
+        Context ctx = getContext();
+        if (ctx == null) return;
+        try {
+            String currentService = Settings.Secure.getString(ctx.getContentResolver(), "voice_recognition_service");
+            boolean isXiaomi = currentService != null && currentService.contains("com.xiaomi.mibrain.speech");
+            boolean hasAudioPerm = ctx.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+                    == android.content.pm.PackageManager.PERMISSION_GRANTED;
+
+            if (isXiaomi && hasAudioPerm) {
+                statusView.setText("✅ 已就绪：系统底层 ASR 引擎正常，录音权限已授予");
+                try {
+                    statusView.setTextColor(getResources().getColor(R.color.primary, null));
+                } catch (Throwable ignored) {}
+            } else {
+                StringBuilder sb = new StringBuilder("⚠️ 需配置：");
+                if (!isXiaomi) {
+                    String shortName = currentService == null || currentService.isEmpty() ? "未设置" : currentService;
+                    if (shortName.contains("/")) {
+                        shortName = shortName.substring(shortName.indexOf('/') + 1);
+                    }
+                    if (shortName.contains(".")) {
+                        shortName = shortName.substring(shortName.lastIndexOf('.') + 1);
+                    }
+                    sb.append("当前引擎=").append(shortName).append("；");
+                }
+                if (!hasAudioPerm) {
+                    sb.append("录音权限未授予；");
+                }
+                sb.append("请点击「一键配置」修复。");
+                statusView.setText(sb.toString());
+                try {
+                    statusView.setTextColor(getResources().getColor(R.color.err, null));
+                } catch (Throwable ignored) {}
+            }
+        } catch (Throwable t) {
+            statusView.setText("状态读取失败: " + t.getMessage());
+        }
+    }
+
+    private void applyAsrConfig(TextView statusView) {
+        Context ctx = getContext();
+        if (ctx == null) return;
+        toast("正在通过 Root 配置小米原生 ASR 引擎...");
+        new Thread(() -> {
+            try {
+                String pkg = ctx.getPackageName();
+                String cmd = "settings put secure voice_recognition_service \"com.xiaomi.mibrain.speech/com.xiaomi.mibrain.speech.asr.AsrService\""
+                        + " && pm grant " + pkg + " android.permission.RECORD_AUDIO"
+                        + " && cmd appops set com.xiaomi.mibrain.speech RECORD_AUDIO allow"
+                        + " && cmd appops set " + pkg + " RECORD_AUDIO allow";
+                HttpShellService.execRootCommand(cmd);
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        refreshAsrStatus(statusView);
+                        toast("🎉 已成功配置小米官方 ASR 引擎为系统默认服务！");
+                    });
+                }
+            } catch (Throwable e) {
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> toast("配置执行异常: " + e.getMessage()));
+                }
+            }
+        }, "apply-asr-config").start();
     }
 }

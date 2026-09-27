@@ -332,6 +332,67 @@
                 android:layout_marginTop="@dimen/gap_hair" />
         </LinearLayout>
 
+        <!-- ========== 小米原生 ASR 语音配置 ========== -->
+        <LinearLayout
+            style="@style/DshaCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/gap_section">
+
+            <TextView
+                style="@style/DshaText.Title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🎙️ 小米原生 ASR 语音引擎" />
+
+            <TextView
+                style="@style/DshaText.Caption"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/gap_tight"
+                android:text="调用 MIUI / HyperOS 系统底层纯听觉组件，零模型占用、秒级流式出字、带整句语义纠错。" />
+
+            <TextView
+                android:id="@+id/config_asr_status"
+                style="@style/DshaText.Caption"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/gap_control"
+                android:padding="@dimen/gap_tight"
+                android:background="@drawable/bg_btn"
+                android:text="当前状态：未检测" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/gap_control"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/config_asr_btn_check"
+                    android:layout_width="0dp"
+                    android:layout_height="@dimen/btn_height"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="@dimen/gap_tight"
+                    android:background="@drawable/bg_btn"
+                    android:text="🔍 检测状态"
+                    android:textAllCaps="false"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="@dimen/text_body" />
+
+                <Button
+                    android:id="@+id/config_asr_btn_fix"
+                    android:layout_width="0dp"
+                    android:layout_height="@dimen/btn_height"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_btn_primary"
+                    android:text="⚡ 一键配置"
+                    android:textAllCaps="false"
+                    android:textColor="@color/accent_on"
+                    android:textSize="@dimen/text_body" />
+            </LinearLayout>
+        </LinearLayout>
+
         <TextView
             android:id="@+id/config_repo_link"
             style="@style/DshaText.Caption"
