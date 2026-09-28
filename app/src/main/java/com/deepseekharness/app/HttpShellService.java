@@ -78,6 +78,14 @@ public final class HttpShellService {
     public static volatile boolean isApprovalWaiting = false;
     public static volatile AuthPromptInfo sCurrentApprovalInfo = null;
     public static volatile long sCurrentApprovalEpoch = -1L;
+    /** 当前是否有助手提问正在挂起等待用户回答 */
+    public static volatile boolean isAskWaiting = false;
+    public static volatile String sCurrentAskText = "";
+
+    /** 当前是否处于任何交互等待态（安全审批或助手提问） */
+    public static boolean isInteractiveWaiting() {
+        return isApprovalWaiting || isAskWaiting;
+    }
 
     private final Context ctx;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -1607,6 +1615,8 @@ public final class HttpShellService {
     }
 
     private void showAskNotification(String q, String[] opts, long epoch) {
+        isAskWaiting = true;
+        sCurrentAskText = q != null ? q : "";
         createConfirmChannel();
         AuthPromptInfo info = parseAuthPrompt(q, "💬 助手提问", opts);
         Intent openAppIntent = QuickChatSheetActivity.createLaunchIntent(ctx);
@@ -1620,7 +1630,8 @@ public final class HttpShellService {
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(info.detail))
                 .setContentIntent(contentPi)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setOngoing(true);
+                .setOngoing(true)
+                .setAutoCancel(false);
 
         PendingIntent pi0 = null;
         PendingIntent pi1 = null;
@@ -1666,6 +1677,8 @@ public final class HttpShellService {
 
     private void cancelAskNotification() {
         try {
+            isAskWaiting = false;
+            sCurrentAskText = "";
             NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm != null) nm.cancel(Constants.NOTIF_ASK_QUESTION);
         } catch (Throwable ignored) {}
@@ -2010,7 +2023,7 @@ public final class HttpShellService {
             org.json.JSONObject bigIslandArea = new org.json.JSONObject();
             org.json.JSONObject leftImgText = new org.json.JSONObject();
             leftImgText.put("type", 1);
-            if (!hasDualActions && sCachedWhaleBmp != null) {
+            if (sCachedWhaleBmp != null) {
                 org.json.JSONObject leftPicInfo = new org.json.JSONObject();
                 leftPicInfo.put("type", 1);
                 leftPicInfo.put("pic", "miui.focus.pic_big_island");
@@ -2030,7 +2043,7 @@ public final class HttpShellService {
             bigIslandArea.put("islandTimeout", 900);
 
             island.put("bigIslandArea", bigIslandArea);
-            if (!hasDualActions && sCachedWhaleBmp != null) {
+            if (sCachedWhaleBmp != null) {
                 org.json.JSONObject smallIsland = new org.json.JSONObject();
                 org.json.JSONObject smallPicInfo = new org.json.JSONObject();
                 smallPicInfo.put("type", 1);
@@ -2231,6 +2244,8 @@ public final class HttpShellService {
 
     private void showAskWaitingNotification(String customQuestion) {
         try {
+            isAskWaiting = true;
+            sCurrentAskText = customQuestion != null ? customQuestion : "";
             createConfirmChannel();
             NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
             Intent openAppIntent = QuickChatSheetActivity.createLaunchIntent(ctx);
@@ -2252,7 +2267,7 @@ public final class HttpShellService {
                     .setStyle(new NotificationCompat.BigTextStyle().bigText(displayDesc))
                     .setContentIntent(contentPi)
                     .addAction(returnAction)
-                    .setAutoCancel(true)
+                    .setAutoCancel(false)
                     .setOngoing(true)
                     .setPriority(NotificationCompat.PRIORITY_HIGH);
 
