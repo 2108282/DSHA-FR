@@ -116,6 +116,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
     public static final int ICON_FULLSCREEN = 4;
     public static final int ICON_FILES = 5;
     public static final int ICON_BACK = 6;
+    public static final int ICON_REFRESH = 7;
 
     // 全局静态保活单例，彻底解决再次进入重新转圈加载问题
     @SuppressLint("StaticFieldLeak")
@@ -221,6 +222,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
     private HeaderIconButton btnClose;
     private HeaderIconButton btnSettings;
     private HeaderIconButton btnFiles;
+    private HeaderIconButton btnRefresh;
     private HeaderIconButton btnNewChat;
     private HeaderIconButton btnFullscreen;
     private TextView btnFileSave;
@@ -721,6 +723,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         if (btnClose != null) btnClose.setIconColor(textColor);
         if (btnSettings != null) btnSettings.setIconColor(textColor);
         if (btnFiles != null) btnFiles.setIconColor(textColor);
+        if (btnRefresh != null) btnRefresh.setIconColor(textColor);
         if (btnNewChat != null) btnNewChat.setIconColor(textColor);
         if (btnFullscreen != null) btnFullscreen.setIconColor(textColor);
 
@@ -1076,7 +1079,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
 
         headerBar.addView(leftGroup);
 
-        // 右侧按钮组：[③ 💬➕ 新建对话] + [④ ⬒ 全屏进入App] + [⑤ 💾 保存]
+        // 右侧按钮组：[⓪ 🔄 刷新鉴权] + [③ 💬➕ 新建对话] + [④ ⬒ 全屏进入App] + [⑤ 💾 保存]
         LinearLayout rightGroup = new LinearLayout(this);
         rightGroup.setId(View.generateViewId());
         RelativeLayout.LayoutParams rightLp = new RelativeLayout.LayoutParams(
@@ -1087,8 +1090,24 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         rightGroup.setOrientation(LinearLayout.HORIZONTAL);
         rightGroup.setGravity(Gravity.CENTER_VERTICAL);
 
+        // [⓪ 🔄 刷新鉴权并进入DSH按钮]
+        btnRefresh = createHeaderIconButton(ICON_REFRESH, textColor, "重新获取Token并刷新进入DSH");
+        btnRefresh.setOnClickListener(v -> {
+            v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+            btnRefresh.animate().rotationBy(360f).setDuration(600)
+                    .setInterpolator(new DecelerateInterpolator()).start();
+            if (fileViewerContainer != null && fileViewerContainer.getVisibility() == View.VISIBLE) {
+                closeFileViewer();
+            }
+            forceReloadWithLatestToken();
+        });
+        rightGroup.addView(btnRefresh);
+
         // [③ 💬➕ 新建对话按钮]
         btnNewChat = createHeaderIconButton(ICON_NEW_CHAT, textColor, "开启新对话");
+        LinearLayout.LayoutParams newChatLp = (LinearLayout.LayoutParams) btnNewChat.getLayoutParams();
+        newChatLp.setMarginStart(dpToPx(4));
+        btnNewChat.setLayoutParams(newChatLp);
         btnNewChat.setOnClickListener(v -> {
             if (sCachedWebView == null) return;
 
@@ -1452,6 +1471,33 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                     arrow.lineTo(cx + 2.0f * dp, cy + 6.0f * dp);
                     canvas.drawPath(arrow, paint);
                     canvas.drawLine(cx - 3.5f * dp, cy, cx + 5.5f * dp, cy, paint);
+                    break;
+                }
+                case ICON_REFRESH: { // ⑦ [ 🔄 刷新 ] (与旁边新对话、全屏光学对齐，统一1.85dp线宽与圆倒角)
+                    float r = 6.6f * dp;
+                    rectF.set(cx - r, cy - r, cx + r, cy + r);
+                    // 顺时针圆弧：从 45° 扫 275° 到 320° (-40°)，留出右上角 85° 缺口供箭头穿透
+                    canvas.drawArc(rectF, 45f, 275f, false, paint);
+
+                    // 终点在 -40° 处（右上方偏右）
+                    double rad = Math.toRadians(-40.0);
+                    float x0 = cx + r * (float) Math.cos(rad);
+                    float y0 = cy + r * (float) Math.sin(rad);
+
+                    // 顺时针切线方向为 50°，箭头向切向顺延，两翼折角回勾 (长度 3.2dp)
+                    float arrowLen = 3.2f * dp;
+                    Path arrowPath = new Path();
+                    // 外侧翼 (约 195°)
+                    float w1x = x0 + arrowLen * (float) Math.cos(Math.toRadians(195.0));
+                    float w1y = y0 + arrowLen * (float) Math.sin(Math.toRadians(195.0));
+                    // 内侧翼 (约 265°)
+                    float w2x = x0 + arrowLen * (float) Math.cos(Math.toRadians(265.0));
+                    float w2y = y0 + arrowLen * (float) Math.sin(Math.toRadians(265.0));
+
+                    arrowPath.moveTo(w1x, w1y);
+                    arrowPath.lineTo(x0, y0);
+                    arrowPath.lineTo(w2x, w2y);
+                    canvas.drawPath(arrowPath, paint);
                     break;
                 }
             }
@@ -2586,57 +2632,141 @@ public class QuickChatSheetActivity extends AppCompatActivity {
     }
 
     /**
-     * 智能刷新 Token 与鉴权 Cookie：
-     * 1. 重新从 Controller 换取最新的 dsh-auth-* Cookie 并写入 CookieManager（保证附件上传畅通）
-     * 2. 携带最新 launchtoken 重新 loadUrl（保证主框架鉴权成功）
+     * 重新从后端获取 Token 并刷新抽屉 Web 进入 DSH：
+     * 1. 彻底解决抽屉比后端提前启动导致无法进入的问题；
+     * 2. 强制清空陈旧缓存，在子线程直接从宿主日志或 .launch_token 抽取带最新 Token 的 URL；
+     * 3. 轮询等待后端启动就绪（最多 32 轮 * 250ms = 8 秒）；
+     * 4. 成功获取后同步 Cookie 并调用 WebView 加载进入 DSH；
+     * 5. 若超时或后端未运行，给予用户清晰明确的 Toast 提示。
      */
-    private void reloadWithLatestToken() {
-        if (sCachedWebView == null || controller == null) return;
-        final long currentGen = controller.getWebGeneration();
-        final int currentPort = controller.getPort();
-        if (progressBar != null && !sWebLoaded) {
+    private void forceReloadWithLatestToken() {
+        if (sCachedWebView == null) return;
+        if (progressBar != null) {
             progressBar.setVisibility(View.VISIBLE);
         }
+        sWebLoaded = false;
         authRetried = false;
-        sLoadedGeneration = currentGen;
-        sLoadedPort = currentPort;
+
+        if (controller != null) {
+            controller.clearWebAuthUrl();
+        }
+
+        final int port = controller != null ? controller.getPort() : 3080;
+        sLoadedPort = port;
 
         new Thread(() -> {
-            String targetUrl = controller.getWebAuthUrl();
-            if (targetUrl == null || targetUrl.isEmpty()) {
-                controller.tryRecoverRunningUrl();
-            }
-            for (int step = 0; step < 25 && (targetUrl == null || targetUrl.isEmpty()); step++) {
+            String targetUrl = null;
+
+            // 1. 轮询检索后端真实 token（最多等待 32 轮 * 250ms = 8 秒，适应后端开机初始化慢的场景）
+            for (int step = 0; step < 32; step++) {
+                targetUrl = queryLatestBackendAuthUrl(port);
+                if (targetUrl != null && !targetUrl.isEmpty()) {
+                    break;
+                }
+                if (step % 4 == 0 && controller != null) {
+                    controller.asyncRefreshStatus();
+                }
                 try {
-                    Thread.sleep(200);
+                    Thread.sleep(250);
                 } catch (InterruptedException ignored) {
                     break;
                 }
-                targetUrl = controller.getWebAuthUrl();
             }
+
+            // 2. 若轮询未果，尝试从 controller 中获取最后已记录的 URL
             if (targetUrl == null || targetUrl.isEmpty()) {
-                targetUrl = "http://127.0.0.1:" + currentPort + "/";
+                if (controller != null) {
+                    targetUrl = controller.getWebAuthUrl();
+                }
             }
 
             final String finalUrl = targetUrl;
+
+            // 若依然无法获取到带有鉴权 token 的 URL，诊断后端状态并提示用户
+            if (finalUrl == null || finalUrl.isEmpty()) {
+                boolean running = controller != null && controller.isWebRunning();
+                runOnUiThread(() -> {
+                    if (progressBar != null) progressBar.setVisibility(View.GONE);
+                    if (!running) {
+                        Toast.makeText(this, "DSH 后端服务未运行，请先在主页启动服务", Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(this, "未能获取到后端鉴权 Token，请稍后重试", Toast.LENGTH_SHORT).show();
+                    }
+                });
+                return;
+            }
+
+            // 3. 成功获取到最新鉴权 URL，更新 controller 状态
+            if (controller != null) {
+                controller.updateWebAuthUrl(finalUrl);
+                sLoadedGeneration = controller.getWebGeneration();
+            }
+
+            // 4. 重新与后端交换 dsh-auth-* Cookie 并注入 CookieManager，同步注入 3095 桥凭据
             try {
-                String authCookie = controller.exchangeDshAuthCookie();
+                android.webkit.CookieManager cookies = android.webkit.CookieManager.getInstance();
+                String base = "http://127.0.0.1:" + port + "/";
+                String authCookie = controller != null ? controller.exchangeDshAuthCookie() : null;
                 if (authCookie != null && !authCookie.isEmpty()) {
-                    android.webkit.CookieManager cookies = android.webkit.CookieManager.getInstance();
                     String cookieVal = authCookie.contains(";") ? authCookie : (authCookie + "; Path=/; HttpOnly; SameSite=Lax");
-                    String base = "http://127.0.0.1:" + currentPort + "/";
                     cookies.setCookie(base, cookieVal);
                     cookies.setCookie("http://127.0.0.1/", cookieVal);
-                    cookies.flush();
                 }
+                String bt = com.deepseekharness.app.HttpShellService.ensureToken();
+                if (bt != null && !bt.isEmpty()) {
+                    String dshaCookie = "dsha_t=" + bt + "; Path=/; SameSite=Lax; Max-Age=31536000";
+                    cookies.setCookie(base, dshaCookie);
+                    cookies.setCookie("http://127.0.0.1/", dshaCookie);
+                }
+                cookies.flush();
             } catch (Throwable ignored) {}
 
+            // 5. 在主线程加载 WebView
             runOnUiThread(() -> {
                 if (sCachedWebView != null && !isFinishing() && !isDestroyed()) {
                     sCachedWebView.loadUrl(finalUrl);
+                    Toast.makeText(this, "正在重新连接 DSH...", Toast.LENGTH_SHORT).show();
                 }
             });
-        }, "token-cookie-sync").start();
+        }, "dsha-force-reload-token").start();
+    }
+
+    /**
+     * 从宿主运行目录直接读取最新的鉴权 URL。
+     * 双轨校验：
+     * 1. 优先提取 /data/adb/dsha/run/dsh-web.log 尾部的最新 URL
+     * 2. 若日志尚未落盘，直接从 /data/adb/dsha/rootfs/root/.dsh/.launch_token 拼合
+     */
+    private String queryLatestBackendAuthUrl(int port) {
+        try {
+            String cmd = "URL=$(grep -o 'http://127\\.0\\.0\\.1:[0-9]*/?token=[^ ]*' /data/adb/dsha/run/dsh-web.log 2>/dev/null | tail -n 1)\n" +
+                         "if [ -z \"$URL\" ]; then\n" +
+                         "  TOK=$(cat /data/adb/dsha/rootfs/root/.dsh/.launch_token 2>/dev/null | tr -d '\\r\\n')\n" +
+                         "  if [ -n \"$TOK\" ]; then\n" +
+                         "    P=$(cat /data/adb/dsha/run/port 2>/dev/null | tr -d '\\r\\n')\n" +
+                         "    [ -z \"$P\" ] && P=" + port + "\n" +
+                         "    URL=\"http://127.0.0.1:$P/?token=$TOK\"\n" +
+                         "  fi\n" +
+                         "fi\n" +
+                         "echo \"$URL\"";
+            Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
+            java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[1024];
+            int n;
+            java.io.InputStream in = p.getInputStream();
+            while ((n = in.read(buf)) != -1) {
+                bos.write(buf, 0, n);
+            }
+            String out = bos.toString("UTF-8").trim();
+            if (out.startsWith("http://127.0.0.1:")) {
+                return out;
+            }
+        } catch (Throwable ignored) {}
+        return null;
+    }
+
+    private void reloadWithLatestToken() {
+        forceReloadWithLatestToken();
     }
 
     @Override
@@ -3324,6 +3454,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         btnClose.setIconType(ICON_BACK); // 切换为 ‹ 返回箭头
         btnSettings.setVisibility(View.GONE);
         btnFiles.setVisibility(View.GONE);
+        if (btnRefresh != null) btnRefresh.setVisibility(View.GONE);
         btnNewChat.setVisibility(View.GONE);
         btnFullscreen.setVisibility(View.GONE);
         if (btnFileOpenExternal != null) btnFileOpenExternal.setVisibility(View.VISIBLE);
@@ -3524,6 +3655,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         btnClose.setIconType(ICON_CLOSE);
         btnSettings.setVisibility(View.VISIBLE);
         btnFiles.setVisibility(View.VISIBLE);
+        if (btnRefresh != null) btnRefresh.setVisibility(View.VISIBLE);
         btnNewChat.setVisibility(View.VISIBLE);
         btnFullscreen.setVisibility(View.VISIBLE);
         if (btnFileSave != null) btnFileSave.setVisibility(View.GONE);

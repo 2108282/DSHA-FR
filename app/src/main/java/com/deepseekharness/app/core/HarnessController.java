@@ -323,6 +323,23 @@ public class HarnessController {
         return webAuthUrl;
     }
 
+    /** 清空内存中缓存的鉴权 URL，供强制刷新/自愈时重新从后端获取。 */
+    public void clearWebAuthUrl() {
+        synchronized (lifecycle) {
+            webAuthUrl = "";
+        }
+        lastRecoverAttemptMs = 0L;
+    }
+
+    /** 更新鉴权 URL。 */
+    public void updateWebAuthUrl(String url) {
+        if (url == null || url.isEmpty()) return;
+        synchronized (lifecycle) {
+            webAuthUrl = url;
+        }
+        notifyStatusChanged();
+    }
+
     /**
      * 写入动态 WebSocket 心跳补丁与技能目录防轮询：
      * 纯本机模式彻底关闭心跳 (2147483647ms)，局域网模式 120s 防路由器断连；
