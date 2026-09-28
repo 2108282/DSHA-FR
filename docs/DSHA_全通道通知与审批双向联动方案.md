@@ -1,12 +1,13 @@
-# DSHA 全通道通知、悬浮条与 Web 审批双向联动技术白皮书 (三级精简架构)
+# DSHA 全通道通知、悬浮条与 Web 审批双向联动技术白皮书 (全通道自愈架构)
 
-> **版本**：v1.2.0-native  
+> **版本**：v1.2.1-native (0.1.7-rc.2-u7)  
 > **架构体系**：KernelSU / Magisk 原生 Linux chroot (uid=0) 极速运行时 + Android 前端宿主  
-> **三级联动终端**：
-> 1. **通知 / 状态栏灵动胶囊**（系统级全域覆盖）  
-> 2. **桌面顶部悬浮条**（就地批准最短路径）  
-> 3. **Web 端小黄窗**（对话流中原生审批卡片）  
-> *(注：原第 4 级 App 前台 AlertDialog 弹窗已被彻底废弃，彻底消除弹窗叠弹窗的冗余体验)*
+> **核心终端与自愈机制**：
+> 1. **通知 / 状态栏灵动胶囊**（显式 `setAutoCancel(false)` + 强常驻，点击进入抽屉绝不丢失）  
+> 2. **抽屉顶部原生审批条**（抽屉内原生美学横幅，解决 Web 端断网或未及时展示小黄窗的自愈卡片）  
+> 3. **桌面顶部悬浮条**（就地批准最短路径）  
+> 4. **Web 端小黄窗**（对话流中原生审批卡片，前台唤醒时免受 `offline` 断网冲断）  
+> *(注：原第 4 级 App 前台 AlertDialog 强行弹窗已被彻底废弃，取而代之的是优雅的抽屉内置原生横幅自愈)*
 
 ---
 
@@ -73,19 +74,28 @@
 - 决断时通过 `confirmResolved.compareAndSet(false, true)` 争夺决策权；
 - **竞速原则**：三个渠道谁先点谁生效。先到达的点击完成放行/拒绝并 `latch.countDown()`，其余后到点击一律忽略。
 
-### 3. 三端同步清空：`dismissAllApprovalUi()`
+### 3. 全通道同步清空：`dismissAllApprovalUi()`
 决断成功或超时退出时，全量清理方法确保无死锁残留：
 ```java
 public void dismissAllApprovalUi() {
     isApprovalWaiting = false;
-    // 1. 取消通知栏卡片并收起灵动岛大胶囊
+    sCurrentApprovalInfo = null;
+    sCurrentApprovalEpoch = -1L;
+    // 1. 关闭前台 AlertDialog
+    dismissConfirmDialog();
+    // 2. 取消通知栏卡片并收起灵动岛大胶囊
     cancelConfirmNotification();
-    // 2. 关闭桌面悬浮条批准卡片
+    // 3. 关闭桌面悬浮条批准卡片
     try { OverlayController.dismissConfirm(ctx); } catch (Throwable ignored) {}
-    // 3. 同步消除 Web 上的审批弹窗
+    // 4. 同步消除 Web 上的审批弹窗
     dismissWebApprovalDialogs();
+    // 5. 同步消除抽屉原生自愈审批横幅
+    QuickChatSheetActivity.dismissNativeApprovalBanner();
 }
 ```
+
+### 4. 唤醒防断网保护：`triggerForegroundWakeup()`
+抽屉从后台或通知拉起时，若当前处于 `isApprovalWaiting` 等待审批态，绝对不派发 `offline` 事件，防止冲断 Node 端与前端间的 WebSocket 连接，确保审批链路不被意外 abort。
 
 ---
 

@@ -1,5 +1,6 @@
 package com.deepseekharness.app.ui;
 
+import com.deepseekharness.app.ConfirmReceiver;
 import com.deepseekharness.app.HttpShellService;
 import com.deepseekharness.app.core.ConfigStore;
 import com.deepseekharness.app.core.HarnessController;
@@ -37,6 +38,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 import android.os.SystemClock;
+import android.text.TextUtils;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.Gravity;
@@ -245,6 +247,14 @@ public class QuickChatSheetActivity extends AppCompatActivity {
 
     private float initialTouchY = 0f;
     private int initialHeightOnTouch = 0;
+
+    // 原生安全审批横幅组件
+    private LinearLayout approvalBannerView;
+    private TextView approvalTitleView;
+    private TextView approvalDetailView;
+    private TextView btnApprovalAllow;
+    private TextView btnApprovalDeny;
+    private long currentBannerEpoch = -1L;
 
     // 键盘监听状态跃迁锁与动画控制器（彻底杜绝动画死锁）
     private boolean isKeyboardElevated = false;
@@ -578,6 +588,11 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         isDarkMode = dark;
         isMonetColor = monet;
         updateCardTheme();
+        if (com.deepseekharness.app.HttpShellService.isApprovalWaiting && com.deepseekharness.app.HttpShellService.sCurrentApprovalInfo != null) {
+            displayApprovalBanner(com.deepseekharness.app.HttpShellService.sCurrentApprovalInfo, com.deepseekharness.app.HttpShellService.sCurrentApprovalEpoch);
+        } else {
+            hideApprovalBanner();
+        }
         if (sCachedWebView != null) {
             triggerForegroundWakeup();
             injectTransparentBackground(sCachedWebView);
@@ -719,12 +734,210 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             errorHint.setTextColor(palette.textSecondaryColor);
         }
 
+        // 6.5 原生审批横幅主题更新
+        if (approvalBannerView != null) {
+            applyApprovalBannerTheme(approvalBannerView);
+        }
+
         // 7. 手机系统顶部状态栏与导航栏文字/图标颜色
         updateSystemBarsTheme();
 
         // 8. 注入 WebView 沉浸样式
         if (sCachedWebView != null) {
             injectTransparentBackground(sCachedWebView);
+        }
+    }
+
+    private LinearLayout buildApprovalBannerView(MonetThemeHelper.Palette palette) {
+        LinearLayout outer = new LinearLayout(this);
+        LinearLayout.LayoutParams outerLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        outerLp.setMargins(dpToPx(12), dpToPx(8), dpToPx(12), dpToPx(6));
+        outer.setLayoutParams(outerLp);
+        outer.setOrientation(LinearLayout.VERTICAL);
+        outer.setPadding(dpToPx(12), dpToPx(10), dpToPx(12), dpToPx(10));
+        outer.setVisibility(View.GONE);
+
+        applyApprovalBannerTheme(outer);
+
+        // 顶部标题横行：[⚠️ 图标] + [标题] + [等待审批 胶囊徽章]
+        LinearLayout titleRow = new LinearLayout(this);
+        titleRow.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        titleRow.setOrientation(LinearLayout.HORIZONTAL);
+        titleRow.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView iconView = new TextView(this);
+        iconView.setText("⚠️");
+        iconView.setTextSize(14);
+        titleRow.addView(iconView);
+
+        approvalTitleView = new TextView(this);
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
+        titleLp.setMarginStart(dpToPx(6));
+        approvalTitleView.setLayoutParams(titleLp);
+        approvalTitleView.setText("危险权限授权申请");
+        approvalTitleView.setTextSize(13.5f);
+        approvalTitleView.setTypeface(Typeface.DEFAULT_BOLD);
+        approvalTitleView.setTextColor(isDarkMode ? Color.parseColor("#FBBF24") : Color.parseColor("#B45309"));
+        approvalTitleView.setSingleLine(true);
+        approvalTitleView.setEllipsize(TextUtils.TruncateAt.END);
+        titleRow.addView(approvalTitleView);
+
+        TextView badgeView = new TextView(this);
+        badgeView.setText("等待审批");
+        badgeView.setTextSize(10);
+        badgeView.setTypeface(Typeface.DEFAULT_BOLD);
+        badgeView.setTextColor(Color.parseColor("#F59E0B"));
+        badgeView.setPadding(dpToPx(6), dpToPx(2), dpToPx(6), dpToPx(2));
+        GradientDrawable badgeBg = new GradientDrawable();
+        badgeBg.setShape(GradientDrawable.RECTANGLE);
+        badgeBg.setCornerRadius(dpToPx(10));
+        badgeBg.setColor(Color.parseColor("#26F59E0B"));
+        badgeView.setBackground(badgeBg);
+        titleRow.addView(badgeView);
+
+        outer.addView(titleRow);
+
+        // 中间详情文案（命令/原因）
+        approvalDetailView = new TextView(this);
+        LinearLayout.LayoutParams detailLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        detailLp.setMargins(0, dpToPx(6), 0, dpToPx(8));
+        approvalDetailView.setLayoutParams(detailLp);
+        approvalDetailView.setText("模型申请执行敏感操作，请确认是否允许");
+        approvalDetailView.setTextSize(12);
+        approvalDetailView.setMaxLines(4);
+        approvalDetailView.setEllipsize(TextUtils.TruncateAt.END);
+        approvalDetailView.setTextIsSelectable(true);
+        approvalDetailView.setTextColor(isDarkMode ? Color.parseColor("#E2E8F0") : Color.parseColor("#334155"));
+        outer.addView(approvalDetailView);
+
+        // 底部操作按钮栏（居右对齐）
+        LinearLayout btnRow = new LinearLayout(this);
+        LinearLayout.LayoutParams btnRowLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        btnRow.setLayoutParams(btnRowLp);
+        btnRow.setOrientation(LinearLayout.HORIZONTAL);
+        btnRow.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+
+        // [拒绝按钮]
+        btnApprovalDeny = new TextView(this);
+        btnApprovalDeny.setText("拒绝");
+        btnApprovalDeny.setTextSize(12.5f);
+        btnApprovalDeny.setTypeface(Typeface.DEFAULT_BOLD);
+        btnApprovalDeny.setTextColor(Color.parseColor("#EF4444"));
+        btnApprovalDeny.setPadding(dpToPx(14), dpToPx(6), dpToPx(14), dpToPx(6));
+        GradientDrawable denyBg = new GradientDrawable();
+        denyBg.setShape(GradientDrawable.RECTANGLE);
+        denyBg.setCornerRadius(dpToPx(8));
+        denyBg.setColor(isDarkMode ? Color.parseColor("#29EF4444") : Color.parseColor("#14EF4444"));
+        denyBg.setStroke(dpToPx(1), Color.parseColor("#4DEF4444"));
+        btnApprovalDeny.setBackground(denyBg);
+        btnApprovalDeny.setOnClickListener(v -> {
+            ConfirmReceiver.triggerVibrate(this, 50);
+            ConfirmReceiver.writeApprovalDecision("rejected");
+            HttpShellService svc = HttpShellService.instance();
+            if (svc != null) {
+                svc.resolveConfirm(false, currentBannerEpoch);
+            }
+            syncApprovalDecision(false);
+            hideApprovalBanner();
+        });
+        btnRow.addView(btnApprovalDeny);
+
+        // [允许一次按钮]
+        btnApprovalAllow = new TextView(this);
+        LinearLayout.LayoutParams allowLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        allowLp.setMarginStart(dpToPx(10));
+        btnApprovalAllow.setLayoutParams(allowLp);
+        btnApprovalAllow.setText("允许一次");
+        btnApprovalAllow.setTextSize(12.5f);
+        btnApprovalAllow.setTypeface(Typeface.DEFAULT_BOLD);
+        btnApprovalAllow.setTextColor(Color.WHITE);
+        btnApprovalAllow.setPadding(dpToPx(16), dpToPx(6), dpToPx(16), dpToPx(6));
+        GradientDrawable allowBg = new GradientDrawable();
+        allowBg.setShape(GradientDrawable.RECTANGLE);
+        allowBg.setCornerRadius(dpToPx(8));
+        allowBg.setColor(Color.parseColor("#10B981"));
+        btnApprovalAllow.setBackground(allowBg);
+        btnApprovalAllow.setOnClickListener(v -> {
+            ConfirmReceiver.triggerVibrate(this, 50);
+            ConfirmReceiver.writeApprovalDecision("allowed-once");
+            HttpShellService svc = HttpShellService.instance();
+            if (svc != null) {
+                svc.resolveConfirm(true, currentBannerEpoch);
+            }
+            syncApprovalDecision(true);
+            hideApprovalBanner();
+        });
+        btnRow.addView(btnApprovalAllow);
+
+        outer.addView(btnRow);
+        return outer;
+    }
+
+    private void applyApprovalBannerTheme(LinearLayout outer) {
+        if (outer == null) return;
+        GradientDrawable bg = new GradientDrawable();
+        bg.setShape(GradientDrawable.RECTANGLE);
+        bg.setCornerRadius(dpToPx(12));
+        if (isDarkMode) {
+            bg.setColor(Color.parseColor("#F0241A0A"));
+            bg.setStroke(dpToPx(1), Color.parseColor("#80F59E0B"));
+        } else {
+            bg.setColor(Color.parseColor("#F5FEF9C3"));
+            bg.setStroke(dpToPx(1), Color.parseColor("#B3EAB308"));
+        }
+        outer.setBackground(bg);
+        if (approvalTitleView != null) {
+            approvalTitleView.setTextColor(isDarkMode ? Color.parseColor("#FBBF24") : Color.parseColor("#B45309"));
+        }
+        if (approvalDetailView != null) {
+            approvalDetailView.setTextColor(isDarkMode ? Color.parseColor("#E2E8F0") : Color.parseColor("#334155"));
+        }
+    }
+
+    public void displayApprovalBanner(HttpShellService.AuthPromptInfo info, long epoch) {
+        if (info == null) return;
+        currentBannerEpoch = epoch;
+        if (approvalBannerView != null) {
+            if (approvalTitleView != null) {
+                approvalTitleView.setText(info.title != null ? info.title : "⚠️ 安全操作审批");
+            }
+            if (approvalDetailView != null) {
+                approvalDetailView.setText(info.detail != null ? info.detail : "模型正在请求执行敏感指令，请确认是否允许。");
+            }
+            if (btnApprovalAllow != null && info.primaryBtn != null && !info.primaryBtn.isEmpty()) {
+                btnApprovalAllow.setText(info.primaryBtn);
+            }
+            if (btnApprovalDeny != null && info.secondaryBtn != null && !info.secondaryBtn.isEmpty()) {
+                btnApprovalDeny.setText(info.secondaryBtn);
+            }
+            applyApprovalBannerTheme(approvalBannerView);
+            approvalBannerView.setVisibility(View.VISIBLE);
+        }
+    }
+
+    public void hideApprovalBanner() {
+        if (approvalBannerView != null && approvalBannerView.getVisibility() != View.GONE) {
+            approvalBannerView.setVisibility(View.GONE);
+        }
+    }
+
+    public static void showNativeApprovalBanner(HttpShellService.AuthPromptInfo info, long epoch) {
+        QuickChatSheetActivity inst = sCurrentInstance;
+        if (inst != null && info != null) {
+            inst.runOnUiThread(() -> inst.displayApprovalBanner(info, epoch));
+        }
+    }
+
+    public static void dismissNativeApprovalBanner() {
+        QuickChatSheetActivity inst = sCurrentInstance;
+        if (inst != null) {
+            inst.runOnUiThread(() -> inst.hideApprovalBanner());
         }
     }
 
@@ -1023,6 +1236,10 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 ViewGroup.LayoutParams.MATCH_PARENT, dpToPx(1)));
         headerDivider.setBackgroundColor(lineColor);
         sheetCard.addView(headerDivider);
+
+        // 5.5 原生安全审批横幅卡片（当模型提权或底层高危拦截时直接在抽屉顶部显现）
+        approvalBannerView = buildApprovalBannerView(palette);
+        sheetCard.addView(approvalBannerView);
 
         // 6. WebView 主体容器（自适应伸缩，防漏字）
         webContainer = new FrameLayout(this);
@@ -2103,9 +2320,11 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                         + "    }\n"
                         + "    document.dispatchEvent(new Event('visibilitychange'));\n"
                         + "    window.dispatchEvent(new Event('focus'));\n"
-                        + "    // 网络状态翻转：先 offline 再 online，绕过前端 true===true 的早期 return，强制触发网络重连与 session tail 同步\n"
-                        + "    window.dispatchEvent(new Event('offline'));\n"
-                        + "    window.dispatchEvent(new Event('online'));\n"
+                        + "    // 关键安全防线：审批等待中（isApprovalWaiting）绝对禁止派发 offline，防止冲断后端审批 WebSocket 与 waterfall 链路\n"
+                        + "    if (!" + com.deepseekharness.app.HttpShellService.isApprovalWaiting + ") {\n"
+                        + "      window.dispatchEvent(new Event('offline'));\n"
+                        + "      window.dispatchEvent(new Event('online'));\n"
+                        + "    }\n"
                         + "  } catch(e) {}\n"
                         + "})();";
                 sCachedWebView.evaluateJavascript(js, null);
@@ -2437,6 +2656,11 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             isDarkMode = dark;
             isMonetColor = monet;
             updateCardTheme();
+        }
+        if (com.deepseekharness.app.HttpShellService.isApprovalWaiting && com.deepseekharness.app.HttpShellService.sCurrentApprovalInfo != null) {
+            displayApprovalBanner(com.deepseekharness.app.HttpShellService.sCurrentApprovalInfo, com.deepseekharness.app.HttpShellService.sCurrentApprovalEpoch);
+        } else {
+            hideApprovalBanner();
         }
         if (sCachedWebView != null) {
             injectTransparentBackground(sCachedWebView);

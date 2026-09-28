@@ -76,6 +76,8 @@ public final class HttpShellService {
     public static volatile boolean isTaskActive = false;
     /** 当前是否有安全审批/危险权限确认正在挂起等待用户决断 */
     public static volatile boolean isApprovalWaiting = false;
+    public static volatile AuthPromptInfo sCurrentApprovalInfo = null;
+    public static volatile long sCurrentApprovalEpoch = -1L;
 
     private final Context ctx;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -1466,15 +1468,15 @@ public final class HttpShellService {
         }
     }
 
-    static class AuthPromptInfo {
-        final String title;
-        final String detail;
-        final String statusLabel;
-        final String capsuleText;
-        final String primaryBtn;
-        final String secondaryBtn;
+    public static class AuthPromptInfo {
+        public final String title;
+        public final String detail;
+        public final String statusLabel;
+        public final String capsuleText;
+        public final String primaryBtn;
+        public final String secondaryBtn;
 
-        AuthPromptInfo(String title, String detail, String statusLabel, String capsuleText, String primaryBtn, String secondaryBtn) {
+        public AuthPromptInfo(String title, String detail, String statusLabel, String capsuleText, String primaryBtn, String secondaryBtn) {
             this.title = title;
             this.detail = detail;
             this.statusLabel = statusLabel;
@@ -1835,6 +1837,8 @@ public final class HttpShellService {
     /** 全通道瞬时销毁：保证通知、灵动岛、前台弹窗、桌面悬浮条、WebUI 弹窗同时关闭 */
     public void dismissAllApprovalUi() {
         isApprovalWaiting = false;
+        sCurrentApprovalInfo = null;
+        sCurrentApprovalEpoch = -1L;
         // 1. 关闭前台 AlertDialog
         dismissConfirmDialog();
         // 2. 取消通知栏卡片并收起灵动岛大胶囊
@@ -1845,6 +1849,8 @@ public final class HttpShellService {
         } catch (Throwable ignored) {}
         // 4. 同步给活动的 WebView 消除 Web 上的审批弹窗
         dismissWebApprovalDialogs();
+        // 5. 同步关闭抽屉原生审批条
+        com.deepseekharness.app.ui.QuickChatSheetActivity.dismissNativeApprovalBanner();
     }
 
     private void dismissWebApprovalDialogs() {
@@ -2300,6 +2306,8 @@ public final class HttpShellService {
                     PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
             long myEpoch = confirmEpoch.incrementAndGet();
+            sCurrentApprovalEpoch = myEpoch;
+            sCurrentApprovalInfo = info;
             Intent allowI = new Intent(ctx, ConfirmReceiver.class).setAction(ConfirmReceiver.ACTION_ALLOW)
                     .addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
                     .putExtra(ConfirmReceiver.EXTRA_EPOCH, myEpoch);
@@ -2320,6 +2328,7 @@ public final class HttpShellService {
                     .addAction(0, info.primaryBtn, allowPi)
                     .addAction(0, info.secondaryBtn, denyPi)
                     .setOngoing(true)
+                    .setAutoCancel(false)
                     .setPriority(NotificationCompat.PRIORITY_HIGH);
 
             attachFocusCapsule(ctx, nb, info.title, info.detail, info.statusLabel, info.primaryBtn, info.capsuleText, allowPi, info.secondaryBtn, denyPi, true);
@@ -2342,6 +2351,8 @@ public final class HttpShellService {
                 nm.cancel(CONFIRM_NOTIF_ID);
                 nm.notify(CONFIRM_NOTIF_ID, nb.build());
             }
+            // 抽屉内部同步展开原生审批条（若抽屉已在前台）
+            com.deepseekharness.app.ui.QuickChatSheetActivity.showNativeApprovalBanner(info, myEpoch);
         } catch (Throwable ignored) {}
     }
 
@@ -2438,8 +2449,10 @@ public final class HttpShellService {
 
     private void showConfirmNotification(String cmd, long epoch) {
         isApprovalWaiting = true;
+        sCurrentApprovalEpoch = epoch;
+        sCurrentApprovalInfo = parseAuthPrompt(cmd, "⚠️ 危险命令确认", new String[]{"允许", "拒绝"});
+        AuthPromptInfo info = sCurrentApprovalInfo;
         createConfirmChannel();
-        AuthPromptInfo info = parseAuthPrompt(cmd, "⚠️ 危险命令确认", new String[]{"允许", "拒绝"});
 
         Intent openAppIntent = QuickChatSheetActivity.createLaunchIntent(ctx);
         PendingIntent contentPi = PendingIntent.getActivity(ctx, 30, openAppIntent,
@@ -2465,7 +2478,8 @@ public final class HttpShellService {
                 .addAction(0, info.primaryBtn, allowPi)
                 .addAction(0, info.secondaryBtn, denyPi)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
-                .setOngoing(true);
+                .setOngoing(true)
+                .setAutoCancel(false);
 
         attachFocusCapsule(ctx, cb, info.title, info.detail, info.statusLabel, info.primaryBtn, info.capsuleText, allowPi, info.secondaryBtn, denyPi, true);
 
@@ -2476,12 +2490,17 @@ public final class HttpShellService {
                 nm.notify(CONFIRM_NOTIF_ID, cb.build());
             }
         } catch (Throwable ignored) {}
+        // 抽屉内部同步展开原生审批条（若抽屉已在前台）
+        com.deepseekharness.app.ui.QuickChatSheetActivity.showNativeApprovalBanner(info, epoch);
     }
 
     private void cancelConfirmNotification() {
         isApprovalWaiting = false;
+        sCurrentApprovalInfo = null;
+        sCurrentApprovalEpoch = -1L;
         NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm != null) nm.cancel(CONFIRM_NOTIF_ID);
+        com.deepseekharness.app.ui.QuickChatSheetActivity.dismissNativeApprovalBanner();
     }
 
     private void createConfirmChannel() {
