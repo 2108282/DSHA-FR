@@ -558,11 +558,8 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 if ("true".equals(value)) {
                     return;
                 }
-                if (sCachedWebView.canGoBack()) {
-                    sCachedWebView.goBack();
-                } else {
-                    dismissSheet();
-                }
+                // 浮层消费完毕后，快捷抽屉的侧滑返回意图一律为平滑退出抽屉，严禁执行 WebView goBack() 导致 SPA 会话历史倒退刷新
+                dismissSheet();
             });
             return;
         }
@@ -2132,6 +2129,33 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                         + "  -webkit-user-select: none !important;\n"
                         + "  user-select: none !important;\n"
                         + "  -webkit-touch-callout: none !important;\n"
+                        + "}\n"
+                        + "/* 7. 左右抽屉与面板 GPU 硬件加速与状态对齐，杜绝掉帧并修正右侧滑动展开方向 */\n"
+                        + "[data-sidebar-right-panel]:not([data-sidebar-right-open]) {\n"
+                        + "  visibility: hidden !important;\n"
+                        + "}\n"
+                        + "[data-sidebar-right-panel][data-sidebar-right-open] {\n"
+                        + "  visibility: visible !important;\n"
+                        + "}\n"
+                        + "[data-mobile-nav=\"frame\"] > :first-child,\n"
+                        + "div[class*='pI_x6G_sidebarCol'],\n"
+                        + "[data-sidebar-right-panel],\n"
+                        + "[data-sidebar-right-panel] [data-dockkit-host=\"dock\"],\n"
+                        + "[data-sidebar-right-panel] [data-dockkit-pane],\n"
+                        + "[data-aionui-preview-col],\n"
+                        + "[data-aionui-explorer-col] {\n"
+                        + "  will-change: transform !important;\n"
+                        + "  transform: translateZ(0) !important;\n"
+                        + "  backface-visibility: hidden !important;\n"
+                        + "}\n"
+                        + "[data-sidebar-right-panel] [data-dockkit-host=\"dock\"],\n"
+                        + "[data-sidebar-right-panel] [data-dockkit-empty],\n"
+                        + "[data-sidebar-right-panel] [data-dockkit-divider] {\n"
+                        + "  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1), visibility 0s linear 220ms !important;\n"
+                        + "}\n"
+                        + "[data-sidebar-right-panel][data-sidebar-right-open] [data-dockkit-host=\"dock\"],\n"
+                        + "[data-sidebar-right-panel][data-sidebar-right-open] [data-dockkit-empty] {\n"
+                        + "  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1) !important;\n"
                         + "}\n";
 
                 String js = "(function() {"
@@ -2151,7 +2175,8 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                             : "  var solidBg = " + org.json.JSONObject.quote(palette.solidBgHex) + ";\n"
                             + "  var cssSolid = 'html, body, #root, main, .dsh-layout-root, div[class*=\"pI_x6G_frame\"], div[class*=\"pI_x6G_centerCol\"], div[class*=\"_scrollBody\"], div[class*=\"_viewArea\"], div[class*=\"wSkVaW_root\"], div[class*=\"_composerHero\"], div[class*=\"_dock\"] { background: ' + solidBg + ' !important; background-color: ' + solidBg + ' !important; }\n' "
                             + "      + ':root, html, body { --dsw-alias-bg-base: ' + solidBg + ' !important; --dsh-boot-bg: ' + solidBg + ' !important; }\n' "
-                            + "      + '[data-files-entry], [data-files-entry] *, [data-sidebar-right-panel] *, [data-tab=\"files\"] *, [data-sidebar-panel*=\"files\"] * { -webkit-user-select: none !important; user-select: none !important; -webkit-touch-callout: none !important; }\n';\n"
+                            + "      + '[data-files-entry], [data-files-entry] *, [data-sidebar-right-panel] *, [data-tab=\"files\"] *, [data-sidebar-panel*=\"files\"] * { -webkit-user-select: none !important; user-select: none !important; -webkit-touch-callout: none !important; }\n' "
+                            + "      + '[data-sidebar-right-panel]:not([data-sidebar-right-open]) { visibility: hidden !important; } [data-sidebar-right-panel][data-sidebar-right-open] { visibility: visible !important; } [data-mobile-nav=\"frame\"] > :first-child, div[class*=\"pI_x6G_sidebarCol\"], [data-sidebar-right-panel] { will-change: transform !important; transform: translateZ(0) !important; backface-visibility: hidden !important; }\n';\n"
                             + "  style.innerHTML = cssSolid;\n"
                             + "  if (document.documentElement) document.documentElement.style.backgroundColor = solidBg;\n"
                             + "  if (document.body) document.body.style.backgroundColor = solidBg;\n")
