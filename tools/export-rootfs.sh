@@ -233,6 +233,7 @@ EOF_PKG
         "--exclude=./root/dsha-repo"
         "--exclude=./root/dsh-web-mobile"
         "--exclude=./root/.opencodereview"
+        "--exclude=./root/root*"
         "--exclude=./normify-*"
         "--exclude=./.l2s"
         "--exclude=./.proroot-meta"
@@ -258,6 +259,10 @@ EOF_PKG
 
     echo "✓ 纯净脱敏底包已生成: $OUTPUT_TAR ($(ls -lh "$OUTPUT_TAR" | awk '{print $5}'))"
 fi
+
+echo "==> 正在计算 SHA-256 校验和..."
+(cd "$(dirname "$OUTPUT_TAR")" && sha256sum "$(basename "$OUTPUT_TAR")" > "$(basename "$OUTPUT_TAR").sha256")
+echo "✓ 校验和文件已生成: $OUTPUT_TAR.sha256 ($(cat "$OUTPUT_TAR.sha256" | awk '{print $1}'))"
 
 echo "=========================================================="
 echo "✓ 底包导出成功完成！"
