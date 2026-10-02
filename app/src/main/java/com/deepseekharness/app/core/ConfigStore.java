@@ -227,6 +227,22 @@ public class ConfigStore {
         prefs.edit().putBoolean(Constants.KEY_SHEET_MONET_COLOR, enabled).apply();
     }
 
+    public String getSheetPaletteStyle() {
+        return prefs.getString(Constants.KEY_SHEET_PALETTE_STYLE, "tonal_spot");
+    }
+
+    public void setSheetPaletteStyle(String style) {
+        prefs.edit().putString(Constants.KEY_SHEET_PALETTE_STYLE, style != null ? style : "tonal_spot").apply();
+    }
+
+    public String getSheetColorSpec() {
+        return prefs.getString(Constants.KEY_SHEET_COLOR_SPEC, "spec_2025");
+    }
+
+    public void setSheetColorSpec(String spec) {
+        prefs.edit().putString(Constants.KEY_SHEET_COLOR_SPEC, spec != null ? spec : "spec_2025").apply();
+    }
+
     // ================= 快捷抽屉尺寸与形态 =================
 
     public int getSheetHeightPercent() {

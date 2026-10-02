@@ -247,6 +247,24 @@ public final class MonetThemeHelper {
      * 【关键规则】：打开反色（isDarkMode == true）之后，坚决不使用莫奈取色，保持纯正经典深色反色！
      */
     public static Palette resolve(Context ctx, boolean isDarkMode, boolean isMonet, int opacityPercent) {
+        String style = "tonal_spot";
+        String spec = "spec_2025";
+        if (ctx != null) {
+            try {
+                com.deepseekharness.app.core.ConfigStore cfg = new com.deepseekharness.app.core.ConfigStore(ctx);
+                style = cfg.getSheetPaletteStyle();
+                spec = cfg.getSheetColorSpec();
+            } catch (Throwable ignored) {}
+        }
+        return resolve(ctx, isDarkMode, isMonet, opacityPercent, style, spec);
+    }
+
+    /**
+     * 增强版调色板解析：支持色彩风格（PaletteStyle）与色彩标准（ColorSpec）
+     * 仅在浅色模式且开启莫奈时生效；深色模式坚决不使用莫奈取色，保持经典深色反色。
+     */
+    public static Palette resolve(Context ctx, boolean isDarkMode, boolean isMonet, int opacityPercent,
+                                  String paletteStyle, String colorSpec) {
         int opacity = opacityPercent;
         if (opacity < 30 || opacity > 100) {
             opacity = isDarkMode ? 80 : 88;
@@ -300,34 +318,168 @@ public final class MonetThemeHelper {
             }
         }
 
-        // ================= 仅在浅色模式且开启莫奈时：严格按 c8ea259 原始明度与饱和度生成调色板 =================
+        // ================= 仅在浅色模式且开启莫奈时：根据风格与标准动态生成调色板 =================
         int seed = getWallpaperSeedColor(ctx);
         float[] seedHsl = new float[3];
         ColorUtils.colorToHSL(seed, seedHsl);
-        float h = seedHsl[0]; // 壁纸色相 0 ~ 360°
+        float origH = seedHsl[0]; // 壁纸色相 0 ~ 360°
+        float origS = seedHsl[1];
+        float origL = seedHsl[2];
 
-        // 卡片底色：高明度柔彩（S=28%, L=95%），通透呈现壁纸专属调性！
-        int lightCardRgb = ColorUtils.HSLToColor(new float[]{h, 0.28f, 0.95f});
+        String style = paletteStyle != null ? paletteStyle.toLowerCase(Locale.US) : "tonal_spot";
+        boolean isSpec2025 = "spec_2025".equalsIgnoreCase(colorSpec);
+
+        float h = origH;
+        float cardSat = 0.28f;
+        float cardLum = 0.95f;
+        float textSat = 0.65f;
+        float textLum = 0.16f;
+        float textSubSat = 0.35f;
+        float textSubLum = 0.42f;
+        float brandSat = 0.85f;
+        float brandLum = 0.36f;
+        float handleSat = 0.36f;
+        float borderSat = 0.32f;
+
+        switch (style) {
+            case "neutral":
+                // 中性（Neutral）：近无彩色灰阶，极低饱和
+                cardSat = 0.08f;
+                cardLum = 0.96f;
+                textSat = 0.15f;
+                textLum = 0.15f;
+                textSubSat = 0.10f;
+                textSubLum = 0.44f;
+                brandSat = 0.25f;
+                brandLum = 0.35f;
+                handleSat = 0.12f;
+                borderSat = 0.10f;
+                break;
+            case "vibrant":
+                // 鲜明（Vibrant）：高饱和鲜亮，张力十足
+                cardSat = 0.42f;
+                cardLum = 0.94f;
+                textSat = 0.85f;
+                textLum = 0.14f;
+                textSubSat = 0.55f;
+                textSubLum = 0.38f;
+                brandSat = 0.95f;
+                brandLum = 0.34f;
+                handleSat = 0.50f;
+                borderSat = 0.45f;
+                break;
+            case "expressive":
+                // 表现力（Expressive）：色相旋转 +120°，现代跳跃色彩
+                h = (origH + 120.0f) % 360.0f;
+                cardSat = 0.35f;
+                cardLum = 0.95f;
+                textSat = 0.75f;
+                textLum = 0.15f;
+                textSubSat = 0.45f;
+                textSubLum = 0.40f;
+                brandSat = 0.90f;
+                brandLum = 0.35f;
+                handleSat = 0.42f;
+                borderSat = 0.38f;
+                break;
+            case "rainbow":
+                // 彩虹（Rainbow）：底板清爽透光，强调色纯净宽色域
+                cardSat = 0.18f;
+                cardLum = 0.96f;
+                textSat = 0.70f;
+                textLum = 0.15f;
+                textSubSat = 0.40f;
+                textSubLum = 0.42f;
+                brandSat = 0.92f;
+                brandLum = 0.35f;
+                handleSat = 0.32f;
+                borderSat = 0.28f;
+                break;
+            case "fruit_salad":
+                // 水果沙拉（Fruit Salad）：色相微偏 -50°，鲜活清爽果色
+                h = (origH - 50.0f + 360.0f) % 360.0f;
+                cardSat = 0.36f;
+                cardLum = 0.94f;
+                textSat = 0.80f;
+                textLum = 0.15f;
+                textSubSat = 0.50f;
+                textSubLum = 0.39f;
+                brandSat = 0.90f;
+                brandLum = 0.34f;
+                handleSat = 0.42f;
+                borderSat = 0.38f;
+                break;
+            case "monochrome":
+                // 单色（Monochrome）：纯黑白灰阶，饱和度全清零
+                h = 0.0f;
+                cardSat = 0.0f;
+                cardLum = 0.96f;
+                textSat = 0.0f;
+                textLum = 0.12f;
+                textSubSat = 0.0f;
+                textSubLum = 0.45f;
+                brandSat = 0.0f;
+                brandLum = 0.20f;
+                handleSat = 0.0f;
+                borderSat = 0.0f;
+                break;
+            case "fidelity":
+                // 保真（Fidelity）：忠实原始壁纸色彩饱和度
+                cardSat = Math.max(0.10f, Math.min(0.50f, origS * 0.6f));
+                cardLum = 0.95f;
+                textSat = Math.max(0.30f, Math.min(0.90f, origS * 1.2f));
+                textLum = 0.15f;
+                textSubSat = Math.max(0.20f, Math.min(0.70f, origS * 0.8f));
+                textSubLum = 0.40f;
+                brandSat = Math.max(0.40f, Math.min(0.95f, origS * 1.4f));
+                brandLum = 0.35f;
+                handleSat = cardSat * 1.3f;
+                borderSat = cardSat * 1.1f;
+                break;
+            case "tonal_spot":
+            default:
+                // 色调点（Tonal Spot）：默认均衡标准
+                cardSat = 0.28f;
+                cardLum = 0.95f;
+                textSat = 0.65f;
+                textLum = 0.16f;
+                textSubSat = 0.35f;
+                textSubLum = 0.42f;
+                brandSat = 0.85f;
+                brandLum = 0.36f;
+                handleSat = 0.36f;
+                borderSat = 0.32f;
+                break;
+        }
+
+        // 若采用 Material 3 Expressive 2025 规范：拉大浅色下对比度跨度，文字更深凝练，微增强调色
+        if (isSpec2025 && !style.equals("monochrome")) {
+            textLum = Math.max(0.11f, textLum - 0.02f);
+            brandSat = Math.min(1.0f, brandSat * 1.05f);
+        }
+
+        // 卡片底色：高明度柔彩，通透呈现壁纸专属调性！
+        int lightCardRgb = ColorUtils.HSLToColor(new float[]{h, cardSat, cardLum});
         int cardBg = Color.argb(alpha, Color.red(lightCardRgb), Color.green(lightCardRgb), Color.blue(lightCardRgb));
 
-        // 主文字与按钮：壁纸极深浓郁彩色（S=65%, L=16%），保证无障碍顶级对比度
-        int text = ColorUtils.HSLToColor(new float[]{h, 0.65f, 0.16f});
-        // 次级提示文字（S=35%, L=42%）
-        int textSecondary = ColorUtils.HSLToColor(new float[]{h, 0.35f, 0.42f});
-        // 品牌强调色（S=85%, L=36%）
-        int brand = ColorUtils.HSLToColor(new float[]{h, 0.85f, 0.36f});
+        // 主文字与按钮：壁纸浓郁对比色，保证无障碍顶级对比度
+        int text = ColorUtils.HSLToColor(new float[]{h, textSat, textLum});
+        // 次级提示文字
+        int textSecondary = ColorUtils.HSLToColor(new float[]{h, textSubSat, textSubLum});
+        // 品牌强调色
+        int brand = ColorUtils.HSLToColor(new float[]{h, brandSat, brandLum});
 
         // 拖拽横条
-        int handle = ColorUtils.HSLToColor(new float[]{h, 0.36f, 0.72f});
+        int handle = ColorUtils.HSLToColor(new float[]{h, handleSat, 0.72f});
         // 分割线与细边框
-        int borderRaw = ColorUtils.HSLToColor(new float[]{h, 0.32f, 0.82f});
+        int borderRaw = ColorUtils.HSLToColor(new float[]{h, borderSat, 0.82f});
         int line = Color.argb(0x40, Color.red(borderRaw), Color.green(borderRaw), Color.blue(borderRaw));
         int border = Color.argb(0x45, Color.red(borderRaw), Color.green(borderRaw), Color.blue(borderRaw));
 
         // WebView 控件同系质感颜色
-        int inputInner = ColorUtils.HSLToColor(new float[]{h, 0.22f, 0.98f});
-        int inputBorderColor = ColorUtils.HSLToColor(new float[]{h, 0.35f, 0.80f});
-        int menuInner = ColorUtils.HSLToColor(new float[]{h, 0.26f, 0.97f});
+        int inputInner = ColorUtils.HSLToColor(new float[]{h, Math.max(0f, cardSat - 0.06f), 0.98f});
+        int inputBorderColor = ColorUtils.HSLToColor(new float[]{h, borderSat, 0.80f});
+        int menuInner = ColorUtils.HSLToColor(new float[]{h, Math.max(0f, cardSat - 0.02f), 0.97f});
 
         return new Palette(
                 cardBg, text, textSecondary, line, handle, border,
