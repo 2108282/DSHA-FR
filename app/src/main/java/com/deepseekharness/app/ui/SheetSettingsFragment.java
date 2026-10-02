@@ -22,6 +22,7 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.widget.SwitchCompat;
+import androidx.core.graphics.ColorUtils;
 import androidx.fragment.app.Fragment;
 
 import com.deepseekharness.app.R;
@@ -62,14 +63,20 @@ public class SheetSettingsFragment extends Fragment {
             });
         }
 
-        // 2. 抽屉莫奈取色开关（提取系统壁纸 Material You 调色板）
+        // 2. 莫奈取色开关（提取系统壁纸 Material You 调色板）
         SwitchCompat monetSwitch = v.findViewById(R.id.sheet_settings_monet_switch);
         View monetOptionsContainer = v.findViewById(R.id.sheet_settings_monet_options_container);
         TextView styleValue = v.findViewById(R.id.sheet_settings_palette_style_value);
+        LinearLayout styleDots = v.findViewById(R.id.sheet_settings_palette_style_dots);
         TextView specValue = v.findViewById(R.id.sheet_settings_color_spec_value);
 
         if (monetOptionsContainer != null) {
             monetOptionsContainer.setVisibility(cfg.isSheetMonetColor() ? View.VISIBLE : View.GONE);
+        }
+
+        int seedColor = MonetThemeHelper.getWallpaperSeedColor(requireContext());
+        if (styleDots != null) {
+            updatePaletteStyleDots(styleDots, cfg.getSheetPaletteStyle(), seedColor);
         }
 
         if (styleValue != null) {
@@ -99,7 +106,7 @@ public class SheetSettingsFragment extends Fragment {
         // 2.1 色彩风格选择弹窗
         View styleRow = v.findViewById(R.id.sheet_settings_palette_style_row);
         if (styleRow != null) {
-            styleRow.setOnClickListener(x -> showPaletteStyleDialog(requireContext(), cfg, styleValue));
+            styleRow.setOnClickListener(x -> showPaletteStyleDialog(requireContext(), cfg, styleValue, styleDots));
         }
 
         // 2.2 色彩标准选择弹窗
@@ -255,7 +262,94 @@ public class SheetSettingsFragment extends Fragment {
         return "Material 3\nExpressive 2025";
     }
 
-    private void showPaletteStyleDialog(Context context, ConfigStore cfg, TextView styleValue) {
+    public static int[] getStylePreviewColors(String style, int seedColor) {
+        float[] hsl = new float[3];
+        ColorUtils.colorToHSL(seedColor, hsl);
+        float h = hsl[0];
+        String s = style != null ? style.toLowerCase() : "tonal_spot";
+        switch (s) {
+            case "neutral":
+                return new int[]{
+                        ColorUtils.HSLToColor(new float[]{h, 0.12f, 0.45f}),
+                        ColorUtils.HSLToColor(new float[]{h, 0.08f, 0.72f}),
+                        ColorUtils.HSLToColor(new float[]{(h + 15f) % 360f, 0.18f, 0.85f})
+                };
+            case "vibrant":
+                return new int[]{
+                        ColorUtils.HSLToColor(new float[]{h, 0.95f, 0.48f}),
+                        ColorUtils.HSLToColor(new float[]{h, 0.65f, 0.72f}),
+                        ColorUtils.HSLToColor(new float[]{(h + 50f) % 360f, 0.75f, 0.85f})
+                };
+            case "expressive":
+                float eh = (h + 120f) % 360f;
+                return new int[]{
+                        ColorUtils.HSLToColor(new float[]{eh, 0.85f, 0.42f}),
+                        ColorUtils.HSLToColor(new float[]{eh, 0.45f, 0.72f}),
+                        ColorUtils.HSLToColor(new float[]{(eh + 120f) % 360f, 0.55f, 0.85f})
+                };
+            case "rainbow":
+                return new int[]{
+                        ColorUtils.HSLToColor(new float[]{h, 0.85f, 0.45f}),
+                        ColorUtils.HSLToColor(new float[]{(h + 30f) % 360f, 0.35f, 0.72f}),
+                        ColorUtils.HSLToColor(new float[]{(h + 300f) % 360f, 0.65f, 0.85f})
+                };
+            case "fruit_salad":
+                float fh = (h - 50f + 360f) % 360f;
+                return new int[]{
+                        ColorUtils.HSLToColor(new float[]{fh, 0.85f, 0.40f}),
+                        ColorUtils.HSLToColor(new float[]{fh, 0.45f, 0.72f}),
+                        ColorUtils.HSLToColor(new float[]{(fh + 70f) % 360f, 0.55f, 0.85f})
+                };
+            case "monochrome":
+                return new int[]{
+                        Color.parseColor("#1E293B"),
+                        Color.parseColor("#64748B"),
+                        Color.parseColor("#94A3B8")
+                };
+            case "fidelity":
+                return new int[]{
+                        ColorUtils.HSLToColor(new float[]{h, 0.85f, 0.45f}),
+                        ColorUtils.HSLToColor(new float[]{h, 0.45f, 0.72f}),
+                        ColorUtils.HSLToColor(new float[]{(h + 180f) % 360f, 0.65f, 0.48f})
+                };
+            case "tonal_spot":
+            default:
+                return new int[]{
+                        ColorUtils.HSLToColor(new float[]{h, 0.75f, 0.45f}),
+                        ColorUtils.HSLToColor(new float[]{h, 0.35f, 0.72f}),
+                        ColorUtils.HSLToColor(new float[]{(h + 60f) % 360f, 0.45f, 0.85f})
+                };
+        }
+    }
+
+    private View createPaletteDotsView(Context context, int[] colors) {
+        LinearLayout dots = new LinearLayout(context);
+        dots.setOrientation(LinearLayout.HORIZONTAL);
+        dots.setGravity(Gravity.CENTER_VERTICAL);
+        int size = dpToPx(7);
+        int gap = dpToPx(4);
+        for (int i = 0; i < colors.length; i++) {
+            View dot = new View(context);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(size, size);
+            if (i > 0) lp.leftMargin = gap;
+            dot.setLayoutParams(lp);
+            GradientDrawable d = new GradientDrawable();
+            d.setShape(GradientDrawable.OVAL);
+            d.setColor(colors[i]);
+            dot.setBackground(d);
+            dots.addView(dot);
+        }
+        return dots;
+    }
+
+    private void updatePaletteStyleDots(LinearLayout dotsContainer, String style, int seedColor) {
+        if (dotsContainer == null || getContext() == null) return;
+        dotsContainer.removeAllViews();
+        int[] colors = getStylePreviewColors(style, seedColor);
+        dotsContainer.addView(createPaletteDotsView(getContext(), colors));
+    }
+
+    private void showPaletteStyleDialog(Context context, ConfigStore cfg, TextView styleValue, LinearLayout styleDots) {
         Dialog dialog = new Dialog(context);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
 
@@ -300,6 +394,7 @@ public class SheetSettingsFragment extends Fragment {
         styles.put("fidelity", "Fidelity");
 
         String current = cfg.getSheetPaletteStyle();
+        int seedColor = MonetThemeHelper.getWallpaperSeedColor(context);
 
         for (Map.Entry<String, String> entry : styles.entrySet()) {
             final String key = entry.getKey();
@@ -327,19 +422,33 @@ public class SheetSettingsFragment extends Fragment {
             }
             row.addView(itemText);
 
+            // 右侧三色强调色圆点展示
+            int[] itemColors = getStylePreviewColors(key, seedColor);
+            View dotsView = createPaletteDotsView(context, itemColors);
+            row.addView(dotsView);
+
+            // 勾选标记（占位保持对齐）
+            LinearLayout checkSlot = new LinearLayout(context);
+            checkSlot.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(28), ViewGroup.LayoutParams.WRAP_CONTENT));
+            checkSlot.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
+
             if (isSelected) {
                 TextView check = new TextView(context);
                 check.setText("✓");
                 check.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
                 check.setTextColor(dark ? Color.parseColor("#38BDF8") : Color.parseColor("#0284C7"));
                 check.setTypeface(null, android.graphics.Typeface.BOLD);
-                row.addView(check);
+                checkSlot.addView(check);
             }
+            row.addView(checkSlot);
 
             row.setOnClickListener(v -> {
                 cfg.setSheetPaletteStyle(key);
                 if (styleValue != null) {
                     styleValue.setText(label + " ▾");
+                }
+                if (styleDots != null) {
+                    updatePaletteStyleDots(styleDots, key, seedColor);
                 }
                 MonetThemeHelper.clearCache(context);
                 QuickChatSheetActivity.refreshThemeFromConfig(context);

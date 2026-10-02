@@ -37,7 +37,7 @@
             android:layout_marginTop="@dimen/gap_control"
             android:orientation="vertical">
 
-            <!-- 1. 抽屉正反色（抽屉反色开关） -->
+            <!-- 1. 反色开关 -->
             <LinearLayout
                 android:id="@+id/sheet_settings_invert_row"
                 android:layout_width="match_parent"
@@ -58,29 +58,15 @@
                     android:textColor="@color/text_secondary"
                     android:textSize="@dimen/text_title" />
 
-                <LinearLayout
+                <TextView
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="@dimen/gap_control"
                     android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="抽屉反色开关"
-                        android:textColor="@color/text"
-                        android:textSize="@dimen/text_body"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/gap_hair"
-                        android:text="快捷抽屉独立深色反色，与主应用黑夜白天完全分离"
-                        android:textColor="@color/text_muted"
-                        android:textSize="@dimen/text_caption" />
-                </LinearLayout>
+                    android:text="反色开关"
+                    android:textColor="@color/text"
+                    android:textSize="@dimen/text_body"
+                    android:textStyle="bold" />
 
                 <androidx.appcompat.widget.SwitchCompat
                     android:id="@+id/sheet_settings_invert_switch"
@@ -95,7 +81,7 @@
                 android:layout_height="@dimen/stroke"
                 android:background="@color/line" />
 
-            <!-- 2. 抽屉莫奈取色（Material You 动态调色板） -->
+            <!-- 2. 莫奈取色 -->
             <LinearLayout
                 android:id="@+id/sheet_settings_monet_row"
                 android:layout_width="match_parent"
@@ -116,29 +102,15 @@
                     android:textColor="@color/text_secondary"
                     android:textSize="@dimen/text_title" />
 
-                <LinearLayout
+                <TextView
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="@dimen/gap_control"
                     android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="抽屉莫奈取色"
-                        android:textColor="@color/text"
-                        android:textSize="@dimen/text_body"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/gap_hair"
-                        android:text="跟随系统壁纸提取 Material You 调色板（仅浅色模式生效，打开反色不使用）"
-                        android:textColor="@color/text_muted"
-                        android:textSize="@dimen/text_caption" />
-                </LinearLayout>
+                    android:text="莫奈取色"
+                    android:textColor="@color/text"
+                    android:textSize="@dimen/text_body"
+                    android:textStyle="bold" />
 
                 <androidx.appcompat.widget.SwitchCompat
                     android:id="@+id/sheet_settings_monet_switch"
@@ -193,6 +165,14 @@
                         android:textColor="@color/text"
                         android:textSize="@dimen/text_body"
                         android:textStyle="bold" />
+
+                    <LinearLayout
+                        android:id="@+id/sheet_settings_palette_style_dots"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="8dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal" />
 
                     <TextView
                         android:id="@+id/sheet_settings_palette_style_value"
