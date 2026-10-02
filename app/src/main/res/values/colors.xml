@@ -2,6 +2,7 @@
 <resources>
     <color name="primary">#3D6FD4</color>
     <color name="primary_dark">#2E5BB8</color>
+    <color name="accent">#3D6FD4</color>
     <color name="accent_on">#FFFFFF</color>
     <color name="surface">#F7F8FB</color>
     <color name="card">#FFFFFF</color>

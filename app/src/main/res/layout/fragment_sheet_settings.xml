@@ -214,7 +214,7 @@
                         android:layout_height="wrap_content"
                         android:gravity="end|center_vertical"
                         android:text="Tonal Spot ▾"
-                        android:textColor="@color/accent"
+                        android:textColor="@color/primary"
                         android:textSize="@dimen/text_body"
                         android:textStyle="bold" />
                 </LinearLayout>
@@ -278,7 +278,7 @@
                         android:layout_height="wrap_content"
                         android:gravity="end|center_vertical"
                         android:text="M3 Expressive 2025 ▾"
-                        android:textColor="@color/accent"
+                        android:textColor="@color/primary"
                         android:textSize="@dimen/text_body"
                         android:textStyle="bold" />
                 </LinearLayout>
