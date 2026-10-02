@@ -84,6 +84,12 @@ BASE_EXCLUDES=(
     "--exclude=./storage"
     "--exclude=./usr/share/fonts/android/*"
     "--exclude=./usr/share/fonts/truetype/android/*"
+    "--exclude=.git"
+    "--exclude=.git/*"
+    "--exclude=.github"
+    "--exclude=.github/*"
+    "--exclude=.gitignore"
+    "--exclude=.gitattributes"
 )
 
 # 压缩引擎选择 (优先多线程 pigz)
