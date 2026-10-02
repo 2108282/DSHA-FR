@@ -171,9 +171,9 @@
                     android:gravity="center_vertical"
                     android:orientation="horizontal"
                     android:paddingStart="@dimen/card_pad"
-                    android:paddingTop="12dp"
+                    android:paddingTop="14dp"
                     android:paddingEnd="@dimen/card_pad"
-                    android:paddingBottom="12dp">
+                    android:paddingBottom="14dp">
 
                     <TextView
                         android:layout_width="36dp"
@@ -184,29 +184,15 @@
                         android:textColor="@color/text_secondary"
                         android:textSize="@dimen/text_title" />
 
-                    <LinearLayout
+                    <TextView
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="@dimen/gap_control"
                         android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="色彩风格"
-                            android:textColor="@color/text"
-                            android:textSize="@dimen/text_body"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="@dimen/gap_hair"
-                            android:text="8种壁纸动态色彩方案（Tonal Spot / Vibrant 等）"
-                            android:textColor="@color/text_muted"
-                            android:textSize="@dimen/text_caption" />
-                    </LinearLayout>
+                        android:text="色彩风格"
+                        android:textColor="@color/text"
+                        android:textSize="@dimen/text_body"
+                        android:textStyle="bold" />
 
                     <TextView
                         android:id="@+id/sheet_settings_palette_style_value"
@@ -248,36 +234,23 @@
                         android:textColor="@color/text_secondary"
                         android:textSize="@dimen/text_title" />
 
-                    <LinearLayout
+                    <TextView
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="@dimen/gap_control"
                         android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="色彩标准"
-                            android:textColor="@color/text"
-                            android:textSize="@dimen/text_body"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="@dimen/gap_hair"
-                            android:text="Material 3 规范版本（2021 或 2025 Expressive）"
-                            android:textColor="@color/text_muted"
-                            android:textSize="@dimen/text_caption" />
-                    </LinearLayout>
+                        android:text="色彩标准"
+                        android:textColor="@color/text"
+                        android:textSize="@dimen/text_body"
+                        android:textStyle="bold" />
 
                     <TextView
                         android:id="@+id/sheet_settings_color_spec_value"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:gravity="end|center_vertical"
-                        android:text="M3 Expressive 2025 ▾"
+                        android:lineSpacingExtra="2dp"
+                        android:text="Material 3\nExpressive 2025 ▾"
                         android:textColor="@color/primary"
                         android:textSize="@dimen/text_body"
                         android:textStyle="bold" />

@@ -252,7 +252,7 @@ public class SheetSettingsFragment extends Fragment {
         if ("spec_2021".equalsIgnoreCase(spec)) {
             return "Material 3 2021";
         }
-        return "Material 3 Expressive 2025";
+        return "Material 3\nExpressive 2025";
     }
 
     private void showPaletteStyleDialog(Context context, ConfigStore cfg, TextView styleValue) {
@@ -438,7 +438,7 @@ public class SheetSettingsFragment extends Fragment {
             row.setOnClickListener(v -> {
                 cfg.setSheetColorSpec(key);
                 if (specValue != null) {
-                    specValue.setText(label + " ▾");
+                    specValue.setText(getColorSpecTitle(key) + " ▾");
                 }
                 MonetThemeHelper.clearCache(context);
                 QuickChatSheetActivity.refreshThemeFromConfig(context);
