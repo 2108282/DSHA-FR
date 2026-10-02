@@ -182,8 +182,9 @@ EOF_PKG
         "--exclude=./root/.dsh/attachments/*"
         "--exclude=./root/.dsh/storages/*"
         # 排除模型账号与 API Key
-        "--exclude=./root/.dsh/agy-accounts.json"
-        "--exclude=./root/.dsh/agy-stats.json"
+        "--exclude=./root/.dsh/agy"
+        "--exclude=./root/.dsh/agy/*"
+        "--exclude=./root/.dsh/agy-*"
         "--exclude=./root/.dsh/.credentials.yaml"
         "--exclude=./root/.dsh/dsh-api-dashboard.json"
         "--exclude=./root/.dsh/settings.yaml*"
