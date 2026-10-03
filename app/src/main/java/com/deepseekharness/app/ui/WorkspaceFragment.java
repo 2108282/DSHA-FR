@@ -1,66 +1,67 @@
 package com.deepseekharness.app.ui;
 
-import android.content.Context;
-import android.widget.CheckBox;
-import android.widget.LinearLayout;
-import androidx.appcompat.app.AlertDialog;
-import com.google.android.material.dialog.MaterialAlertDialogBuilder;
-import android.net.Uri;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
-import com.deepseekharness.app.BackupManager;
 import com.deepseekharness.app.R;
-import com.deepseekharness.app.core.HarnessController;
-import com.deepseekharness.app.util.BackupScope;
-
-import java.io.File;
+import com.deepseekharness.app.ui.contract.WorkspaceActions;
+import com.deepseekharness.app.ui.contract.WorkspacePresenter;
+import com.deepseekharness.app.ui.contract.WorkspaceUiState;
 
 /**
- * 数据与备份子页：备份（按范围 + 验证）/ 恢复（合并 + 验证）。
+ * 数据与备份子页：纯渲染与契约驱动。
  */
-public class WorkspaceFragment extends Fragment {
+public class WorkspaceFragment extends Fragment implements WorkspacePresenter.ViewCallback {
 
-    private final Handler main = new Handler(Looper.getMainLooper());
-    private HarnessController controller;
+    private WorkspacePresenter presenter;
+    private WorkspaceActions actions;
+
+    private EditText wsPathInput;
+    private TextView rootStatusView;
+
+    private final ActivityResultLauncher<String[]> restorePicker =
+            registerForActivityResult(
+                    new ActivityResultContracts.OpenDocument(),
+                    uri -> {
+                        if (uri != null && actions != null) {
+                            actions.onRestoreSelected(uri);
+                        }
+                    });
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
         View v = inflater.inflate(R.layout.fragment_workspace, container, false);
-        controller = new HarnessController(requireContext());
 
-        v.findViewById(R.id.sub_back).setOnClickListener(x -> getParentFragmentManager().popBackStack());
-        v.findViewById(R.id.workspace_backup).setOnClickListener(x -> chooseScopeAndBackup());
-        v.findViewById(R.id.workspace_restore).setOnClickListener(x -> confirmRestore());
+        presenter = new WorkspacePresenter(requireActivity(), this);
+        actions = presenter;
+
+        wsPathInput = v.findViewById(R.id.workspace_path);
+        rootStatusView = v.findViewById(R.id.workspace_shizuku_status);
+
+        v.findViewById(R.id.sub_back).setOnClickListener(x -> actions.onBackClick());
+        v.findViewById(R.id.workspace_backup).setOnClickListener(x -> actions.onBackupClick());
+        v.findViewById(R.id.workspace_restore).setOnClickListener(x -> actions.onRestoreClick());
         v.findViewById(R.id.workspace_location).setOnClickListener(x ->
                 Toast.makeText(requireContext(), "备份保存在 Download/DSHA/", Toast.LENGTH_LONG).show());
 
-        // 工作区路径配置
-        android.widget.EditText wsPathInput = v.findViewById(R.id.workspace_path);
         if (wsPathInput != null) {
-            wsPathInput.setText(controller.config().getWorkdir());
-            v.findViewById(R.id.workspace_apply).setOnClickListener(x -> {
-                String newWd = wsPathInput.getText().toString().trim();
-                if (!newWd.isEmpty()) {
-                    controller.config().setWorkdir(newWd);
-                    Toast.makeText(requireContext(), "工作区目录已更新：" + newWd, Toast.LENGTH_SHORT).show();
-                }
-            });
+            v.findViewById(R.id.workspace_apply).setOnClickListener(x ->
+                    actions.onApplyWorkdir(wsPathInput.getText().toString()));
         }
 
-        // 文件共享与原生存储映射
         TextView shareStatus = v.findViewById(R.id.workspace_share_status);
         if (shareStatus != null) {
             shareStatus.setText("KernelSU / Magisk 原生环境已打通直连：\n\n"
@@ -71,192 +72,43 @@ public class WorkspaceFragment extends Fragment {
                     + "支持在 MT 管理器、Termux 或手机系统文件管理器中直接访问与读写！");
         }
 
-        // Root 权限检测
-        v.findViewById(R.id.workspace_shizuku_auth).setOnClickListener(x -> {
-            new Thread(() -> {
-                boolean ok = false;
-                try {
-                    Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "id"});
-                    ok = (p.waitFor() == 0);
-                } catch (Throwable ignored) {}
-                final boolean rootOk = ok;
-                if (getActivity() != null) {
-                    getActivity().runOnUiThread(() -> {
-                        Toast.makeText(requireContext(), rootOk ? "✅ Root 授权正常（KernelSU/Magisk）" : "❌ 未获取到 Root 权限，请在授权管理器中允许", Toast.LENGTH_SHORT).show();
-                        refreshShizukuStatus();
-                    });
-                }
-            }).start();
-        });
+        v.findViewById(R.id.workspace_shizuku_auth).setOnClickListener(x -> actions.onCheckRootClick());
 
-        refreshShizukuStatus();
+        presenter.init();
         return v;
     }
 
-    private void refreshShizukuStatus() {
+    @Override
+    public void onDestroyView() {
+        presenter = null;
+        actions = null;
+        wsPathInput = null;
+        rootStatusView = null;
+        super.onDestroyView();
+    }
+
+    @Override
+    public void onRender(WorkspaceUiState state) {
+        if (!isAdded() || getView() == null) return;
+        if (wsPathInput != null && state.workdirPath != null) {
+            wsPathInput.setText(state.workdirPath);
+        }
+        if (rootStatusView != null && state.rootStatusText != null) {
+            rootStatusView.setText(state.rootStatusText);
+        }
+    }
+
+    @Override
+    public void onLaunchRestorePicker() {
         try {
-            TextView status = getView() == null ? null
-                    : getView().findViewById(R.id.workspace_shizuku_status);
-            if (status == null) return;
-            new Thread(() -> {
-                boolean ok = false;
-                try {
-                    Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "id"});
-                    ok = (p.waitFor() == 0);
-                } catch (Throwable ignored) {}
-                final boolean rootOk = ok;
-                if (getActivity() != null) {
-                    getActivity().runOnUiThread(() -> {
-                        if (status != null && isAdded()) {
-                            status.setText(rootOk
-                                    ? "✅ 原生 Root 权限已就绪（免 ADB / 免 Shizuku）"
-                                    : "⚠️ 未获取到 Root 权限，请在 KernelSU/Magisk 中授权");
-                        }
-                    });
-                }
-            }).start();
-        } catch (Throwable ignored) {
+            restorePicker.launch(new String[]{"*/*"});
+        } catch (Throwable t) {
+            Toast.makeText(requireContext(), "打开选择器失败：" + t.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
 
-    private void chooseScopeAndBackup() {
-        final CharSequence[] choices = new CharSequence[BackupScope.ALL.length];
-        for (int i = 0; i < BackupScope.ALL.length; i++) {
-            choices[i] = BackupScope.label(BackupScope.ALL[i]) + "\n" + BackupScope.describe(BackupScope.ALL[i]);
-        }
-        final int[] selected = {0};
-        new MaterialAlertDialogBuilder(requireContext())
-                .setTitle("选择备份范围")
-                .setSingleChoiceItems(choices, 0, (d, which) -> selected[0] = which)
-                .setPositiveButton("下一步", (d, which) -> confirmBackup(BackupScope.ALL[selected[0]]))
-                .setNegativeButton("取消", null)
-                .show();
-    }
-
-    private void confirmBackup(final int scope) {
-        Context ctx = requireContext();
-        float density = getResources().getDisplayMetrics().density;
-        int padH = (int) (20 * density);
-        int padTop = (int) (8 * density);
-
-        LinearLayout layout = new LinearLayout(ctx);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(padH, padTop, padH, 0);
-
-        TextView summaryView = new TextView(ctx);
-        String summary = "即将备份：" + BackupScope.label(scope)
-                + "\n" + BackupScope.describe(scope)
-                + "\n\n保存位置：Download/DSHA/" + BackupScope.fileNamePrefix(scope) + "latest.tar.gz";
-        summaryView.setText(summary);
-        summaryView.setTextSize(14);
-        summaryView.setTextColor(androidx.core.content.ContextCompat.getColor(ctx, R.color.text_secondary));
-        summaryView.setLineSpacing(0f, 1.25f);
-        layout.addView(summaryView);
-
-        CheckBox cbApiKey = new CheckBox(ctx);
-        cbApiKey.setText("同时备份 API key（关掉更安全，恢复后需重填）");
-        cbApiKey.setTextSize(14);
-        cbApiKey.setTextColor(androidx.core.content.ContextCompat.getColor(ctx, R.color.text));
-        cbApiKey.setChecked(false);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-        );
-        lp.topMargin = (int) (14 * density);
-        cbApiKey.setLayoutParams(lp);
-        layout.addView(cbApiKey);
-
-        new MaterialAlertDialogBuilder(ctx)
-                .setTitle("确认备份")
-                .setView(layout)
-                .setPositiveButton("开始备份", (d, w) -> doBackup(scope, cbApiKey.isChecked()))
-                .setNegativeButton("取消", null)
-                .show();
-    }
-
-    private void doBackup(final int scope, final boolean includeApiKey) {
-        toast("开始备份…");
-        final android.content.Context app = requireContext().getApplicationContext();
-        new Thread(() -> {
-            String path = BackupManager.backupToExternal(app, controller, scope, includeApiKey);
-            main.post(() -> {
-                if (path == null) {
-                    new MaterialAlertDialogBuilder(requireContext())
-                            .setTitle("备份失败")
-                            .setMessage(BackupManager.lastError())
-                            .setPositiveButton("关闭", null)
-                            .show();
-                } else {
-                    new MaterialAlertDialogBuilder(requireContext())
-                            .setTitle("备份成功（已校验）")
-                            .setMessage("已备份 " + BackupScope.label(scope)
-                                    + (includeApiKey ? "（已包含 API Key）" : "（未包含 API Key）")
-                                    + "\n\n保存位置：\n" + path
-                                    + "\n\n归档已通过条目数与大小校验。")
-                            .setPositiveButton("关闭", null)
-                            .show();
-                }
-            });
-        }, "dsha-backup").start();
-    }
-
-    private final androidx.activity.result.ActivityResultLauncher<String[]> restorePicker =
-            registerForActivityResult(
-                    new androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
-                    uri -> {
-                        if (uri != null) doRestore(uri);
-                    });
-
-    private void confirmRestore() {
-        new MaterialAlertDialogBuilder(requireContext())
-                .setTitle("恢复备份")
-                .setMessage("选择要恢复的备份文件（Download/DSHA/ 下的 .tar.gz）。\n\n"
-                        + "会覆盖当前配置/对话（恢复前会自动把现有 .dsh 挪到 .dsh.pre-restore-* 保留）。\n确定？")
-                .setPositiveButton("选择文件", (d, w) -> {
-                    android.util.Log.i("DSHA-restore", "选择文件按钮点击，准备 launch");
-                    try {
-                        restorePicker.launch(new String[]{"*/*"});
-                        android.util.Log.i("DSHA-restore", "launch 已调用");
-                    } catch (Throwable t) {
-                        android.util.Log.e("DSHA-restore", "launch 异常: " + t, t);
-                        Toast.makeText(requireContext(), "打开选择器失败：" + t.getMessage(),
-                                Toast.LENGTH_LONG).show();
-                    }
-                })
-                .setNegativeButton("取消", null)
-                .show();
-    }
-
-    private void doRestore(Uri backupUri) {
-        toast("开始恢复…");
-        final android.content.Context app = requireContext().getApplicationContext();
-        new Thread(() -> {
-            try {
-                // 恢复前先尝试停止后台服务，释放文件句柄
-                try { controller.stopWeb(); } catch (Throwable ignored) {}
-                String report = BackupManager.restoreFromBackup(app, controller, backupUri);
-                main.post(() -> new MaterialAlertDialogBuilder(requireContext())
-                        .setTitle("恢复完成（已校验）")
-                        .setMessage(report + "\n\n建议立即重启服务以加载恢复的数据。")
-                        .setPositiveButton("立即重启", (d, w) -> {
-                            controller.stopWeb();
-                            controller.startWeb(null);
-                            Toast.makeText(requireContext(), "正在重启服务…", Toast.LENGTH_SHORT).show();
-                        })
-                        .setNegativeButton("稍后手动启动", null)
-                        .show());
-            } catch (Exception e) {
-                String msg = e.getMessage() == null ? e.toString() : e.getMessage();
-                main.post(() -> new MaterialAlertDialogBuilder(requireContext())
-                        .setTitle("恢复失败")
-                        .setMessage(msg)
-                        .setPositiveButton("关闭", null)
-                        .show());
-            }
-        }, "dsha-restore").start();
-    }
-
-    private void toast(String s) {
-        Toast.makeText(requireContext(), s, Toast.LENGTH_SHORT).show();
+    @Override
+    public void onGoBack() {
+        getParentFragmentManager().popBackStack();
     }
 }

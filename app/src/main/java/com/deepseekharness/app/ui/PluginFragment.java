@@ -229,9 +229,12 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
         });
 
         // 4. 观察 Repository 状态流
-        repository.state().observe(getViewLifecycleOwner(), state -> presenter.updateRepoState(state));
+        repository.state().observe(getViewLifecycleOwner(), state -> {
+            presenter.updateRepoState(state);
+            checkShowInstallPreview();
+        });
         repository.preview().observe(getViewLifecycleOwner(), preview -> {
-            if (preview != null) showInstallPreview(preview);
+            if (preview != null) checkShowInstallPreview();
         });
 
         if (!repository.isBusy() && ((saved == null && getArguments() != null && getArguments().getBoolean("show_installed", false))
@@ -344,6 +347,9 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
         visibleItems.clear();
         visibleItems.addAll(state.displayItems);
         adapter.notifyDataSetChanged();
+
+        // 7. 安装确认弹窗检测（解析完成时立即弹出）
+        checkShowInstallPreview();
     }
 
     @Override
@@ -364,11 +370,22 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
 
     @Override
     public void onShowInstallPreview(PluginRepository.Preview preview) {
+        if (preview != null && repository != null && !repository.isBusy()) {
+            showInstallPreview(preview);
+        } else {
+            checkShowInstallPreview();
+        }
+    }
+
+    private void checkShowInstallPreview() {
+        if (!isAdded() || root == null || previewDialog != null || repository == null) return;
+        PluginRepository.Preview preview = repository.preview().getValue();
+        if (preview == null || repository.isBusy()) return;
         showInstallPreview(preview);
     }
 
     private void showInstallPreview(PluginRepository.Preview preview) {
-        if (!isAdded() || root == null || repository.isBusy() || previewDialog != null || preview == null) return;
+        if (!isAdded() || root == null || previewDialog != null || preview == null) return;
         previewDialog = new AlertDialog.Builder(requireContext())
                 .setTitle("确认安装插件")
                 .setMessage(preview.description)

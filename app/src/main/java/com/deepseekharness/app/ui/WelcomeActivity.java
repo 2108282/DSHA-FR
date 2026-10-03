@@ -17,26 +17,26 @@ import androidx.viewpager2.widget.ViewPager2;
 
 import com.deepseekharness.app.R;
 import com.deepseekharness.app.core.ConfigStore;
-import com.deepseekharness.app.core.HarnessController;
+import com.deepseekharness.app.ui.contract.WelcomeActions;
+import com.deepseekharness.app.ui.contract.WelcomeUiState;
 
 import java.util.Arrays;
 import java.util.List;
 
-/**
- * 欢迎引导（3 页）：第 3 页点「开始」进入解压/主界面。
- */
-public class WelcomeActivity extends AppCompatActivity {
+public class WelcomeActivity extends AppCompatActivity implements WelcomeActions {
 
-    private final int[] pages = { R.layout.welcome_page1, R.layout.welcome_page2, R.layout.welcome_page3 };
     private final TextView[] dots = new TextView[3];
+    private ViewPager2 pager;
+    private Button actionBtn;
+    private final WelcomeActions actions = this;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_welcome);
 
-        ViewPager2 pager = findViewById(R.id.welcome_pager);
-        Button btn = findViewById(R.id.welcome_btn);
+        pager = findViewById(R.id.welcome_pager);
+        actionBtn = findViewById(R.id.welcome_btn);
         LinearLayout dotsBox = findViewById(R.id.welcome_dots);
 
         pager.setAdapter(new PageAdapter());
@@ -54,28 +54,44 @@ public class WelcomeActivity extends AppCompatActivity {
             dotsBox.addView(d);
             dots[i] = d;
         }
-        dots[0].setTextColor(getColor(R.color.primary));
 
         pager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
             @Override
             public void onPageSelected(int position) {
-                for (int i = 0; i < 3; i++) {
-                    dots[i].setTextColor(getColor(i == position ? R.color.primary : R.color.text_muted));
-                }
-                btn.setText(position == 2 ? "开始" : "下一步");
+                actions.onPageSelected(position);
             }
         });
 
-        btn.setOnClickListener(v -> {
-            int cur = pager.getCurrentItem();
-            if (cur < 2) {
-                pager.setCurrentItem(cur + 1);
-            } else {
-                new ConfigStore(this).setWelcomed(true);
-                startActivity(new Intent(this, MainActivity.class));
-                finish();
-            }
-        });
+        actionBtn.setOnClickListener(v -> actions.onNextOrStartClick());
+
+        actions.onPageSelected(0);
+    }
+
+    private void render(WelcomeUiState state) {
+        for (int i = 0; i < 3; i++) {
+            dots[i].setTextColor(getColor(i == state.position ? R.color.primary : R.color.text_muted));
+        }
+        if (actionBtn != null) {
+            actionBtn.setText(state.buttonText);
+        }
+    }
+
+    @Override
+    public void onNextOrStartClick() {
+        int cur = pager.getCurrentItem();
+        if (cur < 2) {
+            pager.setCurrentItem(cur + 1);
+        } else {
+            new ConfigStore(this).setWelcomed(true);
+            startActivity(new Intent(this, MainActivity.class));
+            finish();
+        }
+    }
+
+    @Override
+    public void onPageSelected(int position) {
+        String text = (position == 2) ? "开始" : "下一步";
+        render(new WelcomeUiState(position, text));
     }
 
     private class PageAdapter extends RecyclerView.Adapter<PageAdapter.Holder> {
@@ -90,8 +106,7 @@ public class WelcomeActivity extends AppCompatActivity {
         }
 
         @Override
-        public void onBindViewHolder(@NonNull Holder holder, int position) {
-        }
+        public void onBindViewHolder(@NonNull Holder holder, int position) {}
 
         @Override
         public int getItemViewType(int position) {

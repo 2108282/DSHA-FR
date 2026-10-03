@@ -25,6 +25,8 @@ import com.deepseekharness.app.PtySession;
 import com.deepseekharness.app.R;
 import com.deepseekharness.app.core.HarnessController;
 import com.deepseekharness.app.util.SensitiveData;
+import com.deepseekharness.app.ui.contract.PtyTerminalActions;
+import com.deepseekharness.app.ui.contract.PtyTerminalUiState;
 import com.termux.terminal.TerminalSession;
 import com.termux.view.TerminalView;
 import com.termux.view.TerminalViewClient;
@@ -40,7 +42,9 @@ import com.termux.view.TerminalViewClient;
  * 真正结束只发生在 {@link #shutdown()}（App 退出时 MainActivity 调）。
  */
 public final class PtyTerminalFragment extends Fragment
-        implements TerminalViewClient, PtySession.Listener {
+        implements TerminalViewClient, PtySession.Listener, PtyTerminalActions {
+
+    private final PtyTerminalActions actions = this;
 
     /** true = 用这一页，false = 用旧的简易终端。默认 true。 */
     public static final String KEY_PTY = "term_pty";
@@ -123,9 +127,9 @@ public final class PtyTerminalFragment extends Fragment
         applyFontSize(fontSp());
         buildExtraKeys(root.findViewById(R.id.pty_keys));
 
-        root.findViewById(R.id.pty_font_dec).setOnClickListener(v -> bumpFont(-1));
-        root.findViewById(R.id.pty_font_inc).setOnClickListener(v -> bumpFont(+1));
-        root.findViewById(R.id.pty_simple).setOnClickListener(v -> switchToSimple());
+        root.findViewById(R.id.pty_font_dec).setOnClickListener(v -> actions.onBumpFont(-1));
+        root.findViewById(R.id.pty_font_inc).setOnClickListener(v -> actions.onBumpFont(+1));
+        root.findViewById(R.id.pty_simple).setOnClickListener(v -> actions.onSwitchToSimple());
 
         if (!c.proot().isEnvironmentReady()) {
             title.setText("未检测到 /data/adb/dsha 原生模块或未授予 Root 权限");
@@ -191,9 +195,9 @@ public final class PtyTerminalFragment extends Fragment
             if (seq == null) {
                 if ("CTRL".equals(label)) ctrlBtn = b;
                 else altBtn = b;
-                b.setOnClickListener(v -> toggleModifier(label));
+                b.setOnClickListener(v -> actions.onToggleModifier(label));
             } else {
-                b.setOnClickListener(v -> send(seq));
+                b.setOnClickListener(v -> actions.onSendKey(seq));
             }
             box.addView(b);
         }
@@ -232,6 +236,31 @@ public final class PtyTerminalFragment extends Fragment
             altDown = false;
             paintModifiers();
         }
+    }
+
+    @Override
+    public void onBumpFont(int delta) {
+        bumpFont(delta);
+    }
+
+    @Override
+    public void onSwitchToSimple() {
+        switchToSimple();
+    }
+
+    @Override
+    public void onToggleModifier(String which) {
+        toggleModifier(which);
+    }
+
+    @Override
+    public void onSendKey(String seq) {
+        send(seq);
+    }
+
+    public void render(PtyTerminalUiState state) {
+        if (title != null) title.setText(state.title);
+        paintModifiers();
     }
 
     // ==================== 字号与切换 ====================
