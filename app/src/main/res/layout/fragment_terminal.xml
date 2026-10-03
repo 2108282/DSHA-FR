@@ -5,8 +5,8 @@
     android:background="@color/surface"
     android:orientation="vertical"
     android:paddingStart="@dimen/page_pad"
+    android:paddingTop="8dp"
     android:paddingEnd="@dimen/page_pad"
-    android:paddingTop="6dp"
     android:paddingBottom="@dimen/gap_control">
 
     <LinearLayout
@@ -19,12 +19,12 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:background="@drawable/bg_chip"
+            android:background="@drawable/m3_card_expressive_item"
             android:fontFamily="monospace"
             android:paddingStart="@dimen/gap_control"
-            android:paddingTop="7dp"
+            android:paddingTop="9dp"
             android:paddingEnd="@dimen/gap_control"
-            android:paddingBottom="7dp"
+            android:paddingBottom="9dp"
             android:text="Ubuntu · 原生 Root"
             android:textColor="@color/text_secondary"
             android:textSize="@dimen/text_caption" />
@@ -38,9 +38,14 @@
             android:id="@+id/term_ctrlc"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:padding="6dp"
+            android:background="@drawable/m3_btn_tonal_expressive"
+            android:minWidth="48dp"
+            android:minHeight="48dp"
+            android:gravity="center"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
             android:text="中止"
-            android:textColor="@color/text_muted"
+            android:textColor="@color/m3_secondary_on_container"
             android:textSize="@dimen/text_caption" />
 
         <TextView
@@ -48,20 +53,29 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="@dimen/gap_tight"
-            android:padding="6dp"
+            android:background="@drawable/m3_btn_tonal_expressive"
+            android:minWidth="48dp"
+            android:minHeight="48dp"
+            android:gravity="center"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
             android:text="清理"
-            android:textColor="@color/text_muted"
+            android:textColor="@color/m3_secondary_on_container"
             android:textSize="@dimen/text_caption" />
 
-        <!-- 切回真 PTY 终端（vim / htop / tmux 要用那一套） -->
         <TextView
             android:id="@+id/term_pty"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="@dimen/gap_tight"
-            android:padding="6dp"
+            android:background="@drawable/m3_btn_tonal_expressive"
+            android:minWidth="48dp"
+            android:minHeight="48dp"
+            android:gravity="center"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
             android:text="PTY"
-            android:textColor="@color/text_muted"
+            android:textColor="@color/m3_secondary_on_container"
             android:textSize="@dimen/text_caption" />
     </LinearLayout>
 
@@ -69,7 +83,7 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:background="@drawable/bg_preview"
+        android:background="@drawable/bg_terminal"
         android:orientation="vertical">
 
         <ScrollView

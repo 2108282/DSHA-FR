@@ -1,40 +1,89 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="primary">#7DA7F4</color>
-    <color name="primary_dark">#6F9BEF</color>
-    <color name="accent_on">#0B1524</color>
-    <color name="surface">#10141B</color>
-    <color name="card">#161B24</color>
-    <color name="raised">#1C2330</color>
-    <color name="line">#2A3344</color>
-    <color name="text">#E8ECF4</color>
-    <color name="text_secondary">#A6B0C3</color>
-    <color name="text_muted">#6B7689</color>
-    <color name="ok">#7ED6A2</color>
-    <color name="warn">#E5C07B</color>
-    <color name="err">#E08A8A</color>
-    <color name="preview">#0A0D12</color>
+    <!-- ========== DSHA Core Palette — M3 Expressive 2024~2025 (Dark) ========== -->
+    <color name="primary">#8EAAFF</color>
+    <color name="primary_dark">#7D9CF5</color>
+    <color name="accent">#8EAAFF</color>
+    <color name="accent_on">#0D1628</color>
+
+    <color name="surface">#0E1219</color>
+    <color name="card">#171C26</color>
+    <color name="raised">#1D2433</color>
+    <color name="line">#2B3547</color>
+
+    <color name="text">#E9EDF6</color>
+    <color name="text_secondary">#A3ADC2</color>
+    <color name="text_muted">#6A7590</color>
+
+    <color name="ok">#6DD8A0</color>
+    <color name="warn">#F0C97D</color>
+    <color name="err">#F09090</color>
+    <color name="preview">#0B0E14</color>
+
+    <color name="terminal_surface">#090C11</color>
+    <color name="terminal_outline">#1E2A3E</color>
     <color name="logo_top">#273349</color>
     <color name="logo_bot">#161D2B</color>
-    <!-- 深色底下涟漪要更亮一点才看得见 -->
-    <color name="ripple">#337DA7F4</color>
-    <color name="disabled">#1B2130</color>
-    <color name="err_bg">#1AE08A8A</color>
-    <!-- 危险操作按钮深色模式：暗红背景 + 纯白文字高对比度 -->
-    <color name="btn_danger_bg">#992B2B</color>
+    <color name="ripple">#358EAAFF</color>
+    <color name="disabled">#1C2230</color>
+    <color name="err_bg">#1CF09090</color>
+    <color name="btn_danger_bg">#A33333</color>
     <color name="btn_danger_text">#FFFFFF</color>
 
-    <!-- ========== M3 Expressive 2024~2025 现代设计系统代币 (夜间) ========== -->
-    <color name="m3_surface_container_lowest">#0C1017</color>
-    <color name="m3_surface_container_low">#131822</color>
-    <color name="m3_surface_container">#181F2C</color>
-    <color name="m3_surface_container_high">#1E2636</color>
-    <color name="m3_surface_container_highest">#252F42</color>
-    <color name="m3_outline">#3E485B</color>
-    <color name="m3_outline_variant">#2E3748</color>
-    <color name="m3_tertiary">#D0BCFF</color>
-    <color name="m3_tertiary_container">#4F378B</color>
+    <!-- ========== M3 Expressive Surface Container (夜间) ========== -->
+    <color name="m3_surface_container_lowest">#0A0D14</color>
+    <color name="m3_surface_container_low">#121720</color>
+    <color name="m3_surface_container">#181E2A</color>
+    <color name="m3_surface_container_high">#1F2738</color>
+    <color name="m3_surface_container_highest">#273145</color>
+
+    <color name="m3_outline">#3E4A60</color>
+    <color name="m3_outline_variant">#2D3749</color>
+
+    <color name="m3_tertiary">#CDB8F0</color>
+    <color name="m3_tertiary_container">#4A3580</color>
     <color name="m3_tertiary_on_container">#EADDFF</color>
-    <color name="m3_secondary_container">#253E77</color>
-    <color name="m3_secondary_on_container">#D9E2FF</color>
+
+    <color name="m3_secondary_container">#293F7A</color>
+    <color name="m3_secondary_on_container">#D6E0FF</color>
+
+    <!-- ========== M3 Expressive 新增代币 (夜间) ========== -->
+    <color name="m3_primary_hover">#A0BAFF</color>
+    <color name="m3_primary_container">#2B3A6E</color>
+    <color name="m3_on_primary_container">#D6E0FF</color>
+
+    <color name="m3_success_container">#133D28</color>
+    <color name="m3_on_success_container">#8EEDB5</color>
+    <color name="m3_warning_container">#3D2E0A</color>
+    <color name="m3_on_warning_container">#F5D99A</color>
+    <color name="m3_error_container">#4D1818</color>
+    <color name="m3_on_error_container">#F5A8A8</color>
+
+    <color name="m3_expressive_accent">#9B9DFC</color>
+    <color name="m3_expressive_accent_soft">#252548</color>
+    <color name="m3_expressive_warm">#E8A050</color>
+    <color name="m3_expressive_warm_container">#3D2E14</color>
+
+    <color name="m3_nav_indicator">#293F7A</color>
+    <color name="m3_nav_on_indicator">#C0D0FF</color>
+    <color name="m3_nav_unselected">#6A7590</color>
+
+    <color name="m3_gradient_start">#5A7AFF</color>
+    <color name="m3_gradient_end">#9B7BCC</color>
+    <color name="m3_gradient_surface_start">#0E1219</color>
+    <color name="m3_gradient_surface_end">#151020</color>
+
+    <color name="m3_input_background">#141924</color>
+    <color name="m3_input_stroke">#2D3749</color>
+    <color name="m3_input_stroke_focused">#8EAAFF</color>
+
+    <color name="m3_chip_background">#1D2433</color>
+    <color name="m3_chip_selected_background">#293F7A</color>
+    <color name="m3_chip_text">#A3ADC2</color>
+    <color name="m3_chip_selected_text">#C0D0FF</color>
+
+    <color name="m3_scrim">#66000000</color>
+    <color name="m3_surface_dim">#0A0D13</color>
+    <color name="m3_surface_bright">#1F2738</color>
+    <color name="m3_divider">#0FE9EDF6</color>
 </resources>

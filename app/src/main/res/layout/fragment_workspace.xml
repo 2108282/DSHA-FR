@@ -29,7 +29,6 @@
             android:layout_height="wrap_content"
             android:text="数据与备份" />
 
-        <!-- M3 备份与恢复卡片 -->
         <LinearLayout
             style="@style/DshaCard.Expressive"
             android:layout_width="match_parent"
@@ -37,10 +36,9 @@
             android:layout_marginTop="@dimen/gap_control">
 
             <TextView
-                style="@style/DshaText.Display"
+                style="@style/DshaText.Headline"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textSize="18sp"
                 android:text="数据归档与迁移" />
 
             <TextView
@@ -59,10 +57,10 @@
                 android:layout_marginTop="@dimen/gap_control"
                 android:background="@drawable/m3_btn_primary_expressive"
                 android:text="选择备份范围并导出"
-                android:textStyle="bold"
                 android:textAllCaps="false"
                 android:textColor="@color/m3_btn_primary_text"
-                android:textSize="@dimen/text_body" />
+                android:textSize="@dimen/text_body"
+                android:textStyle="bold" />
 
             <Button
                 android:id="@+id/workspace_restore"
@@ -87,7 +85,6 @@
                 android:textSize="@dimen/text_body" />
         </LinearLayout>
 
-        <!-- M3 环境与工作区管理卡片 -->
         <LinearLayout
             style="@style/DshaCard.Expressive"
             android:layout_width="match_parent"
@@ -95,10 +92,9 @@
             android:layout_marginTop="@dimen/gap_section">
 
             <TextView
-                style="@style/DshaText.Display"
+                style="@style/DshaText.Headline"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textSize="18sp"
                 android:text="环境与工作区直通" />
 
             <TextView
@@ -106,8 +102,8 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/gap_control"
-                android:textStyle="bold"
-                android:text="默认工作区路径（直通手机物理存储）" />
+                android:text="默认工作区路径（直通手机物理存储）"
+                android:textStyle="bold" />
 
             <EditText
                 android:id="@+id/workspace_path"
@@ -128,10 +124,10 @@
                 android:layout_marginTop="@dimen/gap_control"
                 android:background="@drawable/m3_btn_tonal_expressive"
                 android:text="应用新工作区路径"
-                android:textStyle="bold"
                 android:textAllCaps="false"
                 android:textColor="@color/m3_btn_tonal_text"
-                android:textSize="@dimen/text_body" />
+                android:textSize="@dimen/text_body"
+                android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/workspace_info"
@@ -139,11 +135,10 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/gap_tight"
-                android:textColor="@color/text_muted"
-                android:lineSpacingExtra="3dp" />
+                android:lineSpacingExtra="3dp"
+                android:textColor="@color/text_muted" />
         </LinearLayout>
 
-        <!-- M3 宿主 Root Shell 能力卡片 -->
         <LinearLayout
             style="@style/DshaCard.Expressive"
             android:layout_width="match_parent"
@@ -151,10 +146,9 @@
             android:layout_marginTop="@dimen/gap_section">
 
             <TextView
-                style="@style/DshaText.Display"
+                style="@style/DshaText.Headline"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textSize="18sp"
                 android:text="宿主 Root Shell 能力" />
 
             <TextView
@@ -163,8 +157,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/gap_tight"
-                android:padding="12dp"
                 android:background="@drawable/m3_card_expressive_item"
+                android:padding="12dp"
                 android:text="正在检测 Root 权限..." />
 
             <Button
@@ -188,7 +182,6 @@
                 android:text="授权后，Agent 可通过 3095 硬件桥执行宿主 shell 命令：\ncurl http://127.0.0.1:3095/exec?cmd=..." />
         </LinearLayout>
 
-        <!-- 文件共享状态 -->
         <TextView
             android:id="@+id/workspace_share_status"
             style="@style/DshaText.Caption"

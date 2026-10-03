@@ -5,7 +5,7 @@
     android:layout_marginBottom="@dimen/gap_control"
     android:background="@drawable/m3_card_expressive"
     android:orientation="vertical"
-    android:padding="16dp">
+    android:padding="18dp">
 
     <TextView
         android:id="@+id/pluginName"

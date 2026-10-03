@@ -6,29 +6,32 @@
     android:background="@color/surface"
     android:orientation="vertical">
 
+    <!-- Top AppBar -->
     <LinearLayout
         android:id="@+id/app_bar"
         android:layout_width="match_parent"
-        android:layout_height="56dp"
+        android:layout_height="@dimen/appbar_height"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:paddingStart="@dimen/page_pad"
         android:paddingEnd="@dimen/gap_control">
 
+        <!-- Logo -->
         <FrameLayout
-            android:layout_width="32dp"
-            android:layout_height="32dp"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
             android:background="@drawable/bg_logo">
 
             <ImageView
-                android:layout_width="17dp"
-                android:layout_height="17dp"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
                 android:layout_gravity="center"
-                android:contentDescription="@null"
+                android:importantForAccessibility="no"
                 android:src="@drawable/ic_terminal"
                 app:tint="@color/primary" />
         </FrameLayout>
 
+        <!-- Title -->
         <TextView
             android:id="@+id/app_title"
             style="@style/DshaText.Title"
@@ -37,32 +40,33 @@
             android:layout_marginStart="@dimen/gap_control"
             android:text="启动" />
 
-        <!-- 标题右侧的弹性占位：把主题与「关于」挤到最右 -->
+        <!-- Spacer -->
         <View
             android:id="@+id/appbar_spacer"
             android:layout_width="0dp"
             android:layout_height="1dp"
             android:layout_weight="1" />
 
+        <!-- Theme toggle chip -->
         <TextView
             android:id="@+id/btn_theme"
             android:layout_width="wrap_content"
-            android:layout_height="32dp"
+            android:layout_height="34dp"
             android:layout_marginEnd="8dp"
             android:background="@drawable/bg_chip_clickable"
             android:clickable="true"
             android:focusable="true"
             android:gravity="center"
-            android:paddingStart="10dp"
-            android:paddingEnd="10dp"
+            android:paddingHorizontal="12dp"
             android:text="黑夜"
             android:textColor="@color/text_secondary"
             android:textSize="13sp" />
 
+        <!-- About button -->
         <FrameLayout
             android:id="@+id/btn_about"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
             android:background="@drawable/bg_chip_clickable"
             android:clickable="true"
             android:contentDescription="关于"
@@ -72,32 +76,35 @@
                 android:layout_width="16dp"
                 android:layout_height="16dp"
                 android:layout_gravity="center"
-                android:contentDescription="@null"
+                android:importantForAccessibility="no"
                 android:src="@drawable/ic_about"
                 app:tint="@color/text_secondary" />
         </FrameLayout>
     </LinearLayout>
 
+    <!-- Fragment container -->
     <FrameLayout
         android:id="@+id/fragment_container"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1" />
 
-    <!-- 底栏与内容区之间的分界线：没有它底栏会和页面糊在一起 -->
+    <!-- Divider -->
     <View
         android:layout_width="match_parent"
         android:layout_height="@dimen/stroke"
         android:background="@color/line" />
 
+    <!-- Bottom Navigation -->
     <com.google.android.material.bottomnavigation.BottomNavigationView
         android:id="@+id/bottom_nav"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@color/card"
+        android:background="@color/m3_surface_container_low"
         app:elevation="0dp"
         app:itemIconTint="@color/nav_item_tint"
         app:itemTextColor="@color/nav_item_tint"
         app:labelVisibilityMode="labeled"
         app:menu="@menu/bottom_nav_menu" />
+
 </LinearLayout>

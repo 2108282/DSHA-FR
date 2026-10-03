@@ -1,47 +1,89 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="primary">#3D6FD4</color>
-    <color name="primary_dark">#2E5BB8</color>
-    <color name="accent">#3D6FD4</color>
+    <!-- ========== DSHA Core Palette — M3 Expressive 2024~2025 ========== -->
+    <color name="primary">#4A6CF7</color>
+    <color name="primary_dark">#3B5DE6</color>
+    <color name="accent">#4A6CF7</color>
     <color name="accent_on">#FFFFFF</color>
-    <color name="surface">#F7F8FB</color>
+
+    <color name="surface">#F8F9FC</color>
     <color name="card">#FFFFFF</color>
-    <color name="raised">#EEF1F6</color>
-    <color name="line">#E2E6EE</color>
-    <color name="text">#1A2230</color>
-    <color name="text_secondary">#4A5568</color>
-    <color name="text_muted">#7A8494</color>
-    <color name="ok">#2F9E64</color>
-    <color name="warn">#C48A1A</color>
-    <color name="err">#C45A5A</color>
-    <color name="preview">#F0F3F8</color>
-    <!-- Termux 的默认 ANSI 前景色是白色；终端背景必须固定为深色，不能复用
-         会在浅色主题下变亮的 preview，否则就会出现浅灰底白字。 -->
-    <color name="terminal_surface">#0A0D12</color>
-    <color name="terminal_outline">#263041</color>
-    <color name="logo_top">#E8EEF8</color>
-    <color name="logo_bot">#D5DFF0</color>
-    <!-- 按压涟漪：主色低透明度，浅色底上淡淡一层 -->
-    <color name="ripple">#233D6FD4</color>
-    <!-- 禁用态：按钮变灰 + 文字降到可读下限（不可点却外观照旧最让人困惑） -->
-    <color name="disabled">#E9ECF2</color>
-    <!-- 状态色的浅底（用于状态条/标签背景，不刺眼） -->
-    <color name="err_bg">#14C45A5A</color>
-    <!-- 危险操作按钮：背景深红 + 纯白文字高对比度 -->
-    <color name="btn_danger_bg">#C45A5A</color>
+    <color name="raised">#EFF1F8</color>
+    <color name="line">#E0E4EF</color>
+
+    <color name="text">#151B2C</color>
+    <color name="text_secondary">#46516A</color>
+    <color name="text_muted">#7C869E</color>
+
+    <color name="ok">#22A96B</color>
+    <color name="warn">#D4941C</color>
+    <color name="err">#D35454</color>
+    <color name="preview">#F0F2F9</color>
+
+    <color name="terminal_surface">#0B0E14</color>
+    <color name="terminal_outline">#1E2A3E</color>
+    <color name="logo_top">#E6EDF8</color>
+    <color name="logo_bot">#D0DBEF</color>
+    <color name="ripple">#254A6CF7</color>
+    <color name="disabled">#E7EAF3</color>
+    <color name="err_bg">#14D35454</color>
+    <color name="btn_danger_bg">#D35454</color>
     <color name="btn_danger_text">#FFFFFF</color>
 
-    <!-- ========== M3 Expressive 2024~2025 现代设计系统代币 ========== -->
+    <!-- ========== M3 Expressive Surface Container 阶梯 ========== -->
     <color name="m3_surface_container_lowest">#FFFFFF</color>
-    <color name="m3_surface_container_low">#F3F5FA</color>
-    <color name="m3_surface_container">#EDEFF6</color>
-    <color name="m3_surface_container_high">#E7EAF2</color>
-    <color name="m3_surface_container_highest">#E1E4ED</color>
-    <color name="m3_outline">#D2D6E3</color>
-    <color name="m3_outline_variant">#E3E6EF</color>
-    <color name="m3_tertiary">#6750A4</color>
-    <color name="m3_tertiary_container">#EADDFF</color>
-    <color name="m3_tertiary_on_container">#21005D</color>
-    <color name="m3_secondary_container">#D9E2FF</color>
-    <color name="m3_secondary_on_container">#001945</color>
+    <color name="m3_surface_container_low">#F4F5FB</color>
+    <color name="m3_surface_container">#ECEEF7</color>
+    <color name="m3_surface_container_high">#E5E8F3</color>
+    <color name="m3_surface_container_highest">#DFE2EE</color>
+
+    <color name="m3_outline">#CDD2E3</color>
+    <color name="m3_outline_variant">#DFE3F0</color>
+
+    <color name="m3_tertiary">#7B5EA7</color>
+    <color name="m3_tertiary_container">#F0E6FF</color>
+    <color name="m3_tertiary_on_container">#2D0F58</color>
+
+    <color name="m3_secondary_container">#DBE3FF</color>
+    <color name="m3_secondary_on_container">#0A1B4D</color>
+
+    <!-- ========== M3 Expressive 新增设计代币 ========== -->
+    <color name="m3_primary_hover">#3F5FE8</color>
+    <color name="m3_primary_container">#E0E7FF</color>
+    <color name="m3_on_primary_container">#1A2870</color>
+
+    <color name="m3_success_container">#DFFAE9</color>
+    <color name="m3_on_success_container">#064D2A</color>
+    <color name="m3_warning_container">#FFF3D6</color>
+    <color name="m3_on_warning_container">#5C3D00</color>
+    <color name="m3_error_container">#FFE5E5</color>
+    <color name="m3_on_error_container">#5C0D0D</color>
+
+    <color name="m3_expressive_accent">#6366F1</color>
+    <color name="m3_expressive_accent_soft">#E8E8FE</color>
+    <color name="m3_expressive_warm">#F59E42</color>
+    <color name="m3_expressive_warm_container">#FFF5E6</color>
+
+    <color name="m3_nav_indicator">#DDE3FF</color>
+    <color name="m3_nav_on_indicator">#2B3EA0</color>
+    <color name="m3_nav_unselected">#7C869E</color>
+
+    <color name="m3_gradient_start">#4A6CF7</color>
+    <color name="m3_gradient_end">#7B5EA7</color>
+    <color name="m3_gradient_surface_start">#F8F9FC</color>
+    <color name="m3_gradient_surface_end">#F0EEFA</color>
+
+    <color name="m3_input_background">#F2F4FA</color>
+    <color name="m3_input_stroke">#D5D9EA</color>
+    <color name="m3_input_stroke_focused">#4A6CF7</color>
+
+    <color name="m3_chip_background">#EFF1F8</color>
+    <color name="m3_chip_selected_background">#E0E7FF</color>
+    <color name="m3_chip_text">#46516A</color>
+    <color name="m3_chip_selected_text">#2B3EA0</color>
+
+    <color name="m3_scrim">#33151B2C</color>
+    <color name="m3_surface_dim">#D8DBE9</color>
+    <color name="m3_surface_bright">#FAFAFD</color>
+    <color name="m3_divider">#0F151B2C</color>
 </resources>

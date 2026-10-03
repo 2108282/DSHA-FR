@@ -45,9 +45,9 @@
             android:layout_marginTop="16dp"
             android:background="@drawable/m3_btn_primary_expressive"
             android:text="修复证书与网络环境"
-            android:textStyle="bold"
             android:textAllCaps="false"
-            android:textColor="@color/m3_btn_primary_text" />
+            android:textColor="@color/m3_btn_primary_text"
+            android:textStyle="bold" />
 
         <Button
             android:id="@+id/diagnostic_plugins"
@@ -59,7 +59,6 @@
             android:textAllCaps="false"
             android:textColor="@color/m3_btn_tonal_text" />
 
-        <!-- M3 报告卡片代码块 -->
         <LinearLayout
             style="@style/DshaCard.Expressive"
             android:layout_width="match_parent"

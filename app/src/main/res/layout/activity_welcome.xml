@@ -34,9 +34,9 @@
             android:layout_height="@dimen/btn_height"
             android:background="@drawable/m3_btn_primary_expressive"
             android:text="下一步"
-            android:textStyle="bold"
             android:textAllCaps="false"
             android:textColor="@color/m3_btn_primary_text"
-            android:textSize="@dimen/text_body" />
+            android:textSize="@dimen/text_body"
+            android:textStyle="bold" />
     </LinearLayout>
 </LinearLayout>

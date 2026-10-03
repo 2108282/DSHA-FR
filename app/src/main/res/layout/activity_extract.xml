@@ -8,10 +8,10 @@
     android:padding="@dimen/page_pad_wide">
 
     <FrameLayout
-        android:layout_width="92dp"
-        android:layout_height="92dp"
+        android:layout_width="96dp"
+        android:layout_height="96dp"
         android:layout_marginBottom="@dimen/gap_section"
-        android:background="@drawable/bg_card">
+        android:background="@drawable/m3_card_expressive">
 
         <ProgressBar
             android:id="@+id/extract_bar"

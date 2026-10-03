@@ -4,6 +4,7 @@
     android:layout_height="match_parent"
     android:background="@color/surface">
 
+    <!-- Main content -->
     <LinearLayout
         android:id="@+id/launch_home"
         android:layout_width="match_parent"
@@ -14,12 +15,14 @@
         android:paddingEnd="@dimen/page_pad"
         android:paddingBottom="@dimen/gap_control">
 
-        <!-- M3 Expressive 主控大卡片 -->
+        <!-- Hero status card -->
         <LinearLayout
             style="@style/DshaCard.Expressive"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content">
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
 
+            <!-- Header row -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -41,10 +44,11 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:textSize="20sp"
-                    android:text="DSH 未运行" />
+                    android:text="DSH 未运行"
+                    android:textSize="22sp" />
             </LinearLayout>
 
+            <!-- Status line -->
             <TextView
                 android:id="@+id/launch_status"
                 style="@style/DshaText.Label"
@@ -53,6 +57,7 @@
                 android:layout_marginTop="@dimen/gap_tight"
                 android:textColor="@color/text_muted" />
 
+            <!-- Progress bar -->
             <ProgressBar
                 android:id="@+id/launch_busy"
                 style="?android:attr/progressBarStyleHorizontal"
@@ -63,6 +68,7 @@
                 android:indeterminateTint="@color/primary"
                 android:visibility="gone" />
 
+            <!-- Port row -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -75,8 +81,8 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="端口："
-                    android:textStyle="bold"
-                    android:textColor="@color/text_secondary" />
+                    android:textColor="@color/text_secondary"
+                    android:textStyle="bold" />
 
                 <EditText
                     android:id="@+id/launch_port_input"
@@ -89,8 +95,7 @@
                     android:importantForAutofill="no"
                     android:inputType="number"
                     android:maxLength="5"
-                    android:paddingStart="6dp"
-                    android:paddingEnd="6dp"
+                    android:paddingHorizontal="6dp"
                     android:textSize="14sp" />
 
                 <TextView
@@ -101,10 +106,8 @@
                     android:background="@drawable/bg_chip_clickable"
                     android:clickable="true"
                     android:focusable="true"
-                    android:paddingStart="10dp"
-                    android:paddingTop="5dp"
-                    android:paddingEnd="10dp"
-                    android:paddingBottom="5dp"
+                    android:paddingHorizontal="10dp"
+                    android:paddingVertical="5dp"
                     android:text="3080"
                     android:textColor="@color/text_secondary"
                     android:textSize="12sp" />
@@ -117,10 +120,8 @@
                     android:background="@drawable/bg_chip_clickable"
                     android:clickable="true"
                     android:focusable="true"
-                    android:paddingStart="10dp"
-                    android:paddingTop="5dp"
-                    android:paddingEnd="10dp"
-                    android:paddingBottom="5dp"
+                    android:paddingHorizontal="10dp"
+                    android:paddingVertical="5dp"
                     android:text="3088"
                     android:textColor="@color/text_secondary"
                     android:textSize="12sp" />
@@ -133,15 +134,14 @@
                     android:background="@drawable/bg_chip_clickable"
                     android:clickable="true"
                     android:focusable="true"
-                    android:paddingStart="10dp"
-                    android:paddingTop="5dp"
-                    android:paddingEnd="10dp"
-                    android:paddingBottom="5dp"
+                    android:paddingHorizontal="10dp"
+                    android:paddingVertical="5dp"
                     android:text="8080"
                     android:textColor="@color/text_secondary"
                     android:textSize="12sp" />
             </LinearLayout>
 
+            <!-- Button row -->
             <LinearLayout
                 android:id="@+id/launch_controls"
                 android:layout_width="match_parent"
@@ -186,24 +186,23 @@
                     android:textSize="@dimen/text_body" />
             </LinearLayout>
 
+            <!-- LAN address card -->
             <TextView
                 android:id="@+id/lan_addr"
                 style="@style/DshaText.Body"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:minHeight="@dimen/btn_height"
                 android:layout_marginTop="@dimen/gap_block"
                 android:background="@drawable/m3_card_expressive_item"
                 android:clickable="true"
                 android:focusable="true"
                 android:gravity="center"
-                android:paddingStart="@dimen/gap_control"
-                android:paddingTop="12dp"
-                android:paddingEnd="@dimen/gap_control"
-                android:paddingBottom="12dp"
+                android:minHeight="@dimen/btn_height"
+                android:padding="12dp"
                 android:textColor="@color/text"
                 android:visibility="gone" />
 
+            <!-- Sheet button -->
             <Button
                 android:id="@+id/launch_open_sheet"
                 android:layout_width="match_parent"
@@ -217,25 +216,27 @@
                 android:visibility="gone" />
         </LinearLayout>
 
-        <!-- M3 日志卡片 -->
+        <!-- Log card -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_marginTop="@dimen/gap_section"
             android:layout_weight="1"
             android:background="@drawable/m3_card_expressive"
-            android:padding="16dp"
-            android:orientation="vertical">
+            android:orientation="vertical"
+            android:padding="18dp">
 
+            <!-- Log header -->
             <TextView
                 style="@style/DshaText.Caption"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingBottom="@dimen/gap_tight"
                 android:letterSpacing="0.04"
-                android:textStyle="bold"
-                android:text="运行追踪 · dsh-web.log" />
+                android:paddingBottom="@dimen/gap_tight"
+                android:text="运行追踪 · dsh-web.log"
+                android:textStyle="bold" />
 
+            <!-- Log scroll -->
             <ScrollView
                 android:id="@+id/launch_log_scroll"
                 android:layout_width="match_parent"
@@ -249,8 +250,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:fontFamily="monospace"
-                    android:paddingTop="@dimen/gap_hair"
-                    android:paddingBottom="@dimen/gap_hair"
+                    android:paddingVertical="@dimen/gap_hair"
                     android:text="还没有日志。"
                     android:textColor="@color/text_secondary"
                     android:textIsSelectable="true" />
@@ -258,6 +258,7 @@
         </LinearLayout>
     </LinearLayout>
 
+    <!-- Web overlay -->
     <FrameLayout
         android:id="@+id/launch_web"
         android:layout_width="match_parent"
@@ -270,4 +271,5 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
     </FrameLayout>
+
 </FrameLayout>

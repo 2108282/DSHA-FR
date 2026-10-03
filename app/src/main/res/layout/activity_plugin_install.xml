@@ -29,7 +29,7 @@
             android:layout_marginTop="12dp"
             android:text="第三方插件安装" />
 
-        <!-- M3 详情卡片 -->
+        <!-- M3 Expressive 详情卡片 -->
         <LinearLayout
             style="@style/DshaCard.Expressive"
             android:layout_width="match_parent"

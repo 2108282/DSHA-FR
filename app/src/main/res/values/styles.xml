@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  文本与容器样式：字号/颜色/行距成套定义，布局引用 style 而不是各自硬编码。
-  之前同样是"页面标题"，启动页 15sp、市场页 22sp、解压页 21sp，字号阶梯断裂。
+  M3 Expressive 2024~2025 文本、容器与控件样式统一定义。
+  布局引用 style 而不是各自硬编码，字号/颜色/行距/圆角成套管理。
 -->
 <resources>
 
@@ -30,12 +30,22 @@
         <item name="android:textColor">@color/text</item>
     </style>
 
+    <!-- ========== 文本样式阶梯 — M3 Expressive Typography ========== -->
+
     <!-- 页面主标题（每页顶部只有一个） -->
     <style name="DshaText.Display" parent="">
         <item name="android:textSize">@dimen/text_display</item>
         <item name="android:textStyle">bold</item>
         <item name="android:textColor">@color/text</item>
         <item name="android:letterSpacing">-0.01</item>
+    </style>
+
+    <!-- 大区块标题（页面内分区，如「设置」页的各分组） -->
+    <style name="DshaText.Headline" parent="">
+        <item name="android:textSize">@dimen/text_headline</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/text</item>
+        <item name="android:letterSpacing">-0.005</item>
     </style>
 
     <!-- 区块标题（卡片内的小节名） -->
@@ -66,20 +76,78 @@
         <item name="android:lineSpacingExtra">2dp</item>
     </style>
 
-    <!-- 卡片容器：统一底色、圆角、内边距 -->
+    <!-- 上标 / 小型注释 -->
+    <style name="DshaText.Overline" parent="">
+        <item name="android:textSize">@dimen/text_overline</item>
+        <item name="android:textColor">@color/text_muted</item>
+        <item name="android:textAllCaps">true</item>
+        <item name="android:letterSpacing">0.05</item>
+    </style>
+
+    <!-- ========== 卡片容器样式 ========== -->
+
+    <!-- 标准卡片容器：统一底色、圆角、内边距 -->
     <style name="DshaCard" parent="">
         <item name="android:background">@drawable/bg_card</item>
         <item name="android:padding">@dimen/card_pad</item>
         <item name="android:orientation">vertical</item>
     </style>
 
-    <!-- M3 Expressive 2024~2025 现代卡片容器：24dp超大圆角与柔和微描边 -->
+    <!-- M3 Expressive 2024~2025 现代卡片容器：超大圆角与柔和微描边 -->
     <style name="DshaCard.Expressive" parent="">
         <item name="android:background">@drawable/m3_card_expressive</item>
-        <item name="android:padding">18dp</item>
+        <item name="android:padding">@dimen/card_pad_expressive</item>
         <item name="android:orientation">vertical</item>
     </style>
 
+    <!-- M3 Expressive 带阴影的卡片 -->
+    <style name="DshaCard.Expressive.Elevated" parent="DshaCard.Expressive">
+        <item name="android:elevation">@dimen/elevation_low</item>
+    </style>
+
+    <!-- ========== Chip 样式 ========== -->
+
+    <style name="DshaChip" parent="">
+        <item name="android:background">@drawable/bg_btn</item>
+        <item name="android:textSize">@dimen/text_label</item>
+        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:paddingLeft">@dimen/chip_pad_horizontal</item>
+        <item name="android:paddingRight">@dimen/chip_pad_horizontal</item>
+        <item name="android:paddingTop">@dimen/chip_pad_vertical</item>
+        <item name="android:paddingBottom">@dimen/chip_pad_vertical</item>
+        <item name="android:minHeight">@dimen/chip_height</item>
+        <item name="android:gravity">center</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+    </style>
+
+    <style name="DshaChip.Selected" parent="DshaChip">
+        <item name="android:background">@drawable/bg_btn_primary</item>
+        <item name="android:textColor">@color/accent_on</item>
+    </style>
+
+    <!-- ========== 输入框样式 ========== -->
+
+    <style name="DshaInput" parent="">
+        <item name="android:background">@drawable/bg_input</item>
+        <item name="android:textSize">@dimen/text_body</item>
+        <item name="android:textColor">@color/text</item>
+        <item name="android:textColorHint">@color/text_muted</item>
+        <item name="android:minHeight">@dimen/input_height</item>
+        <item name="android:paddingLeft">@dimen/card_pad</item>
+        <item name="android:paddingRight">@dimen/card_pad</item>
+        <item name="android:paddingTop">@dimen/gap_control</item>
+        <item name="android:paddingBottom">@dimen/gap_control</item>
+        <item name="android:singleLine">true</item>
+    </style>
+
+    <style name="DshaInput.Multiline" parent="DshaInput">
+        <item name="android:singleLine">false</item>
+        <item name="android:minLines">3</item>
+        <item name="android:gravity">top|start</item>
+    </style>
+
+    <!-- ========== 按钮样式 ========== -->
 
     <!-- 让 <Button> 回到「尊重 android:background」的行为。
          定义在 styles.xml（不分 day/night）而不是某一份 themes.xml ——
@@ -94,6 +162,53 @@
         <item name="android:textColor">@color/text</item>
         <item name="android:insetTop">0dp</item>
         <item name="android:insetBottom">0dp</item>
+        <item name="android:minHeight">@dimen/btn_height</item>
         <item name="rippleColor">@color/ripple</item>
     </style>
+
+    <!-- 主操作按钮：高对比度强调色填充 -->
+    <style name="Widget.DSHA.Button.Primary" parent="Widget.DSHA.Button">
+        <item name="android:background">@drawable/bg_btn_primary</item>
+        <item name="android:textColor">@color/accent_on</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <!-- 大尺寸主按钮：引导页/关键流程 -->
+    <style name="Widget.DSHA.Button.PrimaryLarge" parent="Widget.DSHA.Button.Primary">
+        <item name="android:minHeight">@dimen/btn_height_large</item>
+        <item name="android:textSize">@dimen/text_title</item>
+    </style>
+
+    <!-- 危险操作按钮 -->
+    <style name="Widget.DSHA.Button.Danger" parent="Widget.DSHA.Button">
+        <item name="android:textColor">@color/err</item>
+    </style>
+
+    <!-- ========== 列表项样式 ========== -->
+
+    <style name="DshaListItem" parent="">
+        <item name="android:minHeight">@dimen/touch_min</item>
+        <item name="android:paddingLeft">@dimen/list_item_pad_horizontal</item>
+        <item name="android:paddingRight">@dimen/list_item_pad_horizontal</item>
+        <item name="android:paddingTop">@dimen/list_item_pad_vertical</item>
+        <item name="android:paddingBottom">@dimen/list_item_pad_vertical</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+        <item name="android:background">?attr/selectableItemBackground</item>
+    </style>
+
+    <!-- ========== 状态徽章 ========== -->
+
+    <style name="DshaStatusBadge" parent="">
+        <item name="android:textSize">@dimen/text_caption</item>
+        <item name="android:textColor">@color/accent_on</item>
+        <item name="android:background">@drawable/bg_btn_primary</item>
+        <item name="android:paddingLeft">@dimen/gap_tight</item>
+        <item name="android:paddingRight">@dimen/gap_tight</item>
+        <item name="android:paddingTop">@dimen/gap_hair</item>
+        <item name="android:paddingBottom">@dimen/gap_hair</item>
+        <item name="android:gravity">center</item>
+    </style>
+
 </resources>

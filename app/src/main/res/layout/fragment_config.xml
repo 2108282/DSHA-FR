@@ -49,10 +49,9 @@
             android:layout_marginTop="@dimen/gap_section">
 
             <TextView
-                style="@style/DshaText.Display"
+                style="@style/DshaText.Headline"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textSize="18sp"
                 android:text="端口与 CPU 调度" />
 
             <TextView
@@ -64,8 +63,8 @@
                 android:background="@drawable/m3_card_expressive_item"
                 android:paddingStart="14dp"
                 android:paddingEnd="14dp"
-                android:paddingTop="10dp"
-                android:paddingBottom="10dp"
+                android:paddingTop="12dp"
+                android:paddingBottom="12dp"
                 android:text="▸ 点击展开高级设置：端口与 CPU 亲和性 (Taskset)" />
 
             <LinearLayout
@@ -135,10 +134,9 @@
             android:layout_marginTop="@dimen/gap_section">
 
             <TextView
-                style="@style/DshaText.Display"
+                style="@style/DshaText.Headline"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textSize="18sp"
                 android:text="行为与系统直通" />
 
             <CheckBox
@@ -214,6 +212,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/gap_tight"
+                android:minHeight="@dimen/touch_min"
+                android:paddingStart="@dimen/gap_tight"
                 android:text="允许 agent 读传感器、开手电（环境光 / 加速度 / 磁力等）" />
 
             <CheckBox
@@ -221,6 +221,8 @@
                 style="@style/DshaText.Body"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:minHeight="@dimen/touch_min"
+                android:paddingStart="@dimen/gap_tight"
                 android:text="允许 agent 读取位置（仅在有需要时开启）" />
 
             <!-- 所有文件访问权限卡片 -->
@@ -237,8 +239,8 @@
                 android:orientation="horizontal"
                 android:paddingStart="14dp"
                 android:paddingEnd="14dp"
-                android:paddingTop="10dp"
-                android:paddingBottom="10dp">
+                android:paddingTop="12dp"
+                android:paddingBottom="12dp">
 
                 <LinearLayout
                     android:layout_width="0dp"
@@ -294,10 +296,9 @@
             android:layout_marginTop="@dimen/gap_section">
 
             <TextView
-                style="@style/DshaText.Display"
+                style="@style/DshaText.Headline"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textSize="18sp"
                 android:text="系统与保活权限" />
 
             <TextView
@@ -356,10 +357,9 @@
             android:layout_marginTop="@dimen/gap_section">
 
             <TextView
-                style="@style/DshaText.Display"
+                style="@style/DshaText.Headline"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textSize="18sp"
                 android:text="🎙️ 小米原生 ASR 语音引擎" />
 
             <TextView
@@ -387,6 +387,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="@dimen/gap_tight"
                 android:minHeight="@dimen/touch_min"
+                android:paddingStart="@dimen/gap_tight"
                 android:text="长语音连续接力模式" />
 
             <TextView

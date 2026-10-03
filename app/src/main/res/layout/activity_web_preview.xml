@@ -15,7 +15,7 @@
             android:id="@+id/web_error_panel"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:background="?android:attr/colorBackground"
+            android:background="@color/surface"
             android:fillViewport="true"
             android:visibility="gone">
             <LinearLayout
@@ -23,14 +23,12 @@
                 android:layout_height="wrap_content"
                 android:gravity="center_vertical"
                 android:orientation="vertical"
-                android:padding="24dp">
+                android:padding="@dimen/page_pad">
                 <TextView
                     android:id="@+id/web_error_title"
-                    style="@style/DshaText.Body"
+                    style="@style/DshaText.Display"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:textSize="20sp"
-                    android:textStyle="bold" />
+                    android:layout_height="wrap_content" />
                 <TextView
                     android:id="@+id/web_error_detail"
                     style="@style/DshaText.Body"
@@ -41,15 +39,22 @@
                 <Button
                     android:id="@+id/web_retry"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
+                    android:layout_height="@dimen/btn_height"
                     android:layout_marginTop="24dp"
-                    android:text="重试" />
+                    android:background="@drawable/m3_btn_primary_expressive"
+                    android:text="重试"
+                    android:textAllCaps="false"
+                    android:textColor="@color/m3_btn_primary_text"
+                    android:textStyle="bold" />
                 <Button
                     android:id="@+id/web_error_browser"
-                    style="?attr/borderlessButtonStyle"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="在系统浏览器中打开" />
+                    android:layout_height="@dimen/btn_height"
+                    android:layout_marginTop="@dimen/gap_tight"
+                    android:background="@drawable/m3_btn_tonal_expressive"
+                    android:text="在系统浏览器中打开"
+                    android:textAllCaps="false"
+                    android:textColor="@color/m3_btn_tonal_text" />
             </LinearLayout>
         </ScrollView>
     </FrameLayout>
@@ -60,5 +65,7 @@
         android:layout_width="match_parent"
         android:layout_height="3dp"
         android:layout_gravity="top"
+        android:indeterminateTint="@color/primary"
+        android:progressTint="@color/primary"
         android:max="100" />
 </FrameLayout>

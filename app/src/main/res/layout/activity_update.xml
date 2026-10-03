@@ -37,23 +37,22 @@
             android:layout_marginTop="8dp"
             android:textColor="@color/text_secondary" />
 
-        <!-- 通道选择器卡片 -->
         <RadioGroup
             android:id="@+id/update_channels"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
             android:background="@drawable/m3_card_expressive_item"
-            android:padding="8dp"
-            android:orientation="horizontal">
+            android:orientation="horizontal"
+            android:padding="8dp">
 
             <RadioButton
                 android:id="@+id/update_stable"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:minHeight="44dp"
                 android:buttonTint="@color/primary"
+                android:minHeight="44dp"
                 android:text="稳定通道 (Stable)" />
 
             <RadioButton
@@ -61,12 +60,11 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:minHeight="44dp"
                 android:buttonTint="@color/primary"
+                android:minHeight="44dp"
                 android:text="预览通道 (RC / Beta)" />
         </RadioGroup>
 
-        <!-- 状态与日志卡片 -->
         <LinearLayout
             style="@style/DshaCard.Expressive"
             android:layout_width="match_parent"
@@ -78,8 +76,8 @@
                 style="@style/DshaText.Body"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textStyle="bold"
-                android:textIsSelectable="true" />
+                android:textIsSelectable="true"
+                android:textStyle="bold" />
 
             <ProgressBar
                 android:id="@+id/update_progress"
@@ -105,8 +103,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:textColor="@color/text_secondary"
                 android:lineSpacingExtra="3dp"
+                android:textColor="@color/text_secondary"
                 android:textIsSelectable="true" />
         </LinearLayout>
 
@@ -128,9 +126,9 @@
             android:layout_marginTop="16dp"
             android:background="@drawable/m3_btn_primary_expressive"
             android:text="检查更新"
-            android:textStyle="bold"
             android:textAllCaps="false"
-            android:textColor="@color/m3_btn_primary_text" />
+            android:textColor="@color/m3_btn_primary_text"
+            android:textStyle="bold" />
 
         <Button
             android:id="@+id/update_download"
@@ -139,9 +137,9 @@
             android:layout_marginTop="12dp"
             android:background="@drawable/m3_btn_primary_expressive"
             android:text="下载更新"
-            android:textStyle="bold"
             android:textAllCaps="false"
-            android:textColor="@color/m3_btn_primary_text" />
+            android:textColor="@color/m3_btn_primary_text"
+            android:textStyle="bold" />
 
         <Button
             android:id="@+id/update_install"
@@ -150,9 +148,9 @@
             android:layout_marginTop="12dp"
             android:background="@drawable/m3_btn_primary_expressive"
             android:text="安装更新"
-            android:textStyle="bold"
             android:textAllCaps="false"
-            android:textColor="@color/m3_btn_primary_text" />
+            android:textColor="@color/m3_btn_primary_text"
+            android:textStyle="bold" />
 
         <Button
             android:id="@+id/update_browser"
