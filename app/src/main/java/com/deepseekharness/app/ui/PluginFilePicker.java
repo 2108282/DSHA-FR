@@ -5,9 +5,9 @@ import android.content.Intent;
 import android.content.pm.ResolveInfo;
 
 /** 优先 Android DocumentsUI，避免第三方压缩软件抢占 OpenDocument 却不返回文件。 */
-final class PluginFilePicker {
+public final class PluginFilePicker {
     private PluginFilePicker() { }
-    static Intent intent(Context context, boolean alternative) {
+    public static Intent intent(Context context, boolean alternative) {
         Intent picker = new Intent(alternative ? Intent.ACTION_GET_CONTENT : Intent.ACTION_OPEN_DOCUMENT)
                 .addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);

@@ -46,7 +46,7 @@ public class CtsModuleMain extends XposedModule {
     private static final String KEY_ENABLED = "enabled";
 
     /** 重定向目标包名 = 本应用 applicationId */
-    private static final String TARGET_PACKAGE = "com.dsha.fr";
+    private static final String TARGET_PACKAGE = "com.dsha.fra";
 
     /** Google Gemini / Assistant 悬浮界面（手势的目标 Activity） */
     private static final String GOOGLE_FLOATY_ACTIVITY =
