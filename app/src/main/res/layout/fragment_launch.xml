@@ -179,10 +179,10 @@
                     android:layout_height="@dimen/btn_height"
                     android:layout_marginStart="@dimen/gap_tight"
                     android:layout_weight="1"
-                    android:background="@drawable/m3_btn_tonal_expressive"
+                    android:background="@drawable/m3_btn_danger_soft"
                     android:text="停止"
                     android:textAllCaps="false"
-                    android:textColor="@color/err"
+                    android:textColor="@color/m3_on_error_container"
                     android:textSize="@dimen/text_body" />
             </LinearLayout>
 

@@ -16,22 +16,22 @@
     <dimen name="gap_hair">4dp</dimen>
 
     <!-- ========== 圆角阶梯 — M3 Expressive 超大圆角系统 ========== -->
-    <dimen name="radius_expressive_container">32dp</dimen>
-    <dimen name="radius_expressive_card">28dp</dimen>
-    <dimen name="radius_expressive_item">20dp</dimen>
-    <dimen name="radius_expressive_button">24dp</dimen>
-    <dimen name="radius_card">22dp</dimen>
-    <dimen name="radius_control">16dp</dimen>
+    <dimen name="radius_expressive_container">24dp</dimen>
+    <dimen name="radius_expressive_card">20dp</dimen>
+    <dimen name="radius_expressive_item">14dp</dimen>
+    <dimen name="radius_expressive_button">16dp</dimen>
+    <dimen name="radius_card">18dp</dimen>
+    <dimen name="radius_control">12dp</dimen>
     <dimen name="radius_small">10dp</dimen>
     <dimen name="radius_pill">999dp</dimen>
-    <dimen name="radius_appbar">20dp</dimen>
+    <dimen name="radius_appbar">16dp</dimen>
 
     <!-- M3 Expressive Shape Token 扩展 -->
-    <dimen name="radius_dialog">28dp</dimen>
-    <dimen name="bottom_nav_indicator_radius">24dp</dimen>
-    <dimen name="radius_fab">20dp</dimen>
-    <dimen name="radius_search">14dp</dimen>
-    <dimen name="radius_avatar">16dp</dimen>
+    <dimen name="radius_dialog">20dp</dimen>
+    <dimen name="bottom_nav_indicator_radius">16dp</dimen>
+    <dimen name="radius_fab">16dp</dimen>
+    <dimen name="radius_search">12dp</dimen>
+    <dimen name="radius_avatar">14dp</dimen>
 
     <!-- ========== 字号阶梯 ========== -->
     <dimen name="text_hero">28sp</dimen>
@@ -54,14 +54,14 @@
     <dimen name="stroke_medium">1.5dp</dimen>
 
     <!-- ========== 导航与 AppBar ========== -->
-    <dimen name="appbar_height">64dp</dimen>
+    <dimen name="appbar_height">56dp</dimen>
     <dimen name="appbar_height_large">120dp</dimen>
     <dimen name="nav_bar_height">80dp</dimen>
     <dimen name="nav_icon_size">24dp</dimen>
     <dimen name="nav_label_gap">4dp</dimen>
 
     <!-- ========== M3 Expressive Spacing Token ========== -->
-    <dimen name="card_pad_expressive">20dp</dimen>
+    <dimen name="card_pad_expressive">16dp</dimen>
     <dimen name="page_top_pad">16dp</dimen>
     <dimen name="list_item_pad_vertical">14dp</dimen>
     <dimen name="list_item_pad_horizontal">16dp</dimen>

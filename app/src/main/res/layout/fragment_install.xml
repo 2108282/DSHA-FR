@@ -18,7 +18,7 @@
             android:layout_height="wrap_content"
             android:background="@drawable/m3_btn_tonal_expressive"
             android:text="‹ 返回设置"
-            android:textColor="@color/m3_secondary_on_container" />
+            android:textColor="@color/text" />
 
         <TextView
             style="@style/DshaText.Display"

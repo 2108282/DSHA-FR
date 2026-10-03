@@ -20,7 +20,7 @@
             android:paddingEnd="16dp"
             android:text="关闭"
             android:textAllCaps="false"
-            android:textColor="@color/m3_secondary_on_container" />
+            android:textColor="@color/text" />
 
         <TextView
             style="@style/DshaText.Display"

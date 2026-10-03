@@ -36,7 +36,7 @@
             android:layout_height="@dimen/btn_height"
             android:layout_marginTop="@dimen/gap_control"
             android:background="@drawable/m3_btn_tonal_expressive"
-            android:textColor="@color/m3_secondary_on_container"
+            android:textColor="@color/text"
             android:gravity="center"
             android:textStyle="bold"
             android:text="数据与备份 · 备份恢复与工作区直通" />

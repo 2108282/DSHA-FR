@@ -47,7 +47,7 @@
             android:paddingEnd="12dp"
             android:paddingBottom="8dp"
             android:text="A−"
-            android:textColor="@color/m3_secondary_on_container"
+            android:textColor="@color/text"
             android:textSize="@dimen/text_label" />
 
         <TextView
@@ -64,7 +64,7 @@
             android:paddingEnd="12dp"
             android:paddingBottom="8dp"
             android:text="A+"
-            android:textColor="@color/m3_secondary_on_container"
+            android:textColor="@color/text"
             android:textSize="@dimen/text_label" />
 
         <TextView
@@ -81,7 +81,7 @@
             android:paddingEnd="12dp"
             android:paddingBottom="8dp"
             android:text="简易"
-            android:textColor="@color/m3_secondary_on_container"
+            android:textColor="@color/text"
             android:textSize="@dimen/text_caption" />
     </LinearLayout>
 

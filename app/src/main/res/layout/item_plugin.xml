@@ -56,7 +56,7 @@
             android:layout_height="36dp"
             android:layout_marginStart="@dimen/gap_tight"
             android:background="@drawable/m3_btn_tonal_expressive"
-            android:textColor="@color/m3_secondary_on_container"
+            android:textColor="@color/text"
             android:paddingStart="12dp"
             android:paddingEnd="12dp"
             android:text="更多 ▾" />
