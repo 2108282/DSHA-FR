@@ -73,9 +73,9 @@ jobs:
           VERSION_NAME=$(grep "versionName" app/build.gradle | head -1 | awk -F '"' '{print $2}')
           echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
           APK_SRC=$(ls app/build/outputs/apk/standard/release/*.apk | head -1)
-          cp -f "$APK_SRC" "dist/DSHA-FRA-${VERSION_NAME}-release.apk"
+          cp -f "$APK_SRC" "dist/DSHA-FR-${VERSION_NAME}-release.apk"
           cd dist
-          sha256sum "DSHA-FRA-${VERSION_NAME}-release.apk" | tee "DSHA-FRA-${VERSION_NAME}-release.apk.sha256"
+          sha256sum "DSHA-FR-${VERSION_NAME}-release.apk" | tee "DSHA-FR-${VERSION_NAME}-release.apk.sha256"
           echo "=========================================================="
           echo "           带签名 Release APK 打包就绪 (不发布)            "
           echo "=========================================================="
@@ -85,6 +85,6 @@ jobs:
       - name: 上传带签名 Release APK 至 Artifacts (仅供下载，不发布)
         uses: actions/upload-artifact@v4
         with:
-          name: DSHA-FRA-${{ env.VERSION_NAME }}-release-apk
+          name: DSHA-FR-${{ env.VERSION_NAME }}-release-apk
           path: dist/*
           if-no-files-found: error
