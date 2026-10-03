@@ -74,8 +74,15 @@ public class WorkspaceFragment extends Fragment implements WorkspacePresenter.Vi
 
         v.findViewById(R.id.workspace_shizuku_auth).setOnClickListener(x -> actions.onCheckRootClick());
 
-        presenter.init();
         return v;
+    }
+
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+        if (presenter != null) {
+            presenter.init();
+        }
     }
 
     @Override
@@ -89,7 +96,7 @@ public class WorkspaceFragment extends Fragment implements WorkspacePresenter.Vi
 
     @Override
     public void onRender(WorkspaceUiState state) {
-        if (!isAdded() || getView() == null) return;
+        if (!isAdded()) return;
         if (wsPathInput != null && state.workdirPath != null) {
             wsPathInput.setText(state.workdirPath);
         }

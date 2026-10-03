@@ -93,8 +93,15 @@ public class SettingsFragment extends Fragment implements SettingsPresenter.View
             reextract.setVisibility(View.GONE);
         }
 
-        presenter.init();
         return v;
+    }
+
+    @Override
+    public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+        super.onViewCreated(view, savedInstanceState);
+        if (presenter != null) {
+            presenter.init();
+        }
     }
 
     @Override
@@ -112,7 +119,7 @@ public class SettingsFragment extends Fragment implements SettingsPresenter.View
 
     @Override
     public void onRender(SettingsUiState state) {
-        if (!isAdded() || getView() == null) return;
+        if (!isAdded()) return;
         if (verText != null) verText.setText(state.versionText);
         if (updateSubText != null) updateSubText.setText(state.updateSubText);
         if (persistentNotifSwitch != null) {
