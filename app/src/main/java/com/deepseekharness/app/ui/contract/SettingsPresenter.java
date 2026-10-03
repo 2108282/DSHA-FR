@@ -63,6 +63,8 @@ public class SettingsPresenter implements SettingsActions {
 
     @Override
     public void onTogglePersistentNotification(boolean enabled) {
+        boolean current = configStore.isPersistentNotificationEnabled();
+        if (current == enabled) return;
         configStore.setPersistentNotificationEnabled(enabled);
         HarnessService.syncPersistentNotificationState(context, enabled);
         Toast.makeText(context, enabled ? "已开启常驻通知" : "已关闭常驻通知", Toast.LENGTH_SHORT).show();

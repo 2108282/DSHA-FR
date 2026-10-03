@@ -32,6 +32,7 @@ public class SettingsFragment extends Fragment implements SettingsPresenter.View
     private TextView verText;
     private TextView updateSubText;
     private SwitchCompat persistentNotifSwitch;
+    private boolean isBinding = false;
 
     private static final TabOption[] TAB_OPTIONS = {
             new TabOption("配置", "端口 · 行为 · 权限", ConfigFragment::new),
@@ -74,9 +75,16 @@ public class SettingsFragment extends Fragment implements SettingsPresenter.View
         v.findViewById(R.id.settings_apply_patches).setOnClickListener(x -> actions.onApplyPatchesClick());
 
         if (persistentNotifSwitch != null) {
+            persistentNotifSwitch.setClickable(true);
+            persistentNotifSwitch.setFocusable(false);
+            persistentNotifSwitch.setOnCheckedChangeListener((btn, isChecked) -> {
+                if (isBinding) return;
+                actions.onTogglePersistentNotification(isChecked);
+            });
+
             View notifRow = v.findViewById(R.id.settings_persistent_notification_row);
             if (notifRow != null) {
-                notifRow.setOnClickListener(x -> actions.onTogglePersistentNotification(!persistentNotifSwitch.isChecked()));
+                notifRow.setOnClickListener(x -> persistentNotifSwitch.toggle());
             }
         }
 
@@ -91,6 +99,9 @@ public class SettingsFragment extends Fragment implements SettingsPresenter.View
 
     @Override
     public void onDestroyView() {
+        if (persistentNotifSwitch != null) {
+            persistentNotifSwitch.setOnCheckedChangeListener(null);
+        }
         presenter = null;
         actions = null;
         verText = null;
@@ -105,7 +116,11 @@ public class SettingsFragment extends Fragment implements SettingsPresenter.View
         if (verText != null) verText.setText(state.versionText);
         if (updateSubText != null) updateSubText.setText(state.updateSubText);
         if (persistentNotifSwitch != null) {
-            persistentNotifSwitch.setChecked(state.isPersistentNotificationEnabled);
+            isBinding = true;
+            if (persistentNotifSwitch.isChecked() != state.isPersistentNotificationEnabled) {
+                persistentNotifSwitch.setChecked(state.isPersistentNotificationEnabled);
+            }
+            isBinding = false;
         }
     }
 
