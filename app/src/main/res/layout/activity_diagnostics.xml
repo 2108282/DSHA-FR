@@ -14,57 +14,68 @@
         <Button
             android:id="@+id/diagnostic_back"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:background="@drawable/bg_btn"
+            android:layout_height="36dp"
+            android:background="@drawable/m3_btn_tonal_expressive"
             android:paddingStart="16dp"
             android:paddingEnd="16dp"
             android:text="‹ 返回"
             android:textAllCaps="false"
-            android:textColor="@color/text_secondary"
+            android:textColor="@color/m3_secondary_on_container"
             android:textSize="@dimen/text_body" />
 
         <TextView
             style="@style/DshaText.Display"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="诊断与修复" />
+            android:layout_marginTop="12dp"
+            android:text="系统环境诊断与修复" />
 
         <TextView
             android:id="@+id/diagnostic_status"
             style="@style/DshaText.Label"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp" />
+            android:layout_marginTop="8dp"
+            android:textColor="@color/text_secondary" />
 
         <Button
             android:id="@+id/diagnostic_repair"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:background="@drawable/bg_btn"
-            android:text="修复证书与 npm"
+            android:layout_height="@dimen/btn_height"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/m3_btn_primary_expressive"
+            android:text="修复证书与网络环境"
+            android:textStyle="bold"
             android:textAllCaps="false"
-            android:textColor="@color/text" />
+            android:textColor="@color/m3_btn_primary_text" />
 
         <Button
             android:id="@+id/diagnostic_plugins"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:background="@drawable/bg_btn"
-            android:text="前往插件页使用备用文件选择器"
+            android:layout_height="@dimen/btn_height"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/m3_btn_tonal_expressive"
+            android:text="前往插件管理页"
             android:textAllCaps="false"
-            android:textColor="@color/text" />
+            android:textColor="@color/m3_btn_tonal_text" />
 
-        <TextView
-            android:id="@+id/diagnostic_report"
-            style="@style/DshaText.Body"
+        <!-- M3 报告卡片代码块 -->
+        <LinearLayout
+            style="@style/DshaCard.Expressive"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:fontFamily="monospace"
-            android:textIsSelectable="true"
-            android:textSize="13sp" />
+            android:layout_marginTop="16dp">
+
+            <TextView
+                android:id="@+id/diagnostic_report"
+                style="@style/DshaText.Body"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:lineSpacingExtra="3dp"
+                android:textColor="@color/text"
+                android:textIsSelectable="true"
+                android:textSize="13sp" />
+        </LinearLayout>
     </LinearLayout>
 </ScrollView>

@@ -14,8 +14,9 @@
         android:paddingEnd="@dimen/page_pad"
         android:paddingBottom="@dimen/gap_control">
 
+        <!-- M3 Expressive 主控大卡片 -->
         <LinearLayout
-            style="@style/DshaCard"
+            style="@style/DshaCard.Expressive"
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
 
@@ -36,10 +37,11 @@
 
                 <TextView
                     android:id="@+id/launch_run_state"
-                    style="@style/DshaText.Title"
+                    style="@style/DshaText.Display"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
+                    android:textSize="20sp"
                     android:text="DSH 未运行" />
             </LinearLayout>
 
@@ -64,7 +66,7 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/gap_tight"
+                android:layout_marginTop="@dimen/gap_block"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
 
@@ -73,6 +75,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="端口："
+                    android:textStyle="bold"
                     android:textColor="@color/text_secondary" />
 
                 <EditText
@@ -98,10 +101,10 @@
                     android:background="@drawable/bg_chip_clickable"
                     android:clickable="true"
                     android:focusable="true"
-                    android:paddingStart="8dp"
-                    android:paddingTop="4dp"
-                    android:paddingEnd="8dp"
-                    android:paddingBottom="4dp"
+                    android:paddingStart="10dp"
+                    android:paddingTop="5dp"
+                    android:paddingEnd="10dp"
+                    android:paddingBottom="5dp"
                     android:text="3080"
                     android:textColor="@color/text_secondary"
                     android:textSize="12sp" />
@@ -110,14 +113,14 @@
                     android:id="@+id/launch_port_chip_3088"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
+                    android:layout_marginStart="6dp"
                     android:background="@drawable/bg_chip_clickable"
                     android:clickable="true"
                     android:focusable="true"
-                    android:paddingStart="8dp"
-                    android:paddingTop="4dp"
-                    android:paddingEnd="8dp"
-                    android:paddingBottom="4dp"
+                    android:paddingStart="10dp"
+                    android:paddingTop="5dp"
+                    android:paddingEnd="10dp"
+                    android:paddingBottom="5dp"
                     android:text="3088"
                     android:textColor="@color/text_secondary"
                     android:textSize="12sp" />
@@ -126,14 +129,14 @@
                     android:id="@+id/launch_port_chip_8080"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
+                    android:layout_marginStart="6dp"
                     android:background="@drawable/bg_chip_clickable"
                     android:clickable="true"
                     android:focusable="true"
-                    android:paddingStart="8dp"
-                    android:paddingTop="4dp"
-                    android:paddingEnd="8dp"
-                    android:paddingBottom="4dp"
+                    android:paddingStart="10dp"
+                    android:paddingTop="5dp"
+                    android:paddingEnd="10dp"
+                    android:paddingBottom="5dp"
                     android:text="8080"
                     android:textColor="@color/text_secondary"
                     android:textSize="12sp" />
@@ -143,19 +146,20 @@
                 android:id="@+id/launch_controls"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/gap_control"
+                android:layout_marginTop="@dimen/gap_block"
                 android:orientation="horizontal">
 
                 <Button
                     android:id="@+id/launch_start"
                     android:layout_width="0dp"
                     android:layout_height="@dimen/btn_height"
-                    android:layout_weight="1"
-                    android:background="@drawable/bg_btn_primary"
+                    android:layout_weight="1.2"
+                    android:background="@drawable/m3_btn_primary_expressive"
                     android:text="启动"
                     android:textAllCaps="false"
-                    android:textColor="@color/accent_on"
-                    android:textSize="@dimen/text_body" />
+                    android:textColor="@color/m3_btn_primary_text"
+                    android:textSize="@dimen/text_body"
+                    android:textStyle="bold" />
 
                 <Button
                     android:id="@+id/launch_open"
@@ -163,20 +167,19 @@
                     android:layout_height="@dimen/btn_height"
                     android:layout_marginStart="@dimen/gap_tight"
                     android:layout_weight="1"
-                    android:background="@drawable/bg_btn"
+                    android:background="@drawable/m3_btn_tonal_expressive"
                     android:text="重启"
                     android:textAllCaps="false"
-                    android:textColor="@color/text_secondary"
+                    android:textColor="@color/m3_btn_tonal_text"
                     android:textSize="@dimen/text_body" />
 
-                <!-- 停止是破坏性操作：底色仍走次级按钮（不抢视觉），文字用告警色区分 -->
                 <Button
                     android:id="@+id/launch_stop"
                     android:layout_width="0dp"
                     android:layout_height="@dimen/btn_height"
                     android:layout_marginStart="@dimen/gap_tight"
                     android:layout_weight="1"
-                    android:background="@drawable/bg_btn"
+                    android:background="@drawable/m3_btn_tonal_expressive"
                     android:text="停止"
                     android:textAllCaps="false"
                     android:textColor="@color/err"
@@ -189,15 +192,15 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:minHeight="@dimen/btn_height"
-                android:layout_marginTop="@dimen/gap_control"
-                android:background="@drawable/bg_btn"
+                android:layout_marginTop="@dimen/gap_block"
+                android:background="@drawable/m3_card_expressive_item"
                 android:clickable="true"
                 android:focusable="true"
                 android:gravity="center"
                 android:paddingStart="@dimen/gap_control"
-                android:paddingTop="10dp"
+                android:paddingTop="12dp"
                 android:paddingEnd="@dimen/gap_control"
-                android:paddingBottom="10dp"
+                android:paddingBottom="12dp"
                 android:textColor="@color/text"
                 android:visibility="gone" />
 
@@ -206,7 +209,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="@dimen/btn_height"
                 android:layout_marginTop="@dimen/gap_tight"
-                android:background="@drawable/bg_btn"
+                android:background="@drawable/m3_btn_tonal_expressive"
                 android:text="💬 打开快捷对话抽屉"
                 android:textAllCaps="false"
                 android:textColor="@color/text"
@@ -214,24 +217,24 @@
                 android:visibility="gone" />
         </LinearLayout>
 
+        <!-- M3 日志卡片 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_marginTop="@dimen/gap_control"
+            android:layout_marginTop="@dimen/gap_section"
             android:layout_weight="1"
-            android:background="@drawable/bg_preview"
+            android:background="@drawable/m3_card_expressive"
+            android:padding="16dp"
             android:orientation="vertical">
 
             <TextView
                 style="@style/DshaText.Caption"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingStart="@dimen/card_pad"
-                android:paddingTop="@dimen/gap_control"
-                android:paddingEnd="@dimen/card_pad"
-                android:paddingBottom="@dimen/gap_hair"
+                android:paddingBottom="@dimen/gap_tight"
                 android:letterSpacing="0.04"
-                android:text="日志 · dsh-web.log" />
+                android:textStyle="bold"
+                android:text="运行追踪 · dsh-web.log" />
 
             <ScrollView
                 android:id="@+id/launch_log_scroll"
@@ -246,10 +249,8 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:fontFamily="monospace"
-                    android:paddingStart="@dimen/card_pad"
                     android:paddingTop="@dimen/gap_hair"
-                    android:paddingEnd="@dimen/card_pad"
-                    android:paddingBottom="@dimen/card_pad"
+                    android:paddingBottom="@dimen/gap_hair"
                     android:text="还没有日志。"
                     android:textColor="@color/text_secondary"
                     android:textIsSelectable="true" />

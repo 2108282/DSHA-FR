@@ -73,6 +73,13 @@
         <item name="android:orientation">vertical</item>
     </style>
 
+    <!-- M3 Expressive 2024~2025 现代卡片容器：24dp超大圆角与柔和微描边 -->
+    <style name="DshaCard.Expressive" parent="">
+        <item name="android:background">@drawable/m3_card_expressive</item>
+        <item name="android:padding">18dp</item>
+        <item name="android:orientation">vertical</item>
+    </style>
+
 
     <!-- 让 <Button> 回到「尊重 android:background」的行为。
          定义在 styles.xml（不分 day/night）而不是某一份 themes.xml ——

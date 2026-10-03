@@ -23,4 +23,18 @@
     <!-- 危险操作按钮深色模式：暗红背景 + 纯白文字高对比度 -->
     <color name="btn_danger_bg">#992B2B</color>
     <color name="btn_danger_text">#FFFFFF</color>
+
+    <!-- ========== M3 Expressive 2024~2025 现代设计系统代币 (夜间) ========== -->
+    <color name="m3_surface_container_lowest">#0C1017</color>
+    <color name="m3_surface_container_low">#131822</color>
+    <color name="m3_surface_container">#181F2C</color>
+    <color name="m3_surface_container_high">#1E2636</color>
+    <color name="m3_surface_container_highest">#252F42</color>
+    <color name="m3_outline">#3E485B</color>
+    <color name="m3_outline_variant">#2E3748</color>
+    <color name="m3_tertiary">#D0BCFF</color>
+    <color name="m3_tertiary_container">#4F378B</color>
+    <color name="m3_tertiary_on_container">#EADDFF</color>
+    <color name="m3_secondary_container">#253E77</color>
+    <color name="m3_secondary_on_container">#D9E2FF</color>
 </resources>

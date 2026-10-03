@@ -11,7 +11,6 @@
         android:layout_height="0dp"
         android:layout_weight="1" />
 
-    <!-- 页码指示：3 页引导原来没有任何进度提示，不知道还有几页 -->
     <LinearLayout
         android:id="@+id/welcome_dots"
         android:layout_width="wrap_content"
@@ -33,10 +32,11 @@
             android:id="@+id/welcome_btn"
             android:layout_width="match_parent"
             android:layout_height="@dimen/btn_height"
-            android:background="@drawable/bg_btn_primary"
+            android:background="@drawable/m3_btn_primary_expressive"
             android:text="下一步"
+            android:textStyle="bold"
             android:textAllCaps="false"
-            android:textColor="@color/accent_on"
+            android:textColor="@color/m3_btn_primary_text"
             android:textSize="@dimen/text_body" />
     </LinearLayout>
 </LinearLayout>

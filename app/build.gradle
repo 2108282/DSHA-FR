@@ -1,5 +1,6 @@
 plugins {
     id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
 }
 
 // 两版共用功能和离线环境；只有 low 携带兼容旧 Android 的 Gecko 内核。
@@ -101,6 +102,10 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
 
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
     buildFeatures {
         resValues = true
         aidl = true
@@ -127,6 +132,10 @@ tasks.named("preBuild").configure { dependsOn(prepareStandardAssets) }
 
 dependencies {
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
+    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.6.2'
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.2'
+    implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1'
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
     // 真 PTY 终端：Termux 拆出的 terminal-view/terminal-emulator（Apache 2.0），

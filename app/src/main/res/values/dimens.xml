@@ -24,7 +24,11 @@
     <dimen name="gap_hair">4dp</dimen>
 
     <!-- ========== 圆角阶梯 ========== -->
-    <!-- 大容器：卡片、预览框 -->
+    <!-- M3 Expressive 2024~2025 超大外层圆角 -->
+    <dimen name="radius_expressive_container">28dp</dimen>
+    <dimen name="radius_expressive_card">24dp</dimen>
+    <dimen name="radius_expressive_item">18dp</dimen>
+    <dimen name="radius_expressive_button">20dp</dimen>
     <dimen name="radius_card">18dp</dimen>
     <!-- 控件：按钮、输入框 -->
     <dimen name="radius_control">14dp</dimen>
