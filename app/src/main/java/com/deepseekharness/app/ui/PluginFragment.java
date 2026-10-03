@@ -85,6 +85,14 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
     private Uri pendingImport;
     private AlertDialog previewDialog;
 
+    private final ActivityResultLauncher<String> readPermission = registerForActivityResult(
+            new ActivityResultContracts.RequestPermission(), allowed -> {
+                Uri selected = pendingImport;
+                pendingImport = null;
+                if (allowed && selected != null) repository.importArchive(selected);
+                else repository.selectionMessage("未获得文件读取权限，请改用系统文件选择器导入。");
+            });
+
     private final ActivityResultLauncher<Intent> importPicker = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(), result -> {
                 if (repository == null) repository = new ViewModelProvider(requireActivity()).get(PluginRepository.class);
@@ -109,14 +117,6 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
                     return;
                 }
                 repository.importArchive(uri);
-            });
-
-    private final ActivityResultLauncher<String> readPermission = registerForActivityResult(
-            new ActivityResultContracts.RequestPermission(), allowed -> {
-                Uri selected = pendingImport;
-                pendingImport = null;
-                if (allowed && selected != null) repository.importArchive(selected);
-                else repository.selectionMessage("未获得文件读取权限，请改用系统文件选择器导入。");
             });
 
     private final ActivityResultLauncher<String> exportPicker = registerForActivityResult(
