@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="primary">#7DA7F4</color>
-    <color name="primary_dark">#6F9BEF</color>
-    <color name="accent">#7DA7F4</color>
+    <!-- 核心色：柔和冷靛蓝灰，夜间舒适不刺眼 -->
+    <color name="primary">#8AA8D6</color>
+    <color name="primary_dark">#7B9BCB</color>
+    <color name="accent">#8AA8D6</color>
     <color name="accent_on">#0B1524</color>
     <color name="surface">#10141B</color>
     <color name="card">#161B24</color>
@@ -19,7 +20,7 @@
     <color name="terminal_outline">#263041</color>
     <color name="logo_top">#273349</color>
     <color name="logo_bot">#161D2B</color>
-    <color name="ripple">#337DA7F4</color>
+    <color name="ripple">#338AA8D6</color>
     <color name="disabled">#1B2130</color>
     <color name="err_bg">#1AE08A8A</color>
     <color name="btn_danger_bg">#992B2B</color>
@@ -38,7 +39,7 @@
     <color name="m3_secondary_container">#243049</color>
     <color name="m3_secondary_on_container">#C5D4F5</color>
 
-    <color name="m3_primary_hover">#8FB4F7</color>
+    <color name="m3_primary_hover">#9BB5DC</color>
     <color name="m3_primary_container">#243049</color>
     <color name="m3_on_primary_container">#C5D4F5</color>
     <color name="m3_success_container">#173528</color>
@@ -47,20 +48,20 @@
     <color name="m3_on_warning_container">#E8D09A</color>
     <color name="m3_error_container">#3A1C1C</color>
     <color name="m3_on_error_container">#F0A8A8</color>
-    <color name="m3_expressive_accent">#7DA7F4</color>
+    <color name="m3_expressive_accent">#8AA8D6</color>
     <color name="m3_expressive_accent_soft">#243049</color>
     <color name="m3_expressive_warm">#E5C07B</color>
     <color name="m3_expressive_warm_container">#3A2E14</color>
     <color name="m3_nav_indicator">#243049</color>
     <color name="m3_nav_on_indicator">#C5D4F5</color>
     <color name="m3_nav_unselected">#6B7689</color>
-    <color name="m3_gradient_start">#7DA7F4</color>
-    <color name="m3_gradient_end">#8AA0D0</color>
+    <color name="m3_gradient_start">#8AA8D6</color>
+    <color name="m3_gradient_end">#96A4C2</color>
     <color name="m3_gradient_surface_start">#10141B</color>
     <color name="m3_gradient_surface_end">#10141B</color>
     <color name="m3_input_background">#121722</color>
     <color name="m3_input_stroke">#2A3344</color>
-    <color name="m3_input_stroke_focused">#7DA7F4</color>
+    <color name="m3_input_stroke_focused">#8AA8D6</color>
     <color name="m3_chip_background">#1C2330</color>
     <color name="m3_chip_selected_background">#243049</color>
     <color name="m3_chip_text">#A6B0C3</color>

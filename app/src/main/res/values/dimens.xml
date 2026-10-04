@@ -15,22 +15,22 @@
     <dimen name="gap_tight">8dp</dimen>
     <dimen name="gap_hair">4dp</dimen>
 
-    <!-- ========== 圆角阶梯 — M3 Expressive 超大圆角系统 ========== -->
+    <!-- ========== 圆角阶梯 — 恢复原本控件规格 ========== -->
     <dimen name="radius_expressive_container">24dp</dimen>
-    <dimen name="radius_expressive_card">20dp</dimen>
+    <dimen name="radius_expressive_card">18dp</dimen>
     <dimen name="radius_expressive_item">14dp</dimen>
-    <dimen name="radius_expressive_button">16dp</dimen>
+    <dimen name="radius_expressive_button">14dp</dimen>
     <dimen name="radius_card">18dp</dimen>
-    <dimen name="radius_control">12dp</dimen>
+    <dimen name="radius_control">14dp</dimen>
     <dimen name="radius_small">10dp</dimen>
     <dimen name="radius_pill">999dp</dimen>
     <dimen name="radius_appbar">16dp</dimen>
 
     <!-- M3 Expressive Shape Token 扩展 -->
     <dimen name="radius_dialog">20dp</dimen>
-    <dimen name="bottom_nav_indicator_radius">16dp</dimen>
+    <dimen name="bottom_nav_indicator_radius">14dp</dimen>
     <dimen name="radius_fab">16dp</dimen>
-    <dimen name="radius_search">12dp</dimen>
+    <dimen name="radius_search">14dp</dimen>
     <dimen name="radius_avatar">14dp</dimen>
 
     <!-- ========== 字号阶梯 ========== -->
@@ -46,7 +46,7 @@
     <!-- ========== 控件尺寸 ========== -->
     <dimen name="btn_height">48dp</dimen>
     <dimen name="btn_height_large">56dp</dimen>
-    <dimen name="input_height">48dp</dimen>
+    <dimen name="input_height">46dp</dimen>
     <dimen name="touch_min">44dp</dimen>
     <dimen name="progress_thin">3dp</dimen>
     <dimen name="progress_bold">6dp</dimen>

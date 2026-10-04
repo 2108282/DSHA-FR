@@ -1,75 +1,75 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 核心色：沿用原蓝灰体系，略提一点饱和度，避免电光蓝 -->
-    <color name="primary">#3B6FD1</color>
-    <color name="primary_dark">#2E5BB8</color>
-    <color name="accent">#3B6FD1</color>
+    <!-- 核心色：典雅蓝灰 / 柔和冷靛，内敛耐看，彻底告别刺眼深蓝 -->
+    <color name="primary">#47699F</color>
+    <color name="primary_dark">#395582</color>
+    <color name="accent">#47699F</color>
     <color name="accent_on">#FFFFFF</color>
-    <color name="surface">#F5F6F8</color>
+    <color name="surface">#F7F8FA</color>
     <color name="card">#FFFFFF</color>
-    <color name="raised">#EEF0F4</color>
-    <color name="line">#E4E7ED</color>
+    <color name="raised">#F0F2F5</color>
+    <color name="line">#E5E7EB</color>
     <color name="text">#1A2230</color>
     <color name="text_secondary">#4A5568</color>
     <color name="text_muted">#7A8494</color>
     <color name="ok">#2F9E64</color>
     <color name="warn">#C48A1A</color>
     <color name="err">#C45A5A</color>
-    <color name="preview">#F0F3F8</color>
+    <color name="preview">#F2F4F8</color>
     <color name="terminal_surface">#0A0D12</color>
     <color name="terminal_outline">#263041</color>
-    <color name="logo_top">#E8EEF8</color>
-    <color name="logo_bot">#D5DFF0</color>
-    <color name="ripple">#233B6FD1</color>
+    <color name="logo_top">#ECF0F7</color>
+    <color name="logo_bot">#DCE3EE</color>
+    <color name="ripple">#2247699F</color>
     <color name="disabled">#E9ECF2</color>
     <color name="err_bg">#14C45A5A</color>
     <color name="btn_danger_bg">#C45A5A</color>
     <color name="btn_danger_text">#FFFFFF</color>
 
-    <!-- Surface 阶梯：贴近白卡，避免灰叠灰 -->
+    <!-- Surface 阶梯：纯净白 / 极简浅灰通透阶梯，杜绝灰叠灰与杂色 -->
     <color name="m3_surface_container_lowest">#FFFFFF</color>
-    <color name="m3_surface_container_low">#FFFFFF</color>
-    <color name="m3_surface_container">#F0F2F6</color>
-    <color name="m3_surface_container_high">#EAECEF</color>
-    <color name="m3_surface_container_highest">#E4E7ED</color>
-    <color name="m3_outline">#D5DAE3</color>
-    <color name="m3_outline_variant">#E4E7ED</color>
-    <color name="m3_tertiary">#6750A4</color>
-    <color name="m3_tertiary_container">#EDE7F6</color>
-    <color name="m3_tertiary_on_container">#2D2150</color>
-    <!-- 选中态浅底：淡蓝洗，不是高饱和容器 -->
-    <color name="m3_secondary_container">#E8EEF8</color>
-    <color name="m3_secondary_on_container">#2E5BB8</color>
+    <color name="m3_surface_container_low">#F7F8FA</color>
+    <color name="m3_surface_container">#F2F4F7</color>
+    <color name="m3_surface_container_high">#ECEDF2</color>
+    <color name="m3_surface_container_highest">#E4E6EB</color>
+    <color name="m3_outline">#D8DBE2</color>
+    <color name="m3_outline_variant">#E5E7EB</color>
+    <color name="m3_tertiary">#5D6B82</color>
+    <color name="m3_tertiary_container">#EDF1F7</color>
+    <color name="m3_tertiary_on_container">#253042</color>
+    <!-- 选中态浅底：极淡冷靛洗 -->
+    <color name="m3_secondary_container">#EBF0F8</color>
+    <color name="m3_secondary_on_container">#2E476E</color>
 
-    <color name="m3_primary_hover">#2E5BB8</color>
-    <color name="m3_primary_container">#E8EEF8</color>
-    <color name="m3_on_primary_container">#1A3A7A</color>
+    <color name="m3_primary_hover">#395582</color>
+    <color name="m3_primary_container">#EBF0F8</color>
+    <color name="m3_on_primary_container">#1E304D</color>
     <color name="m3_success_container">#E6F6EE</color>
     <color name="m3_on_success_container">#146C3C</color>
     <color name="m3_warning_container">#FBF3E0</color>
     <color name="m3_on_warning_container">#7A5608</color>
     <color name="m3_error_container">#F8EAEA</color>
     <color name="m3_on_error_container">#8A2E2E</color>
-    <color name="m3_expressive_accent">#3B6FD1</color>
-    <color name="m3_expressive_accent_soft">#E8EEF8</color>
+    <color name="m3_expressive_accent">#47699F</color>
+    <color name="m3_expressive_accent_soft">#EBF0F8</color>
     <color name="m3_expressive_warm">#C48A1A</color>
     <color name="m3_expressive_warm_container">#FBF3E0</color>
-    <color name="m3_nav_indicator">#E8EEF8</color>
-    <color name="m3_nav_on_indicator">#2E5BB8</color>
+    <color name="m3_nav_indicator">#EBF0F8</color>
+    <color name="m3_nav_on_indicator">#2E476E</color>
     <color name="m3_nav_unselected">#7A8494</color>
-    <color name="m3_gradient_start">#3B6FD1</color>
-    <color name="m3_gradient_end">#5B7FCE</color>
-    <color name="m3_gradient_surface_start">#F5F6F8</color>
-    <color name="m3_gradient_surface_end">#F5F6F8</color>
-    <color name="m3_input_background">#F5F6F8</color>
-    <color name="m3_input_stroke">#E4E7ED</color>
-    <color name="m3_input_stroke_focused">#3B6FD1</color>
-    <color name="m3_chip_background">#EEF0F4</color>
-    <color name="m3_chip_selected_background">#E8EEF8</color>
+    <color name="m3_gradient_start">#47699F</color>
+    <color name="m3_gradient_end">#5E7FA8</color>
+    <color name="m3_gradient_surface_start">#F7F8FA</color>
+    <color name="m3_gradient_surface_end">#F7F8FA</color>
+    <color name="m3_input_background">#F5F6F9</color>
+    <color name="m3_input_stroke">#E2E5EA</color>
+    <color name="m3_input_stroke_focused">#47699F</color>
+    <color name="m3_chip_background">#F0F2F5</color>
+    <color name="m3_chip_selected_background">#EBF0F8</color>
     <color name="m3_chip_text">#4A5568</color>
-    <color name="m3_chip_selected_text">#2E5BB8</color>
+    <color name="m3_chip_selected_text">#2E476E</color>
     <color name="m3_scrim">#331A2230</color>
-    <color name="m3_surface_dim">#E4E7ED</color>
+    <color name="m3_surface_dim">#E4E6EB</color>
     <color name="m3_surface_bright">#FFFFFF</color>
     <color name="m3_divider">#0F1A2230</color>
 </resources>
