@@ -62,6 +62,7 @@
 
         <activity android:name=".ui.UpdateActivity" android:exported="false" />
         <activity android:name=".ui.DiagnosticActivity" android:exported="false" />
+        <activity android:name=".ui.ModelSetupActivity" android:exported="false" />
 
         <!-- 快捷对话底部抽屉弹层（点击常驻通知或任务完成通知直达，独立任务栈物理隔离）
              同时作为「圈定即搜」(Contextual Search) 的处理者：系统以

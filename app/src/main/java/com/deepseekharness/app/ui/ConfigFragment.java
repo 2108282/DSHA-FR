@@ -97,6 +97,11 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
 
         subBack.setOnClickListener(v -> actions.onBack());
         workspaceEntry.setOnClickListener(v -> actions.onOpenWorkspace());
+        View modelsEntry = view.findViewById(R.id.config_models_entry);
+        if (modelsEntry != null) {
+            modelsEntry.setOnClickListener(v ->
+                    startActivity(new android.content.Intent(requireContext(), ModelSetupActivity.class)));
+        }
         overlayStyleBtn.setOnClickListener(v -> actions.onOpenOverlayStyle());
         allFilesBtn.setOnClickListener(v -> actions.onOpenAllFilesSettings());
         batteryOptBtn.setOnClickListener(v -> actions.onOpenBatteryOptimization());

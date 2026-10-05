@@ -41,6 +41,18 @@
             android:textStyle="bold"
             android:text="数据与备份 · 备份恢复与工作区直通" />
 
+        <TextView
+            android:id="@+id/config_models_entry"
+            style="@style/DshaText.Body"
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/btn_height"
+            android:layout_marginTop="@dimen/gap_tight"
+            android:background="@drawable/m3_btn_tonal_expressive"
+            android:textColor="@color/text"
+            android:gravity="center"
+            android:textStyle="bold"
+            android:text="模型配置 · 服务商、接口与模型目录" />
+
         <!-- ========== 模块一：端口与调度核心 ========== -->
         <LinearLayout
             style="@style/DshaCard.Expressive"
