@@ -200,17 +200,18 @@ public final class ModelSetupActivity extends AppCompatActivity {
       if (path.size() > 0 && value.isJsonNull()) continue;
       String title = s(entry, "displayName");
       if (title.isEmpty()) title = s(entry, "provider");
+      final String finalTitle = title;
       JsonObject profile = ModelConfiguration.object(value);
       String detail = s(profile, "baseURL");
       if (detail.isEmpty()) detail = t("使用服务商默认地址", "Uses provider default endpoint");
       
       Runnable onDelete = null;
       if (writable && !"llm-deepseek".equals(s(entry, "settingsNs"))) {
-        onDelete = () -> confirmDeleteDirectoryEntry(entry, title);
+        onDelete = () -> confirmDeleteDirectoryEntry(entry, finalTitle);
       }
       page.entryWithAction(
           configured,
-          title,
+          finalTitle,
           detail,
           R.drawable.ic_ui_link,
           () -> {
