@@ -85,7 +85,25 @@ public final class ModelSetupActivity extends AppCompatActivity {
     page.content.addView(body);
     page.footer.setVisibility(View.GONE);
     setContentView(page.root);
-    repository.message.observe(this, status::setText);
+    repository.message.observe(
+        this,
+        msg -> {
+          status.setText(msg);
+          if (msg != null && !msg.isEmpty()
+              && !msg.equals(t("模型设置已同步", "Model settings synced"))
+              && !msg.equals(t("正在同步…", "Syncing…"))) {
+            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+            if (msg.contains("无法") || msg.contains("失败") || msg.contains("拒绝")
+                || msg.contains("answered") || msg.contains("401") || msg.contains("403")
+                || msg.contains("Error") || msg.contains("error")) {
+              new DshaDialogBuilder(this)
+                  .setTitle(t("提示", "Notice"))
+                  .setMessage(msg)
+                  .setPositiveButton(t("知道了", "OK"), null)
+                  .show();
+            }
+          }
+        });
     repository.busy.observe(
         this,
         busy -> {
@@ -110,6 +128,7 @@ public final class ModelSetupActivity extends AppCompatActivity {
           if (revision > observedSave) {
             observedSave = revision;
             draft.clear();
+            Toast.makeText(this, t("已成功保存并同步到 Web UI！", "Saved and synced to Web UI!"), Toast.LENGTH_SHORT).show();
             showDirectory();
           }
         });
@@ -436,14 +455,14 @@ public final class ModelSetupActivity extends AppCompatActivity {
 
   private void capture() {
     if (draft.entry == null || endpoint == null) return;
-    if (route != null) draft.route = route.getText().toString().trim();
+    if (route != null) draft.route = route.getText().toString().trim().toLowerCase(Locale.ROOT);
     if (name != null) draft.name = name.getText().toString().trim();
-    draft.endpoint = endpoint.getText().toString().trim();
+    draft.endpoint = endpoint.getText().toString().trim().replaceAll("\\s+", "");
     draft.protocol =
         protocol.getSelectedItemPosition() == 0
             ? ""
             : protocols.get(protocol.getSelectedItemPosition());
-    draft.key = key.getText().toString().trim();
+    draft.key = key.getText().toString().trim().replaceAll("[\\r\\n\\t ]", "");
     captureHeaders();
   }
 
@@ -594,14 +613,21 @@ public final class ModelSetupActivity extends AppCompatActivity {
       ModelConfiguration.validateUrl(draft.endpoint, false);
       if (!draft.key.isEmpty() && !draft.key.matches("[\\x21-\\x7E]+"))
         throw new IllegalArgumentException("KEY");
+      Toast.makeText(this, t("正在连接服务商获取可用模型…", "Fetching available models..."), Toast.LENGTH_SHORT).show();
       repository.discoverModels(
           s(draft.entry, "settingsNs"), draft.route, draft.endpoint, draft.protocol, draft.key);
     } catch (RuntimeException invalid) {
       String code = String.valueOf(invalid.getMessage());
-      status.setText(
-          code.equals("KEY")
-              ? t("API Key 不应包含空格或换行。", "API keys must not contain whitespace.")
-              : t("请先填写有效的 HTTP/HTTPS API 地址。", "Enter a valid HTTP/HTTPS endpoint first."));
+      String msg = code.equals("KEY")
+          ? t("API Key 不应包含空格或中文换行。", "API keys must not contain whitespace or invalid characters.")
+          : t("请先填写有效的 HTTP/HTTPS API 地址。", "Enter a valid HTTP/HTTPS endpoint first.");
+      status.setText(msg);
+      Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
+      new DshaDialogBuilder(this)
+          .setTitle(t("获取模型提示", "Notice"))
+          .setMessage(msg)
+          .setPositiveButton(t("知道了", "OK"), null)
+          .show();
     }
   }
 
@@ -736,6 +762,7 @@ public final class ModelSetupActivity extends AppCompatActivity {
             ModelConfiguration.validateModels(checked.toString(), true);
             draft.modelList = checked;
             renderModels();
+            Toast.makeText(this, t("模型已加入草稿，请点击主页面底部的「保存并同步」生效", "Model added to draft. Tap Save below to sync."), Toast.LENGTH_SHORT).show();
             dialog.dismiss();
           } catch (RuntimeException invalid) {
             error.setText(
@@ -811,16 +838,29 @@ public final class ModelSetupActivity extends AppCompatActivity {
     capture();
     try {
       if (draft.custom) {
+        if (draft.route == null || draft.route.isEmpty()) {
+          throw new IllegalArgumentException("ROUTE_EMPTY");
+        }
         ModelConfiguration.validateRoute(draft.route);
         for (JsonElement entry : current.getAsJsonArray("providers"))
           if (draft.route.equals(s(entry.getAsJsonObject(), "provider")))
             throw new IllegalArgumentException("ROUTE_TAKEN");
       }
+      if (draft.custom && (draft.endpoint == null || draft.endpoint.isEmpty())) {
+        throw new IllegalArgumentException("URL_EMPTY");
+      }
       ModelConfiguration.validateUrl(draft.endpoint, draft.custom);
+      
+      if (draft.custom && (draft.modelList == null || draft.modelList.isEmpty())) {
+        throw new IllegalArgumentException("MODEL_REQUIRED");
+      }
       ModelConfiguration.validateModels(draft.modelList.toString(), draft.custom);
+      
       if (!draft.key.isEmpty() && !draft.key.matches("[\\x21-\\x7E]+"))
         throw new IllegalArgumentException("KEY");
       if (draft.custom && draft.protocol.isEmpty()) throw new IllegalArgumentException("PROTOCOL");
+      
+      Toast.makeText(this, t("正在提交并保存配置…", "Saving configuration..."), Toast.LENGTH_SHORT).show();
       JsonObject next = draft.original.deepCopy();
       if (draft.extra != null) {
         for (String k : new ArrayList<>(next.keySet()))
@@ -867,24 +907,32 @@ public final class ModelSetupActivity extends AppCompatActivity {
           s(draft.entry, "settingsNs"), ops, draft.revision, draft.generation, ref, draft.key);
     } catch (RuntimeException invalid) {
       String code = String.valueOf(invalid.getMessage());
-      status.setText(
-          code.startsWith("HEADERS")
-              ? t(
-                  "请检查请求头：名称不能重复，值不能包含换行，不可覆盖连接与传输字段。",
-                  "Check headers: unique names, no line breaks, and no connection or transport fields.")
-              : code.startsWith("ROUTE")
-                  ? t(
-                      "提供方标识需以小写字母开头，用短横线连接，且不能重复。",
-                      "Provider IDs must start with a lowercase letter, use hyphens and be unique.")
-                  : code.equals("URL")
-                      ? t("请填写有效的 HTTP/HTTPS API 地址。", "Enter a valid HTTP/HTTPS endpoint.")
-                      : code.equals("KEY")
-                          ? t("API Key 不应包含空格或换行。", "API keys must not contain whitespace.")
-                          : code.equals("PROTOCOL")
-                              ? t("请选择连接协议。", "Select a protocol.")
-                              : t(
-                                  "请检查模型目录：ID 不能重复，容量必须是正整数。",
-                                  "Check models: unique IDs and positive integer capacities are required."));
+      String msg = code.equals("ROUTE_EMPTY")
+          ? t("请填写服务商唯一标识（如 my-api，只能由小写英文与数字组成）。", "Enter provider ID (lowercase).")
+          : code.equals("ROUTE_TAKEN")
+          ? t("该提供方标识已存在，请更换标识名称。", "Provider ID is already taken.")
+          : code.equals("URL_EMPTY")
+          ? t("请填写服务商的 API 地址（例如 https://api.openai.com/v1）。", "Enter API endpoint.")
+          : code.equals("MODEL_REQUIRED")
+          ? t("模型目录不能为空。请先点击「添加模型」录入模型 ID，或点击「获取可用模型」自动导入。", "Model catalog is empty. Please add a model first.")
+          : code.startsWith("HEADERS")
+          ? t("请检查请求头：名称不能重复，值不能包含换行，不可覆盖连接与传输字段。", "Check headers.")
+          : code.startsWith("ROUTE")
+          ? t("提供方标识需以小写字母开头，用短横线连接（如 my-provider）。", "Provider IDs must start with lowercase letter.")
+          : code.equals("URL")
+          ? t("请填写有效的 HTTP/HTTPS API 地址。", "Enter valid HTTP/HTTPS endpoint.")
+          : code.equals("KEY")
+          ? t("API Key 包含非法字符，请检查是否有多余空格或非 ASCII 字符。", "API key contains invalid characters.")
+          : code.equals("PROTOCOL")
+          ? t("请选择连接协议（如 OpenAI Chat Completions 或 Anthropic）。", "Select a protocol.")
+          : t("请检查模型目录：ID 不能重复，容量必须是正整数。", "Check models: unique IDs and positive integer capacities are required.");
+      status.setText(msg);
+      Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
+      new DshaDialogBuilder(this)
+          .setTitle(t("保存失败", "Save failed"))
+          .setMessage(msg)
+          .setPositiveButton(t("去修改", "OK"), null)
+          .show();
     }
   }
 
