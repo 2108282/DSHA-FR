@@ -203,14 +203,21 @@ public final class ModelSetupActivity extends AppCompatActivity {
       JsonObject profile = ModelConfiguration.object(value);
       String detail = s(profile, "baseURL");
       if (detail.isEmpty()) detail = t("使用服务商默认地址", "Uses provider default endpoint");
-      page.entry(
+      
+      Runnable onDelete = null;
+      if (writable && !"llm-deepseek".equals(s(entry, "settingsNs"))) {
+        onDelete = () -> confirmDeleteDirectoryEntry(entry, title);
+      }
+      page.entryWithAction(
           configured,
           title,
           detail,
           R.drawable.ic_ui_link,
           () -> {
             if (writable) open(entry, false);
-          });
+          },
+          onDelete != null ? t("删除", "Delete") : null,
+          onDelete);
     }
     LinearLayout add = card("");
     page.entry(
@@ -236,6 +243,29 @@ public final class ModelSetupActivity extends AppCompatActivity {
       page.footer.setVisibility(View.VISIBLE);
       page.button(page.footer, t("继续进入 DSHA", "Continue to DSHA"), true, this::leave);
     }
+  }
+
+  private void confirmDeleteDirectoryEntry(JsonObject entry, String title) {
+    JsonObject ns = namespace(s(entry, "settingsNs"));
+    if (!ns.has("revision")) return;
+    long revision = ns.get("revision").getAsLong();
+    long gen = current.get("generation").getAsLong();
+    JsonArray path = entry.getAsJsonArray("settingsPath");
+    JsonElement val = ModelConfiguration.at(ns.get("value"), path);
+    String ref = "";
+    if (val != null && val.isJsonObject()) {
+      ref = s(val.getAsJsonObject(), "apiKeyEnv");
+    }
+    final String finalRef = ref;
+    new DshaDialogBuilder(this)
+        .setTitle(t("删除服务商？", "Delete provider?"))
+        .setMessage(t("确定要删除「" + title + "」的配置吗？这会从 DSH 中移除该提供方与关联密钥。",
+                      "Delete " + title + "? This removes the configuration and stored API key."))
+        .setNegativeButton(t("取消", "Cancel"), null)
+        .setPositiveButton(t("删除", "Delete"), (d, w) -> {
+            repository.deleteProvider(s(entry, "settingsNs"), path, revision, gen, finalRef);
+        })
+        .show();
   }
 
   private void chooseProvider() {
@@ -364,6 +394,9 @@ public final class ModelSetupActivity extends AppCompatActivity {
     models = card(t("模型目录", "Models"));
     renderModels();
     page.button(body, t("高级配置", "Advanced settings"), false, this::advanced);
+    if (!deepseek() && (!draft.custom || isConfiguredRoute(draft.route))) {
+      page.dangerButton(body, t("删除此服务商配置", "Delete provider configuration"), this::confirmDeleteProvider);
+    }
     page.footer.setVisibility(View.VISIBLE);
     save = page.button(page.footer, t("保存并同步", "Save and sync"), true, this::save);
     save.setEnabled(!Boolean.TRUE.equals(repository.busy.getValue()));
@@ -475,12 +508,15 @@ public final class ModelSetupActivity extends AppCompatActivity {
     for (int i = 0; i < draft.modelList.size(); i++) {
       int index = i;
       JsonObject model = draft.modelList.get(i).getAsJsonObject();
-      page.entry(
+      String modelId = s(model, "id");
+      page.entryWithAction(
           models,
-          s(model, "id"),
+          modelId,
           s(model, "name").isEmpty() ? t("编辑模型与容量", "Edit model and capacity") : s(model, "name"),
           R.drawable.ic_ui2_box,
-          () -> editModel(index));
+          () -> editModel(index),
+          t("删除", "Delete"),
+          () -> confirmDeleteModel(index, modelId));
     }
     if ("llm-pi-ai".equals(s(draft.entry, "settingsNs"))) {
       fetchModels =
@@ -495,6 +531,58 @@ public final class ModelSetupActivity extends AppCompatActivity {
                 "Unchanged catalogs retain the provider's models and capabilities."),
             11,
             R.color.text_muted));
+  }
+
+  private void confirmDeleteModel(int index, String modelId) {
+    new DshaDialogBuilder(this)
+        .setTitle(t("移除模型？", "Remove model?"))
+        .setMessage(t("确定从目录中移除模型「" + modelId + "」吗？保存后生效。",
+                      "Remove model " + modelId + " from catalog? Effective after save."))
+        .setNegativeButton(t("取消", "Cancel"), null)
+        .setPositiveButton(t("移除", "Remove"), (dialog, which) -> {
+            if (index >= 0 && index < draft.modelList.size()) {
+                draft.modelList.remove(index);
+                renderModels();
+                status.setText(t("已从目录移除模型 " + modelId, "Removed model " + modelId));
+            }
+        })
+        .show();
+  }
+
+  private void confirmDeleteProvider() {
+    new DshaDialogBuilder(this)
+        .setTitle(t("删除服务商？", "Delete provider?"))
+        .setMessage(t("确定要删除此服务商配置吗？这会从 DSH 中移除该提供方及关联密钥。",
+                      "Delete this provider? This removes the configuration and stored API key."))
+        .setNegativeButton(t("取消", "Cancel"), null)
+        .setPositiveButton(t("删除", "Delete"), (d, w) -> {
+            JsonArray path = draft.custom
+                ? ModelConfiguration.path("providers", draft.route)
+                : draft.entry.getAsJsonArray("settingsPath");
+            String ref = s(draft.value, "apiKeyEnv");
+            if (ref.isEmpty() && !draft.route.isEmpty()) {
+                ref = ModelConfiguration.keyReference(draft.route);
+            }
+            repository.deleteProvider(
+                s(draft.entry, "settingsNs"),
+                path,
+                draft.revision,
+                draft.generation,
+                ref);
+            draft.clear();
+            showDirectory();
+        })
+        .show();
+  }
+
+  private boolean isConfiguredRoute(String r) {
+    if (r == null || r.isEmpty() || current == null) return false;
+    JsonArray provs = current.getAsJsonArray("providers");
+    if (provs == null) return false;
+    for (JsonElement item : provs) {
+      if (r.equals(s(item.getAsJsonObject(), "provider"))) return true;
+    }
+    return false;
   }
 
   private void fetchModels() {

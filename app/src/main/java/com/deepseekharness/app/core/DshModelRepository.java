@@ -243,6 +243,45 @@ public final class DshModelRepository extends AndroidViewModel {
         });
   }
 
+  public void deleteProvider(
+      String namespace,
+      JsonArray path,
+      long expectedRevision,
+      long openedGeneration,
+      String keyRef) {
+    submit(
+        () -> {
+          if (openedGeneration != generation)
+            throw new IOException(t("请重新读取设置后操作。", "Reload settings before deleting."));
+          checkGeneration();
+
+          if (keyRef != null && !keyRef.isEmpty()) {
+            try {
+              JsonObject args = new JsonObject();
+              args.addProperty("ref", keyRef);
+              rpc("credentials/unset", args);
+            } catch (Exception ignored) {
+            }
+          }
+
+          JsonObject op = new JsonObject();
+          op.addProperty("op", "unset");
+          op.add("path", path);
+          JsonArray ops = new JsonArray();
+          ops.add(op);
+
+          JsonObject args = new JsonObject();
+          args.addProperty("ns", namespace);
+          args.add("ops", ops);
+          args.addProperty("expectedRevision", expectedRevision);
+          rpc("settings/mutate", args);
+
+          read();
+          message.postValue(t("服务商配置已删除。", "Provider configuration deleted."));
+          savedRevision.postValue(++saveSerial);
+        });
+  }
+
   /** 使用 DSH 自己的 provider discovery；一次性密钥只在本轮 RPC 参数中传递。 */
   public void discoverModels(
       String namespace, String provider, String endpoint, String protocol, String key) {

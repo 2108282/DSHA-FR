@@ -113,6 +113,46 @@ final class CardPage {
     card.addView(row);
   }
 
+  void entryWithAction(LinearLayout card, String title, String subtitle, int icon, Runnable onOpen, String actionText, Runnable onAction) {
+    LinearLayout row = new LinearLayout(context);
+    row.setGravity(Gravity.CENTER_VERTICAL);
+    row.setPadding(0, dp(10), 0, dp(10));
+    row.setMinimumHeight(dp(64));
+    row.setBackgroundResource(R.drawable.bg_action_plain);
+    row.setFocusable(true);
+    row.setOnClickListener(v -> onOpen.run());
+    ImageView mark = new ImageView(context);
+    mark.setImageResource(icon);
+    mark.setImageTintList(
+        android.content.res.ColorStateList.valueOf(context.getColor(R.color.primary)));
+    mark.setBackgroundResource(R.drawable.bg_logo);
+    mark.setPadding(dp(7), dp(7), dp(7), dp(7));
+    row.addView(mark, new LinearLayout.LayoutParams(dp(32), dp(32)));
+    LinearLayout words = column();
+    TextView heading = text(title, 13, R.color.text);
+    heading.setTypeface(null, android.graphics.Typeface.BOLD);
+    words.addView(heading);
+    TextView detail = text(subtitle, 11, R.color.text_secondary);
+    detail.setPadding(0, dp(5), 0, 0);
+    words.addView(detail);
+    LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, -2, 1);
+    p.leftMargin = dp(12);
+    row.addView(words, p);
+
+    if (actionText != null && onAction != null) {
+      TextView actionBtn = text(actionText, 13, R.color.err);
+      actionBtn.setPadding(dp(12), dp(8), dp(12), dp(8));
+      actionBtn.setBackgroundResource(R.drawable.bg_selection);
+      actionBtn.setOnClickListener(v -> onAction.run());
+      row.addView(actionBtn);
+    } else {
+      ImageView arrow = new ImageView(context);
+      arrow.setImageResource(R.drawable.ic_ui2_chevron);
+      row.addView(arrow, new LinearLayout.LayoutParams(dp(16), dp(16)));
+    }
+    card.addView(row);
+  }
+
   Button button(LinearLayout parent, String title, boolean primary, Runnable action) {
     var button = new androidx.appcompat.widget.AppCompatButton(context);
     button.setText(title);
@@ -122,6 +162,21 @@ final class CardPage {
     button.setBackgroundResource(primary ? R.drawable.bg_btn_primary : R.drawable.bg_btn);
     button.setTextColor(
         context.getColorStateList(primary ? R.color.button_primary_text : R.color.button_text));
+    button.setOnClickListener(v -> action.run());
+    LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
+    p.topMargin = dp(8);
+    parent.addView(button, p);
+    return button;
+  }
+
+  Button dangerButton(LinearLayout parent, String title, Runnable action) {
+    var button = new androidx.appcompat.widget.AppCompatButton(context);
+    button.setText(title);
+    button.setTextSize(13);
+    button.setAllCaps(false);
+    button.setMinHeight(dp(48));
+    button.setBackgroundResource(R.drawable.m3_btn_danger_soft);
+    button.setTextColor(context.getColor(R.color.m3_on_error_container));
     button.setOnClickListener(v -> action.run());
     LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2);
     p.topMargin = dp(8);
