@@ -186,13 +186,26 @@
                     android:textSize="@dimen/text_body" />
             </LinearLayout>
 
+            <!-- Model Settings card -->
+            <Button
+                android:id="@+id/launch_models"
+                android:layout_width="match_parent"
+                android:layout_height="@dimen/btn_height"
+                android:layout_marginTop="@dimen/gap_block"
+                android:background="@drawable/m3_btn_tonal_expressive"
+                android:text="模型配置 · 服务商、接口与模型目录"
+                android:textAllCaps="false"
+                android:textColor="@color/text"
+                android:textStyle="bold"
+                android:textSize="@dimen/text_body" />
+
             <!-- LAN address card -->
             <TextView
                 android:id="@+id/lan_addr"
                 style="@style/DshaText.Body"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/gap_block"
+                android:layout_marginTop="@dimen/gap_tight"
                 android:background="@drawable/m3_card_expressive_item"
                 android:clickable="true"
                 android:focusable="true"

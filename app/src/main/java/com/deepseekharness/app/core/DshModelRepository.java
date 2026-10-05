@@ -52,7 +52,8 @@ public final class DshModelRepository extends AndroidViewModel {
   }
 
   private void connect() throws Exception {
-    if (controller.getWebAuthUrl().isEmpty()) {
+    String url = controller.getWebAuthUrl();
+    if (url.isEmpty()) {
       if (!controller.isEnvironmentReady())
         throw new IOException(t("请先完成环境安装。", "Install the environment first."));
       if (!controller.isStarting() && !controller.startWeb(null))
@@ -65,11 +66,14 @@ public final class DshModelRepository extends AndroidViewModel {
           t("正在准备本机配置服务，表单将在这里显示…", "Preparing local settings. The form will appear here…"));
       while (!closed && controller.getWebAuthUrl().isEmpty() && controller.isStarting())
         Thread.sleep(350);
+      url = controller.getWebAuthUrl();
     }
     if (closed) throw new InterruptedException();
     generation = controller.getWebGeneration();
-    String url = controller.getWebAuthUrl();
-    if (url.isEmpty())
+    if (url == null || url.isEmpty()) {
+      url = controller.getWebAuthUrl();
+    }
+    if (url == null || url.isEmpty())
       throw new IOException(
           t("配置服务未就绪，请查看启动日志后重试。", "Settings are not ready. Check startup logs and retry."));
     URI parsed = URI.create(url);
@@ -77,14 +81,34 @@ public final class DshModelRepository extends AndroidViewModel {
       throw new IOException("LOCAL_SETTINGS_ORIGIN");
     base = "http://127.0.0.1:" + parsed.getPort();
     cookie = controller.exchangeDshAuthCookie();
+    if (cookie == null || cookie.isEmpty()) {
+      cookie = directExchangeCookie(url);
+    }
     if (cookie == null || cookie.isEmpty())
       throw new IOException(t("本机鉴权未完成，请重试。", "Local authentication incomplete. Retry."));
     checkGeneration();
   }
 
+  private static String directExchangeCookie(String authUrl) {
+    HttpURLConnection conn = null;
+    try {
+      conn = (HttpURLConnection) new URL(authUrl).openConnection();
+      conn.setInstanceFollowRedirects(false);
+      conn.setConnectTimeout(4000);
+      conn.setReadTimeout(5000);
+      conn.setRequestMethod("GET");
+      conn.getResponseCode();
+      return com.deepseekharness.app.util.DshAuthUrl.extractCookie(conn.getHeaderFields());
+    } catch (Throwable ignored) {
+      return null;
+    } finally {
+      if (conn != null) conn.disconnect();
+    }
+  }
+
   private void checkGeneration() throws IOException {
     if (closed
-        || generation != controller.getWebGeneration()
+        || (generation > 0 && generation != controller.getWebGeneration())
         || controller.getWebAuthUrl().isEmpty())
       throw new IOException(
           t(

@@ -318,8 +318,43 @@ public class HarnessController {
         return proot.hasOfflineBundle();
     }
 
-    /** 当前 BrowserAuth 鉴权链接；dsh 还没打印出来时为空串。 */
+    /** 当前 BrowserAuth 鉴权链接；dsh 还没打印出来时尝试同步恢复。 */
     public String getWebAuthUrl() {
+        if (webAuthUrl.isEmpty()) {
+            recoverRunningUrlSync();
+        }
+        return webAuthUrl;
+    }
+
+    /** 同步恢复运行中的鉴权 URL（仅在子线程执行，避免阻塞主线程）。 */
+    public String recoverRunningUrlSync() {
+        if (!webAuthUrl.isEmpty()) return webAuthUrl;
+        if ("ksu_chroot".equals(proot.runtime().id())) {
+            if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+                tryRecoverRunningUrl();
+                return webAuthUrl;
+            }
+            try {
+                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c",
+                        "grep -o 'http://127\\.0\\.0\\.1:[0-9]*/?token=[^ ]*' /data/adb/dsha/run/dsh-web.log 2>/dev/null | tail -n 1"});
+                String out = new String(Compat.readAllBytes(p.getInputStream()), StandardCharsets.UTF_8).trim();
+                String url = extractAuthUrl(out);
+                if (url == null || url.isEmpty()) {
+                    Process pToken = Runtime.getRuntime().exec(new String[]{"su", "-c",
+                            "cat /data/adb/dsha/rootfs/root/.dsh/.launch_token 2>/dev/null || cat /root/.dsh/.launch_token 2>/dev/null"});
+                    String token = new String(Compat.readAllBytes(pToken.getInputStream()), StandardCharsets.UTF_8).trim();
+                    if (!token.isEmpty() && token.length() >= 20) {
+                        url = "http://127.0.0.1:" + getPort() + "/?token=" + token;
+                    }
+                }
+                if (url != null && !url.isEmpty()) {
+                    synchronized (lifecycle) {
+                        webAuthUrl = url;
+                    }
+                }
+            } catch (Throwable ignored) {
+            }
+        }
         return webAuthUrl;
     }
 
@@ -734,25 +769,30 @@ public class HarnessController {
     private String exchangeDshAuthCookie(long generation) {
         String url;
         synchronized (lifecycle) {
-            if (!lifecycle.isCurrent(generation)) return null;
+            if (generation > 0 && !lifecycle.isCurrent(generation)) return null;
             url = webAuthUrl;
-            if (url.isEmpty()) return null;
         }
+        if (url == null || url.isEmpty()) {
+            url = recoverRunningUrlSync();
+        }
+        if (url == null || url.isEmpty()) return null;
+
         HttpURLConnection conn = null;
         try {
             conn = (HttpURLConnection) new URL(url).openConnection();
             conn.setInstanceFollowRedirects(false);
-            conn.setConnectTimeout(2500);
-            conn.setReadTimeout(4000);
+            conn.setConnectTimeout(3500);
+            conn.setReadTimeout(5000);
             conn.setRequestMethod("GET");
             conn.getResponseCode();
             String cookie = extractDshAuthCookie(conn.getHeaderFields());
             synchronized (lifecycle) {
-                if (!lifecycle.isCurrent(generation) || !url.equals(webAuthUrl)) return null;
-                // 纯净返回 cookie 供本地 WebView 注入，无需干预局域网代理
+                if (generation > 0 && !lifecycle.isCurrent(generation)) return null;
+                // 纯净返回 cookie 供本地 WebView/RPC 注入，无需干预局域网代理
                 return cookie;
             }
-        } catch (Throwable ignored) {
+        } catch (Throwable e) {
+            Log.w("DSHA", "exchangeDshAuthCookie failed: " + e.getMessage());
             return null;
         } finally {
             if (conn != null) conn.disconnect();

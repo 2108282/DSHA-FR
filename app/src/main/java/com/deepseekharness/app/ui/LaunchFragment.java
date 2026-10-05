@@ -80,6 +80,12 @@ public class LaunchFragment extends Fragment implements LaunchPresenter.ViewCall
         restartButton.setOnClickListener(x -> actions.onRestartClick());
         stopButton.setOnClickListener(x -> actions.onStopClick());
 
+        View modelsButton = v.findViewById(R.id.launch_models);
+        if (modelsButton != null) {
+            modelsButton.setOnClickListener(x ->
+                    startActivity(new Intent(requireContext(), ModelSetupActivity.class)));
+        }
+
         if (openSheetButton != null) {
             openSheetButton.setOnClickListener(x -> actions.onOpenSheetClick());
         }
