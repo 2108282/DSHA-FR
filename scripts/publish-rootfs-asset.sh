@@ -45,10 +45,10 @@ EOF_MERGE
 chmod +x "$STAGE_DIR/merge.sh"
 
 cat > "$STAGE_DIR/README.md" << EOF_DOC
-# DSHA 0.2.0-rc.2 纯净原生 Linux 底包资产
+# DSHA 0.2.1-alpha.1 纯净原生 Linux 底包资产
 
 本目录为 GitHub Actions 自动化流水线熔铸生成的 **100% 纯净全新底包**。
-已彻底物理清除旧时代残留，原生内置 @deepseek-ai/dsh@0.2.0-rc.2、Node 24 以及四大核心插件。
+已彻底物理清除旧时代残留，原生内置 @deepseek-ai/dsh@0.2.1-alpha.1、Node 24 以及四大核心插件。
 
 ---
 

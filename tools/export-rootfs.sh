@@ -223,6 +223,11 @@ EOF_PKG
         "--exclude=*/.ignored_*"
         "--exclude=./root/.agents/*"
         "--exclude=./root/.config/*"
+        "--exclude=./root/.mcp-auth"
+        "--exclude=./root/.mcp-auth/*"
+        "--exclude=./root/build-agy"
+        "--exclude=./root/build-agy/*"
+        "--exclude=./root/.gitconfig"
         "--exclude=./root/.dsha-backup*"
         "--exclude=./root/.dsha-restore*"
         "--exclude=./root/*.bak*"
@@ -257,8 +262,25 @@ EOF_PKG
     cd /
     tar --numeric-owner -cf "$TMP_RAW_TAR" "${CLEAN_EXCLUDES[@]}" . || [ $? -eq 1 ]
 
-    echo "==> [2/3] 动态注入纯净版 profiles/web/package.json (完美替换)..."
-    tar --numeric-owner -rf "$TMP_RAW_TAR" -C "$STAGE_DIR" ./root/.dsh/profiles/web/package.json
+    echo "==> [2/3] 动态注入纯净版 profiles/web/package.json 与核心插件标准软链接..."
+    STAGE_PROFILE_NM="$STAGE_DIR/root/.dsh/profiles/web/node_modules"
+    STAGE_GLOBAL_NM="$STAGE_DIR/usr/local/lib/node_modules"
+    mkdir -p "$STAGE_PROFILE_NM" "$STAGE_GLOBAL_NM"
+    for p in dsh-device-shell-guide dsh-task-notifier dsh-status-overlay dsh-web-mobile; do
+        tgt="/root/dsha-${p#dsh-}"
+        ln -sfn "$tgt" "$STAGE_PROFILE_NM/$p"
+        ln -sfn "$tgt" "$STAGE_GLOBAL_NM/$p"
+    done
+    tar --numeric-owner -rf "$TMP_RAW_TAR" -C "$STAGE_DIR" \
+        ./root/.dsh/profiles/web/package.json \
+        ./root/.dsh/profiles/web/node_modules/dsh-device-shell-guide \
+        ./root/.dsh/profiles/web/node_modules/dsh-task-notifier \
+        ./root/.dsh/profiles/web/node_modules/dsh-status-overlay \
+        ./root/.dsh/profiles/web/node_modules/dsh-web-mobile \
+        ./usr/local/lib/node_modules/dsh-device-shell-guide \
+        ./usr/local/lib/node_modules/dsh-task-notifier \
+        ./usr/local/lib/node_modules/dsh-status-overlay \
+        ./usr/local/lib/node_modules/dsh-web-mobile
 
     echo "==> [3/3] 正在执行多线程高效压缩..."
     $COMPRESS_CMD < "$TMP_RAW_TAR" > "$OUTPUT_TAR"
