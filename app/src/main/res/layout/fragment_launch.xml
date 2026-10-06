@@ -445,7 +445,8 @@
                     android:textSize="12sp" />
             </ScrollView>
         </com.deepseekharness.app.ui.GlassLinearLayout>
-    </androidx.core.widget.NestedScrollView>
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>
 
     <!-- Web 全屏与抽屉覆盖层容器 -->
     <FrameLayout
