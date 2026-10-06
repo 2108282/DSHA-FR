@@ -267,9 +267,9 @@
                     android:layout_height="wrap_content"
                     android:layout_marginStart="8dp"
                     android:switchMinWidth="44dp"
-                    app:showText="false"
-                    app:thumb="@drawable/switch_thumb"
-                    app:track="@drawable/switch_track" />
+                    android:thumb="@drawable/switch_thumb"
+                    android:track="@drawable/switch_track"
+                    app:showText="false" />
             </LinearLayout>
 
             <!-- 分隔线 1 -->
