@@ -108,6 +108,11 @@
             android:theme="@style/Theme.DeepseekHarness" />
 
         <activity
+            android:name=".ui.CredentialsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.DeepseekHarness" />
+
+        <activity
             android:name=".ui.WebPreviewActivity"
             android:exported="false"
             android:windowSoftInputMode="adjustResize"

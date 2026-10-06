@@ -10,35 +10,31 @@
     <LinearLayout
         android:id="@+id/app_bar"
         android:layout_width="match_parent"
-        android:layout_height="@dimen/appbar_height"
+        android:layout_height="52dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingStart="@dimen/page_pad"
-        android:paddingEnd="@dimen/gap_control">
+        android:paddingHorizontal="16dp"
+        android:background="@color/card">
 
-        <!-- Logo -->
-        <FrameLayout
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:background="@drawable/bg_logo">
-
-            <ImageView
-                android:layout_width="18dp"
-                android:layout_height="18dp"
-                android:layout_gravity="center"
-                android:importantForAccessibility="no"
-                android:src="@drawable/ic_terminal"
-                app:tint="@color/primary" />
-        </FrameLayout>
+        <!-- Leading Icon -->
+        <ImageView
+            android:id="@+id/appbar_icon"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:contentDescription="@null"
+            android:src="@drawable/ic_terminal"
+            app:tint="@color/primary" />
 
         <!-- Title -->
         <TextView
             android:id="@+id/app_title"
-            style="@style/DshaText.Title"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="@dimen/gap_control"
-            android:text="启动" />
+            android:layout_marginStart="10dp"
+            android:text="启动"
+            android:textColor="@color/text"
+            android:textSize="20sp"
+            android:textStyle="bold" />
 
         <!-- Spacer -->
         <View
@@ -52,35 +48,21 @@
             android:id="@+id/btn_theme"
             android:layout_width="wrap_content"
             android:layout_height="34dp"
-            android:layout_marginEnd="8dp"
             android:background="@drawable/bg_chip_clickable"
             android:clickable="true"
             android:focusable="true"
             android:gravity="center"
             android:paddingHorizontal="12dp"
-            android:text="黑夜"
+            android:text="日间"
             android:textColor="@color/text_secondary"
-            android:textSize="13sp" />
-
-        <!-- About button -->
-        <FrameLayout
-            android:id="@+id/btn_about"
-            android:layout_width="34dp"
-            android:layout_height="34dp"
-            android:background="@drawable/bg_chip_clickable"
-            android:clickable="true"
-            android:contentDescription="关于"
-            android:focusable="true">
-
-            <ImageView
-                android:layout_width="16dp"
-                android:layout_height="16dp"
-                android:layout_gravity="center"
-                android:importantForAccessibility="no"
-                android:src="@drawable/ic_about"
-                app:tint="@color/text_secondary" />
-        </FrameLayout>
+            android:textSize="13sp"
+            android:textStyle="bold" />
     </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/line" />
 
     <!-- Fragment container -->
     <FrameLayout

@@ -18,6 +18,7 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.widget.SwitchCompat;
 import androidx.fragment.app.Fragment;
 
 import com.deepseekharness.app.HttpShellService;
@@ -38,14 +39,18 @@ public class LaunchFragment extends Fragment implements LaunchPresenter.ViewCall
     private LaunchActions actions;
 
     // View 控件引用
+    private View runDot;
     private TextView runStateTitle;
     private TextView statusDescription;
     private ProgressBar busyBar;
     private Button startButton;
     private Button restartButton;
     private Button stopButton;
-    private TextView lanAddrText;
-    private Button openSheetButton;
+    private View lanRow;
+    private Button lanCopyBtn;
+    private Button lanMoreBtn;
+    private SwitchCompat lanSwitch;
+    private View openSheetButton;
     private TextView logTextView;
     private ScrollView logScrollView;
     private EditText portEditText;
@@ -59,13 +64,17 @@ public class LaunchFragment extends Fragment implements LaunchPresenter.ViewCall
         View v = inflater.inflate(R.layout.fragment_launch, container, false);
 
         // 1. 查找控件引用
+        runDot = v.findViewById(R.id.launch_run_dot);
         runStateTitle = v.findViewById(R.id.launch_run_state);
         statusDescription = v.findViewById(R.id.launch_status);
         busyBar = v.findViewById(R.id.launch_busy);
         startButton = v.findViewById(R.id.launch_start);
         restartButton = v.findViewById(R.id.launch_open);
         stopButton = v.findViewById(R.id.launch_stop);
-        lanAddrText = v.findViewById(R.id.lan_addr);
+        lanRow = v.findViewById(R.id.launch_lan_row);
+        lanCopyBtn = v.findViewById(R.id.lan_copy);
+        lanMoreBtn = v.findViewById(R.id.lan_more);
+        lanSwitch = v.findViewById(R.id.lan_switch);
         openSheetButton = v.findViewById(R.id.launch_open_sheet);
         logTextView = v.findViewById(R.id.launch_log);
         logScrollView = v.findViewById(R.id.launch_log_scroll);
@@ -75,7 +84,7 @@ public class LaunchFragment extends Fragment implements LaunchPresenter.ViewCall
         presenter = new LaunchPresenter(requireActivity(), this);
         actions = presenter;
 
-        // 3. 事件挂载（每个点击仅一行，契约派发）
+        // 3. 事件挂载
         startButton.setOnClickListener(x -> actions.onPrimaryActionClick());
         restartButton.setOnClickListener(x -> actions.onRestartClick());
         stopButton.setOnClickListener(x -> actions.onStopClick());
@@ -89,8 +98,34 @@ public class LaunchFragment extends Fragment implements LaunchPresenter.ViewCall
         if (openSheetButton != null) {
             openSheetButton.setOnClickListener(x -> actions.onOpenSheetClick());
         }
-        if (lanAddrText != null) {
-            lanAddrText.setOnClickListener(x -> actions.onLanAddressClick());
+
+        if (lanMoreBtn != null) {
+            lanMoreBtn.setOnClickListener(x -> openCredentialsPage());
+        }
+
+        if (lanCopyBtn != null) {
+            lanCopyBtn.setOnClickListener(x -> copyLanAddress());
+        }
+
+        if (lanSwitch != null) {
+            boolean currentLan = requireContext().getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE)
+                    .getBoolean(Constants.KEY_LAN_MODE, false);
+            lanSwitch.setChecked(currentLan);
+            lanSwitch.setOnCheckedChangeListener((btn, isChecked) -> {
+                requireContext().getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE).edit()
+                        .putBoolean(Constants.KEY_LAN_MODE, isChecked).apply();
+                HarnessController controller = HarnessController.get(requireContext());
+                if (controller != null && controller.isWebRunning()) {
+                    if (isChecked) {
+                        LanProxyService.start(requireContext());
+                        Toast.makeText(requireContext(), "局域网服务已开启", Toast.LENGTH_SHORT).show();
+                    } else {
+                        LanProxyService.stop();
+                        Toast.makeText(requireContext(), "局域网服务已关闭", Toast.LENGTH_SHORT).show();
+                    }
+                }
+                if (presenter != null) presenter.recalculateState();
+            });
         }
 
         // 4. 端口设置与快速切换芯片
@@ -113,14 +148,26 @@ public class LaunchFragment extends Fragment implements LaunchPresenter.ViewCall
                 portEditText.setText("3088");
                 actions.onPortSelect(3088);
             });
-            View chip8080 = v.findViewById(R.id.launch_port_chip_8080);
-            if (chip8080 != null) chip8080.setOnClickListener(x -> {
-                portEditText.setText("8080");
-                actions.onPortSelect(8080);
-            });
         }
 
         return v;
+    }
+
+    private void openCredentialsPage() {
+        if (!isAdded()) return;
+        startActivity(new Intent(requireContext(), CredentialsActivity.class));
+    }
+
+    private void copyLanAddress() {
+        if (!isAdded()) return;
+        String ip = HarnessController.getLanAddress();
+        if (ip != null && !ip.isEmpty()) {
+            String addr = "http://" + ip + ":" + LanProxyService.LAN_PORT + "/?token="
+                    + LanProxyService.getLanToken(requireContext());
+            copyAddr("局域网地址", addr);
+        } else {
+            Toast.makeText(requireContext(), "未检测到有效局域网 IP（请确认已连接 WiFi）", Toast.LENGTH_SHORT).show();
+        }
     }
 
     @Override
@@ -143,16 +190,19 @@ public class LaunchFragment extends Fragment implements LaunchPresenter.ViewCall
     public void onDestroyView() {
         if (presenter != null) {
             presenter.destroy();
-            presenter = null;
         }
         actions = null;
+        runDot = null;
         runStateTitle = null;
         statusDescription = null;
         busyBar = null;
         startButton = null;
         restartButton = null;
         stopButton = null;
-        lanAddrText = null;
+        lanRow = null;
+        lanCopyBtn = null;
+        lanMoreBtn = null;
+        lanSwitch = null;
         openSheetButton = null;
         logTextView = null;
         logScrollView = null;
@@ -174,14 +224,27 @@ public class LaunchFragment extends Fragment implements LaunchPresenter.ViewCall
         if (statusDescription != null && !state.statusDescription.isEmpty()) {
             statusDescription.setText(state.statusDescription);
         }
-        if (busyBar != null) {
-            busyBar.setVisibility(state.isBusy ? View.VISIBLE : View.GONE);
+
+        // 状态指示圆点
+        if (runDot != null) {
+            if ("服务运行中".equals(state.runStateTitle)) {
+                runDot.setBackgroundResource(R.drawable.dot_active);
+            } else if ("DSH 未运行".equals(state.runStateTitle) || "已停止".equals(state.runStateTitle)) {
+                runDot.setBackgroundResource(R.drawable.dot_inactive);
+            } else {
+                runDot.setBackgroundResource(R.drawable.dot_warn);
+            }
         }
 
-        // 主按钮（启动 / 进入）
+        // 进度条
+        if (busyBar != null) {
+            busyBar.setVisibility(state.isBusyBarVisible ? View.VISIBLE : View.GONE);
+        }
+
+        // 主操作按钮
         if (startButton != null) {
-            startButton.setText(state.primaryActionText);
-            startButton.setEnabled(state.isPrimaryActionEnabled);
+            startButton.setText(state.startButtonText);
+            startButton.setEnabled(state.isStartButtonEnabled);
         }
 
         // 重启按钮
@@ -196,12 +259,9 @@ public class LaunchFragment extends Fragment implements LaunchPresenter.ViewCall
             stopButton.setEnabled(state.isStopEnabled);
         }
 
-        // 局域网卡片与抽屉入口
-        if (lanAddrText != null) {
-            lanAddrText.setVisibility(state.isLanCardVisible ? View.VISIBLE : View.GONE);
-            if (state.isLanCardVisible) {
-                lanAddrText.setText(state.lanAddressText);
-            }
+        // 局域网行与抽屉入口
+        if (lanRow != null) {
+            lanRow.setVisibility(state.isLanCardVisible ? View.VISIBLE : View.GONE);
         }
         if (openSheetButton != null) {
             openSheetButton.setVisibility(state.isSheetButtonVisible ? View.VISIBLE : View.GONE);
@@ -229,81 +289,22 @@ public class LaunchFragment extends Fragment implements LaunchPresenter.ViewCall
 
     @Override
     public void onShowCredentialsDialog() {
-        if (!isAdded()) return;
-        HarnessController controller = HarnessController.get(requireContext());
-        final String bridgeToken = HttpShellService.currentToken();
-        final String authUrl = controller != null ? controller.getWebAuthUrl() : "";
-
-        boolean lan = requireContext().getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE)
-                .getBoolean(Constants.KEY_LAN_MODE, false);
-        String ip = HarnessController.getLanAddress();
-        final String lanAddr = (lan && ip != null && !ip.isEmpty())
-                ? "http://" + ip + ":" + LanProxyService.LAN_PORT + "/?token="
-                        + LanProxyService.getLanToken(requireContext())
-                : null;
-
-        java.util.List<String> items = new java.util.ArrayList<>();
-        java.util.List<Runnable> acts = new java.util.ArrayList<>();
-
-        // 1. 复制 Bridge Token
-        items.add("📋 复制设备桥令牌 (Bridge Token)\n" + (bridgeToken.isEmpty() ? "（尚未生成）" : bridgeToken));
-        acts.add(() -> copyAddr("Bridge Token", bridgeToken));
-
-        // 2. 本机 Web 访问链接
-        if (!authUrl.isEmpty()) {
-            items.add("🌐 复制本机 Web 访问地址（带 Launch Token）\n" + authUrl);
-            acts.add(() -> copyAddr("本机 Web 地址", authUrl));
-
-            items.add("🚀 内部web访问");
-            acts.add(this::enterWeb);
-        }
-
-        // 3. 局域网访问地址
-        if (lanAddr != null) {
-            items.add("📶 复制局域网访问地址（同 WiFi 其它设备）\n" + lanAddr);
-            acts.add(() -> copyAddr("局域网地址", lanAddr));
-
-            items.add("🔄 重新生成局域网访问 Token（更换密码）");
-            acts.add(() -> {
-                LanProxyService.regenerateLanToken(requireContext());
-                if (presenter != null) presenter.recalculateState();
-                Toast.makeText(requireContext(), "已生成新 Token 并更新地址", Toast.LENGTH_SHORT).show();
-            });
-        } else if (lan) {
-            items.add("📶 局域网模式已开启，等待获取 WiFi IP…");
-            acts.add(() -> {});
-        } else {
-            items.add("📶 局域网访问未开启（可在配置页中打开）");
-            acts.add(() -> {});
-        }
-
-        new androidx.appcompat.app.AlertDialog.Builder(requireContext())
-                .setTitle("访问地址与鉴权凭据")
-                .setItems(items.toArray(new CharSequence[0]), (d, which) -> {
-                    if (which >= 0 && which < acts.size()) acts.get(which).run();
-                })
-                .setNegativeButton("关闭", null)
-                .show();
+        openCredentialsPage();
     }
 
-    private void enterWeb() {
+    @Override
+    public void onOpenExternalBrowser(String url) {
+        if (!isAdded()) return;
         HarnessController controller = HarnessController.get(requireContext());
-        String url = controller != null ? controller.getWebAuthUrl() : "";
-        if (url.isEmpty()) {
-            if (statusDescription != null) {
-                statusDescription.setText("先点「启动」，等鉴权链接就绪后再进入");
-            }
-            return;
-        }
-        final Activity activity = requireActivity();
-        final long generation = controller.getWebGeneration();
+        if (controller == null) return;
         new Thread(() -> {
-            String cookie = controller.exchangeDshAuthCookie();
-            String finalUrl = url;
-            activity.runOnUiThread(() -> {
-                if (!isAdded() || generation != controller.getWebGeneration()
+            String cookie = controller.fetchCookieBlocking();
+            Activity act = getActivity();
+            if (act == null || act.isFinishing()) return;
+            act.runOnUiThread(() -> {
+                if (!isAdded() || getView() == null
                         || !url.equals(controller.getWebAuthUrl())) return;
-                startActivity(WebPreviewActivity.intent(requireContext(), finalUrl, cookie));
+                startActivity(WebPreviewActivity.intent(requireContext(), url, cookie));
             });
         }, "dsh-cookie").start();
     }
