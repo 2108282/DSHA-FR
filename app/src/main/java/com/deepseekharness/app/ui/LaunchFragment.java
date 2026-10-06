@@ -41,7 +41,7 @@ public class LaunchFragment extends Fragment implements LaunchPresenter.ViewCall
     private View runDot;
     private TextView runStateTitle;
     private TextView statusDescription;
-    private ProgressBar busyBar;
+    private CapsuleProgressView busyBar;
     private Button startButton;
     private Button restartButton;
     private Button stopButton;
@@ -54,6 +54,7 @@ public class LaunchFragment extends Fragment implements LaunchPresenter.ViewCall
     private ScrollView logScrollView;
     private EditText portEditText;
 
+    private android.animation.ObjectAnimator dotPulseAnimator;
     private long lastRenderedLogRevision = -1;
 
     @Nullable
@@ -179,6 +180,7 @@ public class LaunchFragment extends Fragment implements LaunchPresenter.ViewCall
 
     @Override
     public void onPause() {
+        updateDotAnimation(false);
         if (presenter != null) {
             presenter.stop();
         }
@@ -187,6 +189,11 @@ public class LaunchFragment extends Fragment implements LaunchPresenter.ViewCall
 
     @Override
     public void onDestroyView() {
+        updateDotAnimation(false);
+        if (dotPulseAnimator != null) {
+            dotPulseAnimator.cancel();
+            dotPulseAnimator = null;
+        }
         if (presenter != null) {
             presenter.destroy();
         }
@@ -209,6 +216,28 @@ public class LaunchFragment extends Fragment implements LaunchPresenter.ViewCall
         super.onDestroyView();
     }
 
+    private void updateDotAnimation(boolean shouldPulse) {
+        if (runDot == null) return;
+        if (shouldPulse) {
+            if (dotPulseAnimator == null) {
+                // 1:1 对齐 HTML @keyframes pulse: 0%,100%{opacity:1} 50%{opacity:.4} (1.2s ease infinite)
+                dotPulseAnimator = android.animation.ObjectAnimator.ofFloat(runDot, "alpha", 1.0f, 0.4f);
+                dotPulseAnimator.setDuration(600); // 单程 600ms，双向往返即 1.2s
+                dotPulseAnimator.setRepeatMode(android.animation.ValueAnimator.REVERSE);
+                dotPulseAnimator.setRepeatCount(android.animation.ValueAnimator.INFINITE);
+                dotPulseAnimator.setInterpolator(new android.view.animation.AccelerateDecelerateInterpolator());
+            }
+            if (!dotPulseAnimator.isRunning()) {
+                dotPulseAnimator.start();
+            }
+        } else {
+            if (dotPulseAnimator != null && dotPulseAnimator.isRunning()) {
+                dotPulseAnimator.cancel();
+            }
+            runDot.setAlpha(1.0f);
+        }
+    }
+
     /**
      * 单一渲染入口：所有的界面状态与按钮属性统一在此赋值，杜绝状态冲突与漏改。
      */
@@ -226,12 +255,21 @@ public class LaunchFragment extends Fragment implements LaunchPresenter.ViewCall
 
         // 状态指示圆点
         if (runDot != null) {
-            if ("服务运行中".equals(state.runStateTitle)) {
+            boolean isRunning = "服务运行中".equals(state.runStateTitle)
+                    || "DSH 已就绪，可进入".equals(state.runStateTitle);
+            boolean isStopped = "DSH 未运行".equals(state.runStateTitle)
+                    || "DSH 已停止".equals(state.runStateTitle)
+                    || "已停止".equals(state.runStateTitle);
+
+            if (isRunning) {
                 runDot.setBackgroundResource(R.drawable.dot_active);
-            } else if ("DSH 未运行".equals(state.runStateTitle) || "已停止".equals(state.runStateTitle)) {
+                updateDotAnimation(true);
+            } else if (isStopped) {
                 runDot.setBackgroundResource(R.drawable.dot_inactive);
+                updateDotAnimation(false);
             } else {
                 runDot.setBackgroundResource(R.drawable.dot_warn);
+                updateDotAnimation(true);
             }
         }
 

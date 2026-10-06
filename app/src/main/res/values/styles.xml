@@ -211,4 +211,10 @@
         <item name="android:gravity">center</item>
     </style>
 
+    <!-- ========== 底部导航文字样式 (1:1 对齐 HTML 11px font-weight: 600) ========== -->
+    <style name="TextAppearance.BottomNav" parent="">
+        <item name="android:textSize">11sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
 </resources>

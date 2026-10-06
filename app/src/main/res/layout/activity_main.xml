@@ -21,15 +21,15 @@
         android:layout_height="match_parent"
         android:orientation="vertical">
 
-        <!-- Top AppBar (52dp, 半透卡片白 card_glass, 细分割线 line_soft) -->
-        <LinearLayout
+        <!-- Top AppBar (52dp, 16px 实时毛玻璃 backdrop-filter, 细分割线 line_soft) -->
+        <com.deepseekharness.app.ui.GlassLinearLayout
             android:id="@+id/app_bar"
             android:layout_width="match_parent"
             android:layout_height="52dp"
-            android:background="@color/card_glass"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingHorizontal="16dp">
+            android:paddingHorizontal="16dp"
+            app:glassCornerRadius="0dp">
 
             <!-- Leading Icon (20dp, 纯净命令行提示符 >_) -->
             <ImageView
@@ -69,11 +69,12 @@
                 android:focusable="true"
                 android:gravity="center"
                 android:paddingHorizontal="12dp"
+                android:stateListAnimator="@animator/chip_press_scale"
                 android:text="日间"
                 android:textColor="@color/text_secondary"
                 android:textSize="13sp"
                 android:textStyle="bold" />
-        </LinearLayout>
+        </com.deepseekharness.app.ui.GlassLinearLayout>
 
         <View
             android:layout_width="match_parent"
@@ -93,19 +94,31 @@
             android:layout_height="1dp"
             android:background="@color/line_soft" />
 
-        <!-- Bottom Navigation (半透 card_glass, 0dp elevation) -->
-        <com.google.android.material.bottomnavigation.BottomNavigationView
-            android:id="@+id/bottom_nav"
+        <!-- Bottom Navigation (1:1 对齐 HTML 58dp 高度, 24dp 图标, 11sp 文字, 16px 实时毛玻璃 backdrop-filter) -->
+        <com.deepseekharness.app.ui.GlassLinearLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="@color/card_glass"
-            app:elevation="0dp"
-            app:itemActiveIndicatorStyle="@style/Widget.App.NoIndicator"
-            app:itemIconTint="@color/nav_item_tint"
-            app:itemRippleColor="@android:color/transparent"
-            app:itemTextColor="@color/nav_item_tint"
-            app:labelVisibilityMode="labeled"
-            app:menu="@menu/bottom_nav_menu" />
+            android:layout_height="58dp"
+            android:orientation="vertical"
+            app:glassCornerRadius="0dp">
+
+            <com.google.android.material.bottomnavigation.BottomNavigationView
+                android:id="@+id/bottom_nav"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@android:color/transparent"
+                app:elevation="0dp"
+                app:itemActiveIndicatorStyle="@style/Widget.App.NoIndicator"
+                app:itemIconSize="24dp"
+                app:itemIconTint="@color/nav_item_tint"
+                app:itemPaddingBottom="6dp"
+                app:itemPaddingTop="8dp"
+                app:itemRippleColor="@android:color/transparent"
+                app:itemTextAppearanceActive="@style/TextAppearance.BottomNav"
+                app:itemTextAppearanceInactive="@style/TextAppearance.BottomNav"
+                app:itemTextColor="@color/nav_item_tint"
+                app:labelVisibilityMode="labeled"
+                app:menu="@menu/bottom_nav_menu" />
+        </com.deepseekharness.app.ui.GlassLinearLayout>
     </LinearLayout>
 
 </FrameLayout>

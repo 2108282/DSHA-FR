@@ -89,7 +89,7 @@ public class MainActivity extends AppCompatActivity {
         TextView themeBtn = findViewById(R.id.btn_theme);
         if (themeBtn != null) {
             boolean dark = ThemeController.isDark(this);
-            themeBtn.setText(dark ? "🌙 黑夜" : "☀️ 日间");
+            themeBtn.setText(dark ? "☀ 白天" : "☾ 黑夜");
             themeBtn.setContentDescription(dark ? "切换到白天模式" : "切换到黑夜模式");
             themeBtn.setOnClickListener(v -> ThemeController.toggle(this));
         }
