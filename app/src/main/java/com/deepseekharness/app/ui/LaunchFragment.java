@@ -18,7 +18,6 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.appcompat.widget.SwitchCompat;
 import androidx.fragment.app.Fragment;
 
 import com.deepseekharness.app.HttpShellService;
@@ -49,7 +48,7 @@ public class LaunchFragment extends Fragment implements LaunchPresenter.ViewCall
     private View lanRow;
     private Button lanCopyBtn;
     private Button lanMoreBtn;
-    private SwitchCompat lanSwitch;
+    private DshaToggle lanSwitch;
     private View openSheetButton;
     private TextView logTextView;
     private ScrollView logScrollView;

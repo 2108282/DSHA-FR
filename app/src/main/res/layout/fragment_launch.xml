@@ -261,18 +261,11 @@
                     android:textSize="12sp"
                     android:textStyle="bold" />
 
-                <androidx.appcompat.widget.SwitchCompat
+                <com.deepseekharness.app.ui.DshaToggle
                     android:id="@+id/lan_switch"
                     android:layout_width="44dp"
                     android:layout_height="26dp"
-                    android:layout_marginStart="8dp"
-                    android:background="@null"
-                    android:switchMinWidth="44dp"
-                    android:thumb="@drawable/switch_thumb"
-                    app:showText="false"
-                    app:thumbTint="@null"
-                    app:track="@drawable/switch_track"
-                    app:trackTint="@null" />
+                    android:layout_marginStart="8dp" />
             </LinearLayout>
 
             <!-- 分隔线 1 -->
