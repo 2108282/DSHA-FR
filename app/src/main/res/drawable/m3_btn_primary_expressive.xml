@@ -1,22 +1,34 @@
 <?xml version="1.0" encoding="utf-8"?>
+
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- 底层发光微阴影: 0 2px 8px rgba(71,105,159,.18) -->
+    
     <item
         android:left="2dp"
         android:right="2dp"
-        android:top="2dp"
+        android:top="3dp"
         android:bottom="0dp">
         <shape android:shape="rectangle">
-            <solid android:color="#2E47699F" />
+            <solid android:color="#1447699F" />
+            <corners android:radius="18dp" />
+        </shape>
+    </item>
+    
+    <item
+        android:left="1dp"
+        android:right="1dp"
+        android:top="2dp"
+        android:bottom="1dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#2447699F" />
             <corners android:radius="16dp" />
         </shape>
     </item>
-    <!-- 顶层主按钮: 高度 46dp, 圆角 14dp, 颜色 #47699F -->
+    
     <item
         android:left="0dp"
         android:right="0dp"
         android:top="0dp"
-        android:bottom="2dp">
+        android:bottom="3dp">
         <ripple android:color="@color/ripple">
             <item android:id="@android:id/mask">
                 <shape android:shape="rectangle">

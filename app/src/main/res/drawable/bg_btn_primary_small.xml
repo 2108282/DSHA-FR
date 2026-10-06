@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 严格对齐 HTML .btn-small .btn-primary: height 36px; border-radius 10px; box-shadow 0 2px 8px rgba(71,105,159,.18); -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 外层发光阴影 -->
+    <item
+        android:left="2dp"
+        android:right="2dp"
+        android:top="2dp"
+        android:bottom="0dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#2447699F" />
+            <corners android:radius="12dp" />
+        </shape>
+    </item>
+    <!-- 顶层主按钮: 高度 36dp, 圆角 10dp, #47699F -->
+    <item
+        android:left="0dp"
+        android:right="0dp"
+        android:top="0dp"
+        android:bottom="2dp">
+        <ripple android:color="@color/ripple">
+            <item android:id="@android:id/mask">
+                <shape android:shape="rectangle">
+                    <solid android:color="#FFFFFFFF" />
+                    <corners android:radius="10dp" />
+                </shape>
+            </item>
+            <item>
+                <shape android:shape="rectangle">
+                    <solid android:color="@color/primary" />
+                    <corners android:radius="10dp" />
+                </shape>
+            </item>
+        </ripple>
+    </item>
+</layer-list>
