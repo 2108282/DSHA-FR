@@ -259,12 +259,19 @@ public class LaunchFragment extends Fragment implements LaunchPresenter.ViewCall
             stopButton.setEnabled(state.isStopEnabled);
         }
 
-        // 局域网行与抽屉入口
+        // 局域网行与抽屉入口（常驻三行功能卡，始终展示）
         if (lanRow != null) {
-            lanRow.setVisibility(state.isLanCardVisible ? View.VISIBLE : View.GONE);
+            lanRow.setVisibility(View.VISIBLE);
         }
         if (openSheetButton != null) {
-            openSheetButton.setVisibility(state.isSheetButtonVisible ? View.VISIBLE : View.GONE);
+            openSheetButton.setVisibility(View.VISIBLE);
+        }
+        if (lanSwitch != null && getContext() != null) {
+            boolean currentLan = requireContext().getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE)
+                    .getBoolean(Constants.KEY_LAN_MODE, false);
+            if (lanSwitch.isChecked() != currentLan) {
+                lanSwitch.setChecked(currentLan);
+            }
         }
 
         // 日志刷新

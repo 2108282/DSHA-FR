@@ -84,7 +84,9 @@
         android:layout_height="wrap_content"
         android:background="@color/card"
         app:elevation="0dp"
+        app:itemActiveIndicatorStyle="@style/Widget.App.NoIndicator"
         app:itemIconTint="@color/nav_item_tint"
+        app:itemRippleColor="@android:color/transparent"
         app:itemTextColor="@color/nav_item_tint"
         app:labelVisibilityMode="labeled"
         app:menu="@menu/bottom_nav_menu" />

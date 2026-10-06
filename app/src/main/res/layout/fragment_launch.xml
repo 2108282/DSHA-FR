@@ -155,6 +155,7 @@
                     android:layout_height="44dp"
                     android:layout_weight="1.2"
                     android:background="@drawable/m3_btn_primary_expressive"
+                    android:stateListAnimator="@null"
                     android:text="启动"
                     android:textAllCaps="false"
                     android:textColor="@color/m3_btn_primary_text"
@@ -168,6 +169,7 @@
                     android:layout_marginStart="8dp"
                     android:layout_weight="1"
                     android:background="@drawable/m3_btn_tonal_expressive"
+                    android:stateListAnimator="@null"
                     android:text="重启"
                     android:textAllCaps="false"
                     android:textColor="@color/m3_btn_tonal_text"
@@ -181,6 +183,7 @@
                     android:layout_marginStart="8dp"
                     android:layout_weight="1"
                     android:background="@drawable/m3_btn_danger_soft"
+                    android:stateListAnimator="@null"
                     android:text="停止"
                     android:textAllCaps="false"
                     android:textColor="@color/err"
@@ -196,23 +199,22 @@
             android:layout_marginTop="12dp"
             android:background="@drawable/m3_card_expressive"
             android:orientation="vertical"
-            android:paddingHorizontal="14dp"
-            android:paddingVertical="4dp">
+            android:paddingHorizontal="14dp">
 
-            <!-- 局域网连接行 -->
+            <!-- 局域网连接行 (固定高度 48dp) -->
             <LinearLayout
                 android:id="@+id/launch_lan_row"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="48dp"
                 android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:paddingVertical="10dp">
+                android:orientation="horizontal">
 
                 <ImageView
                     android:layout_width="18dp"
                     android:layout_height="18dp"
                     android:contentDescription="@null"
                     android:src="@drawable/ic_wifi"
+                    app:srcCompat="@drawable/ic_wifi"
                     app:tint="@color/primary" />
 
                 <TextView
@@ -233,27 +235,29 @@
                 <Button
                     android:id="@+id/lan_copy"
                     android:layout_width="wrap_content"
-                    android:layout_height="34dp"
+                    android:layout_height="32dp"
                     android:background="@drawable/m3_btn_tonal_expressive"
                     android:minWidth="0dp"
-                    android:paddingHorizontal="14dp"
+                    android:paddingHorizontal="12dp"
+                    android:stateListAnimator="@null"
                     android:text="复制"
                     android:textAllCaps="false"
-                    android:textColor="@color/m3_btn_tonal_text"
+                    android:textColor="@color/primary"
                     android:textSize="12sp"
                     android:textStyle="bold" />
 
                 <Button
                     android:id="@+id/lan_more"
                     android:layout_width="wrap_content"
-                    android:layout_height="34dp"
+                    android:layout_height="32dp"
                     android:layout_marginStart="8dp"
                     android:background="@drawable/m3_btn_tonal_expressive"
                     android:minWidth="0dp"
-                    android:paddingHorizontal="14dp"
+                    android:paddingHorizontal="12dp"
+                    android:stateListAnimator="@null"
                     android:text="更多"
                     android:textAllCaps="false"
-                    android:textColor="@color/m3_btn_tonal_text"
+                    android:textColor="@color/primary"
                     android:textSize="12sp"
                     android:textStyle="bold" />
 
@@ -261,7 +265,11 @@
                     android:id="@+id/lan_switch"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp" />
+                    android:layout_marginStart="8dp"
+                    android:switchMinWidth="44dp"
+                    app:showText="false"
+                    app:thumb="@drawable/switch_thumb"
+                    app:track="@drawable/switch_track" />
             </LinearLayout>
 
             <!-- 分隔线 1 -->
@@ -270,23 +278,23 @@
                 android:layout_height="1dp"
                 android:background="@color/line" />
 
-            <!-- 模型管理行 -->
+            <!-- 模型管理行 (固定高度 48dp) -->
             <LinearLayout
                 android:id="@+id/launch_models"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="48dp"
                 android:background="?attr/selectableItemBackground"
                 android:clickable="true"
                 android:focusable="true"
                 android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:paddingVertical="12dp">
+                android:orientation="horizontal">
 
                 <ImageView
                     android:layout_width="18dp"
                     android:layout_height="18dp"
                     android:contentDescription="@null"
                     android:src="@drawable/ic_cpu"
+                    app:srcCompat="@drawable/ic_cpu"
                     app:tint="@color/primary" />
 
                 <TextView
@@ -309,6 +317,7 @@
                     android:layout_height="16dp"
                     android:contentDescription="@null"
                     android:src="@drawable/ic_chevron_right"
+                    app:srcCompat="@drawable/ic_chevron_right"
                     app:tint="@color/text_muted" />
             </LinearLayout>
 
@@ -318,23 +327,23 @@
                 android:layout_height="1dp"
                 android:background="@color/line" />
 
-            <!-- 快捷对话行 -->
+            <!-- 快捷对话行 (固定高度 48dp) -->
             <LinearLayout
                 android:id="@+id/launch_open_sheet"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="48dp"
                 android:background="?attr/selectableItemBackground"
                 android:clickable="true"
                 android:focusable="true"
                 android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:paddingVertical="12dp">
+                android:orientation="horizontal">
 
                 <ImageView
                     android:layout_width="18dp"
                     android:layout_height="18dp"
                     android:contentDescription="@null"
                     android:src="@drawable/ic_chat"
+                    app:srcCompat="@drawable/ic_chat"
                     app:tint="@color/primary" />
 
                 <TextView
@@ -357,6 +366,7 @@
                     android:layout_height="16dp"
                     android:contentDescription="@null"
                     android:src="@drawable/ic_chevron_right"
+                    app:srcCompat="@drawable/ic_chevron_right"
                     app:tint="@color/text_muted" />
             </LinearLayout>
         </LinearLayout>
@@ -386,6 +396,7 @@
                     android:layout_height="16dp"
                     android:contentDescription="@null"
                     android:src="@drawable/ic_terminal"
+                    app:srcCompat="@drawable/ic_terminal"
                     app:tint="@color/primary" />
 
                 <TextView
