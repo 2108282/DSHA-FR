@@ -1,26 +1,45 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ripple xmlns:android="http://schemas.android.com/apk/res/android"
-    android:color="@color/ripple">
-    <item android:id="@android:id/mask">
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 底层发光微阴影: 0 2px 8px rgba(71,105,159,.18) -->
+    <item
+        android:left="2dp"
+        android:right="2dp"
+        android:top="2dp"
+        android:bottom="0dp">
         <shape android:shape="rectangle">
-            <solid android:color="#FFFFFFFF" />
-            <corners android:radius="14dp" />
+            <solid android:color="#2E47699F" />
+            <corners android:radius="16dp" />
         </shape>
     </item>
-    <item>
-        <selector>
-            <item android:state_enabled="false">
+    <!-- 顶层主按钮: 高度 46dp, 圆角 14dp, 颜色 #47699F -->
+    <item
+        android:left="0dp"
+        android:right="0dp"
+        android:top="0dp"
+        android:bottom="2dp">
+        <ripple android:color="@color/ripple">
+            <item android:id="@android:id/mask">
                 <shape android:shape="rectangle">
-                    <solid android:color="@color/disabled" />
+                    <solid android:color="#FFFFFFFF" />
                     <corners android:radius="14dp" />
                 </shape>
             </item>
             <item>
-                <shape android:shape="rectangle">
-                    <solid android:color="@color/primary" />
-                    <corners android:radius="14dp" />
-                </shape>
+                <selector>
+                    <item android:state_enabled="false">
+                        <shape android:shape="rectangle">
+                            <solid android:color="@color/disabled" />
+                            <corners android:radius="14dp" />
+                        </shape>
+                    </item>
+                    <item>
+                        <shape android:shape="rectangle">
+                            <solid android:color="@color/primary" />
+                            <corners android:radius="14dp" />
+                        </shape>
+                    </item>
+                </selector>
             </item>
-        </selector>
+        </ripple>
     </item>
-</ripple>
+</layer-list>
