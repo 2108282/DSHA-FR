@@ -8,6 +8,7 @@
     <color name="surface">#10141B</color>
     <color name="card">#161B24</color>
     <color name="raised">#1C2330</color>
+    <color name="raised_glass">#C71C2330</color>
     <color name="line">#2A3344</color>
     <color name="text">#E8ECF4</color>
     <color name="text_secondary">#A6B0C3</color>

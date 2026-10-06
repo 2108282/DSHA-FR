@@ -5,9 +5,10 @@
     <color name="primary_dark">#395582</color>
     <color name="accent">#47699F</color>
     <color name="accent_on">#FFFFFF</color>
-    <color name="surface">#EDF3FC</color>
+    <color name="surface">#F7F8FA</color>
     <color name="card">#FFFFFF</color>
     <color name="raised">#F0F2F5</color>
+    <color name="raised_glass">#B8F0F2F5</color>
     <color name="line">#E5E7EB</color>
     <color name="text">#1A2230</color>
     <color name="text_secondary">#4A5568</color>

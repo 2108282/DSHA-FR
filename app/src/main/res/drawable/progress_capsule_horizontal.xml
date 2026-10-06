@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 外槽: height 4dp, border-radius 999dp, background #F0F2F5 -->
+    <item android:id="@android:id/background">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/raised" />
+            <corners android:radius="999dp" />
+            <size android:height="4dp" />
+        </shape>
+    </item>
+    <!-- 内槽滑块: height 4dp, border-radius 999dp, background #47699F -->
+    <item android:id="@android:id/progress">
+        <clip>
+            <shape android:shape="rectangle">
+                <solid android:color="@color/primary" />
+                <corners android:radius="999dp" />
+            </shape>
+        </clip>
+    </item>
+</layer-list>

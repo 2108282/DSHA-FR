@@ -1,16 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 严格对齐 HTML: padding: 6px 12px; border-radius: 999px; background: rgba(240,242,245,.72); border: 1px solid rgba(229,231,235,.55); -->
 <ripple xmlns:android="http://schemas.android.com/apk/res/android"
     android:color="@color/ripple">
     <item android:id="@android:id/mask">
         <shape android:shape="rectangle">
-            <solid android:color="#FFFFFFFF" />
-            <corners android:radius="@dimen/radius_pill" />
+            <solid android:color="#FFFFFF" />
+            <corners android:radius="999dp" />
         </shape>
     </item>
     <item>
         <shape android:shape="rectangle">
-            <solid android:color="@color/raised" />
-            <corners android:radius="@dimen/radius_pill" />
+            <solid android:color="@color/raised_glass" />
+            <stroke
+                android:width="1dp"
+                android:color="@color/line_soft" />
+            <corners android:radius="999dp" />
         </shape>
     </item>
 </ripple>

@@ -71,7 +71,8 @@
                 android:layout_height="4dp"
                 android:layout_marginTop="14dp"
                 android:indeterminate="true"
-                android:indeterminateTint="@color/primary" />
+                android:indeterminateTint="@color/primary"
+                android:progressDrawable="@drawable/progress_capsule_horizontal" />
         </LinearLayout>
 
         <!-- 2. 端口与启停卡片 (padding: 16px 18px; border-radius: 18px) -->
