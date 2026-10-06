@@ -28,6 +28,10 @@
     <color name="err_bg">#F8EAEA</color>
     <color name="btn_danger_bg">#C45A5A</color>
     <color name="btn_danger_text">#FFFFFF</color>
+    <color name="card_glass">#D1FFFFFF</color>
+    <color name="line_soft">#8CE5E7EB</color>
+    <color name="status_warn_bg">#FBF3E0</color>
+    <color name="status_ok_bg">#E6F6EE</color>
 
     <!-- Surface 阶梯：纯净白 / 极简浅灰通透阶梯，杜绝灰叠灰与杂色 -->
     <color name="m3_surface_container_lowest">#FFFFFF</color>

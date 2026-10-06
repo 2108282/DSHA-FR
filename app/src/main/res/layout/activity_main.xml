@@ -1,94 +1,111 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/surface"
-    android:orientation="vertical">
+    android:background="@color/surface">
 
-    <!-- Top AppBar -->
+    <!-- 0. 全局固定极光图层: 320dp x 320dp, top -110dp, right -80dp (1:1 对齐 HTML .aurora-1) -->
+    <View
+        android:layout_width="320dp"
+        android:layout_height="320dp"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="-110dp"
+        android:layout_marginEnd="-80dp"
+        android:background="@drawable/bg_aurora_top_right"
+        android:importantForAccessibility="no" />
+
+    <!-- 顶层垂直线性结构 -->
     <LinearLayout
-        android:id="@+id/app_bar"
         android:layout_width="match_parent"
-        android:layout_height="52dp"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingHorizontal="16dp"
-        android:background="@color/card">
+        android:layout_height="match_parent"
+        android:orientation="vertical">
 
-        <!-- Leading Icon -->
-        <ImageView
-            android:id="@+id/appbar_icon"
-            android:layout_width="20dp"
-            android:layout_height="20dp"
-            android:contentDescription="@null"
-            android:src="@drawable/ic_terminal"
-            app:tint="@color/primary" />
+        <!-- Top AppBar (52dp, 半透卡片白 card_glass, 细分割线 line_soft) -->
+        <LinearLayout
+            android:id="@+id/app_bar"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:background="@color/card_glass"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="16dp">
 
-        <!-- Title -->
-        <TextView
-            android:id="@+id/app_title"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:text="启动"
-            android:textColor="@color/text"
-            android:textSize="20sp"
-            android:textStyle="bold" />
+            <!-- Leading Icon (20dp, 纯净命令行提示符 >_) -->
+            <ImageView
+                android:id="@+id/appbar_icon"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_terminal"
+                app:srcCompat="@drawable/ic_terminal"
+                app:tint="@color/primary" />
 
-        <!-- Spacer -->
+            <!-- Title (font-weight: 800) -->
+            <TextView
+                android:id="@+id/app_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:text="启动"
+                android:textColor="@color/text"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <!-- Spacer -->
+            <View
+                android:id="@+id/appbar_spacer"
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <!-- Theme toggle chip (34dp 高, 药丸圆角) -->
+            <TextView
+                android:id="@+id/btn_theme"
+                android:layout_width="wrap_content"
+                android:layout_height="34dp"
+                android:background="@drawable/bg_chip_clickable"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:paddingHorizontal="12dp"
+                android:text="日间"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
         <View
-            android:id="@+id/appbar_spacer"
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="1dp"
+            android:background="@color/line_soft" />
+
+        <!-- Fragment container -->
+        <FrameLayout
+            android:id="@+id/fragment_container"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
             android:layout_weight="1" />
 
-        <!-- Theme toggle chip -->
-        <TextView
-            android:id="@+id/btn_theme"
-            android:layout_width="wrap_content"
-            android:layout_height="34dp"
-            android:background="@drawable/bg_chip_clickable"
-            android:clickable="true"
-            android:focusable="true"
-            android:gravity="center"
-            android:paddingHorizontal="12dp"
-            android:text="日间"
-            android:textColor="@color/text_secondary"
-            android:textSize="13sp"
-            android:textStyle="bold" />
+        <!-- Divider -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/line_soft" />
+
+        <!-- Bottom Navigation (半透 card_glass, 0dp elevation) -->
+        <com.google.android.material.bottomnavigation.BottomNavigationView
+            android:id="@+id/bottom_nav"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@color/card_glass"
+            app:elevation="0dp"
+            app:itemActiveIndicatorStyle="@style/Widget.App.NoIndicator"
+            app:itemIconTint="@color/nav_item_tint"
+            app:itemRippleColor="@android:color/transparent"
+            app:itemTextColor="@color/nav_item_tint"
+            app:labelVisibilityMode="labeled"
+            app:menu="@menu/bottom_nav_menu" />
     </LinearLayout>
 
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:background="@color/line" />
-
-    <!-- Fragment container -->
-    <FrameLayout
-        android:id="@+id/fragment_container"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1" />
-
-    <!-- Divider -->
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="@dimen/stroke"
-        android:background="@color/line" />
-
-    <!-- Bottom Navigation -->
-    <com.google.android.material.bottomnavigation.BottomNavigationView
-        android:id="@+id/bottom_nav"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="@color/card"
-        app:elevation="0dp"
-        app:itemActiveIndicatorStyle="@style/Widget.App.NoIndicator"
-        app:itemIconTint="@color/nav_item_tint"
-        app:itemRippleColor="@android:color/transparent"
-        app:itemTextColor="@color/nav_item_tint"
-        app:labelVisibilityMode="labeled"
-        app:menu="@menu/bottom_nav_menu" />
-
-</LinearLayout>
+</FrameLayout>

@@ -3,31 +3,26 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/surface">
+    android:background="@android:color/transparent">
 
-    <!-- 0. 右上角极光环境光晕层 (320dp 径向渐变) -->
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="320dp"
-        android:background="@drawable/bg_aurora_top_right"
-        android:importantForAccessibility="no" />
-
-    <!-- 主体内容垂直容器 -->
+    <!-- 主体内容垂直容器 (.content: padding 14px 16px 14px; gap: 12px) -->
     <LinearLayout
         android:id="@+id/launch_home"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
         android:paddingHorizontal="16dp"
-        android:paddingTop="12dp"
-        android:paddingBottom="12dp">
+        android:paddingTop="14dp"
+        android:paddingBottom="14dp">
 
-        <!-- 1. 状态卡片 (Status Card - 24dp 圆角) -->
+        <!-- 1. 状态卡片 (Status Card: padding 20px, border-radius 24px, 柔和双层微阴影) -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:background="@drawable/m3_card_expressive_hero"
-            android:elevation="2dp"
+            android:elevation="4dp"
+            android:outlineAmbientShadowColor="#151A2230"
+            android:outlineSpotShadowColor="#101A2230"
             android:orientation="vertical"
             android:outlineProvider="background"
             android:padding="20dp">
@@ -41,8 +36,8 @@
 
                 <View
                     android:id="@+id/launch_run_dot"
-                    android:layout_width="10dp"
-                    android:layout_height="10dp"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
                     android:background="@drawable/dot_warn" />
 
                 <TextView
@@ -57,7 +52,7 @@
                     android:textStyle="bold" />
             </LinearLayout>
 
-            <!-- 副文案 -->
+            <!-- 副文案 (font-size: 13sp; color: text_muted; margin-top: 6px) -->
             <TextView
                 android:id="@+id/launch_status"
                 style="@style/DshaText.Label"
@@ -68,7 +63,7 @@
                 android:textColor="@color/text_muted"
                 android:textSize="13sp" />
 
-            <!-- 细条进度条 -->
+            <!-- 进度槽 (height: 4px; margin-top: 14px; background: var(-raised)) -->
             <ProgressBar
                 android:id="@+id/launch_busy"
                 style="?android:attr/progressBarStyleHorizontal"
@@ -79,16 +74,19 @@
                 android:indeterminateTint="@color/primary" />
         </LinearLayout>
 
-        <!-- 2. 端口与启停卡片 (Port & Controls Card - 18dp 圆角) -->
+        <!-- 2. 端口与启停卡片 (padding: 16px 18px; border-radius: 18px) -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:background="@drawable/m3_card_expressive"
-            android:elevation="2dp"
+            android:elevation="4dp"
+            android:outlineAmbientShadowColor="#151A2230"
+            android:outlineSpotShadowColor="#101A2230"
             android:orientation="vertical"
             android:outlineProvider="background"
-            android:padding="16dp">
+            android:paddingHorizontal="18dp"
+            android:paddingVertical="16dp">
 
             <!-- 端口选择行 -->
             <LinearLayout
@@ -110,7 +108,7 @@
                     android:id="@+id/launch_port_input"
                     android:layout_width="80dp"
                     android:layout_height="40dp"
-                    android:layout_marginStart="10dp"
+                    android:layout_marginStart="8dp"
                     android:background="@drawable/bg_input"
                     android:gravity="center"
                     android:hint="3080"
@@ -140,7 +138,7 @@
                     android:id="@+id/launch_port_chip_3088"
                     android:layout_width="wrap_content"
                     android:layout_height="32dp"
-                    android:layout_marginStart="6dp"
+                    android:layout_marginStart="8dp"
                     android:background="@drawable/bg_chip_clickable"
                     android:clickable="true"
                     android:focusable="true"
@@ -152,7 +150,7 @@
                     android:textStyle="bold" />
             </LinearLayout>
 
-            <!-- 按钮操作行 (高度严格 46dp, 圆角严格 14dp, 字号严格 15sp) -->
+            <!-- 三大按钮 (height: 46px; border-radius: 14px; font-size: 15px; margin-top: 16px; gap: 8px) -->
             <LinearLayout
                 android:id="@+id/launch_controls"
                 android:layout_width="match_parent"
@@ -184,7 +182,7 @@
                     android:elevation="0dp"
                     android:text="重启"
                     android:textAllCaps="false"
-                    android:textColor="@color/m3_btn_tonal_text"
+                    android:textColor="@color/primary"
                     android:textSize="15sp"
                     android:textStyle="bold" />
 
@@ -198,30 +196,34 @@
                     android:elevation="0dp"
                     android:text="停止"
                     android:textAllCaps="false"
-                    android:textColor="@color/btn_danger_text_expressive"
+                    android:textColor="@color/err"
                     android:textSize="15sp"
                     android:textStyle="bold" />
             </LinearLayout>
         </LinearLayout>
 
-        <!-- 3. 三行合并卡片：局域网连接 / 模型管理 / 快捷对话 (18dp 圆角) -->
+        <!-- 3. 三行合并卡片 (padding: 6px 14px; border-radius: 18px) -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:background="@drawable/m3_card_expressive"
-            android:elevation="2dp"
+            android:elevation="4dp"
+            android:outlineAmbientShadowColor="#151A2230"
+            android:outlineSpotShadowColor="#101A2230"
             android:orientation="vertical"
             android:outlineProvider="background"
-            android:paddingHorizontal="14dp">
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="6dp">
 
-            <!-- 局域网连接行 (严格 48dp 等高) -->
+            <!-- 局域网连接行 (padding: 10px 0; gap: 10px) -->
             <LinearLayout
                 android:id="@+id/launch_lan_row"
                 android:layout_width="match_parent"
-                android:layout_height="48dp"
+                android:layout_height="wrap_content"
                 android:gravity="center_vertical"
-                android:orientation="horizontal">
+                android:orientation="horizontal"
+                android:paddingVertical="10dp">
 
                 <ImageView
                     android:layout_width="18dp"
@@ -246,42 +248,40 @@
                     android:layout_height="0dp"
                     android:layout_weight="1" />
 
-                <!-- 复制按钮：尺寸死锁 54x32dp，背景浅蓝 #EBF0F8，文字主色蓝 #47699F -->
+                <!-- 复制按钮 (height: 34px; padding: 0 14px; border-radius: 14px; font-size: 13px) -->
                 <Button
                     android:id="@+id/lan_copy"
-                    android:layout_width="54dp"
-                    android:layout_height="32dp"
-                    android:background="@drawable/m3_btn_tonal_small"
+                    android:layout_width="wrap_content"
+                    android:layout_height="34dp"
+                    android:background="@drawable/m3_btn_tonal_expressive"
                     android:gravity="center"
-                    android:includeFontPadding="false"
                     android:minWidth="0dp"
                     android:minHeight="0dp"
-                    android:padding="0dp"
+                    android:paddingHorizontal="14dp"
                     android:text="复制"
                     android:textAllCaps="false"
                     android:textColor="@color/primary"
-                    android:textSize="12sp"
+                    android:textSize="13sp"
                     android:textStyle="bold" />
 
-                <!-- 更多按钮：尺寸死锁 54x32dp，背景浅蓝 #EBF0F8，文字主色蓝 #47699F -->
+                <!-- 更多按钮 (height: 34px; padding: 0 14px; border-radius: 14px; font-size: 13px) -->
                 <Button
                     android:id="@+id/lan_more"
-                    android:layout_width="54dp"
-                    android:layout_height="32dp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="34dp"
                     android:layout_marginStart="8dp"
-                    android:background="@drawable/m3_btn_tonal_small"
+                    android:background="@drawable/m3_btn_tonal_expressive"
                     android:gravity="center"
-                    android:includeFontPadding="false"
                     android:minWidth="0dp"
                     android:minHeight="0dp"
-                    android:padding="0dp"
+                    android:paddingHorizontal="14dp"
                     android:text="更多"
                     android:textAllCaps="false"
                     android:textColor="@color/primary"
-                    android:textSize="12sp"
+                    android:textSize="13sp"
                     android:textStyle="bold" />
 
-                <!-- 自绘极简胶囊开关：44x26dp, 白球微阴影, 180ms缓动 -->
+                <!-- 自绘极简胶囊开关 (44px x 26px, 纯白圆球带微阴影, 180ms缓动) -->
                 <com.deepseekharness.app.ui.DshaToggle
                     android:id="@+id/lan_switch"
                     android:layout_width="44dp"
@@ -289,22 +289,23 @@
                     android:layout_marginStart="8dp" />
             </LinearLayout>
 
-            <!-- 分隔线 1 -->
+            <!-- 分隔线 1 (border-bottom: 1px solid var(-line-soft)) -->
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
-                android:background="@color/line" />
+                android:background="@color/line_soft" />
 
-            <!-- 模型管理行 (严格 48dp 等高) -->
+            <!-- 模型管理行 (padding: 12px 0; gap: 10px; 绝对无右箭头) -->
             <LinearLayout
                 android:id="@+id/launch_models"
                 android:layout_width="match_parent"
-                android:layout_height="48dp"
+                android:layout_height="wrap_content"
                 android:background="?attr/selectableItemBackground"
                 android:clickable="true"
                 android:focusable="true"
                 android:gravity="center_vertical"
-                android:orientation="horizontal">
+                android:orientation="horizontal"
+                android:paddingVertical="12dp">
 
                 <ImageView
                     android:layout_width="18dp"
@@ -323,37 +324,25 @@
                     android:textColor="@color/text_secondary"
                     android:textSize="13sp"
                     android:textStyle="bold" />
-
-                <View
-                    android:layout_width="0dp"
-                    android:layout_height="0dp"
-                    android:layout_weight="1" />
-
-                <ImageView
-                    android:layout_width="16dp"
-                    android:layout_height="16dp"
-                    android:contentDescription="@null"
-                    android:src="@drawable/ic_chevron_right"
-                    app:srcCompat="@drawable/ic_chevron_right"
-                    app:tint="@color/text_muted" />
             </LinearLayout>
 
-            <!-- 分隔线 2 -->
+            <!-- 分隔线 2 (border-bottom: 1px solid var(-line-soft)) -->
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
-                android:background="@color/line" />
+                android:background="@color/line_soft" />
 
-            <!-- 快捷对话行 (严格 48dp 等高) -->
+            <!-- 快捷对话行 (padding: 12px 0; gap: 10px; 绝对无右箭头) -->
             <LinearLayout
                 android:id="@+id/launch_open_sheet"
                 android:layout_width="match_parent"
-                android:layout_height="48dp"
+                android:layout_height="wrap_content"
                 android:background="?attr/selectableItemBackground"
                 android:clickable="true"
                 android:focusable="true"
                 android:gravity="center_vertical"
-                android:orientation="horizontal">
+                android:orientation="horizontal"
+                android:paddingVertical="12dp">
 
                 <ImageView
                     android:layout_width="18dp"
@@ -372,23 +361,10 @@
                     android:textColor="@color/text_secondary"
                     android:textSize="13sp"
                     android:textStyle="bold" />
-
-                <View
-                    android:layout_width="0dp"
-                    android:layout_height="0dp"
-                    android:layout_weight="1" />
-
-                <ImageView
-                    android:layout_width="16dp"
-                    android:layout_height="16dp"
-                    android:contentDescription="@null"
-                    android:src="@drawable/ic_chevron_right"
-                    app:srcCompat="@drawable/ic_chevron_right"
-                    app:tint="@color/text_muted" />
             </LinearLayout>
         </LinearLayout>
 
-        <!-- 4. 运行追踪日志卡片 (Log Card - 18dp 圆角) -->
+        <!-- 4. 运行追踪日志卡片 (border-radius: 18px; min-height: 120px) -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
@@ -396,19 +372,21 @@
             android:layout_weight="1"
             android:background="@drawable/m3_card_expressive"
             android:clipToOutline="true"
-            android:elevation="2dp"
-            android:minHeight="140dp"
+            android:elevation="4dp"
+            android:outlineAmbientShadowColor="#151A2230"
+            android:outlineSpotShadowColor="#101A2230"
+            android:minHeight="120dp"
             android:orientation="vertical"
             android:outlineProvider="background">
 
-            <!-- 日志标题栏 -->
+            <!-- 头部 (padding: 12px 16px; border-bottom: 1px solid var(-line-soft)) -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
                 android:paddingHorizontal="16dp"
-                android:paddingVertical="10dp">
+                android:paddingVertical="12dp">
 
                 <ImageView
                     android:layout_width="16dp"
@@ -432,9 +410,9 @@
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
-                android:background="@color/line" />
+                android:background="@color/line_soft" />
 
-            <!-- 终端滚动日志区 -->
+            <!-- 终端日志内容区 (padding: 12px 16px; background: var(-terminal); color: var(-terminal-text)) -->
             <ScrollView
                 android:id="@+id/launch_log_scroll"
                 android:layout_width="match_parent"
@@ -442,14 +420,15 @@
                 android:layout_weight="1"
                 android:background="@color/terminal_surface"
                 android:fillViewport="true"
-                android:padding="12dp">
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="12dp">
 
                 <TextView
                     android:id="@+id/launch_log"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:fontFamily="monospace"
-                    android:lineSpacingExtra="3dp"
+                    android:lineSpacingMultiplier="1.6"
                     android:text="还没有日志。"
                     android:textColor="@color/terminal_text"
                     android:textIsSelectable="true"

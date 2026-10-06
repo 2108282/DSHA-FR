@@ -28,6 +28,10 @@
     <color name="err_bg">#1AE08A8A</color>
     <color name="btn_danger_bg">#992B2B</color>
     <color name="btn_danger_text">#FFFFFF</color>
+    <color name="card_glass">#E0161B24</color>
+    <color name="line_soft">#8C2A3344</color>
+    <color name="status_warn_bg">#33E5C07B</color>
+    <color name="status_ok_bg">#337ED6A2</color>
 
     <color name="m3_surface_container_lowest">#0C1017</color>
     <color name="m3_surface_container_low">#161B24</color>
