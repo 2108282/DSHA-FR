@@ -76,6 +76,17 @@ public class MainActivity extends AppCompatActivity {
         }
 
         setContentView(R.layout.activity_main);
+
+        // 1:1 对齐 HTML .aurora { filter: blur(100px); } 硬件加速高斯物理漫射
+        android.view.View auroraView = findViewById(R.id.global_aurora);
+        if (auroraView != null && Build.VERSION.SDK_INT >= 31) {
+            float blurPx = 80f * getResources().getDisplayMetrics().density;
+            try {
+                auroraView.setRenderEffect(android.graphics.RenderEffect.createBlurEffect(
+                        blurPx, blurPx, android.graphics.Shader.TileMode.CLAMP));
+            } catch (Throwable ignored) { }
+        }
+
         String pendingLink = getSharedPreferences("dsha-install-link", MODE_PRIVATE).getString("pending", "");
         if (!pendingLink.isEmpty()) {
             getSharedPreferences("dsha-install-link", MODE_PRIVATE).edit().remove("pending").apply();

@@ -23,16 +23,17 @@
             android:paddingTop="14dp"
             android:paddingBottom="14dp">
 
-        <!-- 1. 状态卡片 (Status Card: padding 20px, border-radius 24px, 16px 实时毛玻璃与双层微阴影) -->
-        <com.deepseekharness.app.ui.GlassLinearLayout
+        <!-- 1. 状态卡片 (Status Card: padding 20px, border-radius 24px, 柔和双层微阴影与精致轮廓) -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:background="@drawable/m3_card_expressive_hero"
             android:elevation="4dp"
             android:orientation="vertical"
             android:outlineAmbientShadowColor="#151A2230"
+            android:outlineProvider="background"
             android:outlineSpotShadowColor="#101A2230"
-            android:padding="20dp"
-            app:glassCornerRadius="24dp">
+            android:padding="20dp">
 
             <!-- 状态标题行 -->
             <LinearLayout
@@ -76,20 +77,21 @@
                 android:layout_width="match_parent"
                 android:layout_height="4dp"
                 android:layout_marginTop="14dp" />
-        </com.deepseekharness.app.ui.GlassLinearLayout>
+        </LinearLayout>
 
-        <!-- 2. 端口与启停卡片 (padding: 16px 18px; border-radius: 18px; 16px 实时毛玻璃与双层微阴影) -->
-        <com.deepseekharness.app.ui.GlassLinearLayout
+        <!-- 2. 端口与启停卡片 (padding: 16px 18px; border-radius: 18px; 双层微阴影与精致轮廓) -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
+            android:background="@drawable/m3_card_expressive"
             android:elevation="4dp"
             android:orientation="vertical"
             android:outlineAmbientShadowColor="#151A2230"
+            android:outlineProvider="background"
             android:outlineSpotShadowColor="#101A2230"
             android:paddingHorizontal="18dp"
-            android:paddingVertical="16dp"
-            app:glassCornerRadius="18dp">
+            android:paddingVertical="16dp">
 
             <!-- 端口选择行 -->
             <LinearLayout
@@ -210,20 +212,21 @@
                     android:textSize="15sp"
                     android:textStyle="bold" />
             </LinearLayout>
-        </com.deepseekharness.app.ui.GlassLinearLayout>
+        </LinearLayout>
 
-        <!-- 3. 三行合并卡片 (padding: 6px 14px; border-radius: 18px; 16px 实时毛玻璃与双层微阴影) -->
-        <com.deepseekharness.app.ui.GlassLinearLayout
+        <!-- 3. 三行合并卡片 (padding: 6px 14px; border-radius: 18px; 双层微阴影与精致轮廓) -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
+            android:background="@drawable/m3_card_expressive"
             android:elevation="4dp"
             android:orientation="vertical"
             android:outlineAmbientShadowColor="#151A2230"
+            android:outlineProvider="background"
             android:outlineSpotShadowColor="#101A2230"
             android:paddingHorizontal="14dp"
-            android:paddingVertical="6dp"
-            app:glassCornerRadius="18dp">
+            android:paddingVertical="6dp">
 
             <!-- 局域网连接行 (padding: 10px 0; gap: 10px) -->
             <LinearLayout
@@ -373,20 +376,22 @@
                     android:textSize="13sp"
                     android:textStyle="bold" />
             </LinearLayout>
-        </com.deepseekharness.app.ui.GlassLinearLayout>
+        </LinearLayout>
 
-        <!-- 4. 运行追踪日志卡片 (border-radius: 18px; min-height: 120px; 16px 实时毛玻璃与双层微阴影) -->
-        <com.deepseekharness.app.ui.GlassLinearLayout
+        <!-- 4. 运行追踪日志卡片 (border-radius: 18px; min-height: 120px; 双层微阴影与精致轮廓) -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_marginTop="12dp"
             android:layout_weight="1"
+            android:background="@drawable/m3_card_expressive"
+            android:clipToOutline="true"
             android:elevation="4dp"
             android:minHeight="120dp"
             android:orientation="vertical"
             android:outlineAmbientShadowColor="#151A2230"
-            android:outlineSpotShadowColor="#101A2230"
-            app:glassCornerRadius="18dp">
+            android:outlineProvider="background"
+            android:outlineSpotShadowColor="#101A2230">
 
             <!-- 头部 (padding: 12px 16px; border-bottom: 1px solid var(-line-soft)) -->
             <LinearLayout
@@ -444,7 +449,7 @@
                     android:textIsSelectable="true"
                     android:textSize="12sp" />
             </ScrollView>
-        </com.deepseekharness.app.ui.GlassLinearLayout>
+        </LinearLayout>
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>
 
