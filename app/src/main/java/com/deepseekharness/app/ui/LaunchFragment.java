@@ -238,13 +238,13 @@ public class LaunchFragment extends Fragment implements LaunchPresenter.ViewCall
 
         // 进度条
         if (busyBar != null) {
-            busyBar.setVisibility(state.isBusyBarVisible ? View.VISIBLE : View.GONE);
+            busyBar.setVisibility(state.isBusy ? View.VISIBLE : View.GONE);
         }
 
         // 主操作按钮
         if (startButton != null) {
-            startButton.setText(state.startButtonText);
-            startButton.setEnabled(state.isStartButtonEnabled);
+            startButton.setText(state.primaryActionText);
+            startButton.setEnabled(state.isPrimaryActionEnabled);
         }
 
         // 重启按钮
@@ -292,13 +292,12 @@ public class LaunchFragment extends Fragment implements LaunchPresenter.ViewCall
         openCredentialsPage();
     }
 
-    @Override
     public void onOpenExternalBrowser(String url) {
         if (!isAdded()) return;
         HarnessController controller = HarnessController.get(requireContext());
         if (controller == null) return;
         new Thread(() -> {
-            String cookie = controller.fetchCookieBlocking();
+            String cookie = controller.exchangeDshAuthCookie();
             Activity act = getActivity();
             if (act == null || act.isFinishing()) return;
             act.runOnUiThread(() -> {

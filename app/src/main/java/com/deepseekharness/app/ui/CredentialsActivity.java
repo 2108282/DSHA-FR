@@ -130,7 +130,7 @@ public class CredentialsActivity extends AppCompatActivity {
             return;
         }
         new Thread(() -> {
-            String cookie = controller.fetchCookieBlocking();
+            String cookie = controller.exchangeDshAuthCookie();
             runOnUiThread(() -> {
                 if (isFinishing()) return;
                 startActivity(WebPreviewActivity.intent(this, authUrl, cookie));
