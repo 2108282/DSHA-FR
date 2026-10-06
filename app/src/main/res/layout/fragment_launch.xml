@@ -263,13 +263,16 @@
 
                 <androidx.appcompat.widget.SwitchCompat
                     android:id="@+id/lan_switch"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
+                    android:layout_width="44dp"
+                    android:layout_height="26dp"
                     android:layout_marginStart="8dp"
+                    android:background="@null"
                     android:switchMinWidth="44dp"
                     android:thumb="@drawable/switch_thumb"
-                    android:track="@drawable/switch_track"
-                    app:showText="false" />
+                    app:showText="false"
+                    app:thumbTint="@null"
+                    app:track="@drawable/switch_track"
+                    app:trackTint="@null" />
             </LinearLayout>
 
             <!-- 分隔线 1 -->
