@@ -5,6 +5,13 @@
     android:layout_height="match_parent"
     android:background="@color/surface">
 
+    <!-- 0. 右上角极光环境光晕层 (320dp 径向渐变) -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="320dp"
+        android:background="@drawable/bg_aurora_top_right"
+        android:importantForAccessibility="no" />
+
     <!-- 主体内容垂直容器 -->
     <LinearLayout
         android:id="@+id/launch_home"
@@ -15,12 +22,14 @@
         android:paddingTop="12dp"
         android:paddingBottom="12dp">
 
-        <!-- 1. 状态卡片 (Status Card) -->
+        <!-- 1. 状态卡片 (Status Card - 24dp 圆角) -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:background="@drawable/m3_card_expressive_hero"
+            android:elevation="2dp"
             android:orientation="vertical"
+            android:outlineProvider="background"
             android:padding="20dp">
 
             <!-- 状态标题行 -->
@@ -59,7 +68,7 @@
                 android:textColor="@color/text_muted"
                 android:textSize="13sp" />
 
-            <!-- 进度条 -->
+            <!-- 细条进度条 -->
             <ProgressBar
                 android:id="@+id/launch_busy"
                 style="?android:attr/progressBarStyleHorizontal"
@@ -70,13 +79,15 @@
                 android:indeterminateTint="@color/primary" />
         </LinearLayout>
 
-        <!-- 2. 端口与启停卡片 (Port & Controls Card) -->
+        <!-- 2. 端口与启停卡片 (Port & Controls Card - 18dp 圆角) -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:background="@drawable/m3_card_expressive"
+            android:elevation="2dp"
             android:orientation="vertical"
+            android:outlineProvider="background"
             android:padding="16dp">
 
             <!-- 端口选择行 -->
@@ -98,7 +109,7 @@
                 <EditText
                     android:id="@+id/launch_port_input"
                     android:layout_width="80dp"
-                    android:layout_height="38dp"
+                    android:layout_height="40dp"
                     android:layout_marginStart="10dp"
                     android:background="@drawable/bg_input"
                     android:gravity="center"
@@ -141,67 +152,70 @@
                     android:textStyle="bold" />
             </LinearLayout>
 
-            <!-- 按钮操作行 -->
+            <!-- 按钮操作行 (高度严格 46dp, 圆角严格 14dp, 字号严格 15sp) -->
             <LinearLayout
                 android:id="@+id/launch_controls"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="14dp"
+                android:layout_marginTop="16dp"
                 android:orientation="horizontal">
 
                 <Button
                     android:id="@+id/launch_start"
                     android:layout_width="0dp"
-                    android:layout_height="44dp"
+                    android:layout_height="46dp"
                     android:layout_weight="1.2"
                     android:background="@drawable/m3_btn_primary_expressive"
-                    android:stateListAnimator="@null"
+                    android:elevation="2dp"
+                    android:outlineProvider="background"
                     android:text="启动"
                     android:textAllCaps="false"
-                    android:textColor="@color/m3_btn_primary_text"
-                    android:textSize="14sp"
+                    android:textColor="@color/accent_on"
+                    android:textSize="15sp"
                     android:textStyle="bold" />
 
                 <Button
                     android:id="@+id/launch_open"
                     android:layout_width="0dp"
-                    android:layout_height="44dp"
+                    android:layout_height="46dp"
                     android:layout_marginStart="8dp"
                     android:layout_weight="1"
                     android:background="@drawable/m3_btn_tonal_expressive"
-                    android:stateListAnimator="@null"
+                    android:elevation="0dp"
                     android:text="重启"
                     android:textAllCaps="false"
                     android:textColor="@color/m3_btn_tonal_text"
-                    android:textSize="14sp"
+                    android:textSize="15sp"
                     android:textStyle="bold" />
 
                 <Button
                     android:id="@+id/launch_stop"
                     android:layout_width="0dp"
-                    android:layout_height="44dp"
+                    android:layout_height="46dp"
                     android:layout_marginStart="8dp"
                     android:layout_weight="1"
                     android:background="@drawable/m3_btn_danger_soft"
-                    android:stateListAnimator="@null"
+                    android:elevation="0dp"
                     android:text="停止"
                     android:textAllCaps="false"
-                    android:textColor="@color/err"
-                    android:textSize="14sp"
+                    android:textColor="@color/btn_danger_text_expressive"
+                    android:textSize="15sp"
                     android:textStyle="bold" />
             </LinearLayout>
         </LinearLayout>
 
-        <!-- 3. 三行合并卡片：局域网连接 / 模型管理 / 快捷对话 -->
+        <!-- 3. 三行合并卡片：局域网连接 / 模型管理 / 快捷对话 (18dp 圆角) -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:background="@drawable/m3_card_expressive"
+            android:elevation="2dp"
             android:orientation="vertical"
+            android:outlineProvider="background"
             android:paddingHorizontal="14dp">
 
-            <!-- 局域网连接行 (固定高度 48dp) -->
+            <!-- 局域网连接行 (严格 48dp 等高) -->
             <LinearLayout
                 android:id="@+id/launch_lan_row"
                 android:layout_width="match_parent"
@@ -232,35 +246,42 @@
                     android:layout_height="0dp"
                     android:layout_weight="1" />
 
+                <!-- 复制按钮：尺寸死锁 54x32dp，背景浅蓝 #EBF0F8，文字主色蓝 #47699F -->
                 <Button
                     android:id="@+id/lan_copy"
-                    android:layout_width="wrap_content"
+                    android:layout_width="54dp"
                     android:layout_height="32dp"
-                    android:background="@drawable/m3_btn_tonal_expressive"
+                    android:background="@drawable/m3_btn_tonal_small"
+                    android:gravity="center"
+                    android:includeFontPadding="false"
                     android:minWidth="0dp"
-                    android:paddingHorizontal="12dp"
-                    android:stateListAnimator="@null"
+                    android:minHeight="0dp"
+                    android:padding="0dp"
                     android:text="复制"
                     android:textAllCaps="false"
                     android:textColor="@color/primary"
                     android:textSize="12sp"
                     android:textStyle="bold" />
 
+                <!-- 更多按钮：尺寸死锁 54x32dp，背景浅蓝 #EBF0F8，文字主色蓝 #47699F -->
                 <Button
                     android:id="@+id/lan_more"
-                    android:layout_width="wrap_content"
+                    android:layout_width="54dp"
                     android:layout_height="32dp"
                     android:layout_marginStart="8dp"
-                    android:background="@drawable/m3_btn_tonal_expressive"
+                    android:background="@drawable/m3_btn_tonal_small"
+                    android:gravity="center"
+                    android:includeFontPadding="false"
                     android:minWidth="0dp"
-                    android:paddingHorizontal="12dp"
-                    android:stateListAnimator="@null"
+                    android:minHeight="0dp"
+                    android:padding="0dp"
                     android:text="更多"
                     android:textAllCaps="false"
                     android:textColor="@color/primary"
                     android:textSize="12sp"
                     android:textStyle="bold" />
 
+                <!-- 自绘极简胶囊开关：44x26dp, 白球微阴影, 180ms缓动 -->
                 <com.deepseekharness.app.ui.DshaToggle
                     android:id="@+id/lan_switch"
                     android:layout_width="44dp"
@@ -274,7 +295,7 @@
                 android:layout_height="1dp"
                 android:background="@color/line" />
 
-            <!-- 模型管理行 (固定高度 48dp) -->
+            <!-- 模型管理行 (严格 48dp 等高) -->
             <LinearLayout
                 android:id="@+id/launch_models"
                 android:layout_width="match_parent"
@@ -323,7 +344,7 @@
                 android:layout_height="1dp"
                 android:background="@color/line" />
 
-            <!-- 快捷对话行 (固定高度 48dp) -->
+            <!-- 快捷对话行 (严格 48dp 等高) -->
             <LinearLayout
                 android:id="@+id/launch_open_sheet"
                 android:layout_width="match_parent"
@@ -367,7 +388,7 @@
             </LinearLayout>
         </LinearLayout>
 
-        <!-- 4. 运行追踪日志卡片 (Log Card) -->
+        <!-- 4. 运行追踪日志卡片 (Log Card - 18dp 圆角) -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
@@ -375,8 +396,10 @@
             android:layout_weight="1"
             android:background="@drawable/m3_card_expressive"
             android:clipToOutline="true"
+            android:elevation="2dp"
             android:minHeight="140dp"
-            android:orientation="vertical">
+            android:orientation="vertical"
+            android:outlineProvider="background">
 
             <!-- 日志标题栏 -->
             <LinearLayout

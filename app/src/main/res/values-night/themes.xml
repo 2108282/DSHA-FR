@@ -4,7 +4,7 @@
   与 values/themes.xml 结构对称，语义色引用 values-night/colors.xml。
 -->
 <resources>
-    <style name="Theme.DeepseekHarness" parent="Theme.Material3.DayNight.NoActionBar">
+    <style name="Theme.DeepseekHarness" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="colorPrimary">@color/primary</item>
         <item name="colorOnPrimary">@color/accent_on</item>
         <item name="colorPrimaryContainer">@color/raised</item>

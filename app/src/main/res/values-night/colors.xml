@@ -24,6 +24,7 @@
     <color name="logo_bot">#161D2B</color>
     <color name="ripple">#338AA8D6</color>
     <color name="disabled">#1B2130</color>
+    <color name="primary_container">#243049</color>
     <color name="err_bg">#1AE08A8A</color>
     <color name="btn_danger_bg">#992B2B</color>
     <color name="btn_danger_text">#FFFFFF</color>
