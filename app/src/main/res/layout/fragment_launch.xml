@@ -311,7 +311,7 @@
                     android:layout_marginStart="8dp" />
             </LinearLayout>
 
-            <!-- 分隔线 1 (border-bottom: 1px solid var(--line-soft)) -->
+            <!-- 分隔线 1 (border-bottom: 1px solid var(- -line-soft)) -->
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
@@ -348,7 +348,7 @@
                     android:textStyle="bold" />
             </LinearLayout>
 
-            <!-- 分隔线 2 (border-bottom: 1px solid var(--line-soft)) -->
+            <!-- 分隔线 2 (border-bottom: 1px solid var(- -line-soft)) -->
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
