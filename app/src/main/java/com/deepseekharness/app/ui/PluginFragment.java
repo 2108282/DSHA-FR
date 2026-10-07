@@ -66,6 +66,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
     private TextView btnExport;
     private TextView btnImportFallback;
     private View pluginStatusCard;
+    private View pluginStatusDot;
     private CapsuleProgressView pluginBusy;
     private TextView statusText;
     private View marketHelp;
@@ -165,6 +166,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
             btnImportFallback.setPaintFlags(btnImportFallback.getPaintFlags() | android.graphics.Paint.UNDERLINE_TEXT_FLAG);
         }
         pluginStatusCard = view.findViewById(R.id.pluginStatusCard);
+        pluginStatusDot = view.findViewById(R.id.pluginStatusDot);
         pluginBusy = view.findViewById(R.id.pluginBusy);
         statusText = view.findViewById(R.id.statusText);
         marketHelp = view.findViewById(R.id.marketHelp);
@@ -292,6 +294,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
         btnExport = null;
         btnImportFallback = null;
         pluginStatusCard = null;
+        pluginStatusDot = null;
         pluginBusy = null;
         statusText = null;
         marketHelp = null;
@@ -327,11 +330,14 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
             }
         }
 
-        // 2. 状态条与加载进度 (在市场页面操作时平滑浮现专属状态卡片)
+        // 2. 状态条与加载进度 (在市场页面操作时平滑浮现精致状态卡片)
         boolean hasStatusMsg = state.statusMessage != null && !state.statusMessage.trim().isEmpty();
         boolean showStatusCard = state.isMarketTab && (state.isBusy || hasStatusMsg);
         if (pluginStatusCard != null) {
             pluginStatusCard.setVisibility(showStatusCard ? View.VISIBLE : View.GONE);
+        }
+        if (pluginStatusDot != null) {
+            pluginStatusDot.setBackgroundResource(state.isBusy ? R.drawable.dot_warn : R.drawable.dot_active);
         }
         if (pluginBusy != null) {
             pluginBusy.setVisibility(state.isBusy ? View.VISIBLE : View.GONE);

@@ -187,34 +187,52 @@
                     android:visibility="gone" />
             </com.deepseekharness.app.ui.ModernCardView>
 
-            <!-- 插件操作实时状态与胶囊进度卡片 (纯 Skia 自绘 ModernCardView + CapsuleProgressView) -->
+            <!-- 插件操作实时状态与胶囊进度卡片 (纯 Skia 自绘 ModernCardView + 状态灯 + CapsuleProgressView) -->
             <com.deepseekharness.app.ui.ModernCardView
                 android:id="@+id/pluginStatusCard"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
                 android:orientation="vertical"
-                android:padding="16dp"
-                android:visibility="gone"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="12dp"
                 app:cardRadius="18dp">
 
-                <TextView
-                    android:id="@+id/statusText"
+                <!-- 状态信息行: 左侧呼吸状态指示灯 + 右侧状态文本 -->
+                <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:lineSpacingMultiplier="1.4"
-                    android:textColor="@color/text"
-                    android:textSize="13.5sp"
-                    android:textStyle="bold" />
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <View
+                        android:id="@+id/pluginStatusDot"
+                        android:layout_width="10dp"
+                        android:layout_height="10dp"
+                        android:background="@drawable/dot_active" />
+
+                    <TextView
+                        android:id="@+id/statusText"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="10dp"
+                        android:layout_weight="1"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:lineSpacingMultiplier="1.3"
+                        android:text="插件管理功能正常"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
 
                 <!-- 胶囊进度槽 (CapsuleProgressView: 38% 宽药丸 1.4s 循环平滑滑动) -->
                 <com.deepseekharness.app.ui.CapsuleProgressView
                     android:id="@+id/pluginBusy"
                     android:layout_width="match_parent"
                     android:layout_height="4dp"
-                    android:layout_marginTop="10dp" />
+                    android:layout_marginTop="10dp"
+                    android:visibility="gone" />
             </com.deepseekharness.app.ui.ModernCardView>
 
             <!-- 卡片 3: 导入与导出插件包 (padding: 18px; border-radius: 18px) -->

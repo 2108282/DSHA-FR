@@ -87,7 +87,15 @@ public class PluginPresenter implements PluginActions {
     /** 核心计算：根据仓储状态、过滤条件与排序生成纯净状态快照 */
     public void recalculateState() {
         boolean busy = repository.isBusy() || (repoState != null && repoState.busy);
-        String statusMsg = repoState != null ? repoState.message : "";
+        String rawMsg = repoState != null ? repoState.message : "";
+        String statusMsg;
+        if (rawMsg == null || rawMsg.trim().isEmpty()
+                || rawMsg.contains("选择链接安装或导入")
+                || rawMsg.contains("插件状态已同步")) {
+            statusMsg = "插件管理功能正常";
+        } else {
+            statusMsg = rawMsg.trim();
+        }
 
         // 1. 链接识别与安装按钮可用态
         boolean linkValid = false;
