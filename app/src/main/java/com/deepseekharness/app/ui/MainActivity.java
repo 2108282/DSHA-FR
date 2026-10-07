@@ -97,11 +97,12 @@ public class MainActivity extends AppCompatActivity {
         }
 
         TextView title = findViewById(R.id.app_title);
-        TextView themeBtn = findViewById(R.id.btn_theme);
-        if (themeBtn != null) {
+        View themeBtn = findViewById(R.id.btn_theme);
+        ImageView themeIcon = findViewById(R.id.img_theme_icon);
+        if (themeBtn != null && themeIcon != null) {
             boolean dark = ThemeController.isDark(this);
-            themeBtn.setText(dark ? "☀ 白天" : "☾ 黑夜");
-            themeBtn.setContentDescription(dark ? "切换到白天模式" : "切换到黑夜模式");
+            themeIcon.setImageResource(dark ? R.drawable.ic_moon : R.drawable.ic_sun);
+            themeIcon.setContentDescription(dark ? "夜间模式" : "日间模式");
             themeBtn.setOnClickListener(v -> ThemeController.toggle(this));
         }
 

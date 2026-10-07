@@ -5,7 +5,7 @@
     android:layout_height="match_parent"
     android:background="@color/surface">
 
-    <!-- 全局固定极光漫射图层 (1:1 对齐 HTML .aurora-1) -->
+    <!-- 全局固定极光漫射图层 (Skia RenderEffect 硬件加速高斯模糊) -->
     <View
         android:id="@+id/global_aurora"
         android:layout_width="320dp"
@@ -21,12 +21,12 @@
         android:layout_height="match_parent"
         android:orientation="vertical">
 
-        <!-- 顶部标题栏 (52dp, 半透卡片白 card_glass, 细分割线) -->
+        <!-- 顶部标题栏 (52dp, 与大背景 @color/surface 颜色完全一致, 细分割线) -->
         <LinearLayout
             android:id="@+id/app_bar"
             android:layout_width="match_parent"
             android:layout_height="52dp"
-            android:background="@color/card_glass"
+            android:background="@color/surface"
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingHorizontal="16dp">
@@ -48,20 +48,25 @@
                 android:textSize="20sp"
                 android:textStyle="bold" />
 
-            <TextView
+            <!-- 纯图标太阳/月亮切换胶囊 (36dp x 36dp, 纯图标, 零文字) -->
+            <FrameLayout
                 android:id="@+id/btn_theme"
-                android:layout_width="wrap_content"
-                android:layout_height="34dp"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
                 android:background="@drawable/bg_chip_clickable"
                 android:clickable="true"
                 android:focusable="true"
-                android:gravity="center"
-                android:paddingHorizontal="12dp"
-                android:stateListAnimator="@animator/chip_press_scale"
-                android:text="日间"
-                android:textColor="@color/text_secondary"
-                android:textSize="13sp"
-                android:textStyle="bold" />
+                android:stateListAnimator="@animator/chip_press_scale">
+
+                <ImageView
+                    android:id="@+id/img_theme_icon"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="切换主题"
+                    android:src="@drawable/ic_sun"
+                    app:tint="@color/text_secondary" />
+            </FrameLayout>
         </LinearLayout>
 
         <View
@@ -138,42 +143,239 @@
                     android:textColor="@color/text_secondary"
                     android:textSize="13sp" />
 
-                <!-- 修复按钮 -->
-                <Button
-                    android:id="@+id/diagnostic_repair"
-                    android:layout_width="match_parent"
-                    android:layout_height="46dp"
+                <!-- 分组标题: 快速环境修复 -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
                     android:layout_marginTop="16dp"
-                    android:background="@drawable/m3_btn_primary_expressive"
-                    android:elevation="3dp"
-                    android:outlineAmbientShadowColor="#00000000"
-                    android:outlineSpotShadowColor="#3847699F"
-                    android:stateListAnimator="@animator/btn_press_scale"
-                    android:text="修复证书与网络环境"
-                    android:textAllCaps="false"
-                    android:textColor="@color/accent_on"
-                    android:textSize="15sp"
+                    android:layout_marginBottom="4dp"
+                    android:letterSpacing="0.09"
+                    android:text="环境自愈与修复"
+                    android:textAllCaps="true"
+                    android:textColor="@color/text_muted"
+                    android:textSize="12sp"
                     android:textStyle="bold" />
 
-                <!-- 前往插件管理页按钮 -->
-                <Button
-                    android:id="@+id/diagnostic_plugins"
+                <!-- 1. 修复大卡片 (严格对齐设置页「模块」卡片规范: 18dp 圆角, 38dp 图标盒, 66dp 分割线, 双行排版) -->
+                <com.deepseekharness.app.ui.ModernCardView
                     android:layout_width="match_parent"
-                    android:layout_height="46dp"
-                    android:layout_marginTop="10dp"
-                    android:background="@drawable/m3_btn_tonal_expressive"
-                    android:stateListAnimator="@animator/btn_press_scale"
-                    android:text="前往插件管理页"
-                    android:textAllCaps="false"
-                    android:textColor="@color/primary"
-                    android:textSize="14sp"
+                    android:layout_height="wrap_content"
+                    android:clipToOutline="true"
+                    android:orientation="vertical"
+                    android:padding="0dp"
+                    app:cardRadius="18dp">
+
+                    <!-- 行 1: 修复网桥与存储环境 -->
+                    <LinearLayout
+                        android:id="@+id/row_repair_bridge"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="?attr/selectableItemBackground"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingHorizontal="16dp"
+                        android:paddingVertical="15dp">
+
+                        <FrameLayout
+                            android:layout_width="38dp"
+                            android:layout_height="38dp"
+                            android:background="@drawable/bg_settings_icon_box">
+
+                            <ImageView
+                                android:layout_width="20dp"
+                                android:layout_height="20dp"
+                                android:layout_gravity="center"
+                                android:contentDescription="修复网桥与存储环境"
+                                android:src="@drawable/ic_settings_sliders"
+                                app:tint="@color/primary" />
+                        </FrameLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="12dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="修复网桥与存储环境"
+                                android:textColor="@color/text"
+                                android:textSize="15sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="1dp"
+                                android:text="内部存储直通 · 3095设备桥 · DNS自愈"
+                                android:textColor="@color/text_muted"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <ImageView
+                            android:layout_width="18dp"
+                            android:layout_height="18dp"
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_chevron_right"
+                            app:tint="@color/text_muted" />
+                    </LinearLayout>
+
+                    <!-- 细分割线 (66dp 左边距，避开图标盒) -->
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginStart="66dp"
+                        android:background="@color/line_soft" />
+
+                    <!-- 行 2: 修复插件丢失问题 -->
+                    <LinearLayout
+                        android:id="@+id/row_repair_plugins"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="?attr/selectableItemBackground"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingHorizontal="16dp"
+                        android:paddingVertical="15dp">
+
+                        <FrameLayout
+                            android:layout_width="38dp"
+                            android:layout_height="38dp"
+                            android:background="@drawable/bg_settings_icon_box">
+
+                            <ImageView
+                                android:layout_width="20dp"
+                                android:layout_height="20dp"
+                                android:layout_gravity="center"
+                                android:contentDescription="修复插件丢失问题"
+                                android:src="@drawable/ic_plugins"
+                                app:tint="@color/primary" />
+                        </FrameLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="12dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="修复插件丢失问题"
+                                android:textColor="@color/text"
+                                android:textSize="15sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="1dp"
+                                android:text="重挂核心插件 · 修复 Cordis 配置软链"
+                                android:textColor="@color/text_muted"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <ImageView
+                            android:layout_width="18dp"
+                            android:layout_height="18dp"
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_chevron_right"
+                            app:tint="@color/text_muted" />
+                    </LinearLayout>
+
+                    <!-- 细分割线 (66dp 左边距，避开图标盒) -->
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginStart="66dp"
+                        android:background="@color/line_soft" />
+
+                    <!-- 行 3: 修复证书与网络环境 -->
+                    <LinearLayout
+                        android:id="@+id/row_repair_network"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="?attr/selectableItemBackground"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingHorizontal="16dp"
+                        android:paddingVertical="15dp">
+
+                        <FrameLayout
+                            android:layout_width="38dp"
+                            android:layout_height="38dp"
+                            android:background="@drawable/bg_settings_icon_box">
+
+                            <ImageView
+                                android:layout_width="20dp"
+                                android:layout_height="20dp"
+                                android:layout_gravity="center"
+                                android:contentDescription="修复证书与网络环境"
+                                android:src="@drawable/ic_wifi"
+                                app:tint="@color/primary" />
+                        </FrameLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="12dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="修复证书与网络环境"
+                                android:textColor="@color/text"
+                                android:textSize="15sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="1dp"
+                                android:text="修复 npm CA 证书与镜像源连接"
+                                android:textColor="@color/text_muted"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <ImageView
+                            android:layout_width="18dp"
+                            android:layout_height="18dp"
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_chevron_right"
+                            app:tint="@color/text_muted" />
+                    </LinearLayout>
+                </com.deepseekharness.app.ui.ModernCardView>
+
+                <!-- 分组标题: 诊断报告 -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:layout_marginTop="18dp"
+                    android:layout_marginBottom="4dp"
+                    android:letterSpacing="0.09"
+                    android:text="详细报告"
+                    android:textAllCaps="true"
+                    android:textColor="@color/text_muted"
+                    android:textSize="12sp"
                     android:textStyle="bold" />
 
                 <!-- 诊断报告卡片 (.gcard: ModernCardView) -->
                 <com.deepseekharness.app.ui.ModernCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="16dp"
                     android:orientation="vertical"
                     android:padding="18dp"
                     app:cardRadius="18dp">

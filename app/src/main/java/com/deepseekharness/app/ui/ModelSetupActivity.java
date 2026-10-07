@@ -35,7 +35,7 @@ public final class ModelSetupActivity extends AppCompatActivity {
 
     // 页面与顶栏
     private TextView appBarTitle;
-    private TextView btnTheme;
+    private View btnTheme;
     private View modelBack;
     private TextView tvMainTitle;
     private TextView tvMainDesc;
@@ -133,9 +133,11 @@ public final class ModelSetupActivity extends AppCompatActivity {
         // 2. 绑定顶栏与公用组件
         appBarTitle = findViewById(R.id.app_bar_title);
         btnTheme = findViewById(R.id.btn_theme);
-        if (btnTheme != null) {
+        ImageView themeIcon = findViewById(R.id.img_theme_icon);
+        if (btnTheme != null && themeIcon != null) {
             boolean dark = ThemeController.isDark(this);
-            btnTheme.setText(dark ? "☀ 白天" : "☾ 黑夜");
+            themeIcon.setImageResource(dark ? R.drawable.ic_moon : R.drawable.ic_sun);
+            themeIcon.setContentDescription(dark ? "夜间模式" : "日间模式");
             btnTheme.setOnClickListener(v -> ThemeController.toggle(this));
         }
 

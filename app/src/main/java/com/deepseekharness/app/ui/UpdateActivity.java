@@ -60,10 +60,12 @@ public final class UpdateActivity extends AppCompatActivity implements UpdateAct
         }
 
         // 顶栏日夜间切换
-        TextView themeBtn = findViewById(R.id.btn_theme);
-        if (themeBtn != null) {
+        View themeBtn = findViewById(R.id.btn_theme);
+        ImageView themeIcon = findViewById(R.id.img_theme_icon);
+        if (themeBtn != null && themeIcon != null) {
             boolean dark = ThemeController.isDark(this);
-            themeBtn.setText(dark ? "☀ 白天" : "☾ 黑夜");
+            themeIcon.setImageResource(dark ? R.drawable.ic_moon : R.drawable.ic_sun);
+            themeIcon.setContentDescription(dark ? "夜间模式" : "日间模式");
             themeBtn.setOnClickListener(v -> ThemeController.toggle(this));
         }
 

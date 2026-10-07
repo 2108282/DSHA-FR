@@ -247,11 +247,26 @@ public final class PtyTerminalFragment extends Fragment
                 java.lang.reflect.Field colorsField = emulator.getClass().getField("mColors");
                 Object colors = colorsField.get(emulator);
                 if (colors != null) {
-                    java.lang.reflect.Method setColor = colors.getClass().getMethod("setColor", int.class, int.class);
-                    setColor.invoke(colors, 256, fg);
-                    setColor.invoke(colors, 257, bg);
-                    setColor.invoke(colors, 258, cursor);
+                    java.lang.reflect.Field currentColorsField = colors.getClass().getField("mCurrentColors");
+                    int[] currentColors = (int[]) currentColorsField.get(colors);
+                    if (currentColors != null && currentColors.length >= 259) {
+                        currentColors[256] = fg;
+                        currentColors[257] = bg;
+                        currentColors[258] = cursor;
+                        if (!isNight) {
+                            // 浅色白天模式: 强行将 ANSI 7(白) 和 ANSI 15(亮白) 映射为深色文字，根治白色字体隐形
+                            currentColors[7] = 0xFF1E293B;
+                            currentColors[15] = 0xFF334155;
+                        } else {
+                            currentColors[7] = 0xFFC9D5E5;
+                            currentColors[15] = 0xFFFFFFFF;
+                        }
+                    }
                 }
+            }
+            if (view != null) {
+                view.onScreenUpdated();
+                view.invalidate();
             }
         } catch (Throwable ignored) {
         }

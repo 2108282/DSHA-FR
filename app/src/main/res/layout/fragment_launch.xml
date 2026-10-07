@@ -491,7 +491,7 @@
                     android:fontFamily="monospace"
                     android:lineSpacingMultiplier="1.6"
                     android:text="还没有日志。"
-                    android:textColor="@color/terminal_text"
+                    android:textColor="#C9D5E5"
                     android:textIsSelectable="true"
                     android:textSize="12sp" />
             </ScrollView>
