@@ -65,7 +65,8 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
     private TextView btnImport;
     private TextView btnExport;
     private TextView btnImportFallback;
-    private ProgressBar pluginBusy;
+    private View pluginStatusCard;
+    private CapsuleProgressView pluginBusy;
     private TextView statusText;
     private View marketHelp;
     private View panelMarketContainer;
@@ -163,6 +164,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
         if (btnImportFallback != null) {
             btnImportFallback.setPaintFlags(btnImportFallback.getPaintFlags() | android.graphics.Paint.UNDERLINE_TEXT_FLAG);
         }
+        pluginStatusCard = view.findViewById(R.id.pluginStatusCard);
         pluginBusy = view.findViewById(R.id.pluginBusy);
         statusText = view.findViewById(R.id.statusText);
         marketHelp = view.findViewById(R.id.marketHelp);
@@ -289,6 +291,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
         btnImport = null;
         btnExport = null;
         btnImportFallback = null;
+        pluginStatusCard = null;
         pluginBusy = null;
         statusText = null;
         marketHelp = null;
@@ -324,9 +327,19 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
             }
         }
 
-        // 2. 状态条与加载进度
-        if (pluginBusy != null) pluginBusy.setVisibility(state.isBusy ? View.VISIBLE : View.GONE);
-        if (statusText != null) statusText.setText(state.statusMessage);
+        // 2. 状态条与加载进度 (在市场页面操作时平滑浮现专属状态卡片)
+        boolean hasStatusMsg = state.statusMessage != null && !state.statusMessage.trim().isEmpty();
+        boolean showStatusCard = state.isMarketTab && (state.isBusy || hasStatusMsg);
+        if (pluginStatusCard != null) {
+            pluginStatusCard.setVisibility(showStatusCard ? View.VISIBLE : View.GONE);
+        }
+        if (pluginBusy != null) {
+            pluginBusy.setVisibility(state.isBusy ? View.VISIBLE : View.GONE);
+            if (state.isBusy) pluginBusy.start(); else pluginBusy.stop();
+        }
+        if (statusText != null) {
+            statusText.setText(state.statusMessage);
+        }
 
         // 3. 按钮可用态 (保持 HTML 原画鲜亮 primary 色)
         if (btnPluginInstall != null) btnPluginInstall.setEnabled(!state.isBusy);
@@ -413,13 +426,77 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
 
     private void showInstallPreview(PluginRepository.Preview preview) {
         if (!isAdded() || root == null || previewDialog != null || preview == null) return;
-        previewDialog = new AlertDialog.Builder(requireContext())
-                .setTitle("确认安装插件")
-                .setMessage(preview.description)
-                .setNegativeButton("取消", (d, w) -> repository.discardPreview())
-                .setPositiveButton("确认安装", (d, w) -> repository.confirmPreview())
+
+        View dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_plugin_install_preview, null);
+
+        TextView tvName = dialogView.findViewById(R.id.dialogPluginName);
+        ModernBadgeView badgeVersion = dialogView.findViewById(R.id.dialogPluginVersionBadge);
+        ModernBadgeView badgeAuthor = dialogView.findViewById(R.id.dialogPluginAuthorBadge);
+        TextView tvDesc = dialogView.findViewById(R.id.dialogPluginDesc);
+        TextView tvCompat = dialogView.findViewById(R.id.dialogPluginCompat);
+        Button btnCancel = dialogView.findViewById(R.id.btnDialogCancel);
+        Button btnConfirm = dialogView.findViewById(R.id.btnDialogConfirm);
+
+        // 解析 preview 文本提取结构化信息
+        String raw = preview.description != null ? preview.description.trim() : "";
+        String[] lines = raw.split("\n");
+        String name = "插件安装包";
+        String version = "未知版本";
+        String author = "未注明作者";
+        StringBuilder descBuilder = new StringBuilder();
+
+        if (lines.length > 0 && lines[0].contains(" · ")) {
+            String[] parts = lines[0].split(" · ");
+            if (parts.length > 0) name = parts[0].trim();
+            if (parts.length > 1) version = parts[1].trim();
+        } else if (lines.length > 0 && !lines[0].isEmpty()) {
+            name = lines[0].trim();
+        }
+
+        for (int i = 1; i < lines.length; i++) {
+            String line = lines[i].trim();
+            if (line.startsWith("作者：") || line.startsWith("作者:")) {
+                author = line.substring(3).trim();
+            } else if (!line.isEmpty()) {
+                if (descBuilder.length() > 0) descBuilder.append("\n");
+                descBuilder.append(line);
+            }
+        }
+
+        if (tvName != null) tvName.setText(name);
+        if (badgeVersion != null) badgeVersion.setBadge(true, version);
+        if (badgeAuthor != null) badgeAuthor.setBadge(false, author);
+        if (tvDesc != null) {
+            tvDesc.setText(descBuilder.length() > 0 ? descBuilder.toString() : "DSHA 官方 / 社区插件扩展包，点击确认即可写入内置运行环境。");
+        }
+        if (tvCompat != null) {
+            tvCompat.setText("• 安装后生效：安装成功后请至启动页重启 DSH 核心服务\n• 隔离安全：独立安装至插件目录，不污染物理宿主系统");
+        }
+
+        AlertDialog dialog = new AlertDialog.Builder(requireContext(), R.style.Dialog_DSHA_Alert)
+                .setView(dialogView)
+                .setCancelable(true)
                 .setOnCancelListener(d -> repository.discardPreview())
                 .create();
+
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        }
+
+        if (btnCancel != null) {
+            btnCancel.setOnClickListener(v -> {
+                dialog.dismiss();
+                repository.discardPreview();
+            });
+        }
+        if (btnConfirm != null) {
+            btnConfirm.setOnClickListener(v -> {
+                dialog.dismiss();
+                repository.confirmPreview();
+            });
+        }
+
+        previewDialog = dialog;
         previewDialog.setOnDismissListener(d -> previewDialog = null);
         previewDialog.show();
     }

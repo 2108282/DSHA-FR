@@ -187,6 +187,36 @@
                     android:visibility="gone" />
             </com.deepseekharness.app.ui.ModernCardView>
 
+            <!-- 插件操作实时状态与胶囊进度卡片 (纯 Skia 自绘 ModernCardView + CapsuleProgressView) -->
+            <com.deepseekharness.app.ui.ModernCardView
+                android:id="@+id/pluginStatusCard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:visibility="gone"
+                app:cardRadius="18dp">
+
+                <TextView
+                    android:id="@+id/statusText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:lineSpacingMultiplier="1.4"
+                    android:textColor="@color/text"
+                    android:textSize="13.5sp"
+                    android:textStyle="bold" />
+
+                <!-- 胶囊进度槽 (CapsuleProgressView: 38% 宽药丸 1.4s 循环平滑滑动) -->
+                <com.deepseekharness.app.ui.CapsuleProgressView
+                    android:id="@+id/pluginBusy"
+                    android:layout_width="match_parent"
+                    android:layout_height="4dp"
+                    android:layout_marginTop="10dp" />
+            </com.deepseekharness.app.ui.ModernCardView>
+
             <!-- 卡片 3: 导入与导出插件包 (padding: 18px; border-radius: 18px) -->
             <com.deepseekharness.app.ui.ModernCardView
                 android:layout_width="match_parent"
@@ -272,27 +302,6 @@
                     android:textColor="@color/text_muted"
                     android:textSize="13sp" />
             </com.deepseekharness.app.ui.ModernCardView>
-
-            <!-- 市场进度指示与状态文本 (安装中/操作中显示) -->
-            <ProgressBar
-                android:id="@+id/pluginBusy"
-                style="?android:attr/progressBarStyleHorizontal"
-                android:layout_width="match_parent"
-                android:layout_height="4dp"
-                android:layout_marginTop="12dp"
-                android:indeterminate="true"
-                android:indeterminateTint="@color/primary"
-                android:visibility="gone" />
-
-            <TextView
-                android:id="@+id/statusText"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:gravity="center"
-                android:textColor="@color/text_secondary"
-                android:textSize="13sp"
-                android:visibility="gone" />
         </LinearLayout>
 
         <!-- ==================== 3. 面板 B：插件管理 (panelInstalled) ==================== -->
