@@ -133,6 +133,9 @@ public class LaunchFragment extends Fragment implements LaunchPresenter.ViewCall
     private void openCredentialsPage() {
         if (!isAdded()) return;
         startActivity(new Intent(requireContext(), CredentialsActivity.class));
+        if (getActivity() != null) {
+            getActivity().overridePendingTransition(R.anim.fragment_enter, R.anim.fragment_exit);
+        }
     }
 
     private void copyLanAddress() {

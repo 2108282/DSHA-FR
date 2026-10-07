@@ -144,6 +144,12 @@ public class CredentialsActivity extends AppCompatActivity {
         }
     }
 
+    @Override
+    public void finish() {
+        super.finish();
+        overridePendingTransition(R.anim.fragment_pop_enter, R.anim.fragment_pop_exit);
+    }
+
     private void enterWeb() {
         HarnessController controller = HarnessController.get(this);
         if (controller == null) return;
