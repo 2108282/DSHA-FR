@@ -28,7 +28,6 @@ public class WorkspaceFragment extends Fragment implements WorkspacePresenter.Vi
     private WorkspaceActions actions;
 
     private EditText wsPathInput;
-    private TextView rootStatusView;
 
     private final ActivityResultLauncher<String[]> restorePicker =
             registerForActivityResult(
@@ -49,12 +48,7 @@ public class WorkspaceFragment extends Fragment implements WorkspacePresenter.Vi
         actions = presenter;
 
         wsPathInput = v.findViewById(R.id.workspace_path);
-        rootStatusView = v.findViewById(R.id.workspace_shizuku_status);
 
-        View subBack = v.findViewById(R.id.sub_back);
-        if (subBack != null) {
-            subBack.setOnClickListener(x -> actions.onBackClick());
-        }
         v.findViewById(R.id.workspace_backup).setOnClickListener(x -> actions.onBackupClick());
         v.findViewById(R.id.workspace_restore).setOnClickListener(x -> actions.onRestoreClick());
         v.findViewById(R.id.workspace_location).setOnClickListener(x ->
@@ -75,8 +69,6 @@ public class WorkspaceFragment extends Fragment implements WorkspacePresenter.Vi
                     + "支持在 MT 管理器、Termux 或手机系统文件管理器中直接访问与读写！");
         }
 
-        v.findViewById(R.id.workspace_shizuku_auth).setOnClickListener(x -> actions.onCheckRootClick());
-
         return v;
     }
 
@@ -89,12 +81,26 @@ public class WorkspaceFragment extends Fragment implements WorkspacePresenter.Vi
     }
 
     @Override
+    public void onResume() {
+        super.onResume();
+        syncActivityTitle(true);
+    }
+
+    @Override
     public void onDestroyView() {
+        syncActivityTitle(false);
         presenter = null;
         actions = null;
         wsPathInput = null;
-        rootStatusView = null;
         super.onDestroyView();
+    }
+
+    private void syncActivityTitle(boolean isSubpage) {
+        if (!isAdded()) return;
+        TextView activityTitle = requireActivity().findViewById(R.id.app_title);
+        if (activityTitle != null) {
+            activityTitle.setText(isSubpage ? "数据与备份" : getString(R.string.nav_settings));
+        }
     }
 
     @Override
@@ -102,9 +108,6 @@ public class WorkspaceFragment extends Fragment implements WorkspacePresenter.Vi
         if (!isAdded()) return;
         if (wsPathInput != null && state.workdirPath != null) {
             wsPathInput.setText(state.workdirPath);
-        }
-        if (rootStatusView != null && state.rootStatusText != null) {
-            rootStatusView.setText(state.rootStatusText);
         }
     }
 

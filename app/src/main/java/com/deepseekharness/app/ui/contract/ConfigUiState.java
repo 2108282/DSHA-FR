@@ -11,11 +11,12 @@ public class ConfigUiState {
     public final String allFilesStatusText;
     public final String a11yStatusText;
     public final String asrStatusText;
+    public final String rootStatusText;
 
     public ConfigUiState(String port, String taskset, boolean isConfirmShell,
                          boolean isOverlayStream, boolean isCapSensors, boolean isCapLocation,
                          boolean isAsrContinuous, String allFilesStatusText,
-                         String a11yStatusText, String asrStatusText) {
+                         String a11yStatusText, String asrStatusText, String rootStatusText) {
         this.port = port;
         this.taskset = taskset;
         this.isConfirmShell = isConfirmShell;
@@ -26,5 +27,6 @@ public class ConfigUiState {
         this.allFilesStatusText = allFilesStatusText;
         this.a11yStatusText = a11yStatusText;
         this.asrStatusText = asrStatusText;
+        this.rootStatusText = rootStatusText;
     }
 }

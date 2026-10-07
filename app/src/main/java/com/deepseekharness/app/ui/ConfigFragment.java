@@ -40,6 +40,8 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
     private View translateBtn;
     private View allFilesBtn;
     private TextView allFilesStatusText;
+    private TextView rootStatusView;
+    private Button rootAuthBtn;
     private View batteryOptBtn;
     private View a11yBtn;
     private TextView a11yStatusText;
@@ -121,6 +123,8 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         translateBtn = view.findViewById(R.id.config_translate);
         allFilesBtn = view.findViewById(R.id.config_all_files);
         allFilesStatusText = view.findViewById(R.id.config_all_files_status);
+        rootStatusView = view.findViewById(R.id.config_root_status);
+        rootAuthBtn = view.findViewById(R.id.config_root_auth);
         batteryOptBtn = view.findViewById(R.id.config_battery_opt);
         a11yBtn = view.findViewById(R.id.config_a11y);
         a11yStatusText = view.findViewById(R.id.config_a11y_status);
@@ -131,6 +135,7 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
 
         overlayStyleBtn.setOnClickListener(v -> actions.onOpenOverlayStyle());
         if (allFilesBtn != null) allFilesBtn.setOnClickListener(v -> actions.onOpenAllFilesSettings());
+        if (rootAuthBtn != null) rootAuthBtn.setOnClickListener(v -> actions.onCheckRootClick());
         batteryOptBtn.setOnClickListener(v -> actions.onOpenBatteryOptimization());
         a11yBtn.setOnClickListener(v -> actions.onOpenA11ySettings());
         asrCheckBtn.setOnClickListener(v -> actions.onCheckAsrStatus());
@@ -173,6 +178,8 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         translateBtn = null;
         allFilesBtn = null;
         allFilesStatusText = null;
+        rootStatusView = null;
+        rootAuthBtn = null;
         batteryOptBtn = null;
         a11yBtn = null;
         a11yStatusText = null;
@@ -223,6 +230,9 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         if (allFilesStatusText != null) allFilesStatusText.setText(state.allFilesStatusText);
         if (a11yStatusText != null) a11yStatusText.setText(state.a11yStatusText);
         if (asrStatusText != null) asrStatusText.setText(state.asrStatusText);
+        if (rootStatusView != null && state.rootStatusText != null) {
+            rootStatusView.setText(state.rootStatusText);
+        }
     }
 
     @Override

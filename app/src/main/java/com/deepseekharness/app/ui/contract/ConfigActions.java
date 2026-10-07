@@ -11,6 +11,7 @@ public interface ConfigActions {
     void onOpenAllFilesSettings();
     void onOpenBatteryOptimization();
     void onOpenA11ySettings();
+    void onCheckRootClick();
     void onCheckAsrStatus();
     void onFixAsrConfig();
     void onToggleAsrContinuous(boolean enabled);

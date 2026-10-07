@@ -21,42 +21,20 @@
         android:paddingTop="14dp"
         android:paddingBottom="96dp">
 
-        <!-- 顶部二级导航条 (返回按钮 + 页面主标题) -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingBottom="12dp">
-
-            <FrameLayout
-                android:id="@+id/sub_back"
-                android:layout_width="34dp"
-                android:layout_height="34dp"
-                android:background="@drawable/bg_chip_clickable"
-                android:clickable="true"
-                android:focusable="true">
-
-                <ImageView
-                    android:layout_width="18dp"
-                    android:layout_height="18dp"
-                    android:layout_gravity="center"
-                    android:contentDescription="返回"
-                    android:src="@drawable/ic_nav_back"
-                    app:tint="@color/text_secondary" />
-            </FrameLayout>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="12dp"
-                android:text="数据与备份"
-                android:textColor="@color/text"
-                android:textSize="20sp"
-                android:textStyle="bold" />
-        </LinearLayout>
-
         <!-- ========== 卡片 1: 数据归档与迁移 (.gcard) ========== -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_marginTop="2dp"
+            android:layout_marginBottom="4dp"
+            android:letterSpacing="0.09"
+            android:text="数据备份与恢复"
+            android:textAllCaps="true"
+            android:textColor="@color/text_muted"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
         <com.deepseekharness.app.ui.ModernCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -129,10 +107,22 @@
         </com.deepseekharness.app.ui.ModernCardView>
 
         <!-- ========== 卡片 2: 环境与工作区直通 (.gcard) ========== -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="4dp"
+            android:letterSpacing="0.09"
+            android:text="存储直通"
+            android:textAllCaps="true"
+            android:textColor="@color/text_muted"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
         <com.deepseekharness.app.ui.ModernCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
             android:orientation="vertical"
             android:padding="18dp"
             app:cardRadius="18dp">
@@ -189,59 +179,6 @@
                 android:textColor="@color/text_muted"
                 android:textSize="11sp"
                 android:visibility="gone" />
-
-        </com.deepseekharness.app.ui.ModernCardView>
-
-        <!-- ========== 卡片 3: 宿主 Root Shell 能力 (保持原有业务契约) ========== -->
-        <com.deepseekharness.app.ui.ModernCardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            android:orientation="vertical"
-            android:padding="18dp"
-            app:cardRadius="18dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="宿主 Root Shell 能力"
-                android:textColor="@color/text"
-                android:textSize="17sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/workspace_shizuku_status"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:background="@drawable/bg_fold_header"
-                android:padding="12dp"
-                android:text="正在检测 Root 权限..."
-                android:textColor="@color/primary"
-                android:textSize="13sp"
-                android:textStyle="bold" />
-
-            <Button
-                android:id="@+id/workspace_shizuku_auth"
-                android:layout_width="match_parent"
-                android:layout_height="46dp"
-                android:layout_marginTop="10dp"
-                android:background="@drawable/m3_btn_tonal_expressive"
-                android:stateListAnimator="@animator/btn_press_scale"
-                android:text="测试 / 重新申请 Root 权限"
-                android:textAllCaps="false"
-                android:textColor="@color/primary"
-                android:textSize="14sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:lineSpacingMultiplier="1.3"
-                android:text="授权后，Agent 可通过 3095 硬件桥执行宿主 shell 命令：\ncurl http://127.0.0.1:3095/exec?cmd=..."
-                android:textColor="@color/text_secondary"
-                android:textSize="11sp" />
 
         </com.deepseekharness.app.ui.ModernCardView>
 

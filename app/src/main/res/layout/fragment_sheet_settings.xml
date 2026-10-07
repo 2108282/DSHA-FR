@@ -21,42 +21,20 @@
         android:paddingTop="14dp"
         android:paddingBottom="96dp">
 
-        <!-- 顶部二级导航条 (返回按钮 + 页面主标题) -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingBottom="12dp">
-
-            <FrameLayout
-                android:id="@+id/sub_back"
-                android:layout_width="34dp"
-                android:layout_height="34dp"
-                android:background="@drawable/bg_chip_clickable"
-                android:clickable="true"
-                android:focusable="true">
-
-                <ImageView
-                    android:layout_width="18dp"
-                    android:layout_height="18dp"
-                    android:layout_gravity="center"
-                    android:contentDescription="返回"
-                    android:src="@drawable/ic_nav_back"
-                    app:tint="@color/text_secondary" />
-            </FrameLayout>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="12dp"
-                android:text="快捷对话设置"
-                android:textColor="@color/text"
-                android:textSize="20sp"
-                android:textStyle="bold" />
-        </LinearLayout>
-
         <!-- ========== 卡片 1: 核心开关列表 (.gcard, padding: 0) ========== -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_marginTop="2dp"
+            android:layout_marginBottom="4dp"
+            android:letterSpacing="0.09"
+            android:text="交互与手势"
+            android:textAllCaps="true"
+            android:textColor="@color/text_muted"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
         <com.deepseekharness.app.ui.ModernCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -317,12 +295,25 @@
 
         </com.deepseekharness.app.ui.ModernCardView>
 
-        <!-- ========== 卡片 2: 色彩风格与标准 (.gcard, padding: 0) ========== -->
+        <!-- ========== 卡片 2: 莫奈色彩外观 (下拉条选择器: 参考 LSPosed 样式) ========== -->
+        <TextView
+            android:id="@+id/sheet_settings_monet_options_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="4dp"
+            android:letterSpacing="0.09"
+            android:text="莫奈色彩"
+            android:textAllCaps="true"
+            android:textColor="@color/text_muted"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
         <com.deepseekharness.app.ui.ModernCardView
             android:id="@+id/sheet_settings_monet_options_container"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
             android:clipToOutline="true"
             android:orientation="vertical"
             app:cardRadius="18dp">
@@ -361,10 +352,15 @@
                     android:id="@+id/sheet_settings_palette_style_value"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="典雅蓝灰 ▾"
-                    android:textColor="@color/primary"
-                    android:textSize="14sp"
-                    android:textStyle="bold" />
+                    android:text="Tonal Spot"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="14sp" />
+
+                <ImageView
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:layout_marginStart="4dp"
+                    android:src="@drawable/ic_chevron_expand" />
             </LinearLayout>
 
             <View
@@ -400,18 +396,35 @@
                     android:id="@+id/sheet_settings_color_spec_value"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Material 3 Expressive 2025 ▾"
-                    android:textColor="@color/primary"
-                    android:textSize="14sp"
-                    android:textStyle="bold" />
+                    android:text="Material 3 Expressive 2025"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="14sp" />
+
+                <ImageView
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:layout_marginStart="4dp"
+                    android:src="@drawable/ic_chevron_expand" />
             </LinearLayout>
         </com.deepseekharness.app.ui.ModernCardView>
 
         <!-- ========== 卡片 3: 对话页设置 (.gcard) ========== -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="4dp"
+            android:letterSpacing="0.09"
+            android:text="抽屉形态与透明度"
+            android:textAllCaps="true"
+            android:textColor="@color/text_muted"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
         <com.deepseekharness.app.ui.ModernCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
             android:orientation="vertical"
             android:padding="18dp"
             app:cardRadius="18dp">

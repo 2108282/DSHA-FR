@@ -622,7 +622,7 @@
 
         </com.deepseekharness.app.ui.ModernCardView>
 
-        <!-- ========== 卡片 5: 系统与保活权限 (.gcard) ========== -->
+        <!-- ========== 卡片 5: 系统与保活权限 (.gcard，包含已迁移的 Root 权限检测) ========== -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -659,6 +659,32 @@
                 android:text="当前运行在 KernelSU / Magisk 原生 Root 模式下"
                 android:textColor="@color/text_secondary"
                 android:textSize="12sp" />
+
+            <!-- 从数据备份页迁移过来的 Root 检测状态与按钮 -->
+            <TextView
+                android:id="@+id/config_root_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/bg_fold_header"
+                android:padding="12dp"
+                android:text="正在检测 Root 权限..."
+                android:textColor="@color/primary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/config_root_auth"
+                android:layout_width="match_parent"
+                android:layout_height="46dp"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/m3_btn_tonal_expressive"
+                android:stateListAnimator="@animator/btn_press_scale"
+                android:text="测试 / 重新申请 Root 权限"
+                android:textAllCaps="false"
+                android:textColor="@color/primary"
+                android:textSize="14sp"
+                android:textStyle="bold" />
 
             <Button
                 android:id="@+id/config_battery_opt"

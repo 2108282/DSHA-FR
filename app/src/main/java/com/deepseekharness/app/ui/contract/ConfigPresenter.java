@@ -32,6 +32,7 @@ public class ConfigPresenter implements ConfigActions {
     private final ViewCallback callback;
     private final ConfigStore config;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private String currentRootStatus = "正在检测 Root 权限…";
 
     public ConfigPresenter(Activity activity, ViewCallback callback) {
         this.activity = activity;
@@ -41,7 +42,22 @@ public class ConfigPresenter implements ConfigActions {
     }
 
     public void init() {
+        refreshRootStatus();
         refreshState();
+    }
+
+    private void refreshRootStatus() {
+        new Thread(() -> {
+            boolean ok = false;
+            try {
+                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "id"});
+                ok = (p.waitFor() == 0);
+            } catch (Throwable ignored) {}
+            currentRootStatus = ok
+                    ? "✅ Root 授权正常（KernelSU/Magisk uid=0 原生直通）"
+                    : "⚠️ 未获取到 Root 权限，请在 KernelSU/APatch/Magisk 管理器中为 DSHA-FR 允许 Root";
+            mainHandler.post(this::refreshState);
+        }, "check-root-config").start();
     }
 
     public void refreshState() {
@@ -73,9 +89,25 @@ public class ConfigPresenter implements ConfigActions {
 
         ConfigUiState state = new ConfigUiState(
                 port, taskset, confirmShell, overlayStream, capSensors,
-                capLocation, asrContinuous, allFilesStatus, a11yStatus, asrStatus
+                capLocation, asrContinuous, allFilesStatus, a11yStatus, asrStatus, currentRootStatus
         );
         mainHandler.post(() -> callback.onRender(state));
+    }
+
+    @Override
+    public void onCheckRootClick() {
+        new Thread(() -> {
+            boolean ok = false;
+            try {
+                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "id"});
+                ok = (p.waitFor() == 0);
+            } catch (Throwable ignored) {}
+            final boolean rootOk = ok;
+            mainHandler.post(() -> {
+                toast(rootOk ? "✅ Root 授权正常（KernelSU/Magisk）" : "❌ 未获取到 Root 权限，请在授权管理器中允许");
+                refreshRootStatus();
+            });
+        }, "recheck-root-config").start();
     }
 
     @Override

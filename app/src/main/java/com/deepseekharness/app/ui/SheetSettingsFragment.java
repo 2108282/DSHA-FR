@@ -1,6 +1,5 @@
 package com.deepseekharness.app.ui;
 
-import android.app.Dialog;
 import android.content.Context;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
@@ -11,16 +10,18 @@ import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.Window;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.PopupWindow;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.content.ContextCompat;
 import androidx.core.graphics.ColorUtils;
 import androidx.fragment.app.Fragment;
 
@@ -31,20 +32,19 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 快捷抽屉二级设置页：1:1 像素级 Skia 现代卡片设计 (ModernCardView + DshaToggle)，纯渲染与契约驱动。
+ * 快捷抽屉二级设置页：1:1 像素级 Skia 现代卡片设计 (ModernCardView + DshaToggle + 原生悬浮下拉条)，纯渲染与契约驱动。
  */
 public class SheetSettingsFragment extends Fragment {
+
+    private TextView styleValue;
+    private LinearLayout styleDots;
+    private TextView specValue;
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
         View v = inflater.inflate(R.layout.fragment_sheet_settings, container, false);
-
-        View back = v.findViewById(R.id.sub_back);
-        if (back != null) {
-            back.setOnClickListener(x -> getParentFragmentManager().popBackStack());
-        }
 
         ConfigStore cfg = new ConfigStore(requireContext());
 
@@ -68,12 +68,17 @@ public class SheetSettingsFragment extends Fragment {
         // 2. 莫奈取色开关（DshaToggle 纯 Skia 自绘）
         DshaToggle monetToggle = v.findViewById(R.id.sheet_settings_monet_toggle);
         View monetOptionsContainer = v.findViewById(R.id.sheet_settings_monet_options_container);
-        TextView styleValue = v.findViewById(R.id.sheet_settings_palette_style_value);
-        LinearLayout styleDots = v.findViewById(R.id.sheet_settings_palette_style_dots);
-        TextView specValue = v.findViewById(R.id.sheet_settings_color_spec_value);
+        View monetOptionsLabel = v.findViewById(R.id.sheet_settings_monet_options_label);
+        styleValue = v.findViewById(R.id.sheet_settings_palette_style_value);
+        styleDots = v.findViewById(R.id.sheet_settings_palette_style_dots);
+        specValue = v.findViewById(R.id.sheet_settings_color_spec_value);
 
+        boolean monetEnabled = cfg.isSheetMonetColor();
         if (monetOptionsContainer != null) {
-            monetOptionsContainer.setVisibility(cfg.isSheetMonetColor() ? View.VISIBLE : View.GONE);
+            monetOptionsContainer.setVisibility(monetEnabled ? View.VISIBLE : View.GONE);
+        }
+        if (monetOptionsLabel != null) {
+            monetOptionsLabel.setVisibility(monetEnabled ? View.VISIBLE : View.GONE);
         }
 
         int seedColor = MonetThemeHelper.getWallpaperSeedColor(requireContext());
@@ -82,18 +87,21 @@ public class SheetSettingsFragment extends Fragment {
         }
 
         if (styleValue != null) {
-            styleValue.setText(getPaletteStyleTitle(cfg.getSheetPaletteStyle()) + " ▾");
+            styleValue.setText(getPaletteStyleTitle(cfg.getSheetPaletteStyle()));
         }
         if (specValue != null) {
-            specValue.setText(getColorSpecTitle(cfg.getSheetColorSpec()) + " ▾");
+            specValue.setText(getColorSpecTitle(cfg.getSheetColorSpec()));
         }
 
         if (monetToggle != null) {
-            monetToggle.setChecked(cfg.isSheetMonetColor(), false, false);
+            monetToggle.setChecked(monetEnabled, false, false);
             monetToggle.setOnCheckedChangeListener((toggle, isChecked) -> {
                 cfg.setSheetMonetColor(isChecked);
                 if (monetOptionsContainer != null) {
                     monetOptionsContainer.setVisibility(isChecked ? View.VISIBLE : View.GONE);
+                }
+                if (monetOptionsLabel != null) {
+                    monetOptionsLabel.setVisibility(isChecked ? View.VISIBLE : View.GONE);
                 }
                 MonetThemeHelper.clearCache(requireContext());
                 QuickChatSheetActivity.refreshThemeFromConfig(requireContext());
@@ -107,16 +115,16 @@ public class SheetSettingsFragment extends Fragment {
             }
         }
 
-        // 2.1 色彩风格选择弹窗
+        // 2.1 色彩风格原生下拉选项条（参考截图）
         View styleRow = v.findViewById(R.id.sheet_settings_palette_style_row);
         if (styleRow != null) {
-            styleRow.setOnClickListener(x -> showPaletteStyleDialog(requireContext(), cfg, styleValue, styleDots));
+            styleRow.setOnClickListener(anchor -> showPaletteStyleDropdown(anchor, cfg));
         }
 
-        // 2.2 色彩标准选择弹窗
+        // 2.2 色彩标准原生下拉选项条（参考截图）
         View specRow = v.findViewById(R.id.sheet_settings_color_spec_row);
         if (specRow != null) {
-            specRow.setOnClickListener(x -> showColorSpecDialog(requireContext(), cfg, specValue));
+            specRow.setOnClickListener(anchor -> showColorSpecDropdown(anchor, cfg));
         }
 
         // 3. 圈定即搜重定向开关（DshaToggle 纯 Skia 自绘）
@@ -242,6 +250,175 @@ public class SheetSettingsFragment extends Fragment {
         return v;
     }
 
+    @Override
+    public void onResume() {
+        super.onResume();
+        syncActivityTitle(true);
+    }
+
+    @Override
+    public void onDestroyView() {
+        syncActivityTitle(false);
+        styleValue = null;
+        styleDots = null;
+        specValue = null;
+        super.onDestroyView();
+    }
+
+    private void syncActivityTitle(boolean isSubpage) {
+        if (!isAdded()) return;
+        TextView activityTitle = requireActivity().findViewById(R.id.app_title);
+        if (activityTitle != null) {
+            activityTitle.setText(isSubpage ? "快捷对话设置" : getString(R.string.nav_settings));
+        }
+    }
+
+    // ==================== 1:1 对齐截图：原生悬浮下拉菜单 ====================
+
+    private void showPaletteStyleDropdown(View anchor, ConfigStore cfg) {
+        Context context = requireContext();
+        Map<String, String> styles = new LinkedHashMap<>();
+        styles.put("tonal_spot", "Tonal Spot");
+        styles.put("neutral", "Neutral");
+        styles.put("vibrant", "Vibrant");
+        styles.put("expressive", "Expressive");
+        styles.put("rainbow", "Rainbow");
+        styles.put("fruit_salad", "Fruit Salad");
+        styles.put("monochrome", "Monochrome");
+        styles.put("fidelity", "Fidelity");
+
+        String current = cfg.getSheetPaletteStyle();
+        int seedColor = MonetThemeHelper.getWallpaperSeedColor(context);
+
+        showModernDropdown(anchor, styles, current, key -> {
+            cfg.setSheetPaletteStyle(key);
+            if (styleValue != null) {
+                styleValue.setText(styles.get(key));
+            }
+            if (styleDots != null) {
+                updatePaletteStyleDots(styleDots, key, seedColor);
+            }
+            MonetThemeHelper.clearCache(context);
+            QuickChatSheetActivity.refreshThemeFromConfig(context);
+        });
+    }
+
+    private void showColorSpecDropdown(View anchor, ConfigStore cfg) {
+        Map<String, String> specs = new LinkedHashMap<>();
+        specs.put("spec_2025", "Material 3 Expressive 2025");
+        specs.put("spec_2021", "Material 3 2021");
+
+        String current = cfg.getSheetColorSpec();
+
+        showModernDropdown(anchor, specs, current, key -> {
+            cfg.setSheetColorSpec(key);
+            if (specValue != null) {
+                specValue.setText(specs.get(key));
+            }
+            MonetThemeHelper.clearCache(requireContext());
+            QuickChatSheetActivity.refreshThemeFromConfig(requireContext());
+        });
+    }
+
+    private interface OnDropdownSelectedListener {
+        void onSelected(String key);
+    }
+
+    /**
+     * 1:1 像素复刻截图样式的悬浮下拉菜单：
+     * - 圆角微阴影浮层 (bg_dropdown_popup)
+     * - 点击即选、无全屏遮罩阻断
+     * - 选中项主题色高亮，右侧带蓝色对号 ✓
+     */
+    private void showModernDropdown(View anchor, Map<String, String> items, String currentKey,
+                                    OnDropdownSelectedListener listener) {
+        Context context = requireContext();
+        PopupWindow popup = new PopupWindow(context);
+        popup.setOutsideTouchable(true);
+        popup.setFocusable(true);
+        popup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+
+        // 浮层根容器：16dp 圆角卡片底，精细边框与微阴影
+        LinearLayout root = new LinearLayout(context);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundResource(R.drawable.bg_dropdown_popup);
+        root.setElevation(dp(context, 8));
+        int padV = dp(context, 6);
+        root.setPadding(0, padV, 0, padV);
+
+        ScrollView scroll = new ScrollView(context);
+        scroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        LinearLayout list = new LinearLayout(context);
+        list.setOrientation(LinearLayout.VERTICAL);
+
+        int minWidth = dp(context, 220);
+        int itemHeight = dp(context, 48);
+
+        for (Map.Entry<String, String> entry : items.entrySet()) {
+            final String key = entry.getKey();
+            final String title = entry.getValue();
+            final boolean isSelected = key.equalsIgnoreCase(currentKey);
+
+            LinearLayout item = new LinearLayout(context);
+            item.setOrientation(LinearLayout.HORIZONTAL);
+            item.setGravity(Gravity.CENTER_VERTICAL);
+            item.setPadding(dp(context, 20), 0, dp(context, 16), 0);
+            item.setMinimumHeight(itemHeight);
+            item.setClickable(true);
+            item.setFocusable(true);
+
+            TypedValue tv = new TypedValue();
+            context.getTheme().resolveAttribute(android.R.attr.selectableItemBackground, tv, true);
+            item.setBackgroundResource(tv.resourceId);
+
+            // 选项文字：选中时主题色高亮且加粗，未选中时深色常规字体
+            TextView label = new TextView(context);
+            label.setText(title);
+            label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+            label.setTextColor(context.getColor(isSelected ? R.color.primary : R.color.text));
+            if (isSelected) {
+                label.setTypeface(null, android.graphics.Typeface.BOLD);
+            }
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            label.setLayoutParams(lp);
+            item.addView(label);
+
+            // 选中项右侧蓝色对勾 ✓（1:1 对齐截图）
+            if (isSelected) {
+                ImageView check = new ImageView(context);
+                check.setImageResource(R.drawable.ic_check_mini);
+                check.setImageTintList(android.content.res.ColorStateList.valueOf(context.getColor(R.color.primary)));
+                int checkSize = dp(context, 18);
+                LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(checkSize, checkSize);
+                clp.setMarginStart(dp(context, 12));
+                check.setLayoutParams(clp);
+                item.addView(check);
+            }
+
+            item.setOnClickListener(v -> {
+                popup.dismiss();
+                if (listener != null) {
+                    listener.onSelected(key);
+                }
+            });
+
+            list.addView(item, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, itemHeight));
+        }
+
+        scroll.addView(list);
+        root.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        popup.setContentView(root);
+        popup.setWidth(Math.max(minWidth, anchor.getWidth() / 2 + dp(context, 60)));
+        popup.setHeight(ViewGroup.LayoutParams.WRAP_CONTENT);
+
+        // 锚定在 anchor 视图的右侧下方弹出
+        int xOffset = anchor.getWidth() - popup.getWidth() - dp(context, 8);
+        popup.showAsDropDown(anchor, xOffset, dp(context, 2));
+    }
+
+    // ==================== 调色板预览辅助 ====================
+
     private static int dp(Context ctx, int v) {
         return Math.round(v * ctx.getResources().getDisplayMetrics().density);
     }
@@ -266,7 +443,7 @@ public class SheetSettingsFragment extends Fragment {
         if ("spec_2021".equalsIgnoreCase(spec)) {
             return "Material 3 2021";
         }
-        return "Material 3\nExpressive 2025";
+        return "Material 3 Expressive 2025";
     }
 
     public static int[] getStylePreviewColors(String style, int seedColor) {
@@ -354,209 +531,5 @@ public class SheetSettingsFragment extends Fragment {
         dotsContainer.removeAllViews();
         int[] colors = getStylePreviewColors(style, seedColor);
         dotsContainer.addView(createPaletteDotsView(getContext(), colors));
-    }
-
-    private void showPaletteStyleDialog(Context context, ConfigStore cfg, TextView styleValue, LinearLayout styleDots) {
-        Dialog dialog = new Dialog(context);
-        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
-
-        Window win = dialog.getWindow();
-        if (win != null) {
-            win.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-        }
-
-        LinearLayout root = new LinearLayout(context);
-        root.setOrientation(LinearLayout.VERTICAL);
-        int pad = dp(context, 16);
-        root.setPadding(pad, pad, pad, pad);
-
-        GradientDrawable bg = new GradientDrawable();
-        bg.setShape(GradientDrawable.RECTANGLE);
-        bg.setCornerRadius(dp(context, 18));
-        boolean dark = cfg.isSheetInvertColor();
-        bg.setColor(dark ? Color.parseColor("#F01E222A") : Color.parseColor("#F8FFFFFF"));
-        bg.setStroke(dp(context, 1), dark ? Color.parseColor("#354A5568") : Color.parseColor("#20000000"));
-        root.setBackground(bg);
-
-        TextView title = new TextView(context);
-        title.setText("选择色彩风格");
-        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17);
-        title.setTextColor(dark ? Color.parseColor("#E2E8F0") : Color.parseColor("#0F172A"));
-        title.setTypeface(null, android.graphics.Typeface.BOLD);
-        title.setPadding(dp(context, 8), dp(context, 4), dp(context, 8), dp(context, 12));
-        root.addView(title);
-
-        ScrollView sv = new ScrollView(context);
-        LinearLayout list = new LinearLayout(context);
-        list.setOrientation(LinearLayout.VERTICAL);
-
-        Map<String, String> styles = new LinkedHashMap<>();
-        styles.put("tonal_spot", "Tonal Spot");
-        styles.put("neutral", "Neutral");
-        styles.put("vibrant", "Vibrant");
-        styles.put("expressive", "Expressive");
-        styles.put("rainbow", "Rainbow");
-        styles.put("fruit_salad", "Fruit Salad");
-        styles.put("monochrome", "Monochrome");
-        styles.put("fidelity", "Fidelity");
-
-        String current = cfg.getSheetPaletteStyle();
-        int seedColor = MonetThemeHelper.getWallpaperSeedColor(context);
-
-        for (Map.Entry<String, String> entry : styles.entrySet()) {
-            final String key = entry.getKey();
-            final String name = entry.getValue();
-
-            LinearLayout item = new LinearLayout(context);
-            item.setOrientation(LinearLayout.HORIZONTAL);
-            item.setGravity(Gravity.CENTER_VERTICAL);
-            item.setPadding(dp(context, 12), dp(context, 10), dp(context, 12), dp(context, 10));
-            item.setClickable(true);
-            item.setFocusable(true);
-
-            TypedValue tv = new TypedValue();
-            context.getTheme().resolveAttribute(android.R.attr.selectableItemBackground, tv, true);
-            item.setBackgroundResource(tv.resourceId);
-
-            int[] previewColors = getStylePreviewColors(key, seedColor);
-            item.addView(createPaletteDotsView(context, previewColors));
-
-            TextView label = new TextView(context);
-            label.setText(name);
-            label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-            label.setTextColor(dark ? Color.parseColor("#E2E8F0") : Color.parseColor("#1E293B"));
-            if (key.equalsIgnoreCase(current)) {
-                label.setTextColor(context.getColor(R.color.primary));
-                label.setTypeface(null, android.graphics.Typeface.BOLD);
-            }
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-            lp.setMarginStart(dp(context, 12));
-            label.setLayoutParams(lp);
-            item.addView(label);
-
-            if (key.equalsIgnoreCase(current)) {
-                TextView check = new TextView(context);
-                check.setText("✓");
-                check.setTextColor(context.getColor(R.color.primary));
-                check.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
-                check.setTypeface(null, android.graphics.Typeface.BOLD);
-                item.addView(check);
-            }
-
-            item.setOnClickListener(v2 -> {
-                cfg.setSheetPaletteStyle(key);
-                if (styleValue != null) {
-                    styleValue.setText(name + " ▾");
-                }
-                if (styleDots != null) {
-                    updatePaletteStyleDots(styleDots, key, seedColor);
-                }
-                MonetThemeHelper.clearCache(context);
-                QuickChatSheetActivity.refreshThemeFromConfig(context);
-                dialog.dismiss();
-            });
-
-            list.addView(item);
-        }
-
-        sv.addView(list);
-        root.addView(sv);
-
-        dialog.setContentView(root);
-        dialog.show();
-    }
-
-    private void showColorSpecDialog(Context context, ConfigStore cfg, TextView specValue) {
-        Dialog dialog = new Dialog(context);
-        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
-
-        Window win = dialog.getWindow();
-        if (win != null) {
-            win.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-        }
-
-        LinearLayout root = new LinearLayout(context);
-        root.setOrientation(LinearLayout.VERTICAL);
-        int pad = dp(context, 16);
-        root.setPadding(pad, pad, pad, pad);
-
-        GradientDrawable bg = new GradientDrawable();
-        bg.setShape(GradientDrawable.RECTANGLE);
-        bg.setCornerRadius(dp(context, 18));
-        boolean dark = cfg.isSheetInvertColor();
-        bg.setColor(dark ? Color.parseColor("#F01E222A") : Color.parseColor("#F8FFFFFF"));
-        bg.setStroke(dp(context, 1), dark ? Color.parseColor("#354A5568") : Color.parseColor("#20000000"));
-        root.setBackground(bg);
-
-        TextView title = new TextView(context);
-        title.setText("选择色彩标准");
-        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17);
-        title.setTextColor(dark ? Color.parseColor("#E2E8F0") : Color.parseColor("#0F172A"));
-        title.setTypeface(null, android.graphics.Typeface.BOLD);
-        title.setPadding(dp(context, 8), dp(context, 4), dp(context, 8), dp(context, 12));
-        root.addView(title);
-
-        LinearLayout list = new LinearLayout(context);
-        list.setOrientation(LinearLayout.VERTICAL);
-
-        Map<String, String> specs = new LinkedHashMap<>();
-        specs.put("spec_2025", "Material 3 Expressive 2025\n更具层次与表现力的现代调色");
-        specs.put("spec_2021", "Material 3 2021\n经典 Material 3 基础色板");
-
-        String current = cfg.getSheetColorSpec();
-
-        for (Map.Entry<String, String> entry : specs.entrySet()) {
-            final String key = entry.getKey();
-            final String desc = entry.getValue();
-
-            LinearLayout item = new LinearLayout(context);
-            item.setOrientation(LinearLayout.HORIZONTAL);
-            item.setGravity(Gravity.CENTER_VERTICAL);
-            item.setPadding(dp(context, 12), dp(context, 12), dp(context, 12), dp(context, 12));
-            item.setClickable(true);
-            item.setFocusable(true);
-
-            TypedValue tv = new TypedValue();
-            context.getTheme().resolveAttribute(android.R.attr.selectableItemBackground, tv, true);
-            item.setBackgroundResource(tv.resourceId);
-
-            TextView label = new TextView(context);
-            label.setText(desc);
-            label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-            label.setLineSpacing(dp(context, 2), 1f);
-            label.setTextColor(dark ? Color.parseColor("#E2E8F0") : Color.parseColor("#1E293B"));
-            if (key.equalsIgnoreCase(current)) {
-                label.setTextColor(context.getColor(R.color.primary));
-                label.setTypeface(null, android.graphics.Typeface.BOLD);
-            }
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-            label.setLayoutParams(lp);
-            item.addView(label);
-
-            if (key.equalsIgnoreCase(current)) {
-                TextView check = new TextView(context);
-                check.setText("✓");
-                check.setTextColor(context.getColor(R.color.primary));
-                check.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
-                check.setTypeface(null, android.graphics.Typeface.BOLD);
-                item.addView(check);
-            }
-
-            item.setOnClickListener(v2 -> {
-                cfg.setSheetColorSpec(key);
-                if (specValue != null) {
-                    specValue.setText(getColorSpecTitle(key) + " ▾");
-                }
-                MonetThemeHelper.clearCache(context);
-                QuickChatSheetActivity.refreshThemeFromConfig(context);
-                dialog.dismiss();
-            });
-
-            list.addView(item);
-        }
-
-        root.addView(list);
-        dialog.setContentView(root);
-        dialog.show();
     }
 }
