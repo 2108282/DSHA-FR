@@ -5,6 +5,8 @@ import com.deepseekharness.app.util.SensitiveData;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.Handler;
@@ -12,6 +14,7 @@ import android.os.Looper;
 import android.provider.Settings;
 import android.view.Gravity;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -56,6 +59,20 @@ public final class OverlayController {
     public static final String K_HOLD = "overlay_hold_sec";            // 2..60 秒
     public static final String K_ALPHA = "overlay_alpha";              // 20..100 %
     public static final String K_BG = "overlay_bg";                    // 预设底色索引
+    public static final String K_STROKE_MODE = "overlay_stroke_mode";  // 0: 与预设相同 1: 透明无框 2: 黑色边框 3: 白色边框
+    public static final int DEF_STROKE_MODE = 0;
+    public static final String[] STROKE_NAMES = {"跟随预设", "透明无框", "深黑边框", "纯白边框"};
+
+    public static final String K_PAD_V = "overlay_pad_v";              // 上下内边距高度 (4..24 dp)
+    public static final int DEF_PAD_V = 8;
+
+    public static final String K_POS_Y = "overlay_pos_y";              // 距离屏幕顶部位置 (0..100 dp)
+    public static final int DEF_POS_Y = 34;
+
+    public static final String K_FONT_STYLE = "overlay_font_style";    // 0: 系统默认 1: 现代中黑 2: 极客等宽
+    public static final int DEF_FONT_STYLE = 0;
+    public static final String[] FONT_NAMES = {"系统默认", "现代中黑", "极客等宽"};
+
     public static final String K_REASONING = "overlay_show_reasoning";  // 显示思考过程
     public static final String K_COMMAND = "overlay_show_command";      // 工具调用带上命令原文
     public static final String K_CONFIRM = "overlay_confirm";           // 危险命令就地批准
@@ -208,6 +225,50 @@ public final class OverlayController {
     public static boolean isLightBackground(Context ctx) {
         int bg = bgColor(ctx);
         return ColorUtils.calculateLuminance(bg | 0xFF000000) > 0.45;
+    }
+
+    public static int strokeMode(Context ctx) {
+        return clamp(prefs(ctx).getInt(K_STROKE_MODE, DEF_STROKE_MODE), 0, STROKE_NAMES.length - 1);
+    }
+
+    private static int strokeColor(Context ctx) {
+        int mode = strokeMode(ctx);
+        if (mode == 1) return Color.TRANSPARENT; // 透明无框
+        if (mode == 2) return 0xFF000000;       // 纯黑
+        if (mode == 3) return 0xFFFFFFFF;       // 纯白
+        // 默认模式 0: 跟随预设 / 自适应
+        boolean isLight = isLightBackground(ctx);
+        return isLight ? 0x24000000 : 0x1AFFFFFF;
+    }
+
+    private static int strokeWidthDp(Context ctx) {
+        int mode = strokeMode(ctx);
+        if (mode == 1) return 0; // 透明无框不画线
+        return 1;
+    }
+
+    public static int padVerticalDp(Context ctx) {
+        return clamp(prefs(ctx).getInt(K_PAD_V, DEF_PAD_V), 4, 24);
+    }
+
+    public static int posYDp(Context ctx) {
+        return clamp(prefs(ctx).getInt(K_POS_Y, DEF_POS_Y), 0, 100);
+    }
+
+    public static int fontStyle(Context ctx) {
+        return clamp(prefs(ctx).getInt(K_FONT_STYLE, DEF_FONT_STYLE), 0, FONT_NAMES.length - 1);
+    }
+
+    public static Typeface resolveTypeface(Context ctx) {
+        int style = fontStyle(ctx);
+        if (style == 1) {
+            return Typeface.create(Typeface.DEFAULT, Typeface.BOLD);
+        } else if (style == 2) {
+            return Typeface.MONOSPACE;
+        }
+        // 默认 0: 严格使用 Android 系统当前的全局默认系统字体 (Typeface.DEFAULT)，
+        // 完整继承手机系统设置中用户所选的个性化字体 (如小米兰亭/澎湃字体/HarmonyOS Sans/OPPO Sans等)
+        return Typeface.DEFAULT;
     }
 
     private static int clamp(int v, int lo, int hi) {
@@ -523,21 +584,48 @@ public final class OverlayController {
         GradientDrawable bg = new GradientDrawable();
         bg.setCornerRadius(dp(ctx, 16));
         bg.setColor(currentBg);
-        // 浅色背景加 1dp 微边框，避免浅色壁纸下边缘融化；深色背景加柔和微细边
-        bg.setStroke(dp(ctx, 1), isLight ? 0x24000000 : 0x1AFFFFFF);
+        int strokeW = strokeWidthDp(ctx);
+        if (strokeW > 0) {
+            bg.setStroke(dp(ctx, strokeW), strokeColor(ctx));
+        }
         root.setBackground(bg);
 
-        // 字号每次显示都重新应用：用户在配置页拉完滑块，下一条内容就是新字号，
-        // 不必重启 App。断行宽度是从 paint 量的，所以它跟着自动变。
-        // 文字颜色根据底色明暗自适应：浅色底用高可读性深墨黑（0xFF0F172A），深色底用纯白
+        // 动态调整悬浮栏上下高度（垂直内边距）
+        int padH = dp(ctx, 14);
+        int padV = dp(ctx, padVerticalDp(ctx));
+        root.setPadding(padH, padV, padH, padV);
+
+        // 动态调整悬浮栏距离屏幕顶部的高度位置（Y 偏移）
+        if (wm != null) {
+            ViewGroup.LayoutParams vlp = root.getLayoutParams();
+            if (vlp instanceof WindowManager.LayoutParams) {
+                WindowManager.LayoutParams wmlp = (WindowManager.LayoutParams) vlp;
+                int newY = dp(ctx, posYDp(ctx));
+                if (wmlp.y != newY) {
+                    wmlp.y = newY;
+                    try {
+                        wm.updateViewLayout(root, wmlp);
+                    } catch (Throwable ignored) {
+                    }
+                }
+            }
+        }
+
+        // 调用原生系统字体并应用现代排版（字间距、行间距、抗锯齿）
+        Typeface tf = resolveTypeface(ctx);
         if (label != null) {
             label.setTextSize(textSp(ctx));
             label.setTextColor(isLight ? 0xFF0F172A : Color.WHITE);
+            label.setTypeface(tf);
+            label.setLetterSpacing(0.015f);
+            label.setLineSpacing(dp(ctx, 3), 1.15f);
+            label.setPaintFlags(label.getPaintFlags() | Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
         }
 
-        // 危险命令提示语自适应对比度：浅底使用醒目焦糖琥珀色（0xFFB45309），深底使用亮黄（0xFFFFC66D）
+        // 危险命令提示语自适应对比度与系统字体
         if (confirmHint != null) {
             confirmHint.setTextColor(isLight ? 0xFFB45309 : 0xFFFFC66D);
+            confirmHint.setTypeface(tf);
         }
     }
 
@@ -554,7 +642,7 @@ public final class OverlayController {
 
         LinearLayout box = new LinearLayout(app);
         box.setOrientation(LinearLayout.VERTICAL);
-        int padH = dp(app, 12), padV = dp(app, 6);
+        int padH = dp(app, 14), padV = dp(app, padVerticalDp(app));
         box.setPadding(padH, padV, padH, padV);
         box.setVisibility(View.GONE);
 
@@ -603,7 +691,7 @@ public final class OverlayController {
         lp.width = overlayWidthPx(app);
         lp.height = WindowManager.LayoutParams.WRAP_CONTENT;
         lp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
-        lp.y = dp(app, 34);     // 贴状态栏下沿：不遮时钟与刘海，也不抢下拉手势
+        lp.y = dp(app, posYDp(app));     // 贴状态栏下沿或按用户设定：不遮时钟与刘海，也不抢下拉手势
 
         try {
             wm.addView(box, lp);

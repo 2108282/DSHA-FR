@@ -83,7 +83,6 @@ public final class OverlayStyleDialog {
             TextView cell = new TextView(context);
             cell.setText(OverlayController.BG_NAMES[i]);
             cell.setTextSize(12f);
-            cell.setTypeface(cell.getTypeface(), android.graphics.Typeface.BOLD);
             cell.setGravity(Gravity.CENTER);
             cell.setPadding(dp.apply(14), dp.apply(10), dp.apply(14), dp.apply(10));
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
@@ -99,6 +98,94 @@ public final class OverlayStyleDialog {
         }
         paintSwatches.run();
         box.addView(swatchScroll);
+
+        // ==================== 边框样式 ====================
+        box.addView(sectionLabel.apply("边框颜色"));
+        final int[] pickedStroke = {sp.getInt(OverlayController.K_STROKE_MODE, OverlayController.DEF_STROKE_MODE)};
+        LinearLayout strokeRow = new LinearLayout(context);
+        strokeRow.setOrientation(LinearLayout.HORIZONTAL);
+        final TextView[] strokeCells = new TextView[OverlayController.STROKE_NAMES.length];
+
+        Runnable paintStrokeCells = () -> {
+            for (int i = 0; i < strokeCells.length; i++) {
+                if (strokeCells[i] == null) continue;
+                GradientDrawable bg = new GradientDrawable();
+                bg.setCornerRadius(dp.apply(10));
+                if (i == pickedStroke[0]) {
+                    bg.setColor(Color.parseColor("#3B82F6"));
+                    strokeCells[i].setTextColor(Color.WHITE);
+                } else {
+                    bg.setColor(Color.parseColor("#F1F5F9"));
+                    strokeCells[i].setTextColor(Color.parseColor("#475569"));
+                    bg.setStroke(dp.apply(1), Color.parseColor("#E2E8F0"));
+                }
+                strokeCells[i].setBackground(bg);
+            }
+        };
+
+        for (int i = 0; i < OverlayController.STROKE_NAMES.length; i++) {
+            final int idx = i;
+            TextView cell = new TextView(context);
+            cell.setText(OverlayController.STROKE_NAMES[i]);
+            cell.setTextSize(11f);
+            cell.setGravity(Gravity.CENTER);
+            cell.setPadding(dp.apply(8), dp.apply(8), dp.apply(8), dp.apply(8));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+            if (i < OverlayController.STROKE_NAMES.length - 1) lp.rightMargin = dp.apply(6);
+            cell.setLayoutParams(lp);
+            cell.setOnClickListener(v -> {
+                pickedStroke[0] = idx;
+                paintStrokeCells.run();
+            });
+            strokeCells[i] = cell;
+            strokeRow.addView(cell);
+        }
+        paintStrokeCells.run();
+        box.addView(strokeRow);
+
+        // ==================== 字体风格 ====================
+        box.addView(sectionLabel.apply("字体风格 (调用系统字体)"));
+        final int[] pickedFont = {sp.getInt(OverlayController.K_FONT_STYLE, OverlayController.DEF_FONT_STYLE)};
+        LinearLayout fontRow = new LinearLayout(context);
+        fontRow.setOrientation(LinearLayout.HORIZONTAL);
+        final TextView[] fontCells = new TextView[OverlayController.FONT_NAMES.length];
+
+        Runnable paintFontCells = () -> {
+            for (int i = 0; i < fontCells.length; i++) {
+                if (fontCells[i] == null) continue;
+                GradientDrawable bg = new GradientDrawable();
+                bg.setCornerRadius(dp.apply(10));
+                if (i == pickedFont[0]) {
+                    bg.setColor(Color.parseColor("#3B82F6"));
+                    fontCells[i].setTextColor(Color.WHITE);
+                } else {
+                    bg.setColor(Color.parseColor("#F1F5F9"));
+                    fontCells[i].setTextColor(Color.parseColor("#475569"));
+                    bg.setStroke(dp.apply(1), Color.parseColor("#E2E8F0"));
+                }
+                fontCells[i].setBackground(bg);
+            }
+        };
+
+        for (int i = 0; i < OverlayController.FONT_NAMES.length; i++) {
+            final int idx = i;
+            TextView cell = new TextView(context);
+            cell.setText(OverlayController.FONT_NAMES[i]);
+            cell.setTextSize(11f);
+            cell.setGravity(Gravity.CENTER);
+            cell.setPadding(dp.apply(8), dp.apply(8), dp.apply(8), dp.apply(8));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+            if (i < OverlayController.FONT_NAMES.length - 1) lp.rightMargin = dp.apply(6);
+            cell.setLayoutParams(lp);
+            cell.setOnClickListener(v -> {
+                pickedFont[0] = idx;
+                paintFontCells.run();
+            });
+            fontCells[i] = cell;
+            fontRow.addView(cell);
+        }
+        paintFontCells.run();
+        box.addView(fontRow);
 
         class SliderHelper {
             SeekBar add(String title, int min, int max, int value, String unit) {
@@ -124,6 +211,8 @@ public final class OverlayStyleDialog {
         }
         SliderHelper sliderHelper = new SliderHelper();
 
+        final SeekBar padV = sliderHelper.add("边框上下高度 (内边距)", 4, 24, sp.getInt(OverlayController.K_PAD_V, OverlayController.DEF_PAD_V), " dp");
+        final SeekBar posY = sliderHelper.add("距屏幕顶部高度 (位置)", 0, 80, sp.getInt(OverlayController.K_POS_Y, OverlayController.DEF_POS_Y), " dp");
         final SeekBar alpha = sliderHelper.add("底色不透明度", 20, 100, sp.getInt(OverlayController.K_ALPHA, OverlayController.DEF_ALPHA), "%");
         final SeekBar lines = sliderHelper.add("最多显示行数", 1, 8, sp.getInt(OverlayController.K_LINES, OverlayController.DEF_LINES), " 行");
         final SeekBar wide = sliderHelper.add("字体大小", 6, 20, sp.getInt(OverlayController.K_TEXT_SP, OverlayController.DEF_TEXT_SP), " sp");
@@ -149,6 +238,10 @@ public final class OverlayStyleDialog {
 
         final Runnable saveRunnable = () -> sp.edit()
                 .putInt(OverlayController.K_BG, pickedBg[0])
+                .putInt(OverlayController.K_STROKE_MODE, pickedStroke[0])
+                .putInt(OverlayController.K_FONT_STYLE, pickedFont[0])
+                .putInt(OverlayController.K_PAD_V, Math.max(4, padV.getProgress()))
+                .putInt(OverlayController.K_POS_Y, posY.getProgress())
                 .putInt(OverlayController.K_ALPHA, Math.max(20, alpha.getProgress()))
                 .putInt(OverlayController.K_LINES, Math.max(1, lines.getProgress()))
                 .putInt(OverlayController.K_TEXT_SP, Math.max(6, wide.getProgress()))
