@@ -5,8 +5,36 @@ PID_FILE="$RUN_DIR/dsh.pid"
 PORT_FILE="$RUN_DIR/port"
 LOG_FILE="$RUN_DIR/dsh-web.log"
 
-PORT="${1:-3080}"
-TASKSET_CPUS="${2:-}"
+PORT="3080"
+TASKSET_CPUS=""
+EXTRA_ARGS=""
+
+# 兼容传统位置参数与标准 CLI 选项
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --port)
+            PORT="$2"
+            shift 2
+            ;;
+        --taskset)
+            TASKSET_CPUS="$2"
+            shift 2
+            ;;
+        [0-9]*)
+            PORT="$1"
+            shift
+            if [ $# -gt 0 ] && [ -z "$TASKSET_CPUS" ] && case "$1" in [0-9,-]*) true ;; *) false ;; esac; then
+                TASKSET_CPUS="$1"
+                shift
+            fi
+            ;;
+        *)
+            EXTRA_ARGS="$EXTRA_ARGS $1"
+            shift
+            ;;
+    esac
+done
+
 case "$PORT" in
     ''|*[!0-9]*) PORT=3080 ;;
 esac
@@ -346,6 +374,12 @@ if [ -f "$ROOTFS/usr/lib/aarch64-linux-gnu/libjemalloc.so.2" ]; then
     PRELOAD_OPT="LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libjemalloc.so.2"
 fi
 
+# 5.9 核心 Bundle 完整性自愈锁：杜绝因误操作导致 @deepseek-ai/dsh-web-app 丢失而使启动器报未知参数
+PKG_JSON="$ROOTFS/root/.dsh/profiles/web/package.json"
+if [ -f "$PKG_JSON" ] && ! grep -q "@deepseek-ai/dsh-web-app" "$PKG_JSON" 2>/dev/null; then
+    sed -i 's|"bundles": \[\s*|"bundles": \[\n        "@deepseek-ai/dsh-base",\n        "@deepseek-ai/dsh-web-app",\n|' "$PKG_JSON" 2>/dev/null || true
+fi
+
 # 6. 原生拉起 Node.js DSH Web 服务
 chroot "$ROOTFS" /usr/bin/env -i \
     HOME=/root \
@@ -359,7 +393,7 @@ chroot "$ROOTFS" /usr/bin/env -i \
     DSH_CONFIRM=1 \
     NODE_PATH=/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules \
     $PRELOAD_OPT \
-    nice -n 10 /usr/local/bin/node --v8-pool-size=2 /usr/local/lib/node_modules/@deepseek-ai/dsh/lib/bin.js web $PATCH_ARG --no-open --port "$PORT" --host 127.0.0.1 > "$LOG_FILE" 2>&1 &
+    nice -n 10 /usr/local/bin/node --v8-pool-size=2 /usr/local/lib/node_modules/@deepseek-ai/dsh/lib/bin.js web $PATCH_ARG --no-open --port "$PORT" --host 127.0.0.1 $EXTRA_ARGS > "$LOG_FILE" 2>&1 &
 
 NEW_PID=$!
 echo "$NEW_PID" > "$PID_FILE"
