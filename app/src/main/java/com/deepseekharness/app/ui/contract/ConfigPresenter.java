@@ -127,14 +127,6 @@ public class ConfigPresenter implements ConfigActions {
     }
 
     @Override
-    public void onToggleOverlayStream(boolean enabled) {
-        context.getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE).edit()
-                .putBoolean("overlay_stream", enabled).apply();
-        toast(enabled ? "已开启屏幕顶部流式输出" : "已关闭屏幕顶部流式输出");
-        refreshState();
-    }
-
-    @Override
     public void onToggleSensors(boolean enabled) {
         context.getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE).edit()
                 .putBoolean("cap_sensors", enabled).apply();
@@ -155,7 +147,6 @@ public class ConfigPresenter implements ConfigActions {
     }
 
     @Override public void onBack() { callback.onGoBack(); }
-    @Override public void onOpenOverlayStyle() { OverlayStyleDialog.show(activity); }
     @Override public void onOpenAllFilesSettings() { openAllFilesAccess(); }
     @Override public void onOpenBatteryOptimization() { openBatteryOptimization(); }
     @Override public void onOpenA11ySettings() { openA11ySettings(); }
