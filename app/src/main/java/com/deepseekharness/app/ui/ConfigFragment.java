@@ -32,11 +32,9 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
     private Button tasksetSaveBtn;
 
     private DshaToggle confirmShellToggle;
-    private DshaToggle overlayStreamToggle;
     private DshaToggle sensorsToggle;
     private DshaToggle locationToggle;
 
-    private View overlayStyleBtn;
     private View translateBtn;
     private View allFilesBtn;
     private TextView allFilesStatusText;
@@ -88,16 +86,6 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
             if (row != null) row.setOnClickListener(v -> confirmShellToggle.toggle());
         }
 
-        overlayStreamToggle = view.findViewById(R.id.config_toggle_overlay_stream);
-        if (overlayStreamToggle != null) {
-            overlayStreamToggle.setOnCheckedChangeListener((toggle, isChecked) -> {
-                if (isBinding) return;
-                actions.onToggleOverlayStream(isChecked);
-            });
-            View row = view.findViewById(R.id.config_row_overlay_stream);
-            if (row != null) row.setOnClickListener(v -> overlayStreamToggle.toggle());
-        }
-
         sensorsToggle = view.findViewById(R.id.config_toggle_sensors);
         if (sensorsToggle != null) {
             sensorsToggle.setOnCheckedChangeListener((toggle, isChecked) -> {
@@ -119,7 +107,6 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         }
 
         // 3. 扩展功能与系统保活权限入口
-        overlayStyleBtn = view.findViewById(R.id.config_overlay_style);
         translateBtn = view.findViewById(R.id.config_translate);
         allFilesBtn = view.findViewById(R.id.config_all_files);
         allFilesStatusText = view.findViewById(R.id.config_all_files_status);
@@ -133,7 +120,6 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         asrCheckBtn = view.findViewById(R.id.config_asr_btn_check);
         asrFixBtn = view.findViewById(R.id.config_asr_btn_fix);
 
-        overlayStyleBtn.setOnClickListener(v -> actions.onOpenOverlayStyle());
         if (allFilesBtn != null) allFilesBtn.setOnClickListener(v -> actions.onOpenAllFilesSettings());
         if (rootAuthBtn != null) rootAuthBtn.setOnClickListener(v -> actions.onCheckRootClick());
         batteryOptBtn.setOnClickListener(v -> actions.onOpenBatteryOptimization());
@@ -171,10 +157,8 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         tasksetInput = null;
         tasksetSaveBtn = null;
         confirmShellToggle = null;
-        overlayStreamToggle = null;
         sensorsToggle = null;
         locationToggle = null;
-        overlayStyleBtn = null;
         translateBtn = null;
         allFilesBtn = null;
         allFilesStatusText = null;
@@ -207,9 +191,6 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
 
         if (confirmShellToggle != null && confirmShellToggle.isChecked() != state.isConfirmShell) {
             confirmShellToggle.setChecked(state.isConfirmShell, false, false);
-        }
-        if (overlayStreamToggle != null && overlayStreamToggle.isChecked() != state.isOverlayStream) {
-            overlayStreamToggle.setChecked(state.isOverlayStream, false, false);
         }
         if (sensorsToggle != null && sensorsToggle.isChecked() != state.isCapSensors) {
             sensorsToggle.setChecked(state.isCapSensors, false, false);

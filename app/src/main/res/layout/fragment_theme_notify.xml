@@ -1,0 +1,409 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/transparent">
+
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipChildren="false"
+        android:clipToPadding="false"
+        android:fillViewport="true"
+        android:overScrollMode="never"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:orientation="vertical"
+            android:paddingHorizontal="16dp"
+            android:paddingTop="14dp"
+            android:paddingBottom="48dp">
+
+            <!-- ==================== 1. 分组：通知服务 ==================== -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:layout_marginTop="4dp"
+                android:layout_marginBottom="4dp"
+                android:letterSpacing="0.09"
+                android:text="通知与保活"
+                android:textAllCaps="true"
+                android:textColor="@color/text_muted"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <!-- 卡片 1 (独立卡片): 常驻后台服务通知 -->
+            <com.deepseekharness.app.ui.ModernCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:clipToOutline="true"
+                android:orientation="vertical"
+                android:padding="0dp"
+                app:cardRadius="18dp">
+
+                <LinearLayout
+                    android:id="@+id/theme_notify_row_persistent"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="15dp">
+
+                    <FrameLayout
+                        android:layout_width="38dp"
+                        android:layout_height="38dp"
+                        android:background="@drawable/bg_settings_icon_box">
+
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:layout_gravity="center"
+                            android:contentDescription="常驻后台服务通知"
+                            android:src="@drawable/ic_settings_bell"
+                            app:tint="@color/primary" />
+                    </FrameLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="常驻后台服务通知"
+                            android:textColor="@color/text"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="1dp"
+                            android:text="随核心模块运转常驻通知栏，点击恢复抽屉"
+                            android:textColor="@color/text_muted"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+
+                    <com.deepseekharness.app.ui.DshaToggle
+                        android:id="@+id/theme_notify_toggle_persistent"
+                        android:layout_width="44dp"
+                        android:layout_height="26dp"
+                        android:layout_marginStart="8dp" />
+                </LinearLayout>
+            </com.deepseekharness.app.ui.ModernCardView>
+
+            <!-- ==================== 2. 分组：主题与色彩 ==================== -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:layout_marginTop="18dp"
+                android:layout_marginBottom="4dp"
+                android:letterSpacing="0.09"
+                android:text="主题与色彩"
+                android:textAllCaps="true"
+                android:textColor="@color/text_muted"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <!-- 卡片组 2 (双行大卡片): 莫奈取色 + 色彩风格 -->
+            <com.deepseekharness.app.ui.ModernCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:clipToOutline="true"
+                android:orientation="vertical"
+                android:padding="0dp"
+                app:cardRadius="18dp">
+
+                <!-- 2.1 莫奈取色 -->
+                <LinearLayout
+                    android:id="@+id/theme_notify_row_monet"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="15dp">
+
+                    <FrameLayout
+                        android:layout_width="38dp"
+                        android:layout_height="38dp"
+                        android:background="@drawable/bg_settings_icon_box">
+
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:layout_gravity="center"
+                            android:contentDescription="莫奈取色"
+                            android:src="@drawable/ic_settings_sliders"
+                            app:tint="@color/primary" />
+                    </FrameLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="莫奈取色"
+                            android:textColor="@color/text"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="1dp"
+                            android:text="跟随系统壁纸动态提取 Monet 主题配色"
+                            android:textColor="@color/text_muted"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+
+                    <com.deepseekharness.app.ui.DshaToggle
+                        android:id="@+id/theme_notify_toggle_monet"
+                        android:layout_width="44dp"
+                        android:layout_height="26dp"
+                        android:layout_marginStart="8dp" />
+                </LinearLayout>
+
+                <!-- 细分割线 -->
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginStart="66dp"
+                    android:background="@color/line_soft" />
+
+                <!-- 2.2 色彩风格下拉 -->
+                <LinearLayout
+                    android:id="@+id/theme_notify_row_palette_style"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="15dp">
+
+                    <FrameLayout
+                        android:layout_width="38dp"
+                        android:layout_height="38dp"
+                        android:background="@drawable/bg_settings_icon_box">
+
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:layout_gravity="center"
+                            android:contentDescription="色彩风格"
+                            android:src="@drawable/ic_settings_quickchat"
+                            app:tint="@color/primary" />
+                    </FrameLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="色彩风格"
+                            android:textColor="@color/text"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/theme_notify_palette_style_value"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="1dp"
+                            android:text="Tonal Spot"
+                            android:textColor="@color/primary"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <!-- 双箭头展开图标 (对齐 LSPosed 选项行) -->
+                    <ImageView
+                        android:layout_width="18dp"
+                        android:layout_height="18dp"
+                        android:contentDescription="@null"
+                        android:src="@drawable/ic_chevron_expand"
+                        app:tint="@color/text_muted" />
+                </LinearLayout>
+            </com.deepseekharness.app.ui.ModernCardView>
+
+            <!-- ==================== 3. 分组：流式悬浮栏 ==================== -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:layout_marginTop="18dp"
+                android:layout_marginBottom="4dp"
+                android:letterSpacing="0.09"
+                android:text="流式悬浮栏"
+                android:textAllCaps="true"
+                android:textColor="@color/text_muted"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <!-- 卡片组 3 (双行大卡片): 启用悬浮栏 + 悬浮条外观与行为配置 -->
+            <com.deepseekharness.app.ui.ModernCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:clipToOutline="true"
+                android:orientation="vertical"
+                android:padding="0dp"
+                app:cardRadius="18dp">
+
+                <!-- 3.1 启用悬浮栏 -->
+                <LinearLayout
+                    android:id="@+id/theme_notify_row_floating"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="15dp">
+
+                    <FrameLayout
+                        android:layout_width="38dp"
+                        android:layout_height="38dp"
+                        android:background="@drawable/bg_settings_icon_box">
+
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:layout_gravity="center"
+                            android:contentDescription="启用悬浮栏"
+                            android:src="@drawable/ic_settings_stream"
+                            app:tint="@color/primary" />
+                    </FrameLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="启用悬浮栏"
+                            android:textColor="@color/text"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="1dp"
+                            android:text="屏幕顶部流式显示 AI 输出过程"
+                            android:textColor="@color/text_muted"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+
+                    <com.deepseekharness.app.ui.DshaToggle
+                        android:id="@+id/theme_notify_toggle_floating"
+                        android:layout_width="44dp"
+                        android:layout_height="26dp"
+                        android:layout_marginStart="8dp" />
+                </LinearLayout>
+
+                <!-- 细分割线 -->
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginStart="66dp"
+                    android:background="@color/line_soft" />
+
+                <!-- 3.2 悬浮条外观与行为配置 -->
+                <LinearLayout
+                    android:id="@+id/theme_notify_row_floating_settings"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="15dp">
+
+                    <FrameLayout
+                        android:layout_width="38dp"
+                        android:layout_height="38dp"
+                        android:background="@drawable/bg_settings_icon_box">
+
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:layout_gravity="center"
+                            android:contentDescription="悬浮条外观与行为配置"
+                            android:src="@drawable/ic_settings_wrench"
+                            app:tint="@color/primary" />
+                    </FrameLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="悬浮条外观与行为配置"
+                            android:textColor="@color/text"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="1dp"
+                            android:text="位置 · 字体大小 · 触控穿透"
+                            android:textColor="@color/text_muted"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+
+                    <ImageView
+                        android:layout_width="18dp"
+                        android:layout_height="18dp"
+                        android:contentDescription="@null"
+                        android:src="@drawable/ic_chevron_right"
+                        app:tint="@color/text_muted" />
+                </LinearLayout>
+            </com.deepseekharness.app.ui.ModernCardView>
+
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+</FrameLayout>

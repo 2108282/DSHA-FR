@@ -76,27 +76,14 @@ public class SettingsFragment extends Fragment implements SettingsPresenter.View
             rowSelftest.setOnClickListener(x -> actions.onRunSelftestClick());
         }
 
-        View rowPatches = v.findViewById(R.id.settings_row_patches);
-        if (rowPatches != null) {
-            rowPatches.setOnClickListener(x -> actions.onApplyPatchesClick());
+        View rowThemeNotify = v.findViewById(R.id.settings_row_theme_notify);
+        if (rowThemeNotify != null) {
+            rowThemeNotify.setOnClickListener(x -> onOpenSubFragment(new ThemeNotifyFragment()));
         }
 
         View rowAbout = v.findViewById(R.id.settings_row_about);
         if (rowAbout != null) {
             rowAbout.setOnClickListener(x -> actions.onAboutClick());
-        }
-
-        // 3. 常驻后台服务通知开关
-        if (persistentNotifToggle != null) {
-            persistentNotifToggle.setOnCheckedChangeListener((toggle, isChecked) -> {
-                if (isBinding) return;
-                actions.onTogglePersistentNotification(isChecked);
-            });
-
-            View notifRow = v.findViewById(R.id.settings_row_persistent_notif);
-            if (notifRow != null) {
-                notifRow.setOnClickListener(x -> persistentNotifToggle.toggle());
-            }
         }
 
         return v;

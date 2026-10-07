@@ -393,9 +393,9 @@
                 android:layout_marginStart="66dp"
                 android:background="@color/line_soft" />
 
-            <!-- 2.3 行：原生环境与存储直通自愈 -->
+            <!-- 2.3 行：主题与通知 (二级页面入口) -->
             <LinearLayout
-                android:id="@+id/settings_row_patches"
+                android:id="@+id/settings_row_theme_notify"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:background="?attr/selectableItemBackground"
@@ -415,73 +415,7 @@
                         android:layout_width="20dp"
                         android:layout_height="20dp"
                         android:layout_gravity="center"
-                        android:contentDescription="原生环境自愈"
-                        android:src="@drawable/ic_settings_wrench"
-                        app:tint="@color/primary" />
-                </FrameLayout>
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="12dp"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="原生环境与存储直通自愈"
-                        android:textColor="@color/text"
-                        android:textSize="15sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="1dp"
-                        android:text="内部存储直通 · DNS · 3095 设备桥 · 插件自愈"
-                        android:textColor="@color/text_muted"
-                        android:textSize="12sp" />
-                </LinearLayout>
-
-                <ImageView
-                    android:layout_width="18dp"
-                    android:layout_height="18dp"
-                    android:contentDescription="@null"
-                    android:src="@drawable/ic_chevron_right"
-                    app:tint="@color/text_muted" />
-            </LinearLayout>
-
-            <!-- 细分割线 (.divider: 1px, margin-left: 66px) -->
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:layout_marginStart="66dp"
-                android:background="@color/line_soft" />
-
-            <!-- 2.4 行：常驻后台服务通知 -->
-            <LinearLayout
-                android:id="@+id/settings_row_persistent_notif"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:background="?attr/selectableItemBackground"
-                android:clickable="true"
-                android:focusable="true"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:paddingHorizontal="16dp"
-                android:paddingVertical="15dp">
-
-                <FrameLayout
-                    android:layout_width="38dp"
-                    android:layout_height="38dp"
-                    android:background="@drawable/bg_settings_icon_box">
-
-                    <ImageView
-                        android:layout_width="20dp"
-                        android:layout_height="20dp"
-                        android:layout_gravity="center"
-                        android:contentDescription="常驻后台服务通知"
+                        android:contentDescription="主题与通知"
                         android:src="@drawable/ic_settings_bell"
                         app:tint="@color/primary" />
                 </FrameLayout>
@@ -496,7 +430,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="常驻后台服务通知"
+                        android:text="主题与通知"
                         android:textColor="@color/text"
                         android:textSize="15sp"
                         android:textStyle="bold" />
@@ -505,17 +439,17 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="1dp"
-                        android:text="随核心模块运转常驻通知栏，点击恢复抽屉"
+                        android:text="莫奈取色 · 悬浮条 · 常驻通知"
                         android:textColor="@color/text_muted"
                         android:textSize="12sp" />
                 </LinearLayout>
 
-                <!-- 纯 Skia 自绘平滑微阴影开关 (.toggle: 44x26dp, 180ms 缓动) -->
-                <com.deepseekharness.app.ui.DshaToggle
-                    android:id="@+id/settings_persistent_notification_toggle"
-                    android:layout_width="44dp"
-                    android:layout_height="26dp"
-                    android:layout_marginStart="8dp" />
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_chevron_right"
+                    app:tint="@color/text_muted" />
             </LinearLayout>
 
             <!-- 细分割线 (.divider: 1px, margin-left: 66px) -->

@@ -71,7 +71,7 @@ public final class DiagnosticRepository extends AndroidViewModel {
         });
     }
     private String collect() {
-        StringBuilder out = new StringBuilder("DSHA 诊断报告\n");
+        StringBuilder out = new StringBuilder();
         out.append("版本：").append(BuildConfig.VERSION_NAME).append(" / ").append(BuildConfig.VERSION_CODE)
                 .append(BuildConfig.LOW_ANDROID ? " / 兼容版\n" : " / 标准版\n");
         out.append("系统：Android ").append(Build.VERSION.RELEASE).append(" / API ").append(Build.VERSION.SDK_INT).append('\n');
@@ -85,7 +85,7 @@ public final class DiagnosticRepository extends AndroidViewModel {
             android.content.pm.PackageInfo web = Build.VERSION.SDK_INT >= 26 ? android.webkit.WebView.getCurrentWebViewPackage() : null;
             out.append("WebView：").append(web == null ? "系统未提供版本信息" : web.packageName + " " + web.versionName).append('\n');
         } catch (Exception | LinkageError error) { out.append("WebView：不可用（").append(error.getClass().getSimpleName()).append("）\n"); }
-        out.append("兼容内核：").append(BuildConfig.LOW_ANDROID ? "Gecko 143 可用（旧系统自动切换）" : "未内置").append('\n');
+        
         ProotBootstrap proot = HarnessController.get(getApplication()).proot();
         out.append("\n环境检查\n");
         out.append("离线环境：").append(proot.isEnvironmentReady() ? "已就绪" : "未就绪，请完成首次解压").append('\n');
