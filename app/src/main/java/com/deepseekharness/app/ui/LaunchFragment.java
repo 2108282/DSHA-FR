@@ -46,9 +46,7 @@ public class LaunchFragment extends Fragment implements LaunchPresenter.ViewCall
     private Button restartButton;
     private Button stopButton;
     private View lanRow;
-    private Button lanCopyBtn;
-    private Button lanMoreBtn;
-    private DshaToggle lanSwitch;
+    private TextView lanSubtitle;
     private View openSheetButton;
     private TextView logTextView;
     private ScrollView logScrollView;
@@ -72,9 +70,7 @@ public class LaunchFragment extends Fragment implements LaunchPresenter.ViewCall
         restartButton = v.findViewById(R.id.launch_open);
         stopButton = v.findViewById(R.id.launch_stop);
         lanRow = v.findViewById(R.id.launch_lan_row);
-        lanCopyBtn = v.findViewById(R.id.lan_copy);
-        lanMoreBtn = v.findViewById(R.id.lan_more);
-        lanSwitch = v.findViewById(R.id.lan_switch);
+        lanSubtitle = v.findViewById(R.id.launch_lan_subtitle);
         openSheetButton = v.findViewById(R.id.launch_open_sheet);
         logTextView = v.findViewById(R.id.launch_log);
         logScrollView = v.findViewById(R.id.launch_log_scroll);
@@ -99,34 +95,15 @@ public class LaunchFragment extends Fragment implements LaunchPresenter.ViewCall
             openSheetButton.setOnClickListener(x -> actions.onOpenSheetClick());
         }
 
-        if (lanMoreBtn != null) {
-            lanMoreBtn.setOnClickListener(x -> openCredentialsPage());
-        }
-
-        if (lanCopyBtn != null) {
-            lanCopyBtn.setOnClickListener(x -> copyLanAddress());
-        }
-
-        if (lanSwitch != null) {
-            boolean currentLan = requireContext().getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE)
-                    .getBoolean(Constants.KEY_LAN_MODE, false);
-            lanSwitch.setChecked(currentLan);
-            lanSwitch.setOnCheckedChangeListener((btn, isChecked) -> {
-                requireContext().getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE).edit()
-                        .putBoolean(Constants.KEY_LAN_MODE, isChecked).apply();
-                HarnessController controller = HarnessController.get(requireContext());
-                if (controller != null && controller.isWebRunning()) {
-                    if (isChecked) {
-                        LanProxyService.start(requireContext());
-                        Toast.makeText(requireContext(), "局域网服务已开启", Toast.LENGTH_SHORT).show();
-                    } else {
-                        LanProxyService.stop();
-                        Toast.makeText(requireContext(), "局域网服务已关闭", Toast.LENGTH_SHORT).show();
-                    }
-                }
-                if (presenter != null) presenter.recalculateState();
+        // 局域网连接行: 单击进入下级页面，长按复制链接
+        if (lanRow != null) {
+            lanRow.setOnClickListener(x -> openCredentialsPage());
+            lanRow.setOnLongClickListener(x -> {
+                copyLanAddress();
+                return true;
             });
         }
+        updateLanSubtitle();
 
         // 4. 端口设置与快速切换芯片
         if (portEditText != null) {
@@ -160,6 +137,12 @@ public class LaunchFragment extends Fragment implements LaunchPresenter.ViewCall
 
     private void copyLanAddress() {
         if (!isAdded()) return;
+        boolean lan = requireContext().getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE)
+                .getBoolean(Constants.KEY_LAN_MODE, false);
+        if (!lan) {
+            Toast.makeText(requireContext(), "局域网访问未授权，请单击进入设置开启", Toast.LENGTH_SHORT).show();
+            return;
+        }
         String ip = HarnessController.getLanAddress();
         if (ip != null && !ip.isEmpty()) {
             String addr = "http://" + ip + ":" + LanProxyService.LAN_PORT + "/?token="
@@ -173,9 +156,17 @@ public class LaunchFragment extends Fragment implements LaunchPresenter.ViewCall
     @Override
     public void onResume() {
         super.onResume();
+        updateLanSubtitle();
         if (presenter != null) {
             presenter.start();
         }
+    }
+
+    private void updateLanSubtitle() {
+        if (lanSubtitle == null || getContext() == null) return;
+        boolean lan = requireContext().getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE)
+                .getBoolean(Constants.KEY_LAN_MODE, false);
+        lanSubtitle.setText(lan ? "已授权·长按复制链接" : "局域网访问未授权");
     }
 
     @Override
@@ -206,9 +197,7 @@ public class LaunchFragment extends Fragment implements LaunchPresenter.ViewCall
         restartButton = null;
         stopButton = null;
         lanRow = null;
-        lanCopyBtn = null;
-        lanMoreBtn = null;
-        lanSwitch = null;
+        lanSubtitle = null;
         openSheetButton = null;
         logTextView = null;
         logScrollView = null;
@@ -303,13 +292,7 @@ public class LaunchFragment extends Fragment implements LaunchPresenter.ViewCall
         if (openSheetButton != null) {
             openSheetButton.setVisibility(View.VISIBLE);
         }
-        if (lanSwitch != null && getContext() != null) {
-            boolean currentLan = requireContext().getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE)
-                    .getBoolean(Constants.KEY_LAN_MODE, false);
-            if (lanSwitch.isChecked() != currentLan) {
-                lanSwitch.setChecked(currentLan);
-            }
-        }
+        updateLanSubtitle();
 
         // 日志刷新
         if (logTextView != null && state.logRevision != lastRenderedLogRevision && !state.logContent.isEmpty()) {

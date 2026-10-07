@@ -29,6 +29,7 @@ public class CredentialsActivity extends AppCompatActivity {
     private TextView lanAddrText;
     private TextView lanBadgeText;
     private TextView bannerText;
+    private DshaToggle lanSwitch;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -45,6 +46,25 @@ public class CredentialsActivity extends AppCompatActivity {
         lanAddrText = findViewById(R.id.cred_lan_addr);
         lanBadgeText = findViewById(R.id.cred_lan_badge);
         bannerText = findViewById(R.id.cred_banner_text);
+        lanSwitch = findViewById(R.id.cred_lan_switch);
+        if (lanSwitch != null) {
+            boolean currentLan = getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE)
+                    .getBoolean(Constants.KEY_LAN_MODE, false);
+            lanSwitch.setChecked(currentLan);
+            lanSwitch.setOnCheckedChangeListener((btn, isChecked) -> {
+                getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE).edit()
+                        .putBoolean(Constants.KEY_LAN_MODE, isChecked).apply();
+                HarnessController ctl = HarnessController.get(this);
+                if (ctl != null && ctl.isWebRunning()) {
+                    if (isChecked) {
+                        LanProxyService.start(this);
+                    } else {
+                        LanProxyService.stop();
+                    }
+                }
+                refreshData();
+            });
+        }
 
         // 复制设备桥令牌
         findViewById(R.id.cred_copy_bridge_token).setOnClickListener(v -> {
@@ -93,6 +113,9 @@ public class CredentialsActivity extends AppCompatActivity {
 
         boolean lan = getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE)
                 .getBoolean(Constants.KEY_LAN_MODE, false);
+        if (lanSwitch != null && lanSwitch.isChecked() != lan) {
+            lanSwitch.setChecked(lan);
+        }
         String ip = HarnessController.getLanAddress();
 
         if (lan && ip != null && !ip.isEmpty()) {

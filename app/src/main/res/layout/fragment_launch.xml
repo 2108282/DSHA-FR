@@ -226,7 +226,7 @@
             </LinearLayout>
         </com.deepseekharness.app.ui.ModernCardView>
 
-        <!-- 3. 三行合并卡片 (对齐设置页卡片规范: clipToOutline=true, 通栏行填充, 18dp 圆角) -->
+        <!-- 3. 模块功能卡片 (1:1 严格对齐设置页模块卡片规范: 38dp 图标盒, 66dp 分割线, 统一双行标题与右箭头) -->
         <com.deepseekharness.app.ui.ModernCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -236,88 +236,74 @@
             android:padding="0dp"
             app:cardRadius="18dp">
 
-            <!-- 局域网连接行 (padding: 14dp 16dp; 图标 20dp, 标题 15sp 加粗) -->
+            <!-- 行 1: 局域网连接 (单击进入下级凭证页, 长按复制链接) -->
             <LinearLayout
                 android:id="@+id/launch_lan_row"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
                 android:paddingHorizontal="16dp"
-                android:paddingVertical="14dp">
+                android:paddingVertical="15dp">
 
-                <ImageView
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:contentDescription="@null"
-                    android:src="@drawable/ic_wifi"
-                    app:srcCompat="@drawable/ic_wifi"
-                    app:tint="@color/primary" />
+                <FrameLayout
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:background="@drawable/bg_settings_icon_box">
 
-                <TextView
-                    android:layout_width="wrap_content"
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="局域网连接"
+                        android:src="@drawable/ic_wifi"
+                        app:tint="@color/primary" />
+                </FrameLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="12dp"
-                    android:text="局域网连接"
-                    android:textColor="@color/text"
-                    android:textSize="15sp"
-                    android:textStyle="bold" />
+                    android:layout_weight="1"
+                    android:orientation="vertical">
 
-                <View
-                    android:layout_width="0dp"
-                    android:layout_height="0dp"
-                    android:layout_weight="1" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="局域网连接"
+                        android:textColor="@color/text"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
 
-                <!-- 复制按钮 -->
-                <Button
-                    android:id="@+id/lan_copy"
-                    android:layout_width="wrap_content"
-                    android:layout_height="34dp"
-                    android:background="@drawable/m3_btn_tonal_expressive"
-                    android:gravity="center"
-                    android:minWidth="0dp"
-                    android:minHeight="0dp"
-                    android:paddingHorizontal="14dp"
-                    android:stateListAnimator="@animator/btn_press_scale"
-                    android:text="复制"
-                    android:textAllCaps="false"
-                    android:textColor="@color/primary"
-                    android:textSize="13sp"
-                    android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/launch_lan_subtitle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="1dp"
+                        android:text="局域网访问未授权"
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp" />
+                </LinearLayout>
 
-                <!-- 更多按钮 -->
-                <Button
-                    android:id="@+id/lan_more"
-                    android:layout_width="wrap_content"
-                    android:layout_height="34dp"
-                    android:layout_marginStart="8dp"
-                    android:background="@drawable/m3_btn_tonal_expressive"
-                    android:gravity="center"
-                    android:minWidth="0dp"
-                    android:minHeight="0dp"
-                    android:paddingHorizontal="14dp"
-                    android:stateListAnimator="@animator/btn_press_scale"
-                    android:text="更多"
-                    android:textAllCaps="false"
-                    android:textColor="@color/primary"
-                    android:textSize="13sp"
-                    android:textStyle="bold" />
-
-                <!-- 自绘极简胶囊开关 -->
-                <com.deepseekharness.app.ui.DshaToggle
-                    android:id="@+id/lan_switch"
-                    android:layout_width="44dp"
-                    android:layout_height="26dp"
-                    android:layout_marginStart="8dp" />
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_chevron_right"
+                    app:tint="@color/text_muted" />
             </LinearLayout>
 
-            <!-- 分隔线 1 (border-bottom: 1px solid var(- -line-soft)) -->
+            <!-- 细分割线 (避开左侧 38dp 图标盒，对齐文字边缘) -->
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
+                android:layout_marginStart="66dp"
                 android:background="@color/line_soft" />
 
-            <!-- 模型管理行 (通栏可点击, 覆盖整个按钮选中态, padding: 15dp 16dp, 图标 20dp, 15sp 加粗) -->
+            <!-- 行 2: 模型管理 -->
             <LinearLayout
                 android:id="@+id/launch_models"
                 android:layout_width="match_parent"
@@ -330,31 +316,60 @@
                 android:paddingHorizontal="16dp"
                 android:paddingVertical="15dp">
 
-                <ImageView
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:contentDescription="@null"
-                    android:src="@drawable/ic_box"
-                    app:srcCompat="@drawable/ic_box"
-                    app:tint="@color/primary" />
+                <FrameLayout
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:background="@drawable/bg_settings_icon_box">
 
-                <TextView
-                    android:layout_width="wrap_content"
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="模型管理"
+                        android:src="@drawable/ic_box"
+                        app:tint="@color/primary" />
+                </FrameLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="12dp"
-                    android:text="模型管理"
-                    android:textColor="@color/text"
-                    android:textSize="15sp"
-                    android:textStyle="bold" />
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="模型管理"
+                        android:textColor="@color/text"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="1dp"
+                        android:text="服务商·API配置"
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_chevron_right"
+                    app:tint="@color/text_muted" />
             </LinearLayout>
 
-            <!-- 分隔线 2 (border-bottom: 1px solid var(- -line-soft)) -->
+            <!-- 细分割线 (避开左侧 38dp 图标盒，对齐文字边缘) -->
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
+                android:layout_marginStart="66dp"
                 android:background="@color/line_soft" />
 
-            <!-- 快捷对话行 (通栏可点击, 覆盖整个按钮选中态, padding: 15dp 16dp, 图标 20dp, 15sp 加粗) -->
+            <!-- 行 3: 快捷对话 -->
             <LinearLayout
                 android:id="@+id/launch_open_sheet"
                 android:layout_width="match_parent"
@@ -367,22 +382,50 @@
                 android:paddingHorizontal="16dp"
                 android:paddingVertical="15dp">
 
-                <ImageView
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:contentDescription="@null"
-                    android:src="@drawable/ic_chat"
-                    app:srcCompat="@drawable/ic_chat"
-                    app:tint="@color/primary" />
+                <FrameLayout
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:background="@drawable/bg_settings_icon_box">
 
-                <TextView
-                    android:layout_width="wrap_content"
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="快捷对话"
+                        android:src="@drawable/ic_chat"
+                        app:tint="@color/primary" />
+                </FrameLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="12dp"
-                    android:text="快捷对话"
-                    android:textColor="@color/text"
-                    android:textSize="15sp"
-                    android:textStyle="bold" />
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="快捷对话"
+                        android:textColor="@color/text"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="1dp"
+                        android:text="手势响应·点击唤起"
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_chevron_right"
+                    app:tint="@color/text_muted" />
             </LinearLayout>
         </com.deepseekharness.app.ui.ModernCardView>
 
