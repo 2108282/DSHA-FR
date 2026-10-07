@@ -32,7 +32,7 @@
         <item name="android:textColorHint">@color/text_muted</item>
 
         <item name="alertDialogTheme">@style/Dialog.DSHA.Alert</item>
-        <item name="materialAlertDialogTheme">@style/Dialog.DSHA.Material</item>
+        <item name="materialAlertDialogTheme">@style/Dialog.DSHA.Alert</item>
         <item name="colorBackgroundFloating">@color/card</item>
         <item name="android:colorBackgroundFloating">@color/card</item>
         <item name="colorSurfaceContainerHigh">@color/card</item>

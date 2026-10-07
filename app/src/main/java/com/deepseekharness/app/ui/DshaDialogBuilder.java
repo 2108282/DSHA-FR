@@ -3,12 +3,14 @@ package com.deepseekharness.app.ui;
 import android.content.Context;
 import androidx.appcompat.app.AlertDialog;
 import com.deepseekharness.app.R;
-import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
-/** 所有应用内弹窗共用 Material 容器、排版、按钮和窗口动画，不接管业务监听器。 */
-public final class DshaDialogBuilder extends MaterialAlertDialogBuilder {
+/**
+ * 统一应用内弹窗排版、按钮与窗口动画，基于纯原生 AppCompat 架构，彻底脱钩 MaterialTheme 约束。
+ */
+public class DshaDialogBuilder extends AlertDialog.Builder {
+
   public DshaDialogBuilder(Context context) {
-    super(context, R.style.Dialog_DSHA_Material);
+    super(context, R.style.Dialog_DSHA_Alert);
   }
 
   @Override
@@ -17,8 +19,6 @@ public final class DshaDialogBuilder extends MaterialAlertDialogBuilder {
     if (dialog.getWindow() != null) {
       android.view.Window window = dialog.getWindow();
       window.setWindowAnimations(R.style.Animation_DSHA_Dialog);
-      // 只在窗口第一次真正显示后设置尺寸。持续监听布局会在动画、输入法和
-      // CardSheet 的底部测量期间反复调用 setLayout，导致 Language 首帧停顿。
       window
           .getDecorView()
           .post(
@@ -33,7 +33,6 @@ public final class DshaDialogBuilder extends MaterialAlertDialogBuilder {
   private void sizeOnce(android.view.Window window, android.view.View view) {
     android.view.WindowManager.LayoutParams attributes = window.getAttributes();
     int gravity = attributes.gravity;
-    // CardSheet.show() 在 show() 后同步设置底部和 MATCH_PARENT；不能把它改回中心窄窗。
     if ((gravity & android.view.Gravity.VERTICAL_GRAVITY_MASK) == android.view.Gravity.BOTTOM
         || attributes.width == android.view.ViewGroup.LayoutParams.MATCH_PARENT) return;
     {
