@@ -256,7 +256,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
         }
 
         presenter.recalculateState();
-        MonetEngine.applyToViewTree(v, MonetEngine.resolveCurrentPalette(requireContext()));
+        MonetEngine.applyToViewTree(view, MonetEngine.resolveCurrentPalette(requireContext()));
     }
 
     @Override
