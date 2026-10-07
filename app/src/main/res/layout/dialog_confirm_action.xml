@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:clipChildren="false"
+    android:clipToPadding="false"
+    android:padding="20dp">
+
+    <!-- 弹窗主体卡片 (纯 Skia ModernCardView: 20dp 圆角, 硬件加速微阴影) -->
+    <com.deepseekharness.app.ui.ModernCardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp"
+        app:cardRadius="20dp">
+
+        <!-- 1. 顶部标题行: 40dp 浅蓝圆角图标盒 + 18sp 粗体标题 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <FrameLayout
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_settings_icon_box">
+
+                <ImageView
+                    android:id="@+id/dialogActionIcon"
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_check_circle"
+                    app:tint="@color/primary" />
+            </FrameLayout>
+
+            <TextView
+                android:id="@+id/dialogActionTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:text="确认执行操作？"
+                android:textColor="@color/text"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- 2. 说明信息槽 (对齐插件安装弹窗: bg_input 半透槽) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:background="@drawable/bg_input"
+            android:orientation="vertical"
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="12dp">
+
+            <TextView
+                android:id="@+id/dialogActionMessage"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:lineSpacingMultiplier="1.4"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <!-- 3. 底部双操作按钮行 (44dp, 间距 10dp) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnActionCancel"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_weight="1"
+                android:background="@drawable/m3_btn_tonal_expressive"
+                android:stateListAnimator="@animator/btn_press_scale"
+                android:text="取消"
+                android:textAllCaps="false"
+                android:textColor="@color/primary"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnActionConfirm"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_marginStart="10dp"
+                android:layout_weight="1.2"
+                android:background="@drawable/m3_btn_primary_expressive"
+                android:stateListAnimator="@animator/btn_press_scale"
+                android:text="开始修复"
+                android:textAllCaps="false"
+                android:textColor="@color/accent_on"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </com.deepseekharness.app.ui.ModernCardView>
+
+</FrameLayout>

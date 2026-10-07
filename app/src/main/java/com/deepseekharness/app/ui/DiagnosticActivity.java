@@ -2,17 +2,19 @@ package com.deepseekharness.app.ui;
 
 import android.os.Build;
 import android.os.Bundle;
+import android.view.LayoutInflater;
 import android.view.View;
+import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.lifecycle.ViewModelProvider;
-import com.deepseekharness.app.core.HarnessController;
 import com.deepseekharness.app.HttpShellService;
 import com.deepseekharness.app.R;
 import com.deepseekharness.app.core.DiagnosticRepository;
+import com.deepseekharness.app.core.HarnessController;
 import com.deepseekharness.app.ui.contract.DiagnosticActions;
 import com.deepseekharness.app.ui.contract.DiagnosticUiState;
 
@@ -107,13 +109,54 @@ public final class DiagnosticActivity extends AppCompatActivity implements Diagn
         overridePendingTransition(R.anim.fragment_pop_enter, R.anim.fragment_pop_exit);
     }
 
+    private void showActionConfirmDialog(String title, String message, int iconRes, Runnable onConfirm) {
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_confirm_action, null);
+        AlertDialog dialog = new DshaDialogBuilder(this).setView(dialogView).create();
+
+        ImageView imgIcon = dialogView.findViewById(R.id.dialogActionIcon);
+        TextView tvTitle = dialogView.findViewById(R.id.dialogActionTitle);
+        TextView tvMessage = dialogView.findViewById(R.id.dialogActionMessage);
+        Button btnCancel = dialogView.findViewById(R.id.btnActionCancel);
+        Button btnConfirm = dialogView.findViewById(R.id.btnActionConfirm);
+
+        if (imgIcon != null) imgIcon.setImageResource(iconRes);
+        if (tvTitle != null) tvTitle.setText(title);
+        if (tvMessage != null) tvMessage.setText(message);
+
+        if (btnCancel != null) btnCancel.setOnClickListener(v -> dialog.dismiss());
+        if (btnConfirm != null) {
+            btnConfirm.setOnClickListener(v -> {
+                dialog.dismiss();
+                if (onConfirm != null) onConfirm.run();
+            });
+        }
+
+        dialog.show();
+    }
+
     @Override
     public void onRepairClick() {
-        if (repository != null) repository.repairNetworkTools();
+        showActionConfirmDialog(
+                "修复证书与网络环境？",
+                "将重新部署系统根证书到标准路径 (/etc/ssl 与 /usr/lib/ssl)，修复 Python SSL 握手与 npm 镜像网络连接。",
+                R.drawable.ic_wifi,
+                () -> {
+                    if (repository != null) repository.repairNetworkTools();
+                }
+        );
     }
 
     @Override
     public void onRepairBridgeClick() {
+        showActionConfirmDialog(
+                "修复网桥与存储环境？",
+                "将重新建立内部存储直通链接 (/root/内部存储)、修复公共权威 DNS 解析，并重新同步 3095 设备桥通信凭据。",
+                R.drawable.ic_settings_sliders,
+                this::executeRepairBridge
+        );
+    }
+
+    private void executeRepairBridge() {
         HarnessController controller = HarnessController.get(this);
         if (controller == null) {
             Toast.makeText(this, "未初始化核心控制器", Toast.LENGTH_SHORT).show();
@@ -126,7 +169,6 @@ public final class DiagnosticActivity extends AppCompatActivity implements Diagn
                 .show();
 
         new Thread(() -> {
-            StringBuilder log = new StringBuilder();
             try {
                 new java.io.File("/sdcard/Download/DSHA/工作区").mkdirs();
             } catch (Throwable ignored) {}
@@ -136,18 +178,13 @@ public final class DiagnosticActivity extends AppCompatActivity implements Diagn
                         + "ln -sfn /sdcard/Download/DSHA /root/内部存储 2>/dev/null || true; "
                         + "chmod 777 /root/.dsh 2>/dev/null || true; echo OK";
                 controller.proot().execAndRead(cmd1, 10_000);
-                log.append("· 存储直通与工作区已就绪\n");
 
                 String cmd2 = "mkdir -p /etc 2>/dev/null; "
                         + "printf 'nameserver 223.5.5.5\\nnameserver 119.29.29.29\\nnameserver 1.1.1.1\\n' > /etc/resolv.conf 2>/dev/null; echo OK";
                 controller.proot().execAndRead(cmd2, 10_000);
-                log.append("· 权威公共 DNS 已更新\n");
 
                 HttpShellService.syncTokenToRootfsSync();
-                log.append("· 3095 设备桥令牌已同步\n");
-            } catch (Throwable t) {
-                log.append("· 修复异常: ").append(t.getMessage()).append("\n");
-            }
+            } catch (Throwable ignored) {}
 
             runOnUiThread(() -> {
                 if (!isFinishing()) {
@@ -161,6 +198,15 @@ public final class DiagnosticActivity extends AppCompatActivity implements Diagn
 
     @Override
     public void onRepairPluginsClick() {
+        showActionConfirmDialog(
+                "修复插件丢失问题？",
+                "将部署并执行 /usr/local/bin/dsha-heal 智能自愈脚本，全盘扫描所有扩展插件，自动重挂软链并补齐 Cordis 配置清单。",
+                R.drawable.ic_plugins,
+                this::executeRepairPlugins
+        );
+    }
+
+    private void executeRepairPlugins() {
         HarnessController controller = HarnessController.get(this);
         if (controller == null) {
             Toast.makeText(this, "未初始化核心控制器", Toast.LENGTH_SHORT).show();
@@ -168,43 +214,70 @@ public final class DiagnosticActivity extends AppCompatActivity implements Diagn
         }
         AlertDialog progress = new AlertDialog.Builder(this)
                 .setTitle("正在自愈")
-                .setMessage("正在重新扫描并建立插件软链接…")
+                .setMessage("正在执行智能插件找回与自愈脚本…")
                 .setCancelable(false)
                 .show();
 
         new Thread(() -> {
-            try {
-                String cmd = "mkdir -p /root/.dsh/profiles/web/node_modules /usr/local/lib/node_modules 2>/dev/null || true; "
-                        + "for p in /root/dsha-*; do [ -d \"$p\" ] || continue; "
-                        + "  bname=$(basename \"$p\"); "
-                        + "  case \"$bname\" in dsha-repo|dsha-builtin.txt|*-installed) continue ;; esac; "
-                        + "  pname=\"dsh-${bname#dsha-}\"; "
-                        + "  ln -sfn \"$p\" \"/root/.dsh/profiles/web/node_modules/$pname\" 2>/dev/null || true; "
-                        + "  ln -sfn \"$p\" \"/usr/local/lib/node_modules/$pname\" 2>/dev/null || true; "
-                        + "done; "
-                        + "if [ -d /root/.dsh/plugin-src ]; then "
-                        + "  for p in /root/.dsh/plugin-src/*; do [ -d \"$p\" ] || continue; "
-                        + "    bname=$(basename \"$p\"); "
-                        + "    if [ \"${bname:0:1}\" = \"@\" ]; then "
-                        + "      mkdir -p \"/root/.dsh/profiles/web/node_modules/$bname\" \"/usr/local/lib/node_modules/$bname\" 2>/dev/null || true; "
-                        + "      for sub in \"$p\"/*; do [ -d \"$sub\" ] || continue; "
-                        + "        subname=$(basename \"$sub\"); "
-                        + "        ln -sfn \"$sub\" \"/root/.dsh/profiles/web/node_modules/$bname/$subname\" 2>/dev/null || true; "
-                        + "        ln -sfn \"$sub\" \"/usr/local/lib/node_modules/$bname/$subname\" 2>/dev/null || true; "
-                        + "      done; "
-                        + "    else "
-                        + "      ln -sfn \"$p\" \"/root/.dsh/profiles/web/node_modules/$bname\" 2>/dev/null || true; "
-                        + "      ln -sfn \"$p\" \"/usr/local/lib/node_modules/$bname\" 2>/dev/null || true; "
-                        + "    fi; "
-                        + "  done; "
-                        + "fi; echo OK";
-                controller.proot().execAndRead(cmd, 15_000);
-            } catch (Throwable ignored) {}
+            String healScript = "cat << 'EOF' > /usr/local/bin/dsha-heal\n"
+                    + "#!/bin/bash\n"
+                    + "python3 -c \"\n"
+                    + "import os, json\n"
+                    + "search_paths = ['/root/.dsh/plugin-src', '/root', '/root/.dsh', '/usr/local/lib/node_modules', '/root/.dsh/profiles/web/node_modules', '/sdcard/Download/DSHA']\n"
+                    + "pkg_f = '/root/.dsh/profiles/web/package.json'\n"
+                    + "manifest = json.load(open(pkg_f))\n"
+                    + "bundles = manifest['dsh']['profile']['bundles']\n"
+                    + "deps = manifest['dependencies']\n"
+                    + "nm = '/root/.dsh/profiles/web/node_modules'\n"
+                    + "gnm = '/usr/local/lib/node_modules'\n"
+                    + "found = {}\n"
+                    + "for base in search_paths:\n"
+                    + "    if not os.path.exists(base): continue\n"
+                    + "    for root, dirs, files in os.walk(base):\n"
+                    + "        if 'package.json' in files:\n"
+                    + "            try:\n"
+                    + "                data = json.load(open(os.path.join(root, 'package.json')))\n"
+                    + "                name = data.get('name')\n"
+                    + "                if name and ('dsh' in name or (data.get('dsh') or {}).get('bundle') or 'cordis.patch.yml' in files):\n"
+                    + "                    if not name.startswith('@deepseek-ai/dsh-') or name in ['@deepseek-ai/dsh-im']:\n"
+                    + "                        if name not in found and root != '/root/.dsh/profiles/web':\n"
+                    + "                            found[name] = root\n"
+                    + "            except Exception: pass\n"
+                    + "        dirs[:] = [d for d in dirs if d not in ['.git', 'node_modules', '.pnpm', 'dist']]\n"
+                    + "added = []\n"
+                    + "for name, path in sorted(found.items()):\n"
+                    + "    if name not in bundles:\n"
+                    + "        bundles.append(name)\n"
+                    + "        deps[name] = 'link:' + path\n"
+                    + "        added.append(name)\n"
+                    + "    for link_base in [nm, gnm]:\n"
+                    + "        dest = os.path.join(link_base, name)\n"
+                    + "        os.makedirs(os.path.dirname(dest), exist_ok=True)\n"
+                    + "        if os.path.lexists(dest):\n"
+                    + "            try: os.remove(dest)\n"
+                    + "            except: pass\n"
+                    + "        try: os.symlink(path, dest)\n"
+                    + "        except: pass\n"
+                    + "json.dump(manifest, open(pkg_f, 'w'), indent=2)\n"
+                    + "print('✓ 扫描完成！已登记并就绪的所有插件:', [x for x in bundles if not x.startswith('@deepseek-ai/')])\n"
+                    + "if added: print('★ 本次新找回并补齐的插件:', added)\n"
+                    + "\"\n"
+                    + "EOF\n"
+                    + "chmod +x /usr/local/bin/dsha-heal\n"
+                    + "/usr/local/bin/dsha-heal\n";
 
+            String result = "";
+            try {
+                result = controller.proot().execAndRead(healScript, 30_000);
+            } catch (Throwable t) {
+                result = "执行异常: " + t.getMessage();
+            }
+
+            final String finalResult = result;
             runOnUiThread(() -> {
                 if (!isFinishing()) {
                     progress.dismiss();
-                    Toast.makeText(this, "全部插件软链接已完成校验与自愈", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "插件丢失自愈执行完成", Toast.LENGTH_SHORT).show();
                     if (repository != null) repository.generate();
                 }
             });
