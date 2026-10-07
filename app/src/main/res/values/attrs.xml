@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <declare-styleable name="ModernCardView">
+        <attr name="cardRadius" format="dimension" />
+        <attr name="cardOverlayColor" format="color" />
+        <attr name="cardStrokeColor" format="color" />
+        <attr name="cardShadowColor" format="color" />
+    </declare-styleable>
+</resources>

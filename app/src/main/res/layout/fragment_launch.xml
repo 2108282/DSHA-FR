@@ -9,6 +9,8 @@
     <androidx.core.widget.NestedScrollView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:clipChildren="false"
+        android:clipToPadding="false"
         android:fillViewport="true"
         android:overScrollMode="never"
         android:scrollbars="none">
@@ -18,22 +20,20 @@
             android:id="@+id/launch_home"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            android:clipChildren="false"
+            android:clipToPadding="false"
             android:orientation="vertical"
             android:paddingHorizontal="16dp"
             android:paddingTop="14dp"
             android:paddingBottom="14dp">
 
-        <!-- 1. 状态卡片 (Status Card: padding 20px, border-radius 24px, 柔和双层微阴影与精致轮廓) -->
-        <LinearLayout
+        <!-- 1. 状态卡片 (Status Card: padding 20px, border-radius 24px, Skia 双层数学阴影) -->
+        <com.deepseekharness.app.ui.ModernCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="@drawable/m3_card_expressive_hero"
-            android:elevation="4dp"
             android:orientation="vertical"
-            android:outlineAmbientShadowColor="#151A2230"
-            android:outlineProvider="background"
-            android:outlineSpotShadowColor="#101A2230"
-            android:padding="20dp">
+            android:padding="20dp"
+            app:cardRadius="24dp">
 
             <!-- 状态标题行 -->
             <LinearLayout
@@ -77,21 +77,17 @@
                 android:layout_width="match_parent"
                 android:layout_height="4dp"
                 android:layout_marginTop="14dp" />
-        </LinearLayout>
+        </com.deepseekharness.app.ui.ModernCardView>
 
-        <!-- 2. 端口与启停卡片 (padding: 16px 18px; border-radius: 18px; 双层微阴影与精致轮廓) -->
-        <LinearLayout
+        <!-- 2. 端口与启停卡片 (padding: 16px 18px; border-radius: 18px; Skia 双层数学阴影) -->
+        <com.deepseekharness.app.ui.ModernCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:background="@drawable/m3_card_expressive"
-            android:elevation="4dp"
             android:orientation="vertical"
-            android:outlineAmbientShadowColor="#151A2230"
-            android:outlineProvider="background"
-            android:outlineSpotShadowColor="#101A2230"
             android:paddingHorizontal="18dp"
-            android:paddingVertical="16dp">
+            android:paddingVertical="16dp"
+            app:cardRadius="18dp">
 
             <!-- 端口选择行 -->
             <LinearLayout
@@ -212,21 +208,17 @@
                     android:textSize="15sp"
                     android:textStyle="bold" />
             </LinearLayout>
-        </LinearLayout>
+        </com.deepseekharness.app.ui.ModernCardView>
 
-        <!-- 3. 三行合并卡片 (padding: 6px 14px; border-radius: 18px; 双层微阴影与精致轮廓) -->
-        <LinearLayout
+        <!-- 3. 三行合并卡片 (padding: 6px 14px; border-radius: 18px; Skia 双层数学阴影) -->
+        <com.deepseekharness.app.ui.ModernCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:background="@drawable/m3_card_expressive"
-            android:elevation="4dp"
             android:orientation="vertical"
-            android:outlineAmbientShadowColor="#151A2230"
-            android:outlineProvider="background"
-            android:outlineSpotShadowColor="#101A2230"
             android:paddingHorizontal="14dp"
-            android:paddingVertical="6dp">
+            android:paddingVertical="6dp"
+            app:cardRadius="18dp">
 
             <!-- 局域网连接行 (padding: 10px 0; gap: 10px) -->
             <LinearLayout
@@ -376,22 +368,17 @@
                     android:textSize="13sp"
                     android:textStyle="bold" />
             </LinearLayout>
-        </LinearLayout>
+        </com.deepseekharness.app.ui.ModernCardView>
 
-        <!-- 4. 运行追踪日志卡片 (border-radius: 18px; min-height: 120px; 双层微阴影与精致轮廓) -->
-        <LinearLayout
+        <!-- 4. 运行追踪日志卡片 (border-radius: 18px; min-height: 120px; Skia 双层数学阴影) -->
+        <com.deepseekharness.app.ui.ModernCardView
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_marginTop="12dp"
             android:layout_weight="1"
-            android:background="@drawable/m3_card_expressive"
-            android:clipToOutline="true"
-            android:elevation="4dp"
             android:minHeight="120dp"
             android:orientation="vertical"
-            android:outlineAmbientShadowColor="#151A2230"
-            android:outlineProvider="background"
-            android:outlineSpotShadowColor="#101A2230">
+            app:cardRadius="18dp">
 
             <!-- 头部 (padding: 12px 16px; border-bottom: 1px solid var(-line-soft)) -->
             <LinearLayout
@@ -449,7 +436,7 @@
                     android:textIsSelectable="true"
                     android:textSize="12sp" />
             </ScrollView>
-        </LinearLayout>
+        </com.deepseekharness.app.ui.ModernCardView>
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>
 
