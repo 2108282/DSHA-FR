@@ -253,18 +253,17 @@ public final class ThemeNotifyFragment extends Fragment {
             if (isSelected) {
                 tv.setTypeface(null, android.graphics.Typeface.BOLD);
             }
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
-            item.addView(tv, lp);
-
-            // ★ 核心功能：每个选项右侧展示该风格对应的 3 个主色小圆圈！
+            // ★ 核心功能：3 个主色小圆圈放在最左侧！
             int[] previewColors = SheetSettingsFragment.getStylePreviewColors(key, seedColor);
             View dotsView = createDotsView(context, previewColors);
             LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            dlp.setMarginStart(dp(8));
-            dlp.setMarginEnd(dp(10));
+            dlp.setMarginEnd(dp(12));
             dotsView.setLayoutParams(dlp);
             item.addView(dotsView);
+
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
+            item.addView(tv, lp);
 
             if (isSelected) {
                 ImageView check = new ImageView(context);

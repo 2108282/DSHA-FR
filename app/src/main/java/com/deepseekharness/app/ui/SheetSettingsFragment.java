@@ -382,18 +382,17 @@ public class SheetSettingsFragment extends Fragment {
             }
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
             label.setLayoutParams(lp);
-            item.addView(label);
-
             if (showPaletteDots) {
                 int[] previewColors = getStylePreviewColors(key, seedColor);
                 View dotsView = createPaletteDotsView(context, previewColors);
                 LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                dlp.setMarginStart(dp(context, 10));
                 dlp.setMarginEnd(dp(context, 12));
                 dotsView.setLayoutParams(dlp);
                 item.addView(dotsView);
             }
+
+            item.addView(label);
 
             // 选中项右侧蓝色对勾 ✓（1:1 对齐截图）
             if (isSelected) {

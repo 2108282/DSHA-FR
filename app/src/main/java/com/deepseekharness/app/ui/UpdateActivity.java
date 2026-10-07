@@ -1,5 +1,8 @@
 package com.deepseekharness.app.ui;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
@@ -14,35 +17,40 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.content.FileProvider;
-import androidx.lifecycle.ViewModelProvider;
 
 import com.deepseekharness.app.BuildConfig;
 import com.deepseekharness.app.R;
-import com.deepseekharness.app.core.UpdateRepository;
-import com.deepseekharness.app.ui.contract.UpdateActions;
-import com.deepseekharness.app.ui.contract.UpdateUiState;
-import com.deepseekharness.app.util.UpdatePolicy;
 
-import java.util.Locale;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
-public final class UpdateActivity extends AppCompatActivity implements UpdateActions {
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
 
-    private UpdateRepository repository;
-    private final UpdateActions actions = this;
-    private boolean resumeInstall;
+public final class UpdateActivity extends AppCompatActivity {
+
+    private static final String URL_DSHA_RELEASES_API = "https://api.github.com/repos/2108282/DSHA-FR/releases?per_page=10";
+    private static final String URL_DSHA_RELEASES_PAGE = "https://github.com/2108282/DSHA-FR/releases";
+
+    private static final String URL_CORE_RELEASES_API = "https://api.github.com/repos/deepseek-ai/deepseek-harness/releases?per_page=5";
+    private static final String URL_CORE_RELEASES_PAGE = "https://github.com/deepseek-ai/deepseek-harness/releases";
 
     private TextView statusView;
     private TextView notesView;
     private ProgressBar progressBar;
-    private TextView bytesView;
-    private View checkBtn;
-    private View downloadBtn;
-    private View installBtn;
-    private View cancelBtn;
     private RadioGroup channelsGroup;
     private RadioButton stableRadio;
     private RadioButton previewRadio;
+    private Button browserBtn;
+    private View coreActionsLayout;
+    private Button copyCmdBtn;
+    private Button copyMirrorCmdBtn;
+
+    private boolean isCoreChannel = false;
+    private String currentBrowserUrl = URL_DSHA_RELEASES_PAGE;
+    private String latestCoreVersion = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -60,7 +68,7 @@ public final class UpdateActivity extends AppCompatActivity implements UpdateAct
             } catch (Throwable ignored) { }
         }
 
-        // 顶栏日夜间切换
+        // 顶栏日夜间纯图标切换 (白天显示太阳，黑夜显示月亮，零文字)
         View themeBtn = findViewById(R.id.btn_theme);
         ImageView themeIcon = findViewById(R.id.img_theme_icon);
         if (themeBtn != null && themeIcon != null) {
@@ -70,175 +78,207 @@ public final class UpdateActivity extends AppCompatActivity implements UpdateAct
             themeBtn.setOnClickListener(v -> ThemeController.toggle(this));
         }
 
-        repository = new ViewModelProvider(this).get(UpdateRepository.class);
-
-        ((TextView) findViewById(R.id.update_current)).setText("当前 " + BuildConfig.VERSION_NAME + " · 版本码 " + BuildConfig.VERSION_CODE
+        ((TextView) findViewById(R.id.update_current)).setText("当前安装版本：" + BuildConfig.VERSION_NAME + " · 版本码 " + BuildConfig.VERSION_CODE
                 + (BuildConfig.LOW_ANDROID ? " · 兼容版" : " · 标准版"));
 
         statusView = findViewById(R.id.update_status);
         notesView = findViewById(R.id.update_notes);
         progressBar = findViewById(R.id.update_progress);
-        bytesView = findViewById(R.id.update_bytes);
-        checkBtn = findViewById(R.id.update_check);
-        downloadBtn = findViewById(R.id.update_download);
-        installBtn = findViewById(R.id.update_install);
-        cancelBtn = findViewById(R.id.update_cancel);
         channelsGroup = findViewById(R.id.update_channels);
         stableRadio = findViewById(R.id.update_stable);
         previewRadio = findViewById(R.id.update_preview);
+        browserBtn = findViewById(R.id.update_browser);
+        coreActionsLayout = findViewById(R.id.layout_core_actions);
+        copyCmdBtn = findViewById(R.id.update_copy_cmd);
+        copyMirrorCmdBtn = findViewById(R.id.update_copy_mirror_cmd);
 
-        boolean isPreview = UpdatePolicy.PREVIEW.equals(repository.channel());
-        channelsGroup.check(isPreview ? R.id.update_preview : R.id.update_stable);
-        updateRadioStyles(isPreview);
+        findViewById(R.id.update_back).setOnClickListener(v -> finish());
+
+        // 默认选中客户端与模块 (Stable)
+        channelsGroup.check(R.id.update_stable);
+        updateRadioStyles(false);
 
         channelsGroup.setOnCheckedChangeListener((g, id) -> {
-            boolean prev = (id == R.id.update_preview);
-            updateRadioStyles(prev);
-            actions.onChannelSelect(prev);
+            boolean isCore = (id == R.id.update_preview);
+            isCoreChannel = isCore;
+            updateRadioStyles(isCore);
+            loadReleaseData(isCore);
         });
 
-        findViewById(R.id.update_back).setOnClickListener(v -> actions.onBackClick());
-        checkBtn.setOnClickListener(v -> actions.onCheckClick());
-        downloadBtn.setOnClickListener(v -> actions.onDownloadClick());
-        cancelBtn.setOnClickListener(v -> actions.onCancelClick());
-        installBtn.setOnClickListener(v -> actions.onInstallClick());
-        findViewById(R.id.update_browser).setOnClickListener(v -> actions.onOpenBrowserClick());
+        browserBtn.setOnClickListener(v -> openBrowser(currentBrowserUrl));
 
-        repository.state().observe(this, state -> {
-            String notes = state.release == null
-                    ? "稳定通道只接收稳定版；预览通道也接收后续稳定版。自动匹配当前高/低版本，版本码不增加时不会提示更新。"
-                    : state.release.version + " · " + String.format(Locale.ROOT, "%.2f MiB", state.release.bytes / 1048576.0) + "\n\n" + state.release.notes;
-            int pct = state.total > 0 ? (int) (state.downloaded * 100 / state.total) : 0;
-            String bytes = state.total > 0 ? String.format(Locale.ROOT, "%.1f / %.1f MiB", state.downloaded / 1048576.0, state.total / 1048576.0) : "";
+        if (copyCmdBtn != null) {
+            copyCmdBtn.setOnClickListener(v -> {
+                if (latestCoreVersion.isEmpty()) {
+                    Toast.makeText(this, "正在拉取核心版本号，请稍候…", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                String cmd = "npm install -g @deepseek-ai/dsh@" + latestCoreVersion;
+                copyToClipboard("官方更新命令", cmd);
+                Toast.makeText(this, "已复制官方更新命令：\n" + cmd, Toast.LENGTH_SHORT).show();
+            });
+        }
 
-            render(new UpdateUiState(
-                    state.message,
-                    notes,
-                    state.busy,
-                    state.total <= 0,
-                    pct,
-                    bytes,
-                    !state.busy,
-                    !state.busy && state.release != null,
-                    !state.busy && state.apk != null
-            ));
-        });
+        if (copyMirrorCmdBtn != null) {
+            copyMirrorCmdBtn.setOnClickListener(v -> {
+                if (latestCoreVersion.isEmpty()) {
+                    Toast.makeText(this, "正在拉取核心版本号，请稍候…", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                String cmd = "npm install -g @deepseek-ai/dsh@" + latestCoreVersion + " --registry=https://registry.npmmirror.com";
+                copyToClipboard("国内源更新命令", cmd);
+                Toast.makeText(this, "已复制国内源更新命令：\n" + cmd, Toast.LENGTH_SHORT).show();
+            });
+        }
 
-        if (savedInstanceState == null) repository.check();
+        // 首次进入加载客户端与模块发布信息
+        loadReleaseData(false);
     }
 
-    private void updateRadioStyles(boolean isPreview) {
+    private void updateRadioStyles(boolean isCore) {
         if (stableRadio != null && previewRadio != null) {
-            stableRadio.setBackgroundResource(!isPreview ? R.drawable.bg_tab_on : R.drawable.bg_tab);
-            stableRadio.setTextColor(getColor(!isPreview ? R.color.primary : R.color.text_secondary));
-            previewRadio.setBackgroundResource(isPreview ? R.drawable.bg_tab_on : R.drawable.bg_tab);
-            previewRadio.setTextColor(getColor(isPreview ? R.color.primary : R.color.text_secondary));
+            stableRadio.setBackgroundResource(!isCore ? R.drawable.bg_tab_on : R.drawable.bg_tab);
+            stableRadio.setTextColor(getColor(!isCore ? R.color.primary : R.color.text_secondary));
+            previewRadio.setBackgroundResource(isCore ? R.drawable.bg_tab_on : R.drawable.bg_tab);
+            previewRadio.setTextColor(getColor(isCore ? R.color.primary : R.color.text_secondary));
         }
     }
 
-    private void render(UpdateUiState state) {
-        if (statusView != null) statusView.setText(state.statusMessage);
-        if (notesView != null) notesView.setText(state.notesText);
-        if (progressBar != null) {
-            progressBar.setVisibility(state.isBusy ? View.VISIBLE : View.GONE);
-            progressBar.setIndeterminate(state.isIndeterminate);
-            if (!state.isIndeterminate) progressBar.setProgress(state.progressPercent);
+    private void loadReleaseData(boolean isCore) {
+        if (progressBar != null) progressBar.setVisibility(View.VISIBLE);
+        if (statusView != null) statusView.setText(isCore ? "正在拉取原生 DSH 核心最新 Release…" : "正在拉取客户端最新正式 Release…");
+        if (notesView != null) notesView.setText("");
+
+        if (coreActionsLayout != null) {
+            coreActionsLayout.setVisibility(isCore ? View.VISIBLE : View.GONE);
         }
-        if (bytesView != null) {
-            bytesView.setVisibility(state.bytesText.isEmpty() ? View.GONE : View.VISIBLE);
-            bytesView.setText(state.bytesText);
-        }
-        if (checkBtn != null) {
-            checkBtn.setEnabled(state.isCheckEnabled);
-            checkBtn.setVisibility(!state.isInstallEnabled ? View.VISIBLE : View.GONE);
-        }
-        if (downloadBtn != null) {
-            downloadBtn.setEnabled(state.isDownloadEnabled);
-            downloadBtn.setVisibility(state.isDownloadEnabled ? View.VISIBLE : View.GONE);
-        }
-        if (installBtn != null) {
-            installBtn.setEnabled(state.isInstallEnabled);
-            installBtn.setVisibility(state.isInstallEnabled ? View.VISIBLE : View.GONE);
-        }
-        if (cancelBtn != null) cancelBtn.setVisibility(state.isBusy ? View.VISIBLE : View.GONE);
-        if (channelsGroup != null) {
-            for (int i = 0; i < channelsGroup.getChildCount(); i++) {
-                channelsGroup.getChildAt(i).setEnabled(!state.isBusy);
+
+        new Thread(() -> {
+            String apiUrl = isCore ? URL_CORE_RELEASES_API : URL_DSHA_RELEASES_API;
+            String fallbackUrl = isCore ? URL_CORE_RELEASES_PAGE : URL_DSHA_RELEASES_PAGE;
+
+            HttpURLConnection conn = null;
+            try {
+                URL url = new URL(apiUrl);
+                conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("GET");
+                conn.setRequestProperty("User-Agent", "DSHA-Client");
+                conn.setRequestProperty("Accept", "application/vnd.github.v3+json");
+                conn.setConnectTimeout(10000);
+                conn.setReadTimeout(15000);
+
+                int code = conn.getResponseCode();
+                if (code >= 200 && code < 300) {
+                    BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                    StringBuilder sb = new StringBuilder();
+                    String line;
+                    while ((line = reader.readLine()) != null) sb.append(line);
+                    reader.close();
+
+                    JSONArray releases = new JSONArray(sb.toString());
+                    JSONObject target = null;
+
+                    if (!isCore) {
+                        // 通道 1: 客户端与模块 -> 过滤排除预览版 (prerelease == false)
+                        for (int i = 0; i < releases.length(); i++) {
+                            JSONObject r = releases.getJSONObject(i);
+                            if (!r.optBoolean("prerelease", false)) {
+                                target = r;
+                                break;
+                            }
+                        }
+                        if (target == null && releases.length() > 0) {
+                            target = releases.getJSONObject(0);
+                        }
+                    } else {
+                        // 通道 2: 原生 DSH 核心 -> 包含预览版，直接取最新第一项
+                        if (releases.length() > 0) {
+                            target = releases.getJSONObject(0);
+                        }
+                    }
+
+                    if (target != null) {
+                        final String tagName = target.optString("tag_name", "");
+                        final String title = target.optString("name", tagName);
+                        final String body = target.optString("body", "暂无详细发布说明。");
+                        final String pageUrl = target.optString("html_url", fallbackUrl);
+
+                        final String parsedVersion;
+                        if (isCore) {
+                            String vStr = tagName;
+                            if (vStr.startsWith("dsh-v")) vStr = vStr.substring(5);
+                            else if (vStr.startsWith("dsh-")) vStr = vStr.substring(4);
+                            else if (vStr.startsWith("v")) vStr = vStr.substring(1);
+                            parsedVersion = vStr.isEmpty() ? tagName : vStr;
+                        } else {
+                            parsedVersion = tagName;
+                        }
+
+                        runOnUiThread(() -> {
+                            if (isFinishing()) return;
+                            if (progressBar != null) progressBar.setVisibility(View.GONE);
+                            currentBrowserUrl = pageUrl;
+
+                            if (isCore) {
+                                latestCoreVersion = parsedVersion;
+                                if (statusView != null) {
+                                    statusView.setText("DSH 核心最新发布：" + tagName);
+                                }
+                                if (notesView != null) {
+                                    notesView.setText("【版本】 " + title + "\n【动态版本号】 " + parsedVersion + "\n\n" + body);
+                                }
+                            } else {
+                                if (statusView != null) {
+                                    statusView.setText("客户端最新正式版：" + tagName);
+                                }
+                                if (notesView != null) {
+                                    notesView.setText("【标题】 " + title + "\n\n" + body);
+                                }
+                            }
+                        });
+                        return;
+                    }
+                }
+                throw new Exception("HTTP " + code);
+            } catch (Throwable t) {
+                runOnUiThread(() -> {
+                    if (isFinishing()) return;
+                    if (progressBar != null) progressBar.setVisibility(View.GONE);
+                    currentBrowserUrl = fallbackUrl;
+                    if (statusView != null) {
+                        statusView.setText("拉取 Release 失败（可能受 GitHub API 限制）");
+                    }
+                    if (notesView != null) {
+                        notesView.setText("错误信息：" + t.getMessage() + "\n\n可点击下方「在浏览器查看」按钮直达 GitHub Releases 网页浏览与下载。");
+                    }
+                });
+            } finally {
+                if (conn != null) conn.disconnect();
             }
+        }, "fetch-releases").start();
+    }
+
+    private void openBrowser(String url) {
+        try {
+            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            startActivity(intent);
+        } catch (Throwable t) {
+            Toast.makeText(this, "无法调用系统浏览器: " + t.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
 
-    @Override
-    public void onBackClick() {
-        finish();
+    private void copyToClipboard(String label, String text) {
+        try {
+            ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            if (cm != null) {
+                cm.setPrimaryClip(ClipData.newPlainText(label, text));
+            }
+        } catch (Throwable ignored) {}
     }
 
     @Override
     public void finish() {
         super.finish();
         overridePendingTransition(R.anim.fragment_pop_enter, R.anim.fragment_pop_exit);
-    }
-
-    @Override
-    public void onChannelSelect(boolean isPreview) {
-        if (repository != null) {
-            repository.setChannel(isPreview ? UpdatePolicy.PREVIEW : UpdatePolicy.STABLE);
-        }
-    }
-
-    @Override
-    public void onCheckClick() {
-        if (repository != null) repository.check();
-    }
-
-    @Override
-    public void onDownloadClick() {
-        if (repository != null) repository.download();
-    }
-
-    @Override
-    public void onCancelClick() {
-        if (repository != null) repository.cancel();
-    }
-
-    @Override
-    public void onInstallClick() {
-        install();
-    }
-
-    private void install() {
-        try {
-            if (android.os.Build.VERSION.SDK_INT >= 26 && !getPackageManager().canRequestPackageInstalls()) {
-                resumeInstall = true;
-                startActivity(new Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                        Uri.parse("package:" + getPackageName())));
-                return;
-            }
-            Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".updates", repository.installableApk());
-            startActivity(new Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")
-                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION));
-        } catch (Exception error) {
-            Toast.makeText(this, "无法安装：" + error.getMessage(), Toast.LENGTH_LONG).show();
-        }
-    }
-
-    @Override
-    public void onOpenBrowserClick() {
-        UpdateRepository.State state = repository != null ? repository.state().getValue() : null;
-        AboutDialog.openBrowser(this, state != null && state.release != null ? state.release.pageUrl
-                : AboutDialog.GITHUB_ROOT_URL + "/releases");
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        if (resumeInstall) {
-            resumeInstall = false;
-            if (android.os.Build.VERSION.SDK_INT < 26 || getPackageManager().canRequestPackageInstalls()) {
-                install();
-            } else {
-                Toast.makeText(this, "未允许安装更新，可稍后重试", Toast.LENGTH_SHORT).show();
-            }
-        }
     }
 }
