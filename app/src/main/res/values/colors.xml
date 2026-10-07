@@ -18,9 +18,10 @@
     <color name="warn">#C48A1A</color>
     <color name="err">#C45A5A</color>
     <color name="preview">#F2F4F8</color>
-    <color name="terminal_surface">#0A0D12</color>
-    <color name="terminal_outline">#263041</color>
-    <color name="terminal_text">#C9D5E5</color>
+    <!-- 浅色日间终端色: 舒适纸白底, 清晰深灰黑文字, 柔和边框 -->
+    <color name="terminal_surface">#F4F6F9</color>
+    <color name="terminal_outline">#DCE1E8</color>
+    <color name="terminal_text">#1E293B</color>
     <color name="logo_top">#ECF0F7</color>
     <color name="logo_bot">#DCE3EE</color>
     <color name="ripple">#2247699F</color>

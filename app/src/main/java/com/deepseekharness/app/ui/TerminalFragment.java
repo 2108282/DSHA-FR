@@ -89,6 +89,11 @@ extends Fragment {
             buffer.setLength(0);
             this.outputText.setText((CharSequence)"Ubuntu 24.04 \u00b7 \u56de\u8f66\u6267\u884c \u00b7 \u4e2d\u6b62 \u00b7 exit \u9000\u51fa\n");
         });
+        View sendBtn = view.findViewById(R.id.term_send);
+        if (sendBtn != null) {
+            sendBtn.setOnClickListener(v -> this.sendCommand());
+        }
+
         View ptyBtn = view.findViewById(R.id.term_pty);
         if (ptyBtn != null) {
             ptyBtn.setOnClickListener(v -> this.switchToPty());

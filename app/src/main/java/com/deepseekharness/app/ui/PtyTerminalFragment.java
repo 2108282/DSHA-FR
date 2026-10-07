@@ -145,6 +145,7 @@ public final class PtyTerminalFragment extends Fragment
             attachedSession = s;
             s.attachListener(this);
             view.attachSession(s.session());
+            applyTerminalColors(s.session());
             title.setText(displayTitle(s.session()));
             return;
         }
@@ -156,6 +157,7 @@ public final class PtyTerminalFragment extends Fragment
             attachedSession = ns;
             ns.attachListener(this);
             view.attachSession(ns.session());
+            applyTerminalColors(ns.session());
             title.setText("Ubuntu · PTY");
         } catch (Throwable e) {
             String safe = SensitiveData.redact(String.valueOf(e));
@@ -180,8 +182,9 @@ public final class PtyTerminalFragment extends Fragment
             TextView b = new TextView(requireContext());
             b.setText(k[0]);
             b.setGravity(Gravity.CENTER);
-            b.setBackgroundResource(R.drawable.bg_chip);
+            b.setBackgroundResource(R.drawable.bg_chip_clickable);
             b.setTextColor(getResources().getColor(R.color.text_secondary));
+            b.setStateListAnimator(android.animation.AnimatorInflater.loadStateListAnimator(requireContext(), R.animator.chip_press_scale));
             b.setTypeface(android.graphics.Typeface.MONOSPACE);
             b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
             int padH = dp(11), padV = dp(7);
@@ -216,10 +219,41 @@ public final class PtyTerminalFragment extends Fragment
         if (ctrlBtn != null) {
             ctrlBtn.setTextColor(getResources().getColor(
                     ctrlDown ? R.color.ok : R.color.text_secondary));
+            ctrlBtn.setBackgroundResource(ctrlDown ? R.drawable.bg_chip : R.drawable.bg_chip_clickable);
         }
         if (altBtn != null) {
             altBtn.setTextColor(getResources().getColor(
                     altDown ? R.color.ok : R.color.text_secondary));
+            altBtn.setBackgroundResource(altDown ? R.drawable.bg_chip : R.drawable.bg_chip_clickable);
+        }
+    }
+
+    private void applyTerminalColors(com.termux.terminal.TerminalSession s) {
+        if (s == null) return;
+        try {
+            boolean isNight = (getResources().getConfiguration().uiMode 
+                    & android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES;
+            int fg = isNight ? 0xFFC9D5E5 : 0xFF1E293B;
+            int bg = isNight ? 0xFF0A0D12 : 0xFFF4F6F9;
+            int cursor = isNight ? 0xFF8AA8D6 : 0xFF47699F;
+
+            if (view != null) {
+                view.setBackgroundColor(bg);
+                view.setTypeface(android.graphics.Typeface.create("monospace", android.graphics.Typeface.NORMAL));
+            }
+
+            Object emulator = s.getEmulator();
+            if (emulator != null) {
+                java.lang.reflect.Field colorsField = emulator.getClass().getField("mColors");
+                Object colors = colorsField.get(emulator);
+                if (colors != null) {
+                    java.lang.reflect.Method setColor = colors.getClass().getMethod("setColor", int.class, int.class);
+                    setColor.invoke(colors, 256, fg);
+                    setColor.invoke(colors, 257, bg);
+                    setColor.invoke(colors, 258, cursor);
+                }
+            }
+        } catch (Throwable ignored) {
         }
     }
 

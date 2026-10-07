@@ -1,116 +1,165 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/surface"
-    android:orientation="vertical"
-    android:paddingStart="@dimen/page_pad"
-    android:paddingTop="8dp"
-    android:paddingEnd="@dimen/page_pad"
-    android:paddingBottom="@dimen/gap_control">
+    android:background="@color/surface">
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingBottom="@dimen/gap_control">
+        android:layout_height="match_parent"
+        android:orientation="vertical">
 
-        <TextView
-            android:id="@+id/pty_title"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:background="@drawable/m3_card_expressive_item"
-            android:ellipsize="end"
-            android:fontFamily="monospace"
-            android:maxLines="1"
-            android:paddingStart="@dimen/gap_control"
-            android:paddingTop="9dp"
-            android:paddingEnd="@dimen/gap_control"
-            android:paddingBottom="9dp"
-            android:text="Ubuntu · PTY"
-            android:textColor="@color/text"
-            android:textSize="@dimen/text_caption" />
-
-        <TextView
-            android:id="@+id/pty_font_dec"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="@dimen/gap_tight"
-            android:background="@drawable/m3_btn_tonal_expressive"
-            android:minWidth="48dp"
-            android:minHeight="48dp"
-            android:gravity="center"
-            android:paddingStart="12dp"
-            android:paddingTop="8dp"
-            android:paddingEnd="12dp"
-            android:paddingBottom="8dp"
-            android:text="A−"
-            android:textColor="@color/text"
-            android:textSize="@dimen/text_label" />
-
-        <TextView
-            android:id="@+id/pty_font_inc"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="@dimen/gap_tight"
-            android:background="@drawable/m3_btn_tonal_expressive"
-            android:minWidth="48dp"
-            android:minHeight="48dp"
-            android:gravity="center"
-            android:paddingStart="12dp"
-            android:paddingTop="8dp"
-            android:paddingEnd="12dp"
-            android:paddingBottom="8dp"
-            android:text="A+"
-            android:textColor="@color/text"
-            android:textSize="@dimen/text_label" />
-
-        <TextView
-            android:id="@+id/pty_simple"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="@dimen/gap_tight"
-            android:background="@drawable/m3_btn_tonal_expressive"
-            android:minWidth="48dp"
-            android:minHeight="48dp"
-            android:gravity="center"
-            android:paddingStart="12dp"
-            android:paddingTop="8dp"
-            android:paddingEnd="12dp"
-            android:paddingBottom="8dp"
-            android:text="简易"
-            android:textColor="@color/text"
-            android:textSize="@dimen/text_caption" />
-    </LinearLayout>
-
-    <FrameLayout
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:background="@drawable/bg_terminal"
-        android:padding="@dimen/gap_tight">
-
-        <com.termux.view.TerminalView
-            android:id="@+id/pty_view"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:background="@color/terminal_surface"
-            android:focusable="true"
-            android:focusableInTouchMode="true" />
-    </FrameLayout>
-
-    <HorizontalScrollView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="@dimen/gap_tight"
-        android:scrollbars="none">
-
+        <!-- 顶部统一标题栏 (52dp, 半透卡片白 card_glass, 细分割线) -->
         <LinearLayout
-            android:id="@+id/pty_keys"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal" />
-    </HorizontalScrollView>
-</LinearLayout>
+            android:id="@+id/app_bar"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:background="@color/card_glass"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="16dp">
+
+            <FrameLayout
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:background="@drawable/bg_settings_icon_box">
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_terminal"
+                    app:tint="@color/primary" />
+            </FrameLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/pty_title"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="Ubuntu 终端"
+                    android:textColor="@color/text"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="PTY 交互终端 · 原生 Root"
+                    android:textColor="@color/text_muted"
+                    android:textSize="11sp" />
+            </LinearLayout>
+
+            <!-- 操作胶囊: 字号调小 A- -->
+            <TextView
+                android:id="@+id/pty_font_dec"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:background="@drawable/m3_btn_tonal_expressive"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:paddingHorizontal="10dp"
+                android:stateListAnimator="@animator/btn_press_scale"
+                android:text="A−"
+                android:textColor="@color/primary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <!-- 操作胶囊: 字号调大 A+ -->
+            <TextView
+                android:id="@+id/pty_font_inc"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/m3_btn_tonal_expressive"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:paddingHorizontal="10dp"
+                android:stateListAnimator="@animator/btn_press_scale"
+                android:text="A+"
+                android:textColor="@color/primary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <!-- 操作胶囊: 切换简易终端 -->
+            <TextView
+                android:id="@+id/pty_simple"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/m3_btn_tonal_expressive"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:paddingHorizontal="10dp"
+                android:stateListAnimator="@animator/btn_press_scale"
+                android:text="简易"
+                android:textColor="@color/primary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/line_soft" />
+
+        <!-- 终端工作区主容器 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:paddingHorizontal="12dp"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp">
+
+            <!-- 纯 Skia ModernCardView 终端卡片 (18dp 圆角, 微阴影, 昼白/夜黑自适应背景) -->
+            <com.deepseekharness.app.ui.ModernCardView
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:clipToOutline="true"
+                android:orientation="vertical"
+                android:padding="8dp"
+                app:cardRadius="18dp">
+
+                <com.termux.view.TerminalView
+                    android:id="@+id/pty_view"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@color/terminal_surface"
+                    android:focusable="true"
+                    android:focusableInTouchMode="true" />
+            </com.deepseekharness.app.ui.ModernCardView>
+
+            <!-- 底部额外快捷功能键栏 (ESC, TAB, CTRL, ALT, 箭头等) -->
+            <HorizontalScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:overScrollMode="never"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:id="@+id/pty_keys"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal" />
+            </HorizontalScrollView>
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>
