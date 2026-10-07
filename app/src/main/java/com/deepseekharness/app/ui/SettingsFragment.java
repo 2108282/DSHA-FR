@@ -27,7 +27,6 @@ public class SettingsFragment extends Fragment implements SettingsPresenter.View
 
     private TextView verText;
     private TextView updateSubText;
-    private DshaToggle persistentNotifToggle;
     private boolean isBinding = false;
 
     private static final TabOption[] TAB_OPTIONS = {
@@ -47,7 +46,6 @@ public class SettingsFragment extends Fragment implements SettingsPresenter.View
 
         verText = v.findViewById(R.id.settings_ver);
         updateSubText = v.findViewById(R.id.settings_update_sub);
-        persistentNotifToggle = v.findViewById(R.id.settings_persistent_notification_toggle);
 
         // 1. 模块区域入口派发
         View rowConfig = v.findViewById(R.id.settings_row_config);
@@ -78,7 +76,7 @@ public class SettingsFragment extends Fragment implements SettingsPresenter.View
 
         View rowThemeNotify = v.findViewById(R.id.settings_row_theme_notify);
         if (rowThemeNotify != null) {
-            rowThemeNotify.setOnClickListener(x -> onOpenSubFragment(new ThemeNotifyFragment()));
+            rowThemeNotify.setOnClickListener(x -> openSubFragment(new ThemeNotifyFragment()));
         }
 
         View rowAbout = v.findViewById(R.id.settings_row_about);
@@ -115,13 +113,18 @@ public class SettingsFragment extends Fragment implements SettingsPresenter.View
         if (!isAdded()) return;
         if (verText != null) verText.setText(state.versionText);
         if (updateSubText != null) updateSubText.setText(state.updateSubText);
-        if (persistentNotifToggle != null) {
-            isBinding = true;
-            if (persistentNotifToggle.isChecked() != state.isPersistentNotificationEnabled) {
-                persistentNotifToggle.setChecked(state.isPersistentNotificationEnabled, false, false);
-            }
-            isBinding = false;
-        }
+
+    }
+
+    public void openSubFragment(Fragment fragment) {
+        if (!isAdded() || fragment == null) return;
+        getParentFragmentManager().beginTransaction()
+                .setCustomAnimations(
+                        R.anim.fragment_enter, R.anim.fragment_exit,
+                        R.anim.fragment_pop_enter, R.anim.fragment_pop_exit)
+                .replace(R.id.fragment_container, fragment)
+                .addToBackStack("settings")
+                .commit();
     }
 
     @Override

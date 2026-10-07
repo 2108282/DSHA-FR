@@ -21,7 +21,8 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
-import com.deepseekharness.app.Constants;
+import com.deepseekharness.app.util.Constants;
+import com.deepseekharness.app.ui.dialog.OverlayStyleDialog;
 import com.deepseekharness.app.R;
 import com.deepseekharness.app.core.ConfigStore;
 
@@ -125,12 +126,7 @@ public final class ThemeNotifyFragment extends Fragment {
         // ==================== 5. 悬浮条外观与行为配置 ====================
         View floatingSettingsRow = v.findViewById(R.id.theme_notify_row_floating_settings);
         if (floatingSettingsRow != null) {
-            floatingSettingsRow.setOnClickListener(x -> {
-                startActivity(new Intent(requireContext(), StatusOverlaySettingsActivity.class));
-                if (getActivity() != null) {
-                    getActivity().overridePendingTransition(R.anim.fragment_enter, R.anim.fragment_exit);
-                }
-            });
+            floatingSettingsRow.setOnClickListener(x -> OverlayStyleDialog.show(requireActivity()));
         }
     }
 

@@ -148,7 +148,6 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
     public void onDestroyView() {
         syncActivityTitle(false);
         if (confirmShellToggle != null) confirmShellToggle.setOnCheckedChangeListener(null);
-        if (overlayStreamToggle != null) overlayStreamToggle.setOnCheckedChangeListener(null);
         if (sensorsToggle != null) sensorsToggle.setOnCheckedChangeListener(null);
         if (locationToggle != null) locationToggle.setOnCheckedChangeListener(null);
 
