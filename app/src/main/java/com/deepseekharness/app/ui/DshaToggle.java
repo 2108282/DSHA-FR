@@ -129,7 +129,7 @@ public class DshaToggle extends View {
     }
 
     public void toggle() {
-        setChecked(!isChecked, true);
+        setChecked(!isChecked, true, true);
     }
 
     public boolean isChecked() {
@@ -137,10 +137,14 @@ public class DshaToggle extends View {
     }
 
     public void setChecked(boolean checked) {
-        setChecked(checked, false);
+        setChecked(checked, false, false);
     }
 
     public void setChecked(boolean checked, boolean animate) {
+        setChecked(checked, animate, false);
+    }
+
+    public void setChecked(boolean checked, boolean animate, boolean fromUser) {
         float target = checked ? 1f : 0f;
         if (this.isChecked == checked) {
             if (animator != null && animator.isRunning()) return; // 正在朝目标平滑位移中，不打断动画
@@ -168,7 +172,8 @@ public class DshaToggle extends View {
             invalidate();
         }
 
-        if (listener != null) {
+        // 仅在明确来自用户交互时才触发监听回调，杜绝数据绑定/列表复用时的级联误杀
+        if (fromUser && listener != null) {
             listener.onCheckedChanged(this, this.isChecked);
         }
     }

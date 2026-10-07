@@ -612,6 +612,45 @@ def cmd_list():
                               + list(deps) + bundles))
     items = []
     updates = lifecycle().read(lifecycle().path('plugin-updates.json'), {})
+
+    # 读取官方 patch 层（PatchToggle 区块）中的禁用 ID
+    patch_file = local(os.path.join(DSH_HOME, "profiles", "web", "cordis.patch.yml"))
+    disabled_patch_ids = set()
+    if os.path.isfile(patch_file):
+        try:
+            with open(patch_file, "r", encoding="utf-8") as pf:
+                in_block = False
+                pending_id = None
+                for line in pf:
+                    l = line.strip()
+                    if l == "# >>> DSHA managed (plugin toggles) >>>":
+                        in_block = True
+                        continue
+                    if l == "# <<< DSHA managed <<<":
+                        in_block = False
+                        continue
+                    if not in_block:
+                        continue
+                    if l.startswith("- id:"):
+                        pending_id = l[5:].strip().strip("\"'")
+                    elif l.startswith("disabled:") and pending_id:
+                        if l[9:].strip().lower() == "true":
+                            disabled_patch_ids.add(pending_id)
+                        pending_id = None
+        except Exception:
+            pass
+
+    KNOWN_LOADER_IDS = {
+        "dsh-device-shell-guide": ["device-shell-guide"],
+        "dsh-status-overlay": ["dsha-status-overlay"],
+        "dsh-task-notifier": ["task-notifier"],
+        "dsh-web-mobile": ["dsh-web-mobile"],
+        "@deepseek-ai/dsh-web-app": ["web-runtime", "webserver"],
+        "dsh-agy": ["dsh-agy", "dsh-agy-web"],
+        "dsh-api-dashboard": ["dsh-api-dashboard"],
+        "@xmanrui/dsh-im": ["dsh-im"],
+    }
+
     for name in names:
         if not builtin.valid_name(name):
             continue
@@ -622,6 +661,20 @@ def cmd_list():
                 and name not in bundles and not (pkg.get("dsh") or {}).get("bundle"):
             continue
         available = official or directory is not None
+
+        # 权威启用状态：优先依据 Patch 层覆盖，兼顾历史 .disabled 标记与 bundles
+        plugin_loader_ids = list(KNOWN_LOADER_IDS.get(name, []))
+        if not plugin_loader_ids:
+            cand_id = name.removeprefix("dsh-")
+            if "/" in cand_id: cand_id = cand_id.split("/")[-1]
+            plugin_loader_ids.append(cand_id)
+        is_patch_off = any(pid in disabled_patch_ids for pid in plugin_loader_ids)
+        marker = os.path.join(local(DSH_HOME), "profiles", "web", "node_modules", name + ".disabled")
+        is_marker_off = os.path.isfile(marker)
+
+        # 只要没有被 patch 禁用且无标记，在 bundles 内或可用即视为启用
+        plugin_enabled = not is_patch_off and not is_marker_off and (name in bundles or available)
+
         desc = pkg.get("description", "")
         if official:
             OFFICIAL_DESC_MAP = {
@@ -632,7 +685,7 @@ def cmd_list():
             }
             if name in OFFICIAL_DESC_MAP:
                 desc = OFFICIAL_DESC_MAP[name]
-        items.append(dict(name=name, enabled=name in bundles, builtin=name in builtin.builtin_names(),
+        items.append(dict(name=name, enabled=plugin_enabled, builtin=name in builtin.builtin_names(),
                           official=official, available=available,
                           version=pkg.get("version", ""), description=desc,
                           source=sources.get(name, "") or repository_url(pkg),

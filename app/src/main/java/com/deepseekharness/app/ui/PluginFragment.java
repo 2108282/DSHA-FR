@@ -510,12 +510,13 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
             holder.description.setText(item.description.isEmpty()
                     ? (item.official ? "官方核心" : item.builtin ? "DSHA 内置插件" : "第三方插件") : item.description);
 
-            // 4. 自绘胶囊开关 (DshaToggle - 保护平滑位移动画不被列表刷新打断)
+            // 4. 自绘胶囊开关 (DshaToggle - 保护平滑位移动画不被列表刷新打断，严格解绑杜绝复用穿透)
             if (holder.toggle != null) {
+                holder.toggle.setOnCheckedChangeListener(null);
                 if (holder.toggle.isChecked() != item.enabled) {
                     holder.toggle.setChecked(item.enabled, false);
                 }
-                holder.toggle.setEnabled(item.available || item.enabled);
+                holder.toggle.setEnabled(!repository.isBusy() && (item.available || item.enabled));
                 holder.toggle.setOnCheckedChangeListener((t, checked) -> {
                     if (actions != null && checked != item.enabled) {
                         if (holder.statusBadge != null) {

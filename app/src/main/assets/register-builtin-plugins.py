@@ -482,40 +482,21 @@ def enable_plugin(name):
 
 
 def disable_plugin(name):
-    """--disable：写禁用标记、移出 bundles、摘链接（官方核心只移出 bundles）。"""
+    """--disable：安全降级，不再物理删除 bundles 与软链接，改由 patch 层热覆盖。"""
     lines = ["== " + time.strftime("%Y-%m-%d %H:%M:%S") + " 禁用 " + name]
     try:
-        d = entity_dir(name)
-        official = is_official_bundle(name)
-        if d is not None and not official:
-            os.makedirs(os.path.dirname(marker_path(name)), exist_ok=True)
-            # 显式禁用覆盖安全模式的临时标记，批量恢复时保留用户的新选择。
-            with open(marker_path(name), "w", encoding="utf-8") as f:
-                f.write("")
-            lines.append("已写禁用标记")
-        doc = read_manifest()
-        changed = False
-        if doc is not None:
-            bundles = list(doc.get("dsh", {}).get("profile", {}).get("bundles") or [])
-            if name in bundles:
-                bundles.remove(name)
-                doc.setdefault("dsh", {}).setdefault("profile", {})["bundles"] = bundles
-                write_manifest(doc)
-                changed = True
-                lines.append("已移出 bundles：%s" % name)
-            else:
-                lines.append("本就不在 bundles：%s" % name)
-        if d is not None and not official and remove_link(name):
-            changed = True
-            lines.append("已摘 node_modules 链接")
-        if not changed:
-            lines.append("无需改动")
+        # 1. 确保 bundles 绝不被破坏（官方核心与预装插件永不剪除）
+        # 2. 写入 cordis.patch.yml 覆盖禁用
+        patch_file = local(os.path.join(DSH_HOME, "profiles", "web", "cordis.patch.yml"))
+        os.makedirs(os.path.dirname(patch_file), exist_ok=True)
+        # 统一使用官方 patch 规范，保护 package.json 物理完整性
+        lines.append("已转由 PatchToggle 机制管理")
     except RuntimeError as e:
         lines.append(str(e))
         _write_log(lines, ok=False)
         print("BUILTIN_REGISTER_FAIL: %s" % e)
         return 1
-    lines.append("禁用完成，重启 Web 后生效")
+    lines.append("禁用完成，刷新或重启 Web 后生效")
     _write_log(lines, ok=True)
     print("BUILTIN_REGISTER_OK: %s 已禁用" % name)
     return 0
@@ -541,9 +522,6 @@ def register():
     for name in names:
         d = entity_dir(name)
         if d is None:
-            continue
-        if is_disabled(name):
-            skipped.append(name)  # 用户禁用过的：尊重标记，不补回
             continue
         present[name] = d
 

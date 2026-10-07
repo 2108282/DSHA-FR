@@ -1,5 +1,6 @@
 package com.deepseekharness.app.runtime;
 import com.deepseekharness.app.util.Compat;
+import com.deepseekharness.app.util.PatchToggle;
 import com.deepseekharness.app.util.ShellQuote;
 
 import android.content.Context;
@@ -15,9 +16,12 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -508,17 +512,87 @@ public class ProotBootstrap {
     }
 
     /**
-     * 启用 / 禁用某个插件（内置或官方核心）：交给容器脚本改 profile 的 bundles。
-     * 内置插件禁用会写 {@code node_modules/<name>.disabled} 标记（注册流程会尊重它），
-     * 官方核心只移出 bundles。改动需重启 Web 后生效。
+     * 启用 / 禁用某个插件（内置或官方核心）：
+     * 遵循 DSH 官方规范，通过修改 profile 的 cordis.patch.yml 实现 patch 层热开关（PatchToggle）。
+     * 绝不篡改 package.json 的 bundles 清单，绝不删除 node_modules 软链接，杜绝核心缺失与启动报错。
      *
      * @param name   插件名（如 dsh-web-mobile 或 @deepseek-ai/dsh-web-app）
      * @param enable true=启用 false=禁用
      */
     public String setPluginEnabled(String name, boolean enable) {
         if (name == null || name.isEmpty()) return "NO_NAME";
-        String flag = enable ? "--enable " : "--disable ";
-        return runBuiltinScript(flag + com.deepseekharness.app.util.ShellQuote.arg(name));
+        synchronized (PLUGIN_SCRIPT_LOCK) {
+            try {
+                // 1. 获取目标插件的 Loader 行 ID
+                List<String> targetIds = resolvePluginLoaderIds(name);
+                if (targetIds.isEmpty()) return "ERROR: 无法解析插件 Loader ID";
+
+                // 2. 读取当前的 profile cordis.patch.yml 文本
+                String patchFile = "/root/.dsh/profiles/web/cordis.patch.yml";
+                String currentYaml = execAndRead("cat " + patchFile + " 2>/dev/null || true", 5000);
+                if (currentYaml == null || currentYaml.startsWith("ERROR:")) currentYaml = "";
+
+                // 3. 计算 Patch 覆盖后的新 YAML
+                Set<String> off = new LinkedHashSet<>(PatchToggle.disabledIds(currentYaml));
+                if (enable) {
+                    off.removeAll(targetIds);
+                } else {
+                    off.addAll(targetIds);
+                }
+                String newYaml = PatchToggle.withDisabled(currentYaml, off);
+
+                // 4. 原子安全写入容器
+                String b64 = Base64.encodeToString(newYaml.getBytes(StandardCharsets.UTF_8), Base64.NO_WRAP);
+                String writeCmd = "mkdir -p /root/.dsh/profiles/web; printf '%s' '" + b64 + "' | base64 -d > " + patchFile;
+                String writeOut = execAndRead(writeCmd, 10000);
+                if (writeOut != null && writeOut.startsWith("ERROR:")) return writeOut;
+
+                // 5. 清理历史遗留的 .disabled 物理标记文件
+                if (enable) {
+                    execAndRead("rm -f /root/.dsh/profiles/web/node_modules/" + name + ".disabled /root/.dsh/plugin-src/" + name + ".disabled 2>/dev/null || true", 3000);
+                }
+
+                return "BUILTIN_REGISTER_OK: " + name + (enable ? " 已启用" : " 已禁用");
+            } catch (Throwable e) {
+                Log.w("DSHA", "PatchToggle 切换失败: " + SensitiveData.redact(String.valueOf(e)));
+                return "ERROR: " + SensitiveData.redact(String.valueOf(e));
+            }
+        }
+    }
+
+    /** 从插件实体中识别其在 cordis.patch.yml 中声明的 Loader 行 ID。 */
+    private List<String> resolvePluginLoaderIds(String name) {
+        List<String> ids = new ArrayList<>();
+        // 1. 优先匹配四大内置核心插件与已知扩展插件的标准 ID 映射
+        if ("dsh-device-shell-guide".equals(name)) { ids.add("device-shell-guide"); return ids; }
+        if ("dsh-status-overlay".equals(name)) { ids.add("dsha-status-overlay"); return ids; }
+        if ("dsh-task-notifier".equals(name)) { ids.add("task-notifier"); return ids; }
+        if ("dsh-web-mobile".equals(name)) { ids.add("dsh-web-mobile"); return ids; }
+        if ("@deepseek-ai/dsh-web-app".equals(name)) { ids.add("web-runtime"); ids.add("webserver"); return ids; }
+        if ("dsh-agy".equals(name)) { ids.add("dsh-agy"); ids.add("dsh-agy-web"); return ids; }
+        if ("dsh-api-dashboard".equals(name)) { ids.add("dsh-api-dashboard"); return ids; }
+        if ("@xmanrui/dsh-im".equals(name)) { ids.add("dsh-im"); return ids; }
+
+        // 2. 尝试从容器中插件实体的 cordis.patch.yml 解析
+        String[] cands = {
+                "/root/.dsh/plugin-src/" + name + "/cordis.patch.yml",
+                "/root/dsha-" + (name.startsWith("dsh-") ? name.substring(4) : name) + "/cordis.patch.yml",
+                "/root/" + name + "/cordis.patch.yml",
+                "/root/.dsh/profiles/web/node_modules/" + name + "/cordis.patch.yml"
+        };
+        for (String cand : cands) {
+            String out = execAndRead("cat " + ShellQuote.arg(cand) + " 2>/dev/null || true", 5000);
+            if (out != null && !out.isEmpty() && !out.startsWith("ERROR:")) {
+                List<String> parsed = PatchToggle.insertedIds(out);
+                if (!parsed.isEmpty()) return parsed;
+            }
+        }
+
+        // 3. 兜底策略：使用包名去前缀作为 loader id
+        String fallbackId = name.startsWith("dsh-") ? name.substring(4) : name;
+        if (fallbackId.contains("/")) fallbackId = fallbackId.substring(fallbackId.lastIndexOf('/') + 1);
+        ids.add(fallbackId);
+        return ids;
     }
 
     private void extractAssetFile(String assetPath, File dest) {
