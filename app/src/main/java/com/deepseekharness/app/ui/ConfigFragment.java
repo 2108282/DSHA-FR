@@ -1,6 +1,5 @@
 package com.deepseekharness.app.ui;
 
-import android.Manifest;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -8,6 +7,7 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -20,6 +20,9 @@ import com.deepseekharness.app.ui.contract.ConfigActions;
 import com.deepseekharness.app.ui.contract.ConfigPresenter;
 import com.deepseekharness.app.ui.contract.ConfigUiState;
 
+/**
+ * 详细配置二级页：1:1 像素级 Skia 现代卡片设计 (ModernCardView)，纯渲染与契约驱动。
+ */
 public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCallback {
 
     private ConfigPresenter presenter;
@@ -29,6 +32,7 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
     private View workspaceEntry;
     private View advHeader;
     private View advBody;
+    private ImageView advArrow;
     private EditText portInput;
     private EditText tasksetInput;
     private CheckBox confirmShellCheck;
@@ -67,6 +71,7 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         workspaceEntry = view.findViewById(R.id.config_workspace_entry);
         advHeader = view.findViewById(R.id.config_adv_header);
         advBody = view.findViewById(R.id.config_adv_body);
+        advArrow = view.findViewById(R.id.config_adv_arrow);
         portInput = view.findViewById(R.id.config_port);
         tasksetInput = view.findViewById(R.id.config_taskset);
         confirmShellCheck = view.findViewById(R.id.config_confirm_shell);
@@ -90,12 +95,14 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         advHeader.setOnClickListener(v -> {
             boolean isVisible = advBody.getVisibility() == View.VISIBLE;
             advBody.setVisibility(isVisible ? View.GONE : View.VISIBLE);
-            ((TextView) advHeader).setText(isVisible
-                    ? "▸ 点击展开高级设置：端口与 CPU 亲和性 (Taskset)"
-                    : "▾ 高级设置：端口与 CPU 亲和性 (Taskset)");
+            if (advArrow != null) {
+                advArrow.setRotation(isVisible ? 0f : 90f);
+            }
         });
 
-        subBack.setOnClickListener(v -> actions.onBack());
+        if (subBack != null) {
+            subBack.setOnClickListener(v -> actions.onBack());
+        }
         workspaceEntry.setOnClickListener(v -> actions.onOpenWorkspace());
         overlayStyleBtn.setOnClickListener(v -> actions.onOpenOverlayStyle());
         allFilesBtn.setOnClickListener(v -> actions.onOpenAllFilesSettings());
@@ -138,6 +145,7 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         workspaceEntry = null;
         advHeader = null;
         advBody = null;
+        advArrow = null;
         portInput = null;
         tasksetInput = null;
         confirmShellCheck = null;
@@ -180,17 +188,15 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
             });
         }
 
-        if (allFilesStatusText != null) allFilesStatusText.setText(state.allFilesStatusText);
-        if (a11yStatusText != null) a11yStatusText.setText(state.a11yStatusText);
-        if (asrStatusText != null) asrStatusText.setText(state.asrStatusText);
-    }
-
-    @Override
-    public void onOpenWorkspace() {
-        getParentFragmentManager().beginTransaction()
-                .replace(R.id.fragment_container, new WorkspaceFragment())
-                .addToBackStack("workspace")
-                .commit();
+        if (allFilesStatusText != null) {
+            allFilesStatusText.setText(state.hasAllFilesAccess ? "已授予完全访问权限" : "未授予，点击跳转系统设置授权");
+        }
+        if (a11yStatusText != null) {
+            a11yStatusText.setText(state.isA11yRunning ? "无障碍服务已开启并正在运行" : "服务未开启或已被系统冻结，点击跳转开启");
+        }
+        if (asrStatusText != null && state.asrStatus != null) {
+            asrStatusText.setText(state.asrStatus);
+        }
     }
 
     @Override
@@ -199,10 +205,10 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
     }
 
     @Override
-    public void onRequestLocationPermission() {
-        requestPermissions(new String[]{
-                Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.ACCESS_COARSE_LOCATION
-        }, 104);
+    public void onNavigateToWorkspace() {
+        getParentFragmentManager().beginTransaction()
+                .replace(R.id.fragment_container, new WorkspaceFragment())
+                .addToBackStack("config")
+                .commit();
     }
 }

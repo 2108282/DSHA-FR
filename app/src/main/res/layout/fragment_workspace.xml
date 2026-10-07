@@ -1,194 +1,258 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/surface"
-    android:clipToPadding="false">
+    android:background="@android:color/transparent"
+    android:clipChildren="false"
+    android:clipToPadding="false"
+    android:fillViewport="true"
+    android:overScrollMode="never"
+    android:scrollbars="none">
 
+    <!-- 主体内容垂直容器 (padding 14px 16px 96px; gap: 12px) -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:clipChildren="false"
+        android:clipToPadding="false"
         android:orientation="vertical"
-        android:paddingStart="@dimen/page_pad"
-        android:paddingTop="@dimen/gap_control"
-        android:paddingEnd="@dimen/page_pad"
-        android:paddingBottom="@dimen/gap_section">
+        android:paddingHorizontal="16dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="96dp">
 
-        <TextView
-            android:id="@+id/sub_back"
-            style="@style/DshaText.Label"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:paddingBottom="@dimen/gap_tight"
-            android:text="‹ 返回"
-            android:visibility="gone" />
-
-        <TextView
-            style="@style/DshaText.Display"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="数据与备份" />
-
+        <!-- 顶部二级导航条 (返回按钮 + 页面主标题) -->
         <LinearLayout
-            style="@style/DshaCard.Expressive"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/gap_control">
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingBottom="12dp">
+
+            <FrameLayout
+                android:id="@+id/sub_back"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:background="@drawable/bg_chip_clickable"
+                android:clickable="true"
+                android:focusable="true">
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="返回"
+                    android:src="@drawable/ic_nav_back"
+                    app:tint="@color/text_secondary" />
+            </FrameLayout>
 
             <TextView
-                style="@style/DshaText.Headline"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="数据归档与迁移" />
+                android:layout_marginStart="12dp"
+                android:text="数据与备份"
+                android:textColor="@color/text"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- ========== 卡片 1: 数据归档与迁移 (.gcard) ========== -->
+        <com.deepseekharness.app.ui.ModernCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="18dp"
+            app:cardRadius="18dp">
 
             <TextView
-                style="@style/DshaText.Caption"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/gap_tight"
-                android:lineSpacingExtra="2dp"
-                android:textColor="@color/text_secondary"
-                android:text="可选全部数据、对话记录、设置或插件；每次只写入所选范围。默认不包含 API Key，不删除当前数据。新备份固定保存为 DSHA-backup-latest.tar.gz。" />
+                android:text="数据归档与迁移"
+                android:textColor="@color/text"
+                android:textSize="17sp"
+                android:textStyle="bold" />
 
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:lineSpacingMultiplier="1.4"
+                android:text="可选全部数据、对话记录、设置或插件。默认不包含 API Key，不删除当前数据。"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp" />
+
+            <!-- 按钮 1: 选择备份范围并导出 (.btn .btn-primary .btn-block) -->
             <Button
                 android:id="@+id/workspace_backup"
                 android:layout_width="match_parent"
-                android:layout_height="@dimen/btn_height"
-                android:layout_marginTop="@dimen/gap_control"
+                android:layout_height="46dp"
+                android:layout_marginTop="12dp"
                 android:background="@drawable/m3_btn_primary_expressive"
+                android:elevation="3dp"
+                android:outlineAmbientShadowColor="#00000000"
+                android:outlineSpotShadowColor="#3847699F"
+                android:stateListAnimator="@animator/btn_press_scale"
                 android:text="选择备份范围并导出"
                 android:textAllCaps="false"
-                android:textColor="@color/m3_btn_primary_text"
-                android:textSize="@dimen/text_body"
+                android:textColor="@color/accent_on"
+                android:textSize="15sp"
                 android:textStyle="bold" />
 
+            <!-- 按钮 2: 从备份归档恢复数据 (.btn .btn-tonal .btn-block) -->
             <Button
                 android:id="@+id/workspace_restore"
                 android:layout_width="match_parent"
-                android:layout_height="@dimen/btn_height"
-                android:layout_marginTop="@dimen/gap_tight"
+                android:layout_height="46dp"
+                android:layout_marginTop="10dp"
                 android:background="@drawable/m3_btn_tonal_expressive"
+                android:stateListAnimator="@animator/btn_press_scale"
                 android:text="从备份归档恢复数据"
                 android:textAllCaps="false"
-                android:textColor="@color/m3_btn_tonal_text"
-                android:textSize="@dimen/text_body" />
+                android:textColor="@color/primary"
+                android:textSize="14sp"
+                android:textStyle="bold" />
 
+            <!-- 按钮 3: 查看物理保存位置 (.btn .btn-tonal .btn-block) -->
             <Button
                 android:id="@+id/workspace_location"
                 android:layout_width="match_parent"
-                android:layout_height="@dimen/btn_height"
-                android:layout_marginTop="@dimen/gap_tight"
+                android:layout_height="46dp"
+                android:layout_marginTop="10dp"
                 android:background="@drawable/m3_btn_tonal_expressive"
+                android:stateListAnimator="@animator/btn_press_scale"
                 android:text="查看物理保存位置"
                 android:textAllCaps="false"
                 android:textColor="@color/text_secondary"
-                android:textSize="@dimen/text_body" />
-        </LinearLayout>
+                android:textSize="14sp"
+                android:textStyle="bold" />
 
-        <LinearLayout
-            style="@style/DshaCard.Expressive"
+        </com.deepseekharness.app.ui.ModernCardView>
+
+        <!-- ========== 卡片 2: 环境与工作区直通 (.gcard) ========== -->
+        <com.deepseekharness.app.ui.ModernCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/gap_section">
+            android:layout_marginTop="14dp"
+            android:orientation="vertical"
+            android:padding="18dp"
+            app:cardRadius="18dp">
 
             <TextView
-                style="@style/DshaText.Headline"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="环境与工作区直通" />
+                android:text="环境与工作区直通"
+                android:textColor="@color/text"
+                android:textSize="17sp"
+                android:textStyle="bold" />
 
             <TextView
-                style="@style/DshaText.Label"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/gap_control"
+                android:layout_marginTop="10dp"
                 android:text="默认工作区路径（直通手机物理存储）"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp"
                 android:textStyle="bold" />
 
             <EditText
                 android:id="@+id/workspace_path"
-                style="@style/DshaText.Body"
                 android:layout_width="match_parent"
-                android:layout_height="@dimen/input_height"
-                android:layout_marginTop="@dimen/gap_tight"
+                android:layout_height="44dp"
+                android:layout_marginTop="8dp"
                 android:background="@drawable/bg_input"
                 android:hint="/root/内部存储/工作区"
                 android:importantForAutofill="no"
-                android:paddingStart="@dimen/gap_control"
-                android:paddingEnd="@dimen/gap_control" />
+                android:paddingHorizontal="14dp"
+                android:textColor="@color/text"
+                android:textSize="14sp" />
 
+            <!-- 应用新工作区路径按钮 (.btn .btn-tonal .btn-block) -->
             <Button
                 android:id="@+id/workspace_apply"
                 android:layout_width="match_parent"
-                android:layout_height="@dimen/btn_height"
-                android:layout_marginTop="@dimen/gap_control"
+                android:layout_height="46dp"
+                android:layout_marginTop="12dp"
                 android:background="@drawable/m3_btn_tonal_expressive"
+                android:stateListAnimator="@animator/btn_press_scale"
                 android:text="应用新工作区路径"
                 android:textAllCaps="false"
-                android:textColor="@color/m3_btn_tonal_text"
-                android:textSize="@dimen/text_body"
+                android:textColor="@color/primary"
+                android:textSize="14sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/workspace_info"
-                style="@style/DshaText.Caption"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/gap_tight"
-                android:lineSpacingExtra="3dp"
-                android:textColor="@color/text_muted" />
-        </LinearLayout>
+                android:layout_marginTop="8dp"
+                android:lineSpacingMultiplier="1.3"
+                android:textColor="@color/text_muted"
+                android:textSize="11sp"
+                android:visibility="gone" />
 
-        <LinearLayout
-            style="@style/DshaCard.Expressive"
+        </com.deepseekharness.app.ui.ModernCardView>
+
+        <!-- ========== 卡片 3: 宿主 Root Shell 能力 (保持原有业务契约) ========== -->
+        <com.deepseekharness.app.ui.ModernCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/gap_section">
+            android:layout_marginTop="14dp"
+            android:orientation="vertical"
+            android:padding="18dp"
+            app:cardRadius="18dp">
 
             <TextView
-                style="@style/DshaText.Headline"
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="宿主 Root Shell 能力" />
+                android:text="宿主 Root Shell 能力"
+                android:textColor="@color/text"
+                android:textSize="17sp"
+                android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/workspace_shizuku_status"
-                style="@style/DshaText.Label"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/gap_tight"
-                android:background="@drawable/m3_card_expressive_item"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/bg_fold_header"
                 android:padding="12dp"
-                android:text="正在检测 Root 权限..." />
+                android:text="正在检测 Root 权限..."
+                android:textColor="@color/primary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
 
             <Button
                 android:id="@+id/workspace_shizuku_auth"
                 android:layout_width="match_parent"
-                android:layout_height="@dimen/btn_height"
-                android:layout_marginTop="@dimen/gap_control"
+                android:layout_height="46dp"
+                android:layout_marginTop="10dp"
                 android:background="@drawable/m3_btn_tonal_expressive"
+                android:stateListAnimator="@animator/btn_press_scale"
                 android:text="测试 / 重新申请 Root 权限"
                 android:textAllCaps="false"
-                android:textColor="@color/m3_btn_tonal_text"
-                android:textSize="@dimen/text_body" />
+                android:textColor="@color/primary"
+                android:textSize="14sp"
+                android:textStyle="bold" />
 
             <TextView
-                style="@style/DshaText.Caption"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/gap_tight"
-                android:lineSpacingExtra="3dp"
+                android:layout_marginTop="8dp"
+                android:lineSpacingMultiplier="1.3"
+                android:text="授权后，Agent 可通过 3095 硬件桥执行宿主 shell 命令：\ncurl http://127.0.0.1:3095/exec?cmd=..."
                 android:textColor="@color/text_secondary"
-                android:text="授权后，Agent 可通过 3095 硬件桥执行宿主 shell 命令：\ncurl http://127.0.0.1:3095/exec?cmd=..." />
-        </LinearLayout>
+                android:textSize="11sp" />
+
+        </com.deepseekharness.app.ui.ModernCardView>
 
         <TextView
             android:id="@+id/workspace_share_status"
-            style="@style/DshaText.Caption"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/gap_section"
-            android:gravity="center"
-            android:text="DSHA · 数据存储直通" />
+            android:layout_marginTop="16dp"
+            android:lineSpacingMultiplier="1.4"
+            android:textColor="@color/text_muted"
+            android:textSize="12sp" />
+
     </LinearLayout>
-</ScrollView>
+</androidx.core.widget.NestedScrollView>

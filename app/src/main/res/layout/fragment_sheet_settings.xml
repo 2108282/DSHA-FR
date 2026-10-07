@@ -1,43 +1,70 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/surface"
-    android:clipToPadding="false">
+    android:background="@android:color/transparent"
+    android:clipChildren="false"
+    android:clipToPadding="false"
+    android:fillViewport="true"
+    android:overScrollMode="never"
+    android:scrollbars="none">
 
+    <!-- 主体内容垂直容器 (padding 14px 16px 96px; gap: 12px) -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:clipChildren="false"
+        android:clipToPadding="false"
         android:orientation="vertical"
-        android:paddingStart="@dimen/page_pad"
-        android:paddingTop="@dimen/gap_control"
-        android:paddingEnd="@dimen/page_pad"
-        android:paddingBottom="@dimen/gap_section">
+        android:paddingHorizontal="16dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="96dp">
 
-        <TextView
-            android:id="@+id/sub_back"
-            style="@style/DshaText.Label"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:paddingBottom="@dimen/gap_tight"
-            android:text="‹ 返回"
-            android:visibility="visible" />
-
-        <TextView
-            style="@style/DshaText.Display"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="抽屉设置" />
-
-        <!-- 快捷抽屉外观与手势交互配置卡片 -->
+        <!-- 顶部二级导航条 (返回按钮 + 页面主标题) -->
         <LinearLayout
-            style="@style/DshaCard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/gap_control"
-            android:orientation="vertical">
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingBottom="12dp">
 
-            <!-- 1. 反色开关 -->
+            <FrameLayout
+                android:id="@+id/sub_back"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:background="@drawable/bg_chip_clickable"
+                android:clickable="true"
+                android:focusable="true">
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="返回"
+                    android:src="@drawable/ic_nav_back"
+                    app:tint="@color/text_secondary" />
+            </FrameLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:text="快捷对话设置"
+                android:textColor="@color/text"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- ========== 卡片 1: 核心开关列表 (.gcard, padding: 0) ========== -->
+        <com.deepseekharness.app.ui.ModernCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:clipToOutline="true"
+            android:orientation="vertical"
+            app:cardRadius="18dp">
+
+            <!-- 1.1 反色模式行 -->
             <LinearLayout
                 android:id="@+id/sheet_settings_invert_row"
                 android:layout_width="match_parent"
@@ -47,41 +74,61 @@
                 android:focusable="true"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
-                android:padding="@dimen/card_pad">
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="14dp">
 
-                <TextView
-                    android:layout_width="36dp"
-                    android:layout_height="36dp"
-                    android:background="@drawable/bg_chip"
-                    android:gravity="center"
-                    android:text="🌗"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="@dimen/text_title" />
+                <FrameLayout
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:background="@drawable/bg_settings_icon_box">
 
-                <TextView
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="反色模式"
+                        android:src="@drawable/ic_sheet_moon"
+                        app:tint="@color/primary" />
+                </FrameLayout>
+
+                <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="@dimen/gap_control"
+                    android:layout_marginStart="12dp"
                     android:layout_weight="1"
-                    android:text="反色开关"
-                    android:textColor="@color/text"
-                    android:textSize="@dimen/text_body"
-                    android:textStyle="bold" />
+                    android:orientation="vertical">
 
-                <androidx.appcompat.widget.SwitchCompat
-                    android:id="@+id/sheet_settings_invert_switch"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:clickable="false"
-                    android:focusable="false" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="反色模式"
+                        android:textColor="@color/text"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="1dp"
+                        android:text="常规 / 反色"
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <com.deepseekharness.app.ui.DshaToggle
+                    android:id="@+id/sheet_settings_invert_toggle"
+                    android:layout_width="44dp"
+                    android:layout_height="26dp"
+                    android:layout_marginStart="8dp" />
             </LinearLayout>
 
             <View
                 android:layout_width="match_parent"
-                android:layout_height="@dimen/stroke"
-                android:background="@color/line" />
+                android:layout_height="1dp"
+                android:layout_marginStart="66dp"
+                android:background="@color/line_soft" />
 
-            <!-- 2. 莫奈取色 -->
+            <!-- 1.2 莫奈取色行 -->
             <LinearLayout
                 android:id="@+id/sheet_settings_monet_row"
                 android:layout_width="match_parent"
@@ -91,158 +138,61 @@
                 android:focusable="true"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
-                android:padding="@dimen/card_pad">
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="14dp">
 
-                <TextView
-                    android:layout_width="36dp"
-                    android:layout_height="36dp"
-                    android:background="@drawable/bg_chip"
-                    android:gravity="center"
-                    android:text="🎨"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="@dimen/text_title" />
+                <FrameLayout
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:background="@drawable/bg_settings_icon_box">
 
-                <TextView
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="莫奈取色"
+                        android:src="@drawable/ic_sheet_palette"
+                        app:tint="@color/primary" />
+                </FrameLayout>
+
+                <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="@dimen/gap_control"
+                    android:layout_marginStart="12dp"
                     android:layout_weight="1"
-                    android:text="莫奈取色"
-                    android:textColor="@color/text"
-                    android:textSize="@dimen/text_body"
-                    android:textStyle="bold" />
-
-                <androidx.appcompat.widget.SwitchCompat
-                    android:id="@+id/sheet_settings_monet_switch"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:clickable="false"
-                    android:focusable="false" />
-            </LinearLayout>
-
-            <!-- 莫奈色彩风格与标准子选项容器（仅在莫奈开启时展示） -->
-            <LinearLayout
-                android:id="@+id/sheet_settings_monet_options_container"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical">
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="@dimen/stroke"
-                    android:background="@color/line" />
-
-                <!-- 色彩风格 -->
-                <LinearLayout
-                    android:id="@+id/sheet_settings_palette_style_row"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:background="?attr/selectableItemBackground"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:paddingStart="@dimen/card_pad"
-                    android:paddingTop="14dp"
-                    android:paddingEnd="@dimen/card_pad"
-                    android:paddingBottom="14dp">
+                    android:orientation="vertical">
 
                     <TextView
-                        android:layout_width="36dp"
-                        android:layout_height="36dp"
-                        android:background="@drawable/bg_chip"
-                        android:gravity="center"
-                        android:text="✨"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="@dimen/text_title" />
-
-                    <TextView
-                        android:layout_width="0dp"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="@dimen/gap_control"
-                        android:layout_weight="1"
-                        android:text="色彩风格"
+                        android:text="莫奈取色"
                         android:textColor="@color/text"
-                        android:textSize="@dimen/text_body"
+                        android:textSize="15sp"
                         android:textStyle="bold" />
-
-                    <LinearLayout
-                        android:id="@+id/sheet_settings_palette_style_dots"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginEnd="8dp"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal" />
 
                     <TextView
-                        android:id="@+id/sheet_settings_palette_style_value"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:gravity="end|center_vertical"
-                        android:text="Tonal Spot ▾"
-                        android:textColor="@color/primary"
-                        android:textSize="@dimen/text_body"
-                        android:textStyle="bold" />
+                        android:layout_marginTop="1dp"
+                        android:text="跟随系统壁纸动态取色"
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp" />
                 </LinearLayout>
 
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="@dimen/stroke"
-                    android:background="@color/line" />
-
-                <!-- 色彩标准 -->
-                <LinearLayout
-                    android:id="@+id/sheet_settings_color_spec_row"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:background="?attr/selectableItemBackground"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:paddingStart="@dimen/card_pad"
-                    android:paddingTop="12dp"
-                    android:paddingEnd="@dimen/card_pad"
-                    android:paddingBottom="12dp">
-
-                    <TextView
-                        android:layout_width="36dp"
-                        android:layout_height="36dp"
-                        android:background="@drawable/bg_chip"
-                        android:gravity="center"
-                        android:text="📐"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="@dimen/text_title" />
-
-                    <TextView
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="@dimen/gap_control"
-                        android:layout_weight="1"
-                        android:text="色彩标准"
-                        android:textColor="@color/text"
-                        android:textSize="@dimen/text_body"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:id="@+id/sheet_settings_color_spec_value"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:gravity="end|center_vertical"
-                        android:lineSpacingExtra="2dp"
-                        android:text="Material 3\nExpressive 2025 ▾"
-                        android:textColor="@color/primary"
-                        android:textSize="@dimen/text_body"
-                        android:textStyle="bold" />
-                </LinearLayout>
+                <com.deepseekharness.app.ui.DshaToggle
+                    android:id="@+id/sheet_settings_monet_toggle"
+                    android:layout_width="44dp"
+                    android:layout_height="26dp"
+                    android:layout_marginStart="8dp" />
             </LinearLayout>
 
             <View
                 android:layout_width="match_parent"
-                android:layout_height="@dimen/stroke"
-                android:background="@color/line" />
+                android:layout_height="1dp"
+                android:layout_marginStart="66dp"
+                android:background="@color/line_soft" />
 
-            <!-- 3. 圈定即搜重定向（增加 Google 和语音识别说明） -->
+            <!-- 1.3 圈定即搜重定向行 -->
             <LinearLayout
                 android:id="@+id/sheet_settings_cts_redirect_row"
                 android:layout_width="match_parent"
@@ -252,21 +202,27 @@
                 android:focusable="true"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
-                android:padding="@dimen/card_pad">
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="14dp">
 
-                <TextView
-                    android:layout_width="36dp"
-                    android:layout_height="36dp"
-                    android:background="@drawable/bg_chip"
-                    android:gravity="center"
-                    android:text="◎"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="@dimen/text_title" />
+                <FrameLayout
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:background="@drawable/bg_settings_icon_box">
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="圈定即搜重定向"
+                        android:src="@drawable/ic_sheet_circle_search"
+                        app:tint="@color/primary" />
+                </FrameLayout>
 
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="@dimen/gap_control"
+                    android:layout_marginStart="12dp"
                     android:layout_weight="1"
                     android:orientation="vertical">
 
@@ -275,282 +231,33 @@
                         android:layout_height="wrap_content"
                         android:text="圈定即搜重定向"
                         android:textColor="@color/text"
-                        android:textSize="@dimen/text_body"
+                        android:textSize="15sp"
                         android:textStyle="bold" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/gap_hair"
-                        android:lineSpacingExtra="2dp"
-                        android:text="圈选手势直接唤起快捷抽屉（需 LSPosed 激活模块并重启）\n需要安装google和谷歌语音识别，并将语音助理选择为google"
+                        android:layout_marginTop="1dp"
+                        android:lineSpacingMultiplier="1.3"
+                        android:text="圈选手势直接唤起快捷抽屉（需 LSPosed 激活）"
                         android:textColor="@color/text_muted"
-                        android:textSize="@dimen/text_caption" />
+                        android:textSize="12sp" />
                 </LinearLayout>
 
-                <androidx.appcompat.widget.SwitchCompat
-                    android:id="@+id/sheet_settings_cts_redirect_switch"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:clickable="false"
-                    android:focusable="false" />
+                <com.deepseekharness.app.ui.DshaToggle
+                    android:id="@+id/sheet_settings_cts_redirect_toggle"
+                    android:layout_width="44dp"
+                    android:layout_height="26dp"
+                    android:layout_marginStart="8dp" />
             </LinearLayout>
 
             <View
                 android:layout_width="match_parent"
-                android:layout_height="@dimen/stroke"
-                android:background="@color/line" />
+                android:layout_height="1dp"
+                android:layout_marginStart="66dp"
+                android:background="@color/line_soft" />
 
-            <!-- 3. 抽屉白天不透明度 -->
-            <LinearLayout
-                android:id="@+id/sheet_settings_opacity_day_row"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:padding="@dimen/card_pad">
-
-                <TextView
-                    android:layout_width="36dp"
-                    android:layout_height="36dp"
-                    android:background="@drawable/bg_chip"
-                    android:gravity="center"
-                    android:text="☀️"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="@dimen/text_title" />
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="@dimen/gap_control"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="抽屉白天不透明度"
-                        android:textColor="@color/text"
-                        android:textSize="@dimen/text_body"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/gap_hair"
-                        android:text="浅色底板 (30~100%)，默认 88%"
-                        android:textColor="@color/text_muted"
-                        android:textSize="@dimen/text_caption" />
-                </LinearLayout>
-
-                <EditText
-                    android:id="@+id/sheet_settings_opacity_day_input"
-                    android:layout_width="56dp"
-                    android:layout_height="38dp"
-                    android:background="@drawable/bg_input"
-                    android:gravity="center"
-                    android:hint="88"
-                    android:importantForAutofill="no"
-                    android:inputType="number"
-                    android:maxLength="3"
-                    android:textColor="@color/text"
-                    android:textSize="@dimen/text_body" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
-                    android:text="%"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="@dimen/text_body" />
-
-                <Button
-                    android:id="@+id/sheet_settings_opacity_day_save"
-                    style="@style/Widget.DSHA.Button"
-                    android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:layout_marginStart="8dp"
-                    android:background="@drawable/bg_btn_primary"
-                    android:paddingStart="12dp"
-                    android:paddingEnd="12dp"
-                    android:text="保存"
-                    android:textColor="@color/accent_on"
-                    android:textSize="@dimen/text_caption" />
-            </LinearLayout>
-
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="@dimen/stroke"
-                android:background="@color/line" />
-
-            <!-- 4. 抽屉黑夜不透明度 -->
-            <LinearLayout
-                android:id="@+id/sheet_settings_opacity_night_row"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:padding="@dimen/card_pad">
-
-                <TextView
-                    android:layout_width="36dp"
-                    android:layout_height="36dp"
-                    android:background="@drawable/bg_chip"
-                    android:gravity="center"
-                    android:text="🌙"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="@dimen/text_title" />
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="@dimen/gap_control"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="抽屉黑夜不透明度"
-                        android:textColor="@color/text"
-                        android:textSize="@dimen/text_body"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/gap_hair"
-                        android:text="深色底板 (30~100%)，默认 80%"
-                        android:textColor="@color/text_muted"
-                        android:textSize="@dimen/text_caption" />
-                </LinearLayout>
-
-                <EditText
-                    android:id="@+id/sheet_settings_opacity_night_input"
-                    android:layout_width="56dp"
-                    android:layout_height="38dp"
-                    android:background="@drawable/bg_input"
-                    android:gravity="center"
-                    android:hint="80"
-                    android:importantForAutofill="no"
-                    android:inputType="number"
-                    android:maxLength="3"
-                    android:textColor="@color/text"
-                    android:textSize="@dimen/text_body" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
-                    android:text="%"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="@dimen/text_body" />
-
-                <Button
-                    android:id="@+id/sheet_settings_opacity_night_save"
-                    style="@style/Widget.DSHA.Button"
-                    android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:layout_marginStart="8dp"
-                    android:background="@drawable/bg_btn_primary"
-                    android:paddingStart="12dp"
-                    android:paddingEnd="12dp"
-                    android:text="保存"
-                    android:textColor="@color/accent_on"
-                    android:textSize="@dimen/text_caption" />
-            </LinearLayout>
-        </LinearLayout>
-
-        <!-- 快捷抽屉尺寸与形态配置卡片 -->
-        <LinearLayout
-            style="@style/DshaCard"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/gap_control"
-            android:orientation="vertical">
-
-            <!-- 1. 默认展开高度百分比 -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:padding="@dimen/card_pad">
-
-                <TextView
-                    android:layout_width="36dp"
-                    android:layout_height="36dp"
-                    android:background="@drawable/bg_chip"
-                    android:gravity="center"
-                    android:text="📏"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="@dimen/text_title" />
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="@dimen/gap_control"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="默认高度与吸附档位"
-                        android:textColor="@color/text"
-                        android:textSize="@dimen/text_body"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/gap_hair"
-                        android:text="默认展开高度 (30~95%)，默认 75%"
-                        android:textColor="@color/text_muted"
-                        android:textSize="@dimen/text_caption" />
-                </LinearLayout>
-
-                <EditText
-                    android:id="@+id/sheet_settings_height_input"
-                    android:layout_width="56dp"
-                    android:layout_height="38dp"
-                    android:background="@drawable/bg_input"
-                    android:gravity="center"
-                    android:hint="75"
-                    android:importantForAutofill="no"
-                    android:inputType="number"
-                    android:maxLength="3"
-                    android:textColor="@color/text"
-                    android:textSize="@dimen/text_body" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
-                    android:text="%"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="@dimen/text_body" />
-
-                <Button
-                    android:id="@+id/sheet_settings_height_save"
-                    style="@style/Widget.DSHA.Button"
-                    android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:layout_marginStart="8dp"
-                    android:background="@drawable/bg_btn_primary"
-                    android:paddingStart="12dp"
-                    android:paddingEnd="12dp"
-                    android:text="保存"
-                    android:textColor="@color/accent_on"
-                    android:textSize="@dimen/text_caption" />
-            </LinearLayout>
-
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="@dimen/stroke"
-                android:background="@color/line" />
-
-            <!-- 2. 低于 45% 自动恢复默认高度 开关项 -->
+            <!-- 1.4 低位自动恢复默认高度行 -->
             <LinearLayout
                 android:id="@+id/sheet_settings_auto_restore_row"
                 android:layout_width="match_parent"
@@ -560,21 +267,27 @@
                 android:focusable="true"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
-                android:padding="@dimen/card_pad">
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="14dp">
 
-                <TextView
-                    android:layout_width="36dp"
-                    android:layout_height="36dp"
-                    android:background="@drawable/bg_chip"
-                    android:gravity="center"
-                    android:text="🔄"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="@dimen/text_title" />
+                <FrameLayout
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:background="@drawable/bg_settings_icon_box">
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="低位自动恢复默认高度"
+                        android:src="@drawable/ic_sheet_restore"
+                        app:tint="@color/primary" />
+                </FrameLayout>
 
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="@dimen/gap_control"
+                    android:layout_marginStart="12dp"
                     android:layout_weight="1"
                     android:orientation="vertical">
 
@@ -583,165 +296,372 @@
                         android:layout_height="wrap_content"
                         android:text="低位自动恢复默认高度"
                         android:textColor="@color/text"
-                        android:textSize="@dimen/text_body"
+                        android:textSize="15sp"
                         android:textStyle="bold" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/gap_hair"
-                        android:lineSpacingExtra="2dp"
-                        android:text="抽屉低于 45% 时，下次唤起或弹起键盘自动回到设定的默认高度"
+                        android:layout_marginTop="1dp"
+                        android:text="低于 45% 时自动回到默认高度"
                         android:textColor="@color/text_muted"
-                        android:textSize="@dimen/text_caption" />
+                        android:textSize="12sp" />
                 </LinearLayout>
 
-                <androidx.appcompat.widget.SwitchCompat
-                    android:id="@+id/sheet_settings_auto_restore_switch"
+                <com.deepseekharness.app.ui.DshaToggle
+                    android:id="@+id/sheet_settings_auto_restore_toggle"
+                    android:layout_width="44dp"
+                    android:layout_height="26dp"
+                    android:layout_marginStart="8dp" />
+            </LinearLayout>
+
+        </com.deepseekharness.app.ui.ModernCardView>
+
+        <!-- ========== 卡片 2: 色彩风格与标准 (.gcard, padding: 0) ========== -->
+        <com.deepseekharness.app.ui.ModernCardView
+            android:id="@+id/sheet_settings_monet_options_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:clipToOutline="true"
+            android:orientation="vertical"
+            app:cardRadius="18dp">
+
+            <!-- 色彩风格行 -->
+            <LinearLayout
+                android:id="@+id/sheet_settings_palette_style_row"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="15dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="色彩风格"
+                    android:textColor="@color/text"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:id="@+id/sheet_settings_palette_style_dots"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:clickable="false"
-                    android:focusable="false" />
+                    android:layout_marginEnd="6dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal" />
+
+                <TextView
+                    android:id="@+id/sheet_settings_palette_style_value"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="典雅蓝灰 ▾"
+                    android:textColor="@color/primary"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
             </LinearLayout>
 
             <View
                 android:layout_width="match_parent"
-                android:layout_height="@dimen/stroke"
-                android:background="@color/line" />
+                android:layout_height="1dp"
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:background="@color/line_soft" />
 
-            <!-- 3. 左右屏幕间距（上下分行：上面文字横排舒展，下面填数保存） -->
+            <!-- 色彩标准行 -->
+            <LinearLayout
+                android:id="@+id/sheet_settings_color_spec_row"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="15dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="色彩标准"
+                    android:textColor="@color/text"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/sheet_settings_color_spec_value"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Material 3 Expressive 2025 ▾"
+                    android:textColor="@color/primary"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </com.deepseekharness.app.ui.ModernCardView>
+
+        <!-- ========== 卡片 3: 对话页设置 (.gcard) ========== -->
+        <com.deepseekharness.app.ui.ModernCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:orientation="vertical"
+            android:padding="18dp"
+            app:cardRadius="18dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="对话页设置"
+                android:textColor="@color/text"
+                android:textSize="17sp"
+                android:textStyle="bold" />
+
+            <!-- 1. 默认展开高度（屏占比） -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="默认展开高度（屏占比）"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="@dimen/card_pad">
+                android:layout_marginTop="8dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
-                <!-- 标题与说明行 -->
-                <LinearLayout
-                    android:layout_width="match_parent"
+                <EditText
+                    android:id="@+id/sheet_settings_height_input"
+                    android:layout_width="0dp"
+                    android:layout_height="42dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_input"
+                    android:gravity="center"
+                    android:hint="75"
+                    android:importantForAutofill="no"
+                    android:inputType="number"
+                    android:maxLength="3"
+                    android:textColor="@color/text"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
+                    android:layout_marginStart="8dp"
+                    android:text="%"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="14sp" />
 
-                    <TextView
-                        android:layout_width="36dp"
-                        android:layout_height="36dp"
-                        android:background="@drawable/bg_chip"
-                        android:gravity="center"
-                        android:text="↔️"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="@dimen/text_title" />
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="@dimen/gap_control"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="左右屏幕间距"
-                            android:textColor="@color/text"
-                            android:textSize="@dimen/text_body"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="@dimen/gap_hair"
-                            android:text="左/右独立边距 (0为贴边直角，>0为浮空圆角)"
-                            android:textColor="@color/text_muted"
-                            android:textSize="@dimen/text_caption" />
-                    </LinearLayout>
-                </LinearLayout>
-
-                <!-- 下方填数与保存行：去掉多余 paddingStart，保存按钮靠右对齐绝对不被截断 -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="@dimen/gap_control"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="左"
-                        android:textColor="@color/text"
-                        android:textSize="@dimen/text_body" />
-
-                    <EditText
-                        android:id="@+id/sheet_settings_margin_left_input"
-                        android:layout_width="46dp"
-                        android:layout_height="38dp"
-                        android:layout_marginStart="6dp"
-                        android:background="@drawable/bg_input"
-                        android:gravity="center"
-                        android:hint="0"
-                        android:importantForAutofill="no"
-                        android:inputType="number"
-                        android:maxLength="3"
-                        android:textColor="@color/text"
-                        android:textSize="@dimen/text_body" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="4dp"
-                        android:text="dp"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="@dimen/text_caption" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="14dp"
-                        android:text="右"
-                        android:textColor="@color/text"
-                        android:textSize="@dimen/text_body" />
-
-                    <EditText
-                        android:id="@+id/sheet_settings_margin_right_input"
-                        android:layout_width="46dp"
-                        android:layout_height="38dp"
-                        android:layout_marginStart="6dp"
-                        android:background="@drawable/bg_input"
-                        android:gravity="center"
-                        android:hint="0"
-                        android:importantForAutofill="no"
-                        android:inputType="number"
-                        android:maxLength="3"
-                        android:textColor="@color/text"
-                        android:textSize="@dimen/text_body" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="4dp"
-                        android:text="dp"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="@dimen/text_caption" />
-
-                    <View
-                        android:layout_width="0dp"
-                        android:layout_height="0dp"
-                        android:layout_weight="1" />
-
-                    <Button
-                        android:id="@+id/sheet_settings_margin_save"
-                        style="@style/Widget.DSHA.Button"
-                        android:layout_width="wrap_content"
-                        android:layout_height="36dp"
-                        android:background="@drawable/bg_btn_primary"
-                        android:paddingStart="14dp"
-                        android:paddingEnd="14dp"
-                        android:text="保存"
-                        android:textColor="@color/accent_on"
-                        android:textSize="@dimen/text_caption" />
-                </LinearLayout>
+                <Button
+                    android:id="@+id/sheet_settings_height_save"
+                    android:layout_width="wrap_content"
+                    android:layout_height="38dp"
+                    android:layout_marginStart="12dp"
+                    android:background="@drawable/bg_btn_primary_compact"
+                    android:stateListAnimator="@animator/btn_press_scale"
+                    android:paddingHorizontal="18dp"
+                    android:text="保存"
+                    android:textAllCaps="false"
+                    android:textColor="@color/accent_on"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
             </LinearLayout>
-        </LinearLayout>
+
+            <!-- 2. 左右屏幕间距 -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:text="左右屏幕间距"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/sheet_settings_margin_left_input"
+                    android:layout_width="0dp"
+                    android:layout_height="42dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_input"
+                    android:gravity="center"
+                    android:hint="0"
+                    android:importantForAutofill="no"
+                    android:inputType="number"
+                    android:maxLength="3"
+                    android:textColor="@color/text"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:text="左 dp"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp" />
+
+                <EditText
+                    android:id="@+id/sheet_settings_margin_right_input"
+                    android:layout_width="0dp"
+                    android:layout_height="42dp"
+                    android:layout_marginStart="10dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_input"
+                    android:gravity="center"
+                    android:hint="0"
+                    android:importantForAutofill="no"
+                    android:inputType="number"
+                    android:maxLength="3"
+                    android:textColor="@color/text"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:text="右 dp"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp" />
+
+                <Button
+                    android:id="@+id/sheet_settings_margin_save"
+                    android:layout_width="wrap_content"
+                    android:layout_height="38dp"
+                    android:layout_marginStart="12dp"
+                    android:background="@drawable/bg_btn_primary_compact"
+                    android:stateListAnimator="@animator/btn_press_scale"
+                    android:paddingHorizontal="18dp"
+                    android:text="保存"
+                    android:textAllCaps="false"
+                    android:textColor="@color/accent_on"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- 3. 白天不透明度（30~100%） -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:text="白天不透明度（30~100%）"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/sheet_settings_opacity_day_input"
+                    android:layout_width="72dp"
+                    android:layout_height="42dp"
+                    android:background="@drawable/bg_input"
+                    android:gravity="center"
+                    android:hint="88"
+                    android:importantForAutofill="no"
+                    android:inputType="number"
+                    android:maxLength="3"
+                    android:textColor="@color/text"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="%"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="14sp" />
+
+                <Button
+                    android:id="@+id/sheet_settings_opacity_day_save"
+                    android:layout_width="wrap_content"
+                    android:layout_height="38dp"
+                    android:layout_marginStart="16dp"
+                    android:background="@drawable/bg_btn_primary_compact"
+                    android:stateListAnimator="@animator/btn_press_scale"
+                    android:paddingHorizontal="18dp"
+                    android:text="保存"
+                    android:textAllCaps="false"
+                    android:textColor="@color/accent_on"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- 4. 黑夜不透明度（30~100%） -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:text="黑夜不透明度（30~100%）"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/sheet_settings_opacity_night_input"
+                    android:layout_width="72dp"
+                    android:layout_height="42dp"
+                    android:background="@drawable/bg_input"
+                    android:gravity="center"
+                    android:hint="80"
+                    android:importantForAutofill="no"
+                    android:inputType="number"
+                    android:maxLength="3"
+                    android:textColor="@color/text"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="%"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="14sp" />
+
+                <Button
+                    android:id="@+id/sheet_settings_opacity_night_save"
+                    android:layout_width="wrap_content"
+                    android:layout_height="38dp"
+                    android:layout_marginStart="16dp"
+                    android:background="@drawable/bg_btn_primary_compact"
+                    android:stateListAnimator="@animator/btn_press_scale"
+                    android:paddingHorizontal="18dp"
+                    android:text="保存"
+                    android:textAllCaps="false"
+                    android:textColor="@color/accent_on"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+        </com.deepseekharness.app.ui.ModernCardView>
+
     </LinearLayout>
-</ScrollView>
+</androidx.core.widget.NestedScrollView>

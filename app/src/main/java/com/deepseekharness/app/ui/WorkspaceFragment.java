@@ -20,7 +20,7 @@ import com.deepseekharness.app.ui.contract.WorkspacePresenter;
 import com.deepseekharness.app.ui.contract.WorkspaceUiState;
 
 /**
- * 数据与备份子页：纯渲染与契约驱动。
+ * 数据与备份二级页：1:1 像素级 Skia 现代卡片设计 (ModernCardView)，纯渲染与契约驱动。
  */
 public class WorkspaceFragment extends Fragment implements WorkspacePresenter.ViewCallback {
 
@@ -51,7 +51,10 @@ public class WorkspaceFragment extends Fragment implements WorkspacePresenter.Vi
         wsPathInput = v.findViewById(R.id.workspace_path);
         rootStatusView = v.findViewById(R.id.workspace_shizuku_status);
 
-        v.findViewById(R.id.sub_back).setOnClickListener(x -> actions.onBackClick());
+        View subBack = v.findViewById(R.id.sub_back);
+        if (subBack != null) {
+            subBack.setOnClickListener(x -> actions.onBackClick());
+        }
         v.findViewById(R.id.workspace_backup).setOnClickListener(x -> actions.onBackupClick());
         v.findViewById(R.id.workspace_restore).setOnClickListener(x -> actions.onRestoreClick());
         v.findViewById(R.id.workspace_location).setOnClickListener(x ->

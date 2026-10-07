@@ -1,246 +1,352 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/surface"
-    android:clipToPadding="false">
+    android:background="@android:color/transparent"
+    android:clipChildren="false"
+    android:clipToPadding="false"
+    android:fillViewport="true"
+    android:overScrollMode="never"
+    android:scrollbars="none">
 
+    <!-- 主体内容垂直容器 (padding 14px 16px 96px; gap: 12px) -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:clipChildren="false"
+        android:clipToPadding="false"
         android:orientation="vertical"
-        android:paddingStart="@dimen/page_pad"
-        android:paddingTop="@dimen/gap_control"
-        android:paddingEnd="@dimen/page_pad"
-        android:paddingBottom="@dimen/gap_section">
+        android:paddingHorizontal="16dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="96dp">
 
-        <TextView
-            android:id="@+id/sub_back"
-            style="@style/DshaText.Label"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:paddingBottom="@dimen/gap_tight"
-            android:text="‹ 返回"
-            android:visibility="gone" />
-
-        <TextView
-            style="@style/DshaText.Display"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="详细配置" />
-
-        <TextView
-            android:id="@+id/config_workspace_entry"
-            style="@style/DshaText.Body"
-            android:layout_width="match_parent"
-            android:layout_height="@dimen/btn_height"
-            android:layout_marginTop="@dimen/gap_control"
-            android:background="@drawable/m3_btn_tonal_expressive"
-            android:textColor="@color/text"
-            android:gravity="center"
-            android:textStyle="bold"
-            android:text="数据与备份 · 备份恢复与工作区直通" />
-
-        <!-- ========== 模块一：端口与调度核心 ========== -->
+        <!-- 顶部二级导航条 (返回按钮 + 页面主标题) -->
         <LinearLayout
-            style="@style/DshaCard.Expressive"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/gap_section">
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingBottom="12dp">
+
+            <FrameLayout
+                android:id="@+id/sub_back"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:background="@drawable/bg_chip_clickable"
+                android:clickable="true"
+                android:focusable="true">
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="返回"
+                    android:src="@drawable/ic_nav_back"
+                    app:tint="@color/text_secondary" />
+            </FrameLayout>
 
             <TextView
-                style="@style/DshaText.Headline"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="端口与 CPU 调度" />
+                android:layout_marginStart="12dp"
+                android:text="详细配置"
+                android:textColor="@color/text"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- 快捷入口按钮：数据与备份 (HTML 原型: .btn .btn-tonal .btn-block) -->
+        <Button
+            android:id="@+id/config_workspace_entry"
+            android:layout_width="match_parent"
+            android:layout_height="46dp"
+            android:layout_marginBottom="12dp"
+            android:background="@drawable/m3_btn_tonal_expressive"
+            android:stateListAnimator="@animator/btn_press_scale"
+            android:text="数据与备份 · 备份恢复与工作区直通"
+            android:textAllCaps="false"
+            android:textColor="@color/primary"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <!-- ========== 卡片 1: 端口与 CPU 调度 (.gcard) ========== -->
+        <com.deepseekharness.app.ui.ModernCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="18dp"
+            app:cardRadius="18dp">
 
             <TextView
-                android:id="@+id/config_adv_header"
-                style="@style/DshaText.Label"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/gap_control"
-                android:background="@drawable/m3_card_expressive_item"
-                android:paddingStart="14dp"
-                android:paddingEnd="14dp"
-                android:paddingTop="12dp"
-                android:paddingBottom="12dp"
-                android:text="▸ 点击展开高级设置：端口与 CPU 亲和性 (Taskset)" />
+                android:text="端口与 CPU 调度"
+                android:textColor="@color/text"
+                android:textSize="17sp"
+                android:textStyle="bold" />
 
+            <!-- 折叠栏：高级设置：端口与 CPU 亲和性 (.fold) -->
+            <LinearLayout
+                android:id="@+id/config_adv_header"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_fold_header"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="14dp"
+                android:paddingVertical="12dp">
+
+                <TextView
+                    android:id="@+id/config_adv_header_text"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="高级设置：端口与 CPU 亲和性 (Taskset)"
+                    android:textColor="@color/primary"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <ImageView
+                    android:id="@+id/config_adv_arrow"
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:src="@drawable/ic_chevron_right"
+                    app:tint="@color/primary" />
+            </LinearLayout>
+
+            <!-- 折叠栏展开体 (.fold-body) -->
             <LinearLayout
                 android:id="@+id/config_adv_body"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
                 android:orientation="vertical"
                 android:visibility="gone">
 
                 <TextView
-                    style="@style/DshaText.Label"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="@dimen/gap_control"
+                    android:layout_marginTop="6dp"
                     android:text="服务监听端口"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="13sp"
                     android:textStyle="bold" />
 
                 <EditText
                     android:id="@+id/config_port"
-                    style="@style/DshaText.Body"
                     android:layout_width="match_parent"
-                    android:layout_height="@dimen/input_height"
-                    android:layout_marginTop="@dimen/gap_tight"
+                    android:layout_height="44dp"
+                    android:layout_marginTop="8dp"
                     android:background="@drawable/bg_input"
                     android:hint="3080"
                     android:importantForAutofill="no"
                     android:inputType="number"
-                    android:paddingStart="@dimen/gap_control"
-                    android:paddingEnd="@dimen/gap_control" />
+                    android:paddingHorizontal="14dp"
+                    android:textColor="@color/text"
+                    android:textSize="14sp" />
 
                 <TextView
-                    style="@style/DshaText.Label"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="@dimen/gap_control"
+                    android:layout_marginTop="12dp"
                     android:text="CPU 核心绑定 (Taskset)"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="13sp"
                     android:textStyle="bold" />
 
                 <TextView
-                    style="@style/DshaText.Caption"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="@dimen/gap_hair"
+                    android:layout_marginTop="4dp"
+                    android:lineSpacingMultiplier="1.4"
+                    android:text="设置容器守护进程及 Agent 任务的 CPU 亲和性，例如 0-6（避开超大核降温防烫）、0-4,7 或留空（全核调度）。"
                     android:textColor="@color/text_secondary"
-                    android:text="设置容器守护进程及 Agent 任务的 CPU 亲和性。例如 0-6（避开超大核降温防烫）、0-4,7 或留空（全核调度）。" />
+                    android:textSize="12sp" />
 
                 <EditText
                     android:id="@+id/config_taskset"
-                    style="@style/DshaText.Body"
                     android:layout_width="match_parent"
-                    android:layout_height="@dimen/input_height"
-                    android:layout_marginTop="@dimen/gap_tight"
+                    android:layout_height="44dp"
+                    android:layout_marginTop="8dp"
                     android:background="@drawable/bg_input"
                     android:hint="如 0-6 或 0-4,7（留空不限制）"
                     android:importantForAutofill="no"
                     android:inputType="text"
-                    android:paddingStart="@dimen/gap_control"
-                    android:paddingEnd="@dimen/gap_control" />
+                    android:paddingHorizontal="14dp"
+                    android:textColor="@color/text"
+                    android:textSize="14sp" />
             </LinearLayout>
-        </LinearLayout>
 
-        <!-- ========== 模块二：行为与环境能力 ========== -->
-        <LinearLayout
-            style="@style/DshaCard.Expressive"
+        </com.deepseekharness.app.ui.ModernCardView>
+
+        <!-- ========== 卡片 2: 行为与系统直通 (.gcard) ========== -->
+        <com.deepseekharness.app.ui.ModernCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/gap_section">
+            android:layout_marginTop="14dp"
+            android:orientation="vertical"
+            android:padding="18dp"
+            app:cardRadius="18dp">
 
             <TextView
-                style="@style/DshaText.Headline"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="行为与系统直通" />
-
-            <CheckBox
-                android:id="@+id/config_confirm_shell"
-                style="@style/DshaText.Body"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/gap_tight"
-                android:minHeight="@dimen/touch_min"
-                android:paddingStart="@dimen/gap_tight"
-                android:text="危险 Shell 操作需确认（删除/格式化/卸载/重启等）" />
+                android:text="行为与系统直通"
+                android:textColor="@color/text"
+                android:textSize="17sp"
+                android:textStyle="bold" />
+
+            <!-- 复选行 1: 危险 Shell 操作需确认 -->
+            <CheckBox
+                android:id="@+id/config_confirm_shell"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:button="@drawable/selector_check_box"
+                android:minHeight="40dp"
+                android:paddingStart="10dp"
+                android:text="危险 Shell 操作需确认"
+                android:textColor="@color/text"
+                android:textSize="14.5sp" />
 
             <TextView
                 android:id="@+id/config_guard_status"
-                style="@style/DshaText.Caption"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="@dimen/gap_tight"
-                android:layout_marginTop="@dimen/gap_hair"
+                android:layout_marginStart="30dp"
+                android:textColor="@color/text_muted"
+                android:textSize="12sp"
                 android:visibility="gone" />
 
+            <!-- 复选行 2: 局域网访问 -->
             <CheckBox
                 android:id="@+id/config_lan_mode"
-                style="@style/DshaText.Body"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:minHeight="@dimen/touch_min"
-                android:paddingStart="@dimen/gap_tight"
-                android:text="局域网访问（同网段设备可打开，注意安全）" />
+                android:layout_marginTop="6dp"
+                android:button="@drawable/selector_check_box"
+                android:minHeight="40dp"
+                android:paddingStart="10dp"
+                android:text="局域网访问"
+                android:textColor="@color/text"
+                android:textSize="14.5sp" />
 
+            <!-- 复选行 3: 屏幕顶部流式显示 AI 输出 -->
             <CheckBox
                 android:id="@+id/config_overlay_stream"
-                style="@style/DshaText.Body"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:minHeight="@dimen/touch_min"
-                android:paddingStart="@dimen/gap_tight"
-                android:text="屏幕顶部流式显示 AI 输出（需悬浮窗权限）" />
+                android:layout_marginTop="6dp"
+                android:button="@drawable/selector_check_box"
+                android:minHeight="40dp"
+                android:paddingStart="10dp"
+                android:text="屏幕顶部流式显示 AI 输出"
+                android:textColor="@color/text"
+                android:textSize="14.5sp" />
 
-            <TextView
-                android:id="@+id/config_overlay_style"
-                style="@style/DshaText.Body"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:minHeight="@dimen/btn_height"
-                android:layout_marginTop="@dimen/gap_tight"
-                android:background="@drawable/m3_card_expressive_item"
-                android:clickable="true"
-                android:focusable="true"
-                android:gravity="center_vertical"
-                android:paddingStart="14dp"
-                android:paddingEnd="14dp"
-                android:text="🎨 悬浮条外观与行为配置 ▸ 底色 / 透明度 / 行数 / 停留" />
-
-            <TextView
-                android:id="@+id/config_translate"
-                style="@style/DshaText.Body"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:minHeight="@dimen/btn_height"
-                android:layout_marginTop="@dimen/gap_tight"
-                android:background="@drawable/m3_card_expressive_item"
-                android:clickable="true"
-                android:focusable="true"
-                android:gravity="center_vertical"
-                android:paddingStart="14dp"
-                android:paddingEnd="14dp"
-                android:text="🌐 插件市场自动翻译 ▸ 开关 / 接口地址 / 模型" />
-
+            <!-- 复选行 4: 允许读传感器、开手电 -->
             <CheckBox
                 android:id="@+id/config_cap_sensors"
-                style="@style/DshaText.Body"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/gap_tight"
-                android:minHeight="@dimen/touch_min"
-                android:paddingStart="@dimen/gap_tight"
-                android:text="允许 agent 读传感器、开手电（环境光 / 加速度 / 磁力等）" />
+                android:layout_marginTop="6dp"
+                android:button="@drawable/selector_check_box"
+                android:minHeight="40dp"
+                android:paddingStart="10dp"
+                android:text="允许读传感器、开手电"
+                android:textColor="@color/text"
+                android:textSize="14.5sp" />
 
+            <!-- 复选行 5: 允许读取位置 -->
             <CheckBox
                 android:id="@+id/config_cap_location"
-                style="@style/DshaText.Body"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:minHeight="@dimen/touch_min"
-                android:paddingStart="@dimen/gap_tight"
-                android:text="允许 agent 读取位置（仅在有需要时开启）" />
+                android:layout_marginTop="6dp"
+                android:button="@drawable/selector_check_box"
+                android:minHeight="40dp"
+                android:paddingStart="10dp"
+                android:text="允许读取位置"
+                android:textColor="@color/text"
+                android:textSize="14.5sp" />
 
-            <!-- 所有文件访问权限卡片 -->
+            <!-- 折叠栏入口 1: 悬浮条外观与行为配置 -->
+            <LinearLayout
+                android:id="@+id/config_overlay_style"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/bg_fold_header"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="14dp"
+                android:paddingVertical="12dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="悬浮条外观与行为配置"
+                    android:textColor="@color/primary"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <ImageView
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:src="@drawable/ic_chevron_right"
+                    app:tint="@color/primary" />
+            </LinearLayout>
+
+            <!-- 折叠栏入口 2: 插件市场自动翻译 -->
+            <LinearLayout
+                android:id="@+id/config_translate"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_fold_header"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="14dp"
+                android:paddingVertical="12dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="插件市场自动翻译"
+                    android:textColor="@color/primary"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <ImageView
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:src="@drawable/ic_chevron_right"
+                    app:tint="@color/primary" />
+            </LinearLayout>
+
+            <!-- 折叠栏入口 3: 所有文件的访问权限 -->
             <LinearLayout
                 android:id="@+id/config_all_files"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/gap_tight"
-                android:background="@drawable/m3_card_expressive_item"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_fold_header"
                 android:clickable="true"
                 android:focusable="true"
                 android:gravity="center_vertical"
-                android:minHeight="@dimen/btn_height"
                 android:orientation="horizontal"
-                android:paddingStart="14dp"
-                android:paddingEnd="14dp"
-                android:paddingTop="12dp"
-                android:paddingBottom="12dp">
+                android:paddingHorizontal="14dp"
+                android:paddingVertical="12dp">
 
                 <LinearLayout
                     android:layout_width="0dp"
@@ -249,195 +355,254 @@
                     android:orientation="vertical">
 
                     <TextView
-                        style="@style/DshaText.Body"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:textStyle="bold"
-                        android:text="📂 所有文件的访问权限 (MANAGE_EXTERNAL_STORAGE) ▸" />
+                        android:text="所有文件的访问权限"
+                        android:textColor="@color/primary"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
 
                     <TextView
                         android:id="@+id/config_all_files_status"
-                        style="@style/DshaText.Caption"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:textColor="@color/text_muted" />
+                        android:layout_marginTop="2dp"
+                        android:textColor="@color/text_muted"
+                        android:textSize="11sp" />
                 </LinearLayout>
+
+                <ImageView
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:src="@drawable/ic_chevron_right"
+                    app:tint="@color/primary" />
             </LinearLayout>
 
             <CheckBox
                 android:id="@+id/config_rc6"
-                style="@style/DshaText.Body"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:minHeight="@dimen/touch_min"
-                android:paddingStart="@dimen/gap_tight"
-                android:text="deepseek-harness：默认最新 RC"
                 android:visibility="gone" />
-        </LinearLayout>
+        </com.deepseekharness.app.ui.ModernCardView>
 
-        <!-- 保存按钮 -->
+        <!-- 保存配置按钮 (.btn .btn-primary .btn-block) -->
         <Button
             android:id="@+id/config_save"
             android:layout_width="match_parent"
-            android:layout_height="@dimen/btn_height"
-            android:layout_marginTop="@dimen/gap_section"
+            android:layout_height="46dp"
+            android:layout_marginTop="16dp"
             android:background="@drawable/m3_btn_primary_expressive"
+            android:elevation="3dp"
+            android:outlineAmbientShadowColor="#00000000"
+            android:outlineSpotShadowColor="#3847699F"
+            android:stateListAnimator="@animator/btn_press_scale"
             android:text="保存配置"
-            android:textStyle="bold"
             android:textAllCaps="false"
-            android:textColor="@color/m3_btn_primary_text"
-            android:textSize="@dimen/text_body" />
+            android:textColor="@color/accent_on"
+            android:textSize="15sp"
+            android:textStyle="bold" />
 
-        <!-- ========== 模块三：系统与设备权限 ========== -->
-        <LinearLayout
-            style="@style/DshaCard.Expressive"
+        <!-- ========== 卡片 3: 小米原生 ASR 语音引擎 (.gcard) ========== -->
+        <com.deepseekharness.app.ui.ModernCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/gap_section">
+            android:layout_marginTop="16dp"
+            android:orientation="vertical"
+            android:padding="18dp"
+            app:cardRadius="18dp">
 
             <TextView
-                style="@style/DshaText.Headline"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="系统与保活权限" />
-
-            <TextView
-                style="@style/DshaText.Caption"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/gap_tight"
+                android:text="小米原生 ASR 语音引擎"
+                android:textColor="@color/text"
+                android:textSize="17sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:lineSpacingMultiplier="1.4"
+                android:text="调用 MIUI / HyperOS 系统底层纯听觉组件，零模型占用、秒级流式出字、带整句语义纠错。"
                 android:textColor="@color/text_secondary"
-                android:text="当前运行在 KernelSU / Magisk 原生 Root 模式下，底层命令直通物理设备，无需配置 ADB 或无线调试。" />
+                android:textSize="12sp" />
 
-            <Button
-                android:id="@+id/config_battery_opt"
-                android:layout_width="match_parent"
-                android:layout_height="@dimen/btn_height"
-                android:layout_marginTop="@dimen/gap_control"
-                android:background="@drawable/m3_btn_tonal_expressive"
-                android:text="🔋 关闭电池优化（后台稳定保活必做）"
-                android:textAllCaps="false"
-                android:textColor="@color/m3_btn_tonal_text"
-                android:textSize="@dimen/text_body" />
-
-            <TextView
-                android:id="@+id/config_battery_opt_hint"
-                style="@style/DshaText.Caption"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/gap_hair"
-                android:textColor="@color/text_muted"
-                android:text="系统休眠可能会冻结后台网络与长任务。加入白名单后后台守护与长任务才能平稳运行。" />
-
-            <Button
-                android:id="@+id/config_a11y"
-                android:layout_width="match_parent"
-                android:layout_height="@dimen/btn_height"
-                android:layout_marginTop="@dimen/gap_control"
-                android:background="@drawable/m3_btn_tonal_expressive"
-                android:text="👆 屏幕操作权限（无障碍服务 · 读屏/点击/输入）"
-                android:textAllCaps="false"
-                android:textColor="@color/m3_btn_tonal_text"
-                android:textSize="@dimen/text_body" />
-
-            <TextView
-                android:id="@+id/config_a11y_status"
-                style="@style/DshaText.Caption"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="@dimen/gap_tight"
-                android:layout_marginTop="@dimen/gap_hair" />
-        </LinearLayout>
-
-        <!-- ========== 模块四：小米原生 ASR 语音配置 ========== -->
-        <LinearLayout
-            style="@style/DshaCard.Expressive"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/gap_section">
-
-            <TextView
-                style="@style/DshaText.Headline"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="🎙️ 小米原生 ASR 语音引擎" />
-
-            <TextView
-                style="@style/DshaText.Caption"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/gap_tight"
-                android:textColor="@color/text_secondary"
-                android:text="调用 MIUI / HyperOS 系统底层纯听觉组件，零模型占用、秒级流式出字、带整句语义纠错。" />
-
-            <TextView
-                android:id="@+id/config_asr_status"
-                style="@style/DshaText.Caption"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/gap_control"
-                android:padding="12dp"
-                android:background="@drawable/m3_card_expressive_item"
-                android:text="当前状态：未检测" />
-
-            <CheckBox
-                android:id="@+id/config_asr_continuous"
-                style="@style/DshaText.Body"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/gap_tight"
-                android:minHeight="@dimen/touch_min"
-                android:paddingStart="@dimen/gap_tight"
-                android:text="长语音连续接力模式" />
-
-            <TextView
-                style="@style/DshaText.Caption"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="@dimen/gap_tight"
-                android:layout_marginTop="-4dp"
-                android:textColor="@color/text_muted"
-                android:text="默认关闭（单次短句识别，说停即止）。开启后长时间说话遇到停顿或单次时长上限自动分段定稿并无缝开启下一段，声浪不中断。" />
-
+            <!-- 长语音连续接力模式行 -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="@dimen/gap_control"
+                android:layout_marginTop="10dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingVertical="8dp">
+
+                <CheckBox
+                    android:id="@+id/config_asr_continuous"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:button="@drawable/selector_check_box" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="10dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="长语音连续接力模式"
+                        android:textColor="@color/text"
+                        android:textSize="14.5sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="默认关闭（单次短句识别）"
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/line_soft" />
+
+            <TextView
+                android:id="@+id/config_asr_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="当前状态：未检测"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <!-- 按钮行: 检测状态 + 一键配置 (.btn-row) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
                 android:orientation="horizontal">
 
                 <Button
                     android:id="@+id/config_asr_btn_check"
                     android:layout_width="0dp"
-                    android:layout_height="@dimen/btn_height"
+                    android:layout_height="44dp"
+                    android:layout_marginEnd="8dp"
                     android:layout_weight="1"
-                    android:layout_marginEnd="@dimen/gap_tight"
                     android:background="@drawable/m3_btn_tonal_expressive"
-                    android:text="🔍 检测状态"
+                    android:stateListAnimator="@animator/btn_press_scale"
+                    android:text="检测状态"
                     android:textAllCaps="false"
-                    android:textColor="@color/m3_btn_tonal_text"
-                    android:textSize="@dimen/text_body" />
+                    android:textColor="@color/primary"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
 
                 <Button
                     android:id="@+id/config_asr_btn_fix"
                     android:layout_width="0dp"
-                    android:layout_height="@dimen/btn_height"
+                    android:layout_height="44dp"
                     android:layout_weight="1"
                     android:background="@drawable/m3_btn_primary_expressive"
-                    android:text="⚡ 一键配置"
-                    android:textStyle="bold"
+                    android:elevation="2dp"
+                    android:outlineAmbientShadowColor="#00000000"
+                    android:outlineSpotShadowColor="#3847699F"
+                    android:stateListAnimator="@animator/btn_press_scale"
+                    android:text="一键配置"
                     android:textAllCaps="false"
-                    android:textColor="@color/m3_btn_primary_text"
-                    android:textSize="@dimen/text_body" />
+                    android:textColor="@color/accent_on"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
             </LinearLayout>
-        </LinearLayout>
+
+        </com.deepseekharness.app.ui.ModernCardView>
+
+        <!-- ========== 卡片 4: 系统与保活权限 (.gcard) ========== -->
+        <com.deepseekharness.app.ui.ModernCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:orientation="vertical"
+            android:padding="18dp"
+            app:cardRadius="18dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="系统与保活权限"
+                android:textColor="@color/text"
+                android:textSize="17sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:lineSpacingMultiplier="1.4"
+                android:text="当前运行在 KernelSU / Magisk 原生 Root 模式下"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/config_battery_opt"
+                android:layout_width="match_parent"
+                android:layout_height="46dp"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/m3_btn_tonal_expressive"
+                android:stateListAnimator="@animator/btn_press_scale"
+                android:text="关闭电池优化（后台稳定保活必做）"
+                android:textAllCaps="false"
+                android:textColor="@color/primary"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/config_battery_opt_hint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="@color/text_muted"
+                android:textSize="11sp"
+                android:visibility="gone" />
+
+            <Button
+                android:id="@+id/config_a11y"
+                android:layout_width="match_parent"
+                android:layout_height="46dp"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/m3_btn_tonal_expressive"
+                android:stateListAnimator="@animator/btn_press_scale"
+                android:text="屏幕操作权限（无障碍服务）"
+                android:textAllCaps="false"
+                android:textColor="@color/primary"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/config_a11y_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="@color/text_muted"
+                android:textSize="11sp" />
+        </com.deepseekharness.app.ui.ModernCardView>
 
         <TextView
             android:id="@+id/config_repo_link"
-            style="@style/DshaText.Caption"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/gap_section"
+            android:layout_marginTop="16dp"
+            android:fontFamily="monospace"
             android:gravity="center"
-            android:text="DSHA · KernelSU / Magisk Native" />
+            android:text="DSHA · KernelSU / Magisk Native"
+            android:textColor="@color/text_muted"
+            android:textSize="12sp" />
+
     </LinearLayout>
-</ScrollView>
+</androidx.core.widget.NestedScrollView>
