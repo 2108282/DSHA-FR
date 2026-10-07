@@ -263,11 +263,6 @@ public class PluginPresenter implements PluginActions {
     }
 
     @Override
-    public void onCheckUpdatesClick() {
-        repository.checkUpdates(null);
-    }
-
-    @Override
     public void onSearchQueryChanged(String query) {
         this.currentSearchQuery = query != null ? query : "";
         recalculateState();

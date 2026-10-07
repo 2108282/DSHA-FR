@@ -332,21 +332,6 @@
             android:orientation="vertical"
             android:visibility="visible">
 
-            <!-- 检查更新全宽按钮 (height: 46px; border-radius 14px) -->
-            <Button
-                android:id="@+id/btnPluginUpdates"
-                android:layout_width="match_parent"
-                android:layout_height="46dp"
-                android:layout_marginTop="12dp"
-                android:background="@drawable/m3_btn_tonal_expressive"
-                android:elevation="0dp"
-                android:stateListAnimator="@animator/btn_press_scale"
-                android:text="检查第三方插件更新"
-                android:textAllCaps="false"
-                android:textColor="@color/primary"
-                android:textSize="15sp"
-                android:textStyle="bold" />
-
             <!-- 搜索框 (height: 46px; border-radius 14px) -->
             <EditText
                 android:id="@+id/pluginSearch"

@@ -81,6 +81,9 @@ public final class UpdateActivity extends AppCompatActivity {
         ((TextView) findViewById(R.id.update_current)).setText("当前安装版本：" + BuildConfig.VERSION_NAME + " · 版本码 " + BuildConfig.VERSION_CODE
                 + (BuildConfig.LOW_ANDROID ? " · 兼容版" : " · 标准版"));
 
+        TextView currentCoreView = findViewById(R.id.update_current_core);
+        queryInstalledCoreVersion(currentCoreView);
+
         statusView = findViewById(R.id.update_status);
         notesView = findViewById(R.id.update_notes);
         progressBar = findViewById(R.id.update_progress);
@@ -274,6 +277,33 @@ public final class UpdateActivity extends AppCompatActivity {
                 cm.setPrimaryClip(ClipData.newPlainText(label, text));
             }
         } catch (Throwable ignored) {}
+    }
+
+    private void queryInstalledCoreVersion(TextView targetView) {
+        if (targetView == null) return;
+        new Thread(() -> {
+            String ver = "";
+            try {
+                com.deepseekharness.app.core.HarnessController ctl = com.deepseekharness.app.core.HarnessController.get(this);
+                if (ctl != null && ctl.proot().isEnvironmentReady()) {
+                    String cmd = "cat /usr/local/lib/node_modules/@deepseek-ai/dsh/package.json 2>/dev/null | grep \x27\"version\"\x27 | head -n 1 | awk -F\x27\"\x27 \x27{print $4}\x27";
+                    ver = ctl.proot().execAndRead(cmd, 3000).trim();
+                    if (ver.isEmpty()) {
+                        ver = ctl.proot().execAndRead("dsh --version 2>/dev/null || true", 3000).trim();
+                    }
+                }
+            } catch (Throwable ignored) {}
+
+            final String displayText = ver.isEmpty()
+                    ? "当前 DSH 核心版本：未安装 / 未启动"
+                    : "当前 DSH 核心版本：v" + ver.replace("v", "");
+
+            runOnUiThread(() -> {
+                if (!isFinishing() && targetView != null) {
+                    targetView.setText(displayText);
+                }
+            });
+        }, "query-core-version").start();
     }
 
     @Override

@@ -10,9 +10,10 @@
     <color name="raised">#1C2330</color>
     <color name="raised_glass">#C71C2330</color>
     <color name="line">#2A3344</color>
-    <color name="text">#E8ECF4</color>
-    <color name="text_secondary">#A6B0C3</color>
-    <color name="text_muted">#6B7689</color>
+    <!-- 经典科技黑蓝灰主字色 (1:1 对齐 Quick 抽屉黑夜模式文字) -->
+    <color name="text">#8BA0B8</color>
+    <color name="text_secondary">#6E8299</color>
+    <color name="text_muted">#56697E</color>
     <color name="ok">#7ED6A2</color>
     <color name="ok_bg">#202F9E64</color>
     <color name="warn">#E5C07B</color>

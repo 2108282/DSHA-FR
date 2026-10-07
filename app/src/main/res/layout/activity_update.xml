@@ -143,6 +143,15 @@
                     android:textColor="@color/text_secondary"
                     android:textSize="13sp" />
 
+                <TextView
+                    android:id="@+id/update_current_core"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="当前 DSH 核心版本：正在读取…"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="13sp" />
+
                 <!-- 通道切换栏 (RadioGroup 封装成分段选项卡) -->
                 <RadioGroup
                     android:id="@+id/update_channels"

@@ -260,9 +260,9 @@
             android:orientation="vertical"
             app:cardRadius="18dp">
 
-            <!-- 2.1 行：检查更新 -->
+            <!-- 2.3 行：主题与通知 (二级页面入口) -->
             <LinearLayout
-                android:id="@+id/settings_row_update"
+                android:id="@+id/settings_row_theme_notify"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:background="?attr/selectableItemBackground"
@@ -282,8 +282,8 @@
                         android:layout_width="20dp"
                         android:layout_height="20dp"
                         android:layout_gravity="center"
-                        android:contentDescription="检查更新"
-                        android:src="@drawable/ic_settings_refresh"
+                        android:contentDescription="主题与通知"
+                        android:src="@drawable/ic_settings_bell"
                         app:tint="@color/primary" />
                 </FrameLayout>
 
@@ -297,17 +297,16 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="检查更新"
+                        android:text="主题与通知"
                         android:textColor="@color/text"
                         android:textSize="15sp"
                         android:textStyle="bold" />
 
                     <TextView
-                        android:id="@+id/settings_update_sub"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="1dp"
-                        android:text="升级 DSH 核心 · 客户端与模块"
+                        android:text="莫奈取色 · 悬浮条 · 常驻通知"
                         android:textColor="@color/text_muted"
                         android:textSize="12sp" />
                 </LinearLayout>
@@ -393,9 +392,9 @@
                 android:layout_marginStart="66dp"
                 android:background="@color/line_soft" />
 
-            <!-- 2.3 行：主题与通知 (二级页面入口) -->
+            <!-- 2.1 行：检查更新 -->
             <LinearLayout
-                android:id="@+id/settings_row_theme_notify"
+                android:id="@+id/settings_row_update"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:background="?attr/selectableItemBackground"
@@ -415,8 +414,8 @@
                         android:layout_width="20dp"
                         android:layout_height="20dp"
                         android:layout_gravity="center"
-                        android:contentDescription="主题与通知"
-                        android:src="@drawable/ic_settings_bell"
+                        android:contentDescription="检查更新"
+                        android:src="@drawable/ic_settings_refresh"
                         app:tint="@color/primary" />
                 </FrameLayout>
 
@@ -430,16 +429,17 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="主题与通知"
+                        android:text="检查更新"
                         android:textColor="@color/text"
                         android:textSize="15sp"
                         android:textStyle="bold" />
 
                     <TextView
+                        android:id="@+id/settings_update_sub"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="1dp"
-                        android:text="莫奈取色 · 悬浮条 · 常驻通知"
+                        android:text="升级 DSH 核心 · 客户端与模块"
                         android:textColor="@color/text_muted"
                         android:textSize="12sp" />
                 </LinearLayout>

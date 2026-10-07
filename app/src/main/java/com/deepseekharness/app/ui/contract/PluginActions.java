@@ -14,7 +14,6 @@ public interface PluginActions {
     void onInstallLinkClick();
     void onImportClick(boolean alternative);
     void onExportClick();
-    void onCheckUpdatesClick();
     void onSearchQueryChanged(String query);
     void onHideBuiltinChanged(boolean hide);
     void onToggleSortClick();

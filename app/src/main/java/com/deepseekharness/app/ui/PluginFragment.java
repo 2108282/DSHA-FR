@@ -72,7 +72,6 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
     private View marketHelp;
     private View panelMarketContainer;
     private LinearLayout installedControls;
-    private Button btnPluginUpdates;
     private EditText searchInput;
     private TextView btnOnlyCustom;
     private TextView pluginCount;
@@ -172,7 +171,6 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
         marketHelp = view.findViewById(R.id.marketHelp);
         panelMarketContainer = view.findViewById(R.id.panelMarketContainer);
         installedControls = view.findViewById(R.id.installedControls);
-        btnPluginUpdates = view.findViewById(R.id.btnPluginUpdates);
         searchInput = view.findViewById(R.id.pluginSearch);
         btnOnlyCustom = view.findViewById(R.id.btnOnlyCustom);
         pluginCount = view.findViewById(R.id.pluginCount);
@@ -201,7 +199,6 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
         // 3. 事件契约绑定（单行派发，业务与视图完全解耦）
         btnRefresh.setOnClickListener(v -> actions.onRefreshClick());
         btnPluginWebsite.setOnClickListener(v -> actions.onWebsiteClick());
-        btnPluginUpdates.setOnClickListener(v -> actions.onCheckUpdatesClick());
         btnPluginInstall.setOnClickListener(v -> actions.onInstallLinkClick());
         btnPluginPaste.setOnClickListener(v -> actions.onPasteLinkClick());
         btnImport.setOnClickListener(v -> actions.onImportClick(false));
@@ -300,7 +297,6 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
         marketHelp = null;
         panelMarketContainer = null;
         installedControls = null;
-        btnPluginUpdates = null;
         searchInput = null;
         btnOnlyCustom = null;
         pluginCount = null;
@@ -356,7 +352,6 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
         if (btnImportFallback != null) btnImportFallback.setEnabled(notBusy);
         if (btnExport != null) btnExport.setEnabled(notBusy);
         if (btnRefresh != null) btnRefresh.setEnabled(notBusy);
-        if (btnPluginUpdates != null) btnPluginUpdates.setEnabled(notBusy);
 
         // 4. 排序与统计
         if (btnSort != null) btnSort.setText(state.sortButtonText);
@@ -634,8 +629,20 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
                     ? "/data/adb/dsha/rootfs/root/dsha-" + item.name + "/"
                     : "/data/adb/dsha/rootfs/root/.dsh/plugin-src/" + item.name + "/";
             if (holder.detailText != null) {
-                holder.detailText.setText("版本：" + (item.version.isEmpty() ? "未知" : item.version)
-                        + (item.updateAvailable ? "（可更新 " + item.latestVersion + "）" : "")
+                String curVer = item.version.isEmpty() ? "未知" : "v" + item.version.replace("v", "");
+                String latestVerStr;
+                if (item.updateAvailable && !item.latestVersion.isEmpty()) {
+                    latestVerStr = "v" + item.latestVersion.replace("v", "") + " (有可用更新)";
+                } else if (!item.latestVersion.isEmpty()) {
+                    latestVerStr = "v" + item.latestVersion.replace("v", "") + " (已是最新)";
+                } else if (item.builtin || item.official) {
+                    latestVerStr = curVer + " (已是最新)";
+                } else {
+                    latestVerStr = curVer + " (已就绪)";
+                }
+
+                holder.detailText.setText("当前版本：" + curVer
+                        + "\n最新版本：" + latestVerStr
                         + "\n配置路径：" + configPath);
             }
 
