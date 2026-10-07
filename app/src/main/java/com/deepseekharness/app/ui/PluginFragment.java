@@ -546,13 +546,14 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
                 });
             }
 
-            // 6. 展开抽屉内的详情与 4 个小按钮 (显示并复制安装来源网址)
-            String sourceUrl = !item.source.isEmpty() ? item.source
-                    : (item.builtin ? "官方底座内置" : item.official ? "官方核心生态" : "本地文件导入");
+            // 6. 展开抽屉内的详情与 4 个小按钮
+            String configPath = item.builtin
+                    ? "/data/adb/dsha/rootfs/root/dsha-" + item.name + "/"
+                    : "/data/adb/dsha/rootfs/root/.dsh/plugin-src/" + item.name + "/";
             if (holder.detailText != null) {
                 holder.detailText.setText("版本：" + (item.version.isEmpty() ? "未知" : item.version)
                         + (item.updateAvailable ? "（可更新 " + item.latestVersion + "）" : "")
-                        + "\n来源地址：" + sourceUrl);
+                        + "\n配置路径：" + configPath);
             }
 
             if (holder.btnAddr != null) {
