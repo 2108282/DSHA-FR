@@ -26,7 +26,7 @@
             android:id="@+id/app_bar"
             android:layout_width="match_parent"
             android:layout_height="52dp"
-            android:background="@color/surface"
+            android:background="@android:color/transparent"
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingHorizontal="16dp">
@@ -71,7 +71,7 @@
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
-            android:background="@color/line_soft" />
+            android:background="@android:color/transparent" />
 
         <!-- 滚动内容区 -->
         <androidx.core.widget.NestedScrollView
@@ -235,7 +235,7 @@
                         android:layout_height="1dp"
                         android:layout_marginStart="16dp"
                         android:layout_marginEnd="16dp"
-                        android:background="@color/line_soft" />
+                        android:background="@android:color/transparent" />
 
                     <!-- 行 2: 原版 DSHA 仓库 -->
                     <LinearLayout
@@ -286,7 +286,7 @@
                         android:layout_height="1dp"
                         android:layout_marginStart="16dp"
                         android:layout_marginEnd="16dp"
-                        android:background="@color/line_soft" />
+                        android:background="@android:color/transparent" />
 
                     <!-- 行 3: QQ 交流群 -->
                     <LinearLayout
@@ -337,7 +337,7 @@
                         android:layout_height="1dp"
                         android:layout_marginStart="16dp"
                         android:layout_marginEnd="16dp"
-                        android:background="@color/line_soft" />
+                        android:background="@android:color/transparent" />
 
                     <!-- 行 4: 开源协议 -->
                     <LinearLayout

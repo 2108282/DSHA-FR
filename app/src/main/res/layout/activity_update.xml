@@ -26,7 +26,7 @@
             android:id="@+id/app_bar"
             android:layout_width="match_parent"
             android:layout_height="52dp"
-            android:background="@color/surface"
+            android:background="@android:color/transparent"
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingHorizontal="16dp">
@@ -72,7 +72,7 @@
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
-            android:background="@color/line_soft" />
+            android:background="@android:color/transparent" />
 
         <!-- 滚动内容区 -->
         <androidx.core.widget.NestedScrollView
