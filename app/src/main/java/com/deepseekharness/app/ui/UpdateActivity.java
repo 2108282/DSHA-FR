@@ -286,7 +286,7 @@ public final class UpdateActivity extends AppCompatActivity {
             try {
                 com.deepseekharness.app.core.HarnessController ctl = com.deepseekharness.app.core.HarnessController.get(this);
                 if (ctl != null && ctl.proot().isEnvironmentReady()) {
-                    String cmd = "cat /usr/local/lib/node_modules/@deepseek-ai/dsh/package.json 2>/dev/null | grep \x27\"version\"\x27 | head -n 1 | awk -F\x27\"\x27 \x27{print $4}\x27";
+                    String cmd = "cat /usr/local/lib/node_modules/@deepseek-ai/dsh/package.json 2>/dev/null | grep '\"version\"' | head -n 1 | awk -F'\"' '{print $4}'";
                     ver = ctl.proot().execAndRead(cmd, 3000).trim();
                     if (ver.isEmpty()) {
                         ver = ctl.proot().execAndRead("dsh --version 2>/dev/null || true", 3000).trim();
