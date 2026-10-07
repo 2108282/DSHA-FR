@@ -294,7 +294,7 @@
 
         </com.deepseekharness.app.ui.ModernCardView>
 
-        <!-- ========== 卡片 2: 端口与 CPU 调度 (ModernCardView) ========== -->
+        <!-- ========== 卡片 2: CPU 核心绑定 (常驻展开显示 + 保存按钮) ========== -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -302,7 +302,7 @@
             android:layout_marginTop="16dp"
             android:layout_marginBottom="4dp"
             android:letterSpacing="0.09"
-            android:text="端口与 CPU 调度"
+            android:text="CPU 调度"
             android:textAllCaps="true"
             android:textColor="@color/text_muted"
             android:textSize="12sp"
@@ -315,99 +315,51 @@
             android:padding="18dp"
             app:cardRadius="18dp">
 
-            <!-- 折叠栏：高级设置：端口与 CPU 亲和性 (.fold) -->
-            <LinearLayout
-                android:id="@+id/config_adv_header"
+            <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="@drawable/bg_fold_header"
-                android:clickable="true"
-                android:focusable="true"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:paddingHorizontal="14dp"
-                android:paddingVertical="12dp">
+                android:text="CPU 核心绑定 (Taskset)"
+                android:textColor="@color/text"
+                android:textSize="17sp"
+                android:textStyle="bold" />
 
-                <TextView
-                    android:id="@+id/config_adv_header_text"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="高级设置：端口与 CPU 亲和性 (Taskset)"
-                    android:textColor="@color/primary"
-                    android:textSize="13sp"
-                    android:textStyle="bold" />
-
-                <ImageView
-                    android:id="@+id/config_adv_arrow"
-                    android:layout_width="16dp"
-                    android:layout_height="16dp"
-                    android:src="@drawable/ic_chevron_right"
-                    app:tint="@color/primary" />
-            </LinearLayout>
-
-            <!-- 折叠栏展开体 (.fold-body) -->
-            <LinearLayout
-                android:id="@+id/config_adv_body"
+            <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:lineSpacingMultiplier="1.4"
+                android:text="设置容器守护进程及 Agent 任务的 CPU 亲和性，例如 0-6（避开超大核降温防烫）、0-4,7 或留空（全核调度）。"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp" />
+
+            <EditText
+                android:id="@+id/config_taskset"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
                 android:layout_marginTop="10dp"
-                android:orientation="vertical"
-                android:visibility="gone">
+                android:background="@drawable/bg_input"
+                android:hint="如 0-6 或 0-4,7（留空不限制）"
+                android:importantForAutofill="no"
+                android:inputType="text"
+                android:paddingHorizontal="14dp"
+                android:textColor="@color/text"
+                android:textSize="14sp" />
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
-                    android:text="服务监听端口"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="13sp"
-                    android:textStyle="bold" />
-
-                <EditText
-                    android:id="@+id/config_port"
-                    android:layout_width="match_parent"
-                    android:layout_height="44dp"
-                    android:layout_marginTop="8dp"
-                    android:background="@drawable/bg_input"
-                    android:hint="3080"
-                    android:importantForAutofill="no"
-                    android:inputType="number"
-                    android:paddingHorizontal="14dp"
-                    android:textColor="@color/text"
-                    android:textSize="14sp" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:text="CPU 核心绑定 (Taskset)"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="13sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:lineSpacingMultiplier="1.4"
-                    android:text="设置容器守护进程及 Agent 任务的 CPU 亲和性，例如 0-6（避开超大核降温防烫）、0-4,7 或留空（全核调度）。"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="12sp" />
-
-                <EditText
-                    android:id="@+id/config_taskset"
-                    android:layout_width="match_parent"
-                    android:layout_height="44dp"
-                    android:layout_marginTop="8dp"
-                    android:background="@drawable/bg_input"
-                    android:hint="如 0-6 或 0-4,7（留空不限制）"
-                    android:importantForAutofill="no"
-                    android:inputType="text"
-                    android:paddingHorizontal="14dp"
-                    android:textColor="@color/text"
-                    android:textSize="14sp" />
-            </LinearLayout>
+            <Button
+                android:id="@+id/config_taskset_save"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/m3_btn_primary_expressive"
+                android:elevation="2dp"
+                android:outlineAmbientShadowColor="#00000000"
+                android:outlineSpotShadowColor="#3847699F"
+                android:stateListAnimator="@animator/btn_press_scale"
+                android:text="保存 CPU 调度"
+                android:textAllCaps="false"
+                android:textColor="@color/accent_on"
+                android:textSize="14sp"
+                android:textStyle="bold" />
 
         </com.deepseekharness.app.ui.ModernCardView>
 
@@ -491,7 +443,7 @@
                     app:tint="@color/primary" />
             </LinearLayout>
 
-            <!-- 折叠栏入口 3: 所有文件的访问权限 -->
+            <!-- 折叠栏入口 3: 所有文件的访问权限 (保持原样) -->
             <LinearLayout
                 android:id="@+id/config_all_files"
                 android:layout_width="match_parent"

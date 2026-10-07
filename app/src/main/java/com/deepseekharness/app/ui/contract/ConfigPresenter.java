@@ -79,17 +79,12 @@ public class ConfigPresenter implements ConfigActions {
     }
 
     @Override
-    public void onSavePort(String port) {
-        if (port != null && !port.trim().isEmpty()) {
-            config.setPort(port.trim());
-        }
-    }
-
-    @Override
     public void onSaveTaskset(String taskset) {
         String cleanTaskset = taskset != null ? taskset.trim().replaceAll("[^0-9,-]", "") : "";
         config.setTaskset(cleanTaskset);
         applyTasksetImmediately(cleanTaskset);
+        toast("CPU 核心调度已保存" + (cleanTaskset.isEmpty() ? "（全核调度）" : "：" + cleanTaskset));
+        refreshState();
     }
 
     @Override

@@ -8,7 +8,6 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
-import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -29,11 +28,8 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
     private ConfigPresenter presenter;
     private ConfigActions actions;
 
-    private View advHeader;
-    private View advBody;
-    private ImageView advArrow;
-    private EditText portInput;
     private EditText tasksetInput;
+    private Button tasksetSaveBtn;
 
     private DshaToggle confirmShellToggle;
     private DshaToggle overlayStreamToggle;
@@ -68,32 +64,12 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         presenter = new ConfigPresenter(requireActivity(), this);
         actions = presenter;
 
-        // 1. 折叠栏（端口与 CPU 亲和度）
-        advHeader = view.findViewById(R.id.config_adv_header);
-        advBody = view.findViewById(R.id.config_adv_body);
-        advArrow = view.findViewById(R.id.config_adv_arrow);
-        portInput = view.findViewById(R.id.config_port);
+        // 1. CPU 调度核心绑定（常驻展开 + 独立保存按钮）
         tasksetInput = view.findViewById(R.id.config_taskset);
-
-        advHeader.setOnClickListener(v -> {
-            boolean isVisible = advBody.getVisibility() == View.VISIBLE;
-            advBody.setVisibility(isVisible ? View.GONE : View.VISIBLE);
-            if (advArrow != null) {
-                advArrow.setRotation(isVisible ? 0f : 90f);
-            }
-        });
-
-        // 端口与 Taskset 输入自动保存（失焦时即刻持久化）
-        if (portInput != null) {
-            portInput.setOnFocusChangeListener((v, hasFocus) -> {
-                if (!hasFocus && actions != null) {
-                    actions.onSavePort(portInput.getText().toString());
-                }
-            });
-        }
-        if (tasksetInput != null) {
-            tasksetInput.setOnFocusChangeListener((v, hasFocus) -> {
-                if (!hasFocus && actions != null) {
+        tasksetSaveBtn = view.findViewById(R.id.config_taskset_save);
+        if (tasksetSaveBtn != null) {
+            tasksetSaveBtn.setOnClickListener(v -> {
+                if (actions != null && tasksetInput != null) {
                     actions.onSaveTaskset(tasksetInput.getText().toString());
                 }
             });
@@ -140,7 +116,7 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
             if (row != null) row.setOnClickListener(v -> locationToggle.toggle());
         }
 
-        // 3. 扩展与权限入口
+        // 3. 扩展功能与系统保活权限入口
         overlayStyleBtn = view.findViewById(R.id.config_overlay_style);
         translateBtn = view.findViewById(R.id.config_translate);
         allFilesBtn = view.findViewById(R.id.config_all_files);
@@ -154,7 +130,7 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         asrFixBtn = view.findViewById(R.id.config_asr_btn_fix);
 
         overlayStyleBtn.setOnClickListener(v -> actions.onOpenOverlayStyle());
-        allFilesBtn.setOnClickListener(v -> actions.onOpenAllFilesSettings());
+        if (allFilesBtn != null) allFilesBtn.setOnClickListener(v -> actions.onOpenAllFilesSettings());
         batteryOptBtn.setOnClickListener(v -> actions.onOpenBatteryOptimization());
         a11yBtn.setOnClickListener(v -> actions.onOpenA11ySettings());
         asrCheckBtn.setOnClickListener(v -> actions.onCheckAsrStatus());
@@ -178,16 +154,6 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
     }
 
     @Override
-    public void onPause() {
-        super.onPause();
-        // 界面切换时自动保存端口与 Taskset
-        if (actions != null) {
-            if (portInput != null) actions.onSavePort(portInput.getText().toString());
-            if (tasksetInput != null) actions.onSaveTaskset(tasksetInput.getText().toString());
-        }
-    }
-
-    @Override
     public void onDestroyView() {
         syncActivityTitle(false);
         if (confirmShellToggle != null) confirmShellToggle.setOnCheckedChangeListener(null);
@@ -197,11 +163,8 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
 
         presenter = null;
         actions = null;
-        advHeader = null;
-        advBody = null;
-        advArrow = null;
-        portInput = null;
         tasksetInput = null;
+        tasksetSaveBtn = null;
         confirmShellToggle = null;
         overlayStreamToggle = null;
         sensorsToggle = null;
@@ -233,7 +196,6 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         if (!isAdded() || getView() == null) return;
 
         isBinding = true;
-        if (portInput != null && !portInput.hasFocus()) portInput.setText(state.port);
         if (tasksetInput != null && !tasksetInput.hasFocus()) tasksetInput.setText(state.taskset);
 
         if (confirmShellToggle != null && confirmShellToggle.isChecked() != state.isConfirmShell) {

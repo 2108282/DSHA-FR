@@ -1,7 +1,6 @@
 package com.deepseekharness.app.ui.contract;
 
 public interface ConfigActions {
-    void onSavePort(String port);
     void onSaveTaskset(String taskset);
     void onToggleConfirmShell(boolean enabled);
     void onToggleOverlayStream(boolean enabled);
