@@ -260,10 +260,15 @@ public class HarnessController {
                     String out = new String(Compat.readAllBytes(p.getInputStream()), StandardCharsets.UTF_8).trim();
                     String url = extractAuthUrl(out);
                     if (url != null && !url.isEmpty()) {
+                        boolean updated = false;
                         synchronized (lifecycle) {
                             if (webAuthUrl.isEmpty()) {
                                 webAuthUrl = url;
+                                updated = true;
                             }
+                        }
+                        if (updated) {
+                            notifyStatusChanged();
                         }
                     }
                 } catch (Throwable ignored) {
@@ -645,9 +650,14 @@ public class HarnessController {
                     String lines = safeLog.append(chunk);
                     appendHostLog(lines);
                     startupDiagnostics.output(generation, lines);
-                    if (webAuthUrl.isEmpty()) url = extractAuthUrl(scan.toString());
-                    if (url != null) {
-                        webAuthUrl = url;
+                    String parsedUrl = extractAuthUrl(scan.toString());
+                    if (parsedUrl != null && !parsedUrl.isEmpty()) {
+                        webAuthUrl = parsedUrl;
+                        url = parsedUrl;
+                    } else if (!webAuthUrl.isEmpty()) {
+                        url = webAuthUrl;
+                    }
+                    if (url != null && lifecycle.isStarting()) {
                         startupDiagnostics.stage(generation, "服务已就绪，等待进入网页");
                         lifecycle.finishStart(generation);
                         reportStatus(generation, onStatus, "鉴权链接已就绪，点「进入对话」即可进入 dsh");
@@ -676,6 +686,22 @@ public class HarnessController {
             if ("ksu_chroot".equals(proot.runtime().id())) {
                 // start.sh 本身将 Node 放入后台后退出是正常行为，只要后台正在运行就不应判定为退出
                 if (isWebRunning()) {
+                    if (lifecycle.isStarting()) {
+                        String finalUrl = webAuthUrl.isEmpty() ? extractAuthUrl(scan.toString()) : webAuthUrl;
+                        if (finalUrl == null || finalUrl.isEmpty()) {
+                            finalUrl = recoverRunningUrlSync();
+                        }
+                        if (finalUrl != null && !finalUrl.isEmpty()) {
+                            webAuthUrl = finalUrl;
+                            startupDiagnostics.stage(generation, "服务已就绪，等待进入网页");
+                            lifecycle.finishStart(generation);
+                            reportStatus(generation, onStatus, "鉴权链接已就绪，点「进入对话」即可进入 dsh");
+                            if (config.isLanMode()) {
+                                com.deepseekharness.app.LanProxyService.start(ctx);
+                                reportStatus(generation, onStatus, "局域网服务已就绪：同网段设备可访问，启动页可复制地址");
+                            }
+                        }
+                    }
                     return;
                 }
             }
