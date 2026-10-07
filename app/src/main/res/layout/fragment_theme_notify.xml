@@ -186,14 +186,15 @@
                         android:layout_marginStart="8dp" />
                 </LinearLayout>
 
-                <!-- 细分割线 -->
+                <!-- 细分割线 (两端各留白 16dp) -->
                 <View
                     android:layout_width="match_parent"
                     android:layout_height="1dp"
-                    android:layout_marginStart="66dp"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginEnd="16dp"
                     android:background="@color/line_soft" />
 
-                <!-- 2.2 色彩风格下拉 -->
+                <!-- 2.2 色彩风格 (完全 1:1 对齐快捷对话设置页规范: 左侧无图标, 右侧带 3 色圆圈预览) -->
                 <LinearLayout
                     android:id="@+id/theme_notify_row_palette_style"
                     android:layout_width="match_parent"
@@ -206,53 +207,37 @@
                     android:paddingHorizontal="16dp"
                     android:paddingVertical="15dp">
 
-                    <FrameLayout
-                        android:layout_width="38dp"
-                        android:layout_height="38dp"
-                        android:background="@drawable/bg_settings_icon_box">
-
-                        <ImageView
-                            android:layout_width="20dp"
-                            android:layout_height="20dp"
-                            android:layout_gravity="center"
-                            android:contentDescription="色彩风格"
-                            android:src="@drawable/ic_settings_quickchat"
-                            app:tint="@color/primary" />
-                    </FrameLayout>
-
-                    <LinearLayout
+                    <TextView
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="12dp"
                         android:layout_weight="1"
-                        android:orientation="vertical">
+                        android:text="色彩风格"
+                        android:textColor="@color/text"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
 
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="色彩风格"
-                            android:textColor="@color/text"
-                            android:textSize="15sp"
-                            android:textStyle="bold" />
+                    <!-- 3 个色彩预览小圆圈容器 -->
+                    <LinearLayout
+                        android:id="@+id/theme_notify_palette_style_dots"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="6dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal" />
 
-                        <TextView
-                            android:id="@+id/theme_notify_palette_style_value"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="1dp"
-                            android:text="Tonal Spot"
-                            android:textColor="@color/primary"
-                            android:textSize="12sp"
-                            android:textStyle="bold" />
-                    </LinearLayout>
+                    <TextView
+                        android:id="@+id/theme_notify_palette_style_value"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Tonal Spot"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="14sp" />
 
-                    <!-- 双箭头展开图标 (对齐 LSPosed 选项行) -->
                     <ImageView
-                        android:layout_width="18dp"
-                        android:layout_height="18dp"
-                        android:contentDescription="@null"
-                        android:src="@drawable/ic_chevron_expand"
-                        app:tint="@color/text_muted" />
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:layout_marginStart="4dp"
+                        android:src="@drawable/ic_chevron_expand" />
                 </LinearLayout>
             </com.deepseekharness.app.ui.ModernCardView>
 

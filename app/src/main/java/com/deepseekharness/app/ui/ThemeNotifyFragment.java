@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -22,10 +23,11 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
-import com.deepseekharness.app.util.Constants;
-import com.deepseekharness.app.ui.dialog.OverlayStyleDialog;
 import com.deepseekharness.app.R;
 import com.deepseekharness.app.core.ConfigStore;
+import com.deepseekharness.app.theme.MonetThemeHelper;
+import com.deepseekharness.app.ui.dialog.OverlayStyleDialog;
+import com.deepseekharness.app.util.Constants;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -36,6 +38,7 @@ public final class ThemeNotifyFragment extends Fragment {
     private static final String PREF_KEY_PALETTE_STYLE = "theme_palette_style_selected";
 
     private TextView paletteStyleValueText;
+    private LinearLayout paletteStyleDotsContainer;
 
     @Nullable
     @Override
@@ -95,13 +98,18 @@ public final class ThemeNotifyFragment extends Fragment {
             }
         }
 
-        // ==================== 3. 色彩风格下拉选项框 (参照快捷对话设置页做样式) ====================
+        // ==================== 3. 色彩风格行 (1:1 对齐快捷对话设置页) ====================
         paletteStyleValueText = v.findViewById(R.id.theme_notify_palette_style_value);
+        paletteStyleDotsContainer = v.findViewById(R.id.theme_notify_palette_style_dots);
+
         String savedStyle = requireContext().getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE)
                 .getString(PREF_KEY_PALETTE_STYLE, "tonal_spot");
+        int seedColor = MonetThemeHelper.getWallpaperSeedColor(requireContext());
+
         if (paletteStyleValueText != null) {
             paletteStyleValueText.setText(getStyleDisplayName(savedStyle));
         }
+        updateDots(paletteStyleDotsContainer, savedStyle, seedColor);
 
         View paletteStyleRow = v.findViewById(R.id.theme_notify_row_palette_style);
         if (paletteStyleRow != null) {
@@ -134,6 +142,33 @@ public final class ThemeNotifyFragment extends Fragment {
         }
     }
 
+    private void updateDots(LinearLayout container, String style, int seedColor) {
+        if (container == null || getContext() == null) return;
+        container.removeAllViews();
+        int[] colors = SheetSettingsFragment.getStylePreviewColors(style, seedColor);
+        container.addView(createDotsView(requireContext(), colors));
+    }
+
+    private View createDotsView(Context context, int[] colors) {
+        LinearLayout dots = new LinearLayout(context);
+        dots.setOrientation(LinearLayout.HORIZONTAL);
+        dots.setGravity(Gravity.CENTER_VERTICAL);
+        int size = dp(8);
+        int gap = dp(4);
+        for (int i = 0; i < colors.length; i++) {
+            View dot = new View(context);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(size, size);
+            if (i > 0) lp.setMarginStart(gap);
+            dot.setLayoutParams(lp);
+            GradientDrawable d = new GradientDrawable();
+            d.setShape(GradientDrawable.OVAL);
+            d.setColor(colors[i]);
+            dot.setBackground(d);
+            dots.addView(dot);
+        }
+        return dots;
+    }
+
     private String getStyleDisplayName(String key) {
         if ("neutral".equals(key)) return "Neutral";
         if ("vibrant".equals(key)) return "Vibrant";
@@ -146,6 +181,7 @@ public final class ThemeNotifyFragment extends Fragment {
     }
 
     private void showPaletteStyleDropdown(View anchor) {
+        Context context = requireContext();
         Map<String, String> styles = new LinkedHashMap<>();
         styles.put("tonal_spot", "Tonal Spot");
         styles.put("neutral", "Neutral");
@@ -156,19 +192,21 @@ public final class ThemeNotifyFragment extends Fragment {
         styles.put("monochrome", "Monochrome");
         styles.put("fidelity", "Fidelity");
 
-        String currentKey = requireContext().getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE)
+        String currentKey = context.getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE)
                 .getString(PREF_KEY_PALETTE_STYLE, "tonal_spot");
+        int seedColor = MonetThemeHelper.getWallpaperSeedColor(context);
 
-        showModernDropdown(anchor, styles, currentKey, key -> {
-            requireContext().getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE).edit()
+        showModernDropdown(anchor, styles, currentKey, seedColor, key -> {
+            context.getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE).edit()
                     .putString(PREF_KEY_PALETTE_STYLE, key).apply();
             if (paletteStyleValueText != null) {
                 paletteStyleValueText.setText(styles.get(key));
             }
+            updateDots(paletteStyleDotsContainer, key, seedColor);
         });
     }
 
-    private void showModernDropdown(View anchor, Map<String, String> options, String selectedKey, OnOptionSelectedListener listener) {
+    private void showModernDropdown(View anchor, Map<String, String> options, String selectedKey, int seedColor, OnOptionSelectedListener listener) {
         Context context = requireContext();
         int popupWidth = dp(240);
         int maxMenuHeight = dp(320);
@@ -219,11 +257,24 @@ public final class ThemeNotifyFragment extends Fragment {
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
             item.addView(tv, lp);
 
+            // ★ 核心功能：每个选项右侧展示该风格对应的 3 个主色小圆圈！
+            int[] previewColors = SheetSettingsFragment.getStylePreviewColors(key, seedColor);
+            View dotsView = createDotsView(context, previewColors);
+            LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            dlp.setMarginStart(dp(8));
+            dlp.setMarginEnd(dp(10));
+            dotsView.setLayoutParams(dlp);
+            item.addView(dotsView);
+
             if (isSelected) {
                 ImageView check = new ImageView(context);
                 check.setImageResource(R.drawable.ic_check_mini);
                 check.setImageTintList(android.content.res.ColorStateList.valueOf(context.getColor(R.color.primary)));
                 item.addView(check, new LinearLayout.LayoutParams(dp(18), dp(18)));
+            } else {
+                View placeholder = new View(context);
+                item.addView(placeholder, new LinearLayout.LayoutParams(dp(18), dp(18)));
             }
 
             item.setOnClickListener(v -> {
@@ -261,6 +312,7 @@ public final class ThemeNotifyFragment extends Fragment {
     public void onDestroyView() {
         syncActivityTitle(false);
         paletteStyleValueText = null;
+        paletteStyleDotsContainer = null;
         super.onDestroyView();
     }
 

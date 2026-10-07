@@ -290,7 +290,7 @@ public class SheetSettingsFragment extends Fragment {
         String current = cfg.getSheetPaletteStyle();
         int seedColor = MonetThemeHelper.getWallpaperSeedColor(context);
 
-        showModernDropdown(anchor, styles, current, key -> {
+        showModernDropdown(anchor, styles, current, true, seedColor, key -> {
             cfg.setSheetPaletteStyle(key);
             if (styleValue != null) {
                 styleValue.setText(styles.get(key));
@@ -310,7 +310,7 @@ public class SheetSettingsFragment extends Fragment {
 
         String current = cfg.getSheetColorSpec();
 
-        showModernDropdown(anchor, specs, current, key -> {
+        showModernDropdown(anchor, specs, current, false, 0, key -> {
             cfg.setSheetColorSpec(key);
             if (specValue != null) {
                 specValue.setText(specs.get(key));
@@ -331,6 +331,7 @@ public class SheetSettingsFragment extends Fragment {
      * - 选中项主题色高亮，右侧带蓝色对号 ✓
      */
     private void showModernDropdown(View anchor, Map<String, String> items, String currentKey,
+                                    boolean showPaletteDots, int seedColor,
                                     OnDropdownSelectedListener listener) {
         Context context = requireContext();
         PopupWindow popup = new PopupWindow(context);
@@ -383,6 +384,17 @@ public class SheetSettingsFragment extends Fragment {
             label.setLayoutParams(lp);
             item.addView(label);
 
+            if (showPaletteDots) {
+                int[] previewColors = getStylePreviewColors(key, seedColor);
+                View dotsView = createPaletteDotsView(context, previewColors);
+                LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                dlp.setMarginStart(dp(context, 10));
+                dlp.setMarginEnd(dp(context, 12));
+                dotsView.setLayoutParams(dlp);
+                item.addView(dotsView);
+            }
+
             // 选中项右侧蓝色对勾 ✓（1:1 对齐截图）
             if (isSelected) {
                 ImageView check = new ImageView(context);
@@ -390,9 +402,11 @@ public class SheetSettingsFragment extends Fragment {
                 check.setImageTintList(android.content.res.ColorStateList.valueOf(context.getColor(R.color.primary)));
                 int checkSize = dp(context, 18);
                 LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(checkSize, checkSize);
-                clp.setMarginStart(dp(context, 12));
                 check.setLayoutParams(clp);
                 item.addView(check);
+            } else if (showPaletteDots) {
+                View placeholder = new View(context);
+                item.addView(placeholder, new LinearLayout.LayoutParams(dp(context, 18), dp(context, 18)));
             }
 
             item.setOnClickListener(v -> {
