@@ -11,11 +11,11 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
-import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import com.deepseekharness.app.BackupManager;
 import com.deepseekharness.app.R;
 import com.deepseekharness.app.core.HarnessController;
+import com.deepseekharness.app.ui.DshaDialogBuilder;
 import com.deepseekharness.app.util.BackupScope;
 
 public class WorkspacePresenter implements WorkspaceActions {
@@ -32,8 +32,6 @@ public class WorkspacePresenter implements WorkspaceActions {
     private final HarnessController controller;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
-    private String currentRootStatus = "正在检测…";
-
     public WorkspacePresenter(Activity activity, ViewCallback callback) {
         this.activity = activity;
         this.context = activity.getApplicationContext();
@@ -42,24 +40,8 @@ public class WorkspacePresenter implements WorkspaceActions {
     }
 
     public void init() {
-        refreshRootStatus();
-    }
-
-    private void refreshRootStatus() {
-        new Thread(() -> {
-            boolean ok = false;
-            try {
-                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "id"});
-                ok = (p.waitFor() == 0);
-            } catch (Throwable ignored) {}
-            currentRootStatus = ok
-                    ? "✅ Root 授权正常（KernelSU/Magisk uid=0 原生直通）"
-                    : "⚠️ 未获取到 Root 权限，请在 KernelSU/APatch/Magisk 管理器中为 DSHA-FR 允许 Root";
-            mainHandler.post(() -> {
-                WorkspaceUiState state = new WorkspaceUiState(controller.config().getWorkdir(), currentRootStatus);
-                callback.onRender(state);
-            });
-        }).start();
+        WorkspaceUiState state = new WorkspaceUiState(controller.config().getWorkdir(), "");
+        callback.onRender(state);
     }
 
     @Override
@@ -78,24 +60,12 @@ public class WorkspacePresenter implements WorkspaceActions {
     }
 
     @Override
-    public void onCheckRootClick() {
-        new Thread(() -> {
-            boolean ok = false;
-            try {
-                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "id"});
-                ok = (p.waitFor() == 0);
-            } catch (Throwable ignored) {}
-            final boolean rootOk = ok;
-            mainHandler.post(() -> {
-                Toast.makeText(context, rootOk ? "✅ Root 授权正常（KernelSU/Magisk）" : "❌ 未获取到 Root 权限，请在授权管理器中允许", Toast.LENGTH_SHORT).show();
-                refreshRootStatus();
-            });
-        }).start();
-    }
-
-    @Override
     public void onBackupClick() {
-        chooseScopeAndBackup();
+        try {
+            chooseScopeAndBackup();
+        } catch (Throwable t) {
+            Toast.makeText(context, "打开备份选项失败: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void chooseScopeAndBackup() {
@@ -104,7 +74,7 @@ public class WorkspacePresenter implements WorkspaceActions {
             choices[i] = BackupScope.label(BackupScope.ALL[i]) + "\n" + BackupScope.describe(BackupScope.ALL[i]);
         }
         final int[] selected = {0};
-        new MaterialAlertDialogBuilder(activity)
+        new DshaDialogBuilder(activity)
                 .setTitle("选择备份范围")
                 .setSingleChoiceItems(choices, 0, (d, which) -> selected[0] = which)
                 .setPositiveButton("下一步", (d, which) -> confirmBackup(BackupScope.ALL[selected[0]]))
@@ -144,7 +114,7 @@ public class WorkspacePresenter implements WorkspaceActions {
         cbApiKey.setLayoutParams(lp);
         layout.addView(cbApiKey);
 
-        new MaterialAlertDialogBuilder(activity)
+        new DshaDialogBuilder(activity)
                 .setTitle("确认备份")
                 .setView(layout)
                 .setPositiveButton("开始备份", (d, w) -> doBackup(scope, cbApiKey.isChecked()))
@@ -154,7 +124,7 @@ public class WorkspacePresenter implements WorkspaceActions {
 
     private void doBackup(final int scope, final boolean includeApiKey) {
         Toast.makeText(context, "开始备份…", Toast.LENGTH_SHORT).show();
-        AlertDialog progress = new MaterialAlertDialogBuilder(activity)
+        AlertDialog progress = new DshaDialogBuilder(activity)
                 .setTitle("备份中")
                 .setMessage("正在打包所选数据…")
                 .setCancelable(false)
@@ -165,13 +135,13 @@ public class WorkspacePresenter implements WorkspaceActions {
             mainHandler.post(() -> {
                 progress.dismiss();
                 if (path == null) {
-                    new MaterialAlertDialogBuilder(activity)
+                    new DshaDialogBuilder(activity)
                             .setTitle("备份失败")
                             .setMessage(BackupManager.lastError())
                             .setPositiveButton("关闭", null)
                             .show();
                 } else {
-                    new MaterialAlertDialogBuilder(activity)
+                    new DshaDialogBuilder(activity)
                             .setTitle("备份成功（已校验）")
                             .setMessage("已备份 " + BackupScope.label(scope)
                                     + (includeApiKey ? "（已包含 API Key）" : "（未包含 API Key）")
@@ -186,11 +156,15 @@ public class WorkspacePresenter implements WorkspaceActions {
 
     @Override
     public void onRestoreClick() {
-        confirmRestore();
+        try {
+            confirmRestore();
+        } catch (Throwable t) {
+            Toast.makeText(context, "打开恢复选项失败: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void confirmRestore() {
-        new MaterialAlertDialogBuilder(activity)
+        new DshaDialogBuilder(activity)
                 .setTitle("恢复备份")
                 .setMessage("选择要恢复的备份文件（Download/DSHA/ 下的 .tar.gz）。\n\n"
                         + "会覆盖当前配置/对话（恢复前会自动把现有 .dsh 挪到 .dsh.pre-restore-* 保留）。\n确定？")
@@ -203,7 +177,7 @@ public class WorkspacePresenter implements WorkspaceActions {
     public void onRestoreSelected(Uri uri) {
         if (uri == null) return;
         Toast.makeText(context, "开始恢复…", Toast.LENGTH_SHORT).show();
-        AlertDialog progress = new MaterialAlertDialogBuilder(activity)
+        AlertDialog progress = new DshaDialogBuilder(activity)
                 .setTitle("恢复中")
                 .setMessage("正在解压覆盖并合并数据…")
                 .setCancelable(false)
@@ -211,29 +185,35 @@ public class WorkspacePresenter implements WorkspaceActions {
 
         new Thread(() -> {
             try {
-                // 恢复前先尝试停止后台服务，释放文件句柄
-                try { controller.stopWeb(); } catch (Throwable ignored) {}
-                String report = BackupManager.restoreFromBackup(context, controller, uri);
+                controller.stopWeb();
+                String err = BackupManager.restoreFromUri(context, controller, uri);
                 mainHandler.post(() -> {
                     progress.dismiss();
-                    new MaterialAlertDialogBuilder(activity)
-                            .setTitle("恢复完成（已校验）")
-                            .setMessage(report + "\n\n建议立即重启服务以加载恢复的数据。")
-                            .setPositiveButton("立即重启", (d, w) -> {
-                                controller.stopWeb();
-                                controller.startWeb(status -> {});
-                                Toast.makeText(context, "正在重启服务…", Toast.LENGTH_SHORT).show();
-                            })
-                            .setNegativeButton("稍后手动启动", null)
-                            .show();
+                    if (err != null) {
+                        new DshaDialogBuilder(activity)
+                                .setTitle("恢复失败")
+                                .setMessage(err)
+                                .setPositiveButton("关闭", null)
+                                .show();
+                    } else {
+                        init();
+                        new DshaDialogBuilder(activity)
+                                .setTitle("恢复完成")
+                                .setMessage("备份已恢复（原配置已安全备份保留在 .dsh.pre-restore-*）。\n重启 Web 生效。")
+                                .setPositiveButton("立即重启 Web", (d, w) -> {
+                                    controller.stopWeb();
+                                    controller.startWeb(status -> {});
+                                })
+                                .setNegativeButton("稍后手动重启", null)
+                                .show();
+                    }
                 });
-            } catch (Throwable e) {
-                String msg = e.getMessage() == null ? e.toString() : e.getMessage();
+            } catch (Throwable t) {
                 mainHandler.post(() -> {
                     progress.dismiss();
-                    new MaterialAlertDialogBuilder(activity)
-                            .setTitle("恢复失败")
-                            .setMessage(msg)
+                    new DshaDialogBuilder(activity)
+                            .setTitle("恢复异常")
+                            .setMessage(t.getMessage())
                             .setPositiveButton("关闭", null)
                             .show();
                 });

@@ -54,8 +54,8 @@ public class ConfigPresenter implements ConfigActions {
                 ok = (p.waitFor() == 0);
             } catch (Throwable ignored) {}
             currentRootStatus = ok
-                    ? "✅ Root 授权正常（KernelSU/Magisk uid=0 原生直通）"
-                    : "⚠️ 未获取到 Root 权限，请在 KernelSU/APatch/Magisk 管理器中为 DSHA-FR 允许 Root";
+                    ? "✅ Root 授权正常"
+                    : "⚠️ 未获取到 Root 权限，请在授权管理器中允许";
             mainHandler.post(this::refreshState);
         }, "check-root-config").start();
     }
@@ -104,7 +104,7 @@ public class ConfigPresenter implements ConfigActions {
             } catch (Throwable ignored) {}
             final boolean rootOk = ok;
             mainHandler.post(() -> {
-                toast(rootOk ? "✅ Root 授权正常（KernelSU/Magisk）" : "❌ 未获取到 Root 权限，请在授权管理器中允许");
+                toast(rootOk ? "✅ Root 授权正常" : "❌ 未获取到 Root 权限，请在授权管理器中允许");
                 refreshRootStatus();
             });
         }, "recheck-root-config").start();

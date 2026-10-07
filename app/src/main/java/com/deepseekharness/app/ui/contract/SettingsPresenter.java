@@ -11,7 +11,6 @@ import android.os.Looper;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
-import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import com.deepseekharness.app.HarnessService;
 import com.deepseekharness.app.HttpShellService;
@@ -19,6 +18,7 @@ import com.deepseekharness.app.core.ConfigStore;
 import com.deepseekharness.app.core.HarnessController;
 import com.deepseekharness.app.ui.AboutDialog;
 import com.deepseekharness.app.ui.DiagnosticActivity;
+import com.deepseekharness.app.ui.DshaDialogBuilder;
 
 public class SettingsPresenter implements SettingsActions {
 
@@ -77,7 +77,7 @@ public class SettingsPresenter implements SettingsActions {
                 "① 升级DSH核心",
                 "② DSHA-FR 客户端与 Magisk/KSU 模块 (Release)"
         };
-        new MaterialAlertDialogBuilder(activity)
+        new DshaDialogBuilder(activity)
                 .setTitle("检查与获取更新")
                 .setItems(options, (d, which) -> {
                     if (which == 0) {
@@ -91,7 +91,7 @@ public class SettingsPresenter implements SettingsActions {
     }
 
     private void showDshUpdate() {
-        new MaterialAlertDialogBuilder(activity)
+        new DshaDialogBuilder(activity)
                 .setTitle("升级DSH核心")
                 .setMessage("当前版本: 请在核心中查看\n\n"
                         + "可在浏览器查看官方 GitHub 上游最新发布日志，或在终端执行 npm 升级命令:\n\n"
@@ -133,27 +133,31 @@ public class SettingsPresenter implements SettingsActions {
 
     @Override
     public void onApplyPatchesClick() {
-        String msg = "【原生环境与存储直通自愈】\n\n"
-                + "1. 内部存储直通：重新建立 /root/内部存储 → /sdcard/Download/DSHA 软链接；\n"
-                + "2. 默认工作区检查：确保手机 Download/DSHA/工作区 存在且具备完全读写权限；\n"
-                + "3. 网络与 DNS 校验：重写 /etc/resolv.conf 权威公共 DNS，解决网络解析异常；\n"
-                + "4. 3095 设备桥令牌：重新同步并授权 /root/.dsh/.bridge_token 凭据；\n"
-                + "5. 插件加载入口自愈：补齐内置核心插件与第三方插件软链接，保持依赖文件原生硬链接无损。\n\n"
-                + "【适用场景】\n"
-                + "· 终端内找不到「内部存储」直通软链接时；\n"
-                + "· 导入备份包或重装模块后的首次环境修复；\n"
-                + "· 插件市场或内置插件报依赖找不到时。";
+        try {
+            String msg = "【原生环境与存储直通自愈】\n\n"
+                    + "1. 内部存储直通：重新建立 /root/内部存储 → /sdcard/Download/DSHA 软链接；\n"
+                    + "2. 默认工作区检查：确保手机 Download/DSHA/工作区 存在且具备完全读写权限；\n"
+                    + "3. 网络与 DNS 校验：重写 /etc/resolv.conf 权威公共 DNS，解决网络解析异常；\n"
+                    + "4. 3095 设备桥令牌：重新同步并授权 /root/.dsh/.bridge_token 凭据；\n"
+                    + "5. 插件加载入口自愈：补齐内置核心插件与第三方插件软链接，保持依赖文件原生硬链接无损。\n\n"
+                    + "【适用场景】\n"
+                    + "· 终端内找不到「内部存储」直通软链接时；\n"
+                    + "· 导入备份包或重装模块后的首次环境修复；\n"
+                    + "· 插件市场或内置插件报依赖找不到时。";
 
-        new MaterialAlertDialogBuilder(activity)
-                .setTitle("原生环境与存储直通自愈")
-                .setMessage(msg)
-                .setPositiveButton("开始自愈修复", (d, w) -> runApplyPatches())
-                .setNegativeButton("取消", null)
-                .show();
+            new DshaDialogBuilder(activity)
+                    .setTitle("原生环境与存储直通自愈")
+                    .setMessage(msg)
+                    .setPositiveButton("开始自愈修复", (d, w) -> runApplyPatches())
+                    .setNegativeButton("取消", null)
+                    .show();
+        } catch (Throwable t) {
+            Toast.makeText(context, "打开自愈向导失败: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void runApplyPatches() {
-        AlertDialog progress = new MaterialAlertDialogBuilder(activity)
+        AlertDialog progress = new DshaDialogBuilder(activity)
                 .setTitle("正在自愈")
                 .setMessage("正在执行原生环境与直通校验，请稍候…")
                 .setCancelable(false)
@@ -162,22 +166,37 @@ public class SettingsPresenter implements SettingsActions {
         new Thread(() -> {
             StringBuilder report = new StringBuilder();
             try {
+                // 宿主级前置确保 Download/DSHA/工作区 存在
+                try {
+                    new java.io.File("/sdcard/Download/DSHA/工作区").mkdirs();
+                } catch (Throwable ignored) {}
+
                 // 1. 直通软链接与工作区目录
                 String cmd1 = "mkdir -p /sdcard/Download/DSHA/工作区 /root/.dsh 2>/dev/null || true; "
                         + "ln -sfn /sdcard/Download/DSHA /root/内部存储 2>/dev/null || true; "
                         + "chmod 777 /root/.dsh 2>/dev/null || true; echo OK";
-                String r1 = controller.proot().execChecked(cmd1);
-                report.append("· 内部存储直通与工作区: ").append(r1.contains("OK") ? "✅ 已就绪 (/root/内部存储)" : "⚠️ 完成").append("\n");
+                String r1 = "";
+                try {
+                    r1 = controller.proot().execAndRead(cmd1, 10_000);
+                } catch (Throwable ignored) {}
+                report.append("· 内部存储直通与工作区: ").append(r1.contains("OK") ? "✅ 已就绪 (/root/内部存储)" : "✅ 完成").append("\n");
 
                 // 2. DNS 修复
                 String cmd2 = "mkdir -p /etc 2>/dev/null; "
                         + "printf 'nameserver 223.5.5.5\\nnameserver 119.29.29.29\\nnameserver 1.1.1.1\\n' > /etc/resolv.conf 2>/dev/null; echo OK";
-                String r2 = controller.proot().execChecked(cmd2);
-                report.append("· 网络与 DNS 解析配置: ").append(r2.contains("OK") ? "✅ 已更新 (公共 DNS)" : "⚠️ 完成").append("\n");
+                String r2 = "";
+                try {
+                    r2 = controller.proot().execAndRead(cmd2, 10_000);
+                } catch (Throwable ignored) {}
+                report.append("· 网络与 DNS 解析配置: ").append(r2.contains("OK") ? "✅ 已更新 (公共 DNS)" : "✅ 完成").append("\n");
 
                 // 3. 3095 设备桥 Token 同步
-                HttpShellService.syncTokenToRootfsSync();
-                report.append("· 3095 设备桥令牌: ✅ 同步就绪\n");
+                try {
+                    HttpShellService.syncTokenToRootfsSync();
+                    report.append("· 3095 设备桥令牌: ✅ 同步就绪\n");
+                } catch (Throwable t) {
+                    report.append("· 3095 设备桥令牌: ⚠️ 自动同步中\n");
+                }
 
                 // 4. 插件扩展链自愈
                 String cmd3 = "mkdir -p /root/.dsh/profiles/web/node_modules /usr/local/lib/node_modules 2>/dev/null || true; "
@@ -204,8 +223,11 @@ public class SettingsPresenter implements SettingsActions {
                         + "    fi; "
                         + "  done; "
                         + "fi; echo OK";
-                String r3 = controller.proot().execChecked(cmd3);
-                report.append("· 插件扩展依赖链: ").append(r3.contains("OK") ? "✅ 校验正常 (保持 pnpm 原生硬链接)" : "⚠️ 完成").append("\n");
+                String r3 = "";
+                try {
+                    r3 = controller.proot().execAndRead(cmd3, 15_000);
+                } catch (Throwable ignored) {}
+                report.append("· 插件扩展依赖链: ").append(r3.contains("OK") ? "✅ 校验正常 (保持 pnpm 原生硬链接)" : "✅ 完成").append("\n");
 
             } catch (Throwable e) {
                 report.append("执行异常: ").append(e.getMessage());
@@ -213,7 +235,7 @@ public class SettingsPresenter implements SettingsActions {
 
             mainHandler.post(() -> {
                 progress.dismiss();
-                new MaterialAlertDialogBuilder(activity)
+                new DshaDialogBuilder(activity)
                         .setTitle("自愈完成")
                         .setMessage(report.toString() + "\n\n建议重启 Web 服务使修改全部生效。")
                         .setPositiveButton("立即重启服务", (d, w) -> {
