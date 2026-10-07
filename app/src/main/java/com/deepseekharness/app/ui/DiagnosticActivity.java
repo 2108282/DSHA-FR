@@ -9,7 +9,7 @@ import android.widget.Toast;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.lifecycle.ViewModelProvider;
-import com.deepseekharness.app.HarnessController;
+import com.deepseekharness.app.core.HarnessController;
 import com.deepseekharness.app.HttpShellService;
 import com.deepseekharness.app.R;
 import com.deepseekharness.app.core.DiagnosticRepository;
