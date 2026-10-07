@@ -226,41 +226,41 @@
             </LinearLayout>
         </com.deepseekharness.app.ui.ModernCardView>
 
-        <!-- 3. 三行合并卡片 (padding: 6px 14px; border-radius: 18px; Skia 双层数学阴影) -->
+        <!-- 3. 三行合并卡片 (对齐设置页卡片规范: clipToOutline=true, 通栏行填充, 18dp 圆角) -->
         <com.deepseekharness.app.ui.ModernCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
+            android:clipToOutline="true"
             android:orientation="vertical"
-            android:paddingHorizontal="14dp"
-            android:paddingVertical="6dp"
+            android:padding="0dp"
             app:cardRadius="18dp">
 
-            <!-- 局域网连接行 (padding: 10px 0; gap: 10px) -->
+            <!-- 局域网连接行 (padding: 14dp 16dp; 图标 20dp, 标题 15sp 加粗) -->
             <LinearLayout
                 android:id="@+id/launch_lan_row"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
-                android:paddingVertical="10dp">
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="14dp">
 
                 <ImageView
-                    android:layout_width="18dp"
-                    android:layout_height="18dp"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
                     android:contentDescription="@null"
                     android:src="@drawable/ic_wifi"
                     app:srcCompat="@drawable/ic_wifi"
                     app:tint="@color/primary" />
 
                 <TextView
-                    style="@style/DshaText.Label"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="10dp"
+                    android:layout_marginStart="12dp"
                     android:text="局域网连接"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="13sp"
+                    android:textColor="@color/text"
+                    android:textSize="15sp"
                     android:textStyle="bold" />
 
                 <View
@@ -268,7 +268,7 @@
                     android:layout_height="0dp"
                     android:layout_weight="1" />
 
-                <!-- 复制按钮 (height: 34px; padding: 0 14px; border-radius: 14px; font-size: 13px) -->
+                <!-- 复制按钮 -->
                 <Button
                     android:id="@+id/lan_copy"
                     android:layout_width="wrap_content"
@@ -285,7 +285,7 @@
                     android:textSize="13sp"
                     android:textStyle="bold" />
 
-                <!-- 更多按钮 (height: 34px; padding: 0 14px; border-radius: 14px; font-size: 13px) -->
+                <!-- 更多按钮 -->
                 <Button
                     android:id="@+id/lan_more"
                     android:layout_width="wrap_content"
@@ -303,7 +303,7 @@
                     android:textSize="13sp"
                     android:textStyle="bold" />
 
-                <!-- 自绘极简胶囊开关 (44px x 26px, 纯白圆球带微阴影, 180ms缓动) -->
+                <!-- 自绘极简胶囊开关 -->
                 <com.deepseekharness.app.ui.DshaToggle
                     android:id="@+id/lan_switch"
                     android:layout_width="44dp"
@@ -311,13 +311,13 @@
                     android:layout_marginStart="8dp" />
             </LinearLayout>
 
-            <!-- 分隔线 1 (border-bottom: 1px solid var(-line-soft)) -->
+            <!-- 分隔线 1 (border-bottom: 1px solid var(--line-soft)) -->
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
                 android:background="@color/line_soft" />
 
-            <!-- 模型管理行 (padding: 12px 0; gap: 10px; 绝对无右箭头) -->
+            <!-- 模型管理行 (通栏可点击, 覆盖整个按钮选中态, padding: 15dp 16dp, 图标 20dp, 15sp 加粗) -->
             <LinearLayout
                 android:id="@+id/launch_models"
                 android:layout_width="match_parent"
@@ -327,34 +327,34 @@
                 android:focusable="true"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
-                android:paddingVertical="12dp">
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="15dp">
 
                 <ImageView
-                    android:layout_width="18dp"
-                    android:layout_height="18dp"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
                     android:contentDescription="@null"
                     android:src="@drawable/ic_box"
                     app:srcCompat="@drawable/ic_box"
                     app:tint="@color/primary" />
 
                 <TextView
-                    style="@style/DshaText.Label"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="10dp"
+                    android:layout_marginStart="12dp"
                     android:text="模型管理"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="13sp"
+                    android:textColor="@color/text"
+                    android:textSize="15sp"
                     android:textStyle="bold" />
             </LinearLayout>
 
-            <!-- 分隔线 2 (border-bottom: 1px solid var(-line-soft)) -->
+            <!-- 分隔线 2 (border-bottom: 1px solid var(--line-soft)) -->
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
                 android:background="@color/line_soft" />
 
-            <!-- 快捷对话行 (padding: 12px 0; gap: 10px; 绝对无右箭头) -->
+            <!-- 快捷对话行 (通栏可点击, 覆盖整个按钮选中态, padding: 15dp 16dp, 图标 20dp, 15sp 加粗) -->
             <LinearLayout
                 android:id="@+id/launch_open_sheet"
                 android:layout_width="match_parent"
@@ -364,24 +364,24 @@
                 android:focusable="true"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
-                android:paddingVertical="12dp">
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="15dp">
 
                 <ImageView
-                    android:layout_width="18dp"
-                    android:layout_height="18dp"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
                     android:contentDescription="@null"
                     android:src="@drawable/ic_chat"
                     app:srcCompat="@drawable/ic_chat"
                     app:tint="@color/primary" />
 
                 <TextView
-                    style="@style/DshaText.Label"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="10dp"
+                    android:layout_marginStart="12dp"
                     android:text="快捷对话"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="13sp"
+                    android:textColor="@color/text"
+                    android:textSize="15sp"
                     android:textStyle="bold" />
             </LinearLayout>
         </com.deepseekharness.app.ui.ModernCardView>

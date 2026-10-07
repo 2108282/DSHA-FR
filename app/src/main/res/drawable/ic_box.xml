@@ -4,23 +4,23 @@
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <!-- 外轮廓等角方块 -->
+    <!-- 外轮廓饱满等角立方体 (扩充视口占比，彻底消除视觉偏小感) -->
     <path
-        android:pathData="M12,3 L20.5,7.9 V16.1 L12,21 L3.5,16.1 V7.9 Z"
+        android:pathData="M12,2 L21.5,7 V17 L12,22 L2.5,17 V7 Z"
         android:strokeColor="#FF000000"
         android:strokeWidth="2"
         android:strokeLineCap="round"
         android:strokeLineJoin="round" />
-    <!-- 内部交汇棱线 -->
+    <!-- 内部中心交汇三向棱线 -->
     <path
-        android:pathData="M3.5,7.9 L12,12.8 L20.5,7.9 M12,12.8 V21"
+        android:pathData="M2.5,7 L12,12 L21.5,7 M12,12 V22"
         android:strokeColor="#FF000000"
         android:strokeWidth="2"
         android:strokeLineCap="round"
         android:strokeLineJoin="round" />
     <!-- 顶部内置服务商封箱线 -->
     <path
-        android:pathData="M7.5,5.5 L16.5,10.5"
+        android:pathData="M7,4.5 L17,9.5"
         android:strokeColor="#FF000000"
         android:strokeWidth="2"
         android:strokeLineCap="round"
