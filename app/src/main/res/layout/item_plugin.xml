@@ -1,64 +1,220 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<com.deepseekharness.app.ui.ModernCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginBottom="@dimen/gap_control"
-    android:background="@drawable/m3_card_expressive"
+    android:layout_marginBottom="10dp"
     android:orientation="vertical"
-    android:padding="18dp">
+    android:padding="16dp"
+    app:cardRadius="18dp">
 
-    <TextView
-        android:id="@+id/pluginName"
-        style="@style/DshaText.Body"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:fontFamily="sans"
-        android:breakStrategy="simple"
-        android:textSize="16sp"
-        android:textStyle="bold" />
-
-    <TextView
-        android:id="@+id/pluginDesc"
-        style="@style/DshaText.Caption"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="@dimen/gap_tight"
-        android:textColor="@color/text_secondary"
-        android:maxLines="3"
-        android:ellipsize="end" />
-
+    <!-- 1. 插件头部主行 (gap: 12px; align-items: flex-start) -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="@dimen/gap_control"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
+        android:gravity="top"
+        android:orientation="horizontal">
 
-        <TextView
-            android:id="@+id/pluginStatus"
-            style="@style/DshaText.Caption"
+        <!-- 左侧 42x42dp 图标框 (.plugin-icon: border-radius 14px; background primary-container) -->
+        <FrameLayout
+            android:layout_width="42dp"
+            android:layout_height="42dp"
+            android:background="@drawable/m3_btn_tonal_expressive">
+
+            <ImageView
+                android:id="@+id/pluginIcon"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:layout_gravity="center"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_plugins"
+                app:srcCompat="@drawable/ic_plugins"
+                app:tint="@color/primary" />
+        </FrameLayout>
+
+        <!-- 中间信息栏 (.plugin-main) -->
+        <LinearLayout
             android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_marginEnd="8dp"
             android:layout_weight="1"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="@dimen/gap_tight" />
+            android:orientation="vertical">
 
-        <Switch
-            android:id="@+id/pluginSwitch"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:minHeight="48dp"
-            android:showText="false" />
+            <!-- 插件名称与状态徽章行 (.plugin-name) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
-        <TextView
-            android:id="@+id/pluginActions"
-            style="@style/PluginAction"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:layout_marginStart="@dimen/gap_tight"
-            android:background="@drawable/m3_btn_tonal_expressive"
-            android:textColor="@color/text"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp"
-            android:text="更多 ▾" />
+                <TextView
+                    android:id="@+id/pluginName"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="@color/text"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+
+                <!-- 纯 Skia 自绘胶囊状态徽章 (.badge: height 20px; border-radius 999px) -->
+                <com.deepseekharness.app.ui.ModernBadgeView
+                    android:id="@+id/pluginStatusBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="20dp"
+                    android:layout_marginStart="8dp" />
+            </LinearLayout>
+
+            <!-- 版本与来源元数据 (.plugin-meta: text-muted; 12sp) -->
+            <TextView
+                android:id="@+id/pluginStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/text_muted"
+                android:textSize="12sp" />
+
+            <!-- 详细描述 (.plugin-desc: text-secondary; 12sp) -->
+            <TextView
+                android:id="@+id/pluginDesc"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:ellipsize="end"
+                android:lineSpacingMultiplier="1.3"
+                android:maxLines="2"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <!-- 右侧自绘极简胶囊开关 (44px x 26px, 180ms cubic-bezier 缓动白圆球) -->
+        <com.deepseekharness.app.ui.DshaToggle
+            android:id="@+id/pluginToggle"
+            android:layout_width="44dp"
+            android:layout_height="26dp"
+            android:layout_marginTop="4dp" />
     </LinearLayout>
-</LinearLayout>
+
+    <!-- 2. 全宽更多操作按钮 (height: 34px; margin-top: 10px; border-radius: 14px) -->
+    <Button
+        android:id="@+id/pluginActions"
+        android:layout_width="match_parent"
+        android:layout_height="34dp"
+        android:layout_marginTop="10dp"
+        android:background="@drawable/m3_btn_tonal_expressive"
+        android:elevation="0dp"
+        android:gravity="center"
+        android:minWidth="0dp"
+        android:minHeight="0dp"
+        android:stateListAnimator="@animator/btn_press_scale"
+        android:text="更多 ▸"
+        android:textAllCaps="false"
+        android:textColor="@color/primary"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+    <!-- 3. 展开抽屉内嵌详情面板 (padding: 12px 14px; background raised-glass; border-radius 14px) -->
+    <LinearLayout
+        android:id="@+id/pluginDetailsPanel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:background="@drawable/bg_input"
+        android:orientation="vertical"
+        android:paddingHorizontal="14dp"
+        android:paddingVertical="12dp"
+        android:visibility="gone">
+
+        <!-- 详细元信息 (开发者/依赖/权限/路径) -->
+        <TextView
+            android:id="@+id/pluginDetailText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:lineSpacingMultiplier="1.8"
+            android:textColor="@color/text_muted"
+            android:textSize="12sp" />
+
+        <!-- 四大操作小按钮行 (height: 32px; gap: 8px) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnPluginAddr"
+                android:layout_width="0dp"
+                android:layout_height="32dp"
+                android:layout_weight="1"
+                android:background="@drawable/m3_btn_tonal_small"
+                android:elevation="0dp"
+                android:gravity="center"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:stateListAnimator="@animator/btn_press_scale"
+                android:text="地址"
+                android:textAllCaps="false"
+                android:textColor="@color/primary"
+                android:textSize="12.5sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnPluginRename"
+                android:layout_width="0dp"
+                android:layout_height="32dp"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:background="@drawable/m3_btn_tonal_small"
+                android:elevation="0dp"
+                android:gravity="center"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:stateListAnimator="@animator/btn_press_scale"
+                android:text="名称"
+                android:textAllCaps="false"
+                android:textColor="@color/primary"
+                android:textSize="12.5sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnPluginExport"
+                android:layout_width="0dp"
+                android:layout_height="32dp"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:background="@drawable/m3_btn_tonal_small"
+                android:elevation="0dp"
+                android:gravity="center"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:stateListAnimator="@animator/btn_press_scale"
+                android:text="导出"
+                android:textAllCaps="false"
+                android:textColor="@color/primary"
+                android:textSize="12.5sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnPluginUninstall"
+                android:layout_width="0dp"
+                android:layout_height="32dp"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:background="@drawable/btn_danger_outline"
+                android:elevation="0dp"
+                android:gravity="center"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:stateListAnimator="@animator/btn_press_scale"
+                android:text="卸载"
+                android:textAllCaps="false"
+                android:textColor="@color/err"
+                android:textSize="12.5sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </LinearLayout>
+
+</com.deepseekharness.app.ui.ModernCardView>

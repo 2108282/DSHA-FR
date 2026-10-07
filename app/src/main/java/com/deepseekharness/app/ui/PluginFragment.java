@@ -53,8 +53,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
 
     private View root;
     private NestedScrollView pluginScroll;
-    private TextView btnMarketTab;
-    private TextView btnInstalledTab;
+    private ModernSegmentedView modernSegmentedTabs;
     private ImageView btnRefresh;
     private View pluginWebsiteSection;
     private Button btnPluginWebsite;
@@ -69,6 +68,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
     private ProgressBar pluginBusy;
     private TextView statusText;
     private View marketHelp;
+    private View panelMarketContainer;
     private LinearLayout installedControls;
     private Button btnPluginUpdates;
     private EditText searchInput;
@@ -143,8 +143,12 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
 
         // 1. 获取所有控件引用
         pluginScroll = view.findViewById(R.id.pluginScroll);
-        btnMarketTab = view.findViewById(R.id.btnMarket);
-        btnInstalledTab = view.findViewById(R.id.btnInstalled);
+        modernSegmentedTabs = view.findViewById(R.id.modernSegmentedTabs);
+        if (modernSegmentedTabs != null) {
+            modernSegmentedTabs.setOnTabSelectedListener(index -> {
+                if (actions != null) actions.onSelectTab(index == 0);
+            });
+        }
         btnRefresh = view.findViewById(R.id.btnRefresh);
         pluginWebsiteSection = view.findViewById(R.id.pluginWebsiteSection);
         btnPluginWebsite = view.findViewById(R.id.btnPluginWebsite);
@@ -159,6 +163,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
         pluginBusy = view.findViewById(R.id.pluginBusy);
         statusText = view.findViewById(R.id.statusText);
         marketHelp = view.findViewById(R.id.marketHelp);
+        panelMarketContainer = view.findViewById(R.id.panelMarketContainer);
         installedControls = view.findViewById(R.id.installedControls);
         btnPluginUpdates = view.findViewById(R.id.btnPluginUpdates);
         searchInput = view.findViewById(R.id.pluginSearch);
@@ -187,8 +192,6 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
         }
 
         // 3. 事件契约绑定（单行派发，业务与视图完全解耦）
-        btnMarketTab.setOnClickListener(v -> actions.onSelectTab(true));
-        btnInstalledTab.setOnClickListener(v -> actions.onSelectTab(false));
         btnRefresh.setOnClickListener(v -> actions.onRefreshClick());
         btnPluginWebsite.setOnClickListener(v -> actions.onWebsiteClick());
         btnPluginUpdates.setOnClickListener(v -> actions.onCheckUpdatesClick());
@@ -266,8 +269,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
         if (pluginList != null) pluginList.setAdapter(null);
         root = null;
         pluginScroll = null;
-        btnMarketTab = null;
-        btnInstalledTab = null;
+        modernSegmentedTabs = null;
         btnRefresh = null;
         pluginWebsiteSection = null;
         btnPluginWebsite = null;
@@ -282,6 +284,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
         pluginBusy = null;
         statusText = null;
         marketHelp = null;
+        panelMarketContainer = null;
         installedControls = null;
         btnPluginUpdates = null;
         searchInput = null;
@@ -303,19 +306,14 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
         if (!isAdded() || root == null) return;
 
         // 1. Tab 切换与区块显隐
-        if (marketHelp != null) marketHelp.setVisibility(state.isMarketTab ? View.VISIBLE : View.GONE);
-        if (pluginWebsiteSection != null) pluginWebsiteSection.setVisibility(state.isMarketTab ? View.VISIBLE : View.GONE);
-        if (pluginLinkSection != null) pluginLinkSection.setVisibility(state.isMarketTab ? View.VISIBLE : View.GONE);
+        if (panelMarketContainer != null) panelMarketContainer.setVisibility(state.isMarketTab ? View.VISIBLE : View.GONE);
         if (installedControls != null) installedControls.setVisibility(state.isMarketTab ? View.GONE : View.VISIBLE);
-        if (pluginList != null) pluginList.setVisibility(state.isMarketTab ? View.GONE : View.VISIBLE);
 
-        if (btnMarketTab != null) {
-            btnMarketTab.setBackgroundResource(state.isMarketTab ? R.drawable.bg_tab_on : R.drawable.bg_tab);
-            btnMarketTab.setTextColor(requireContext().getColor(state.isMarketTab ? R.color.primary : R.color.text_secondary));
-        }
-        if (btnInstalledTab != null) {
-            btnInstalledTab.setBackgroundResource(state.isMarketTab ? R.drawable.bg_tab : R.drawable.bg_tab_on);
-            btnInstalledTab.setTextColor(requireContext().getColor(state.isMarketTab ? R.color.text_secondary : R.color.primary));
+        if (modernSegmentedTabs != null) {
+            int targetIndex = state.isMarketTab ? 0 : 1;
+            if (modernSegmentedTabs.getSelectedIndex() != targetIndex) {
+                modernSegmentedTabs.setSelectedIndex(targetIndex, true);
+            }
         }
 
         // 2. 状态条与加载进度
@@ -414,18 +412,44 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
         if (linkInput != null) linkInput.setText(text);
     }
 
+    private void copyText(String label, String text) {
+        try {
+            android.content.ClipboardManager cm = (android.content.ClipboardManager)
+                    requireContext().getSystemService(Context.CLIPBOARD_SERVICE);
+            if (cm != null) {
+                cm.setPrimaryClip(android.content.ClipData.newPlainText(label, text));
+                Toast.makeText(requireContext(), label + " 已复制", Toast.LENGTH_SHORT).show();
+            }
+        } catch (Throwable t) {
+            Toast.makeText(requireContext(), "复制失败：" + t.getMessage(), Toast.LENGTH_SHORT).show();
+        }
+    }
+
     private class Adapter extends RecyclerView.Adapter<Adapter.Holder> {
+        private final java.util.Set<String> expandedPlugins = new java.util.HashSet<>();
+
         class Holder extends RecyclerView.ViewHolder {
-            final TextView name, state, description;
-            final Switch toggle;
-            final View actionBtn;
+            final TextView name, statusBadge, meta, description;
+            final DshaToggle toggle;
+            final Button actionBtn;
+            final View detailsPanel;
+            final TextView detailText;
+            final Button btnAddr, btnRename, btnExport, btnUninstall;
+
             Holder(View view) {
                 super(view);
                 name = view.findViewById(R.id.pluginName);
-                state = view.findViewById(R.id.pluginStatus);
+                statusBadge = view.findViewById(R.id.pluginStatusBadge);
+                meta = view.findViewById(R.id.pluginStatus);
                 description = view.findViewById(R.id.pluginDesc);
-                toggle = view.findViewById(R.id.pluginSwitch);
+                toggle = view.findViewById(R.id.pluginToggle);
                 actionBtn = view.findViewById(R.id.pluginActions);
+                detailsPanel = view.findViewById(R.id.pluginDetailsPanel);
+                detailText = view.findViewById(R.id.pluginDetailText);
+                btnAddr = view.findViewById(R.id.btnPluginAddr);
+                btnRename = view.findViewById(R.id.btnPluginRename);
+                btnExport = view.findViewById(R.id.btnPluginExport);
+                btnUninstall = view.findViewById(R.id.btnPluginUninstall);
             }
         }
 
@@ -439,35 +463,90 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
         public void onBindViewHolder(@NonNull Holder holder, int position) {
             PluginRepository.Item item = visibleItems.get(position);
             holder.name.setText(item.name);
-            holder.state.setText((item.available ? (item.enabled ? "已启用" : "已禁用") : "实体缺失，请重新导入")
-                    + (item.version.isEmpty() ? "" : " · " + item.version)
-                    + (item.updateAvailable ? "\n可更新：" + item.latestVersion
-                            : (item.latestVersion.isEmpty() ? "" : "\n上次检查版本：" + item.latestVersion)
-                            + (item.updateMessage.isEmpty() ? "" : "\n" + item.updateMessage))
-                    + (item.rollbackVersion.isEmpty() ? "" : "\n可回退：" + item.rollbackVersion));
-            holder.state.setTextColor(requireContext().getColor(
-                    !item.available ? R.color.warn : item.enabled ? R.color.primary : R.color.text_muted));
+
+            // 1. 胶囊状态徽章 (.badge: badge-on / badge-off)
+            boolean isEnabled = item.enabled;
+            if (holder.statusBadge != null) {
+                holder.statusBadge.setText(isEnabled ? "已启用" : (item.available ? "已禁用" : "缺失"));
+                holder.statusBadge.setBackgroundResource(isEnabled ? R.drawable.bg_badge_on : R.drawable.bg_badge_off);
+                holder.statusBadge.setTextColor(requireContext().getColor(isEnabled ? R.color.ok : R.color.text_muted));
+            }
+
+            // 2. 元信息
+            String typeLabel = item.builtin ? "DSHA 内置插件" : item.official ? "官方核心" : "第三方插件";
+            String versionStr = item.version.isEmpty() ? "" : item.version + " · ";
+            String updateStr = item.updateAvailable ? " · 可更新：" + item.latestVersion : "";
+            holder.meta.setText(versionStr + typeLabel + updateStr);
+
+            // 3. 详细描述
             holder.description.setText(item.description.isEmpty()
                     ? (item.official ? "官方核心" : item.builtin ? "DSHA 内置插件" : "第三方插件") : item.description);
 
-            if (holder.actionBtn != null) {
-                holder.actionBtn.setOnClickListener(v -> {
-                    if (actions != null) actions.onItemActionClick(item);
+            // 4. 自绘胶囊开关 (DshaToggle)
+            if (holder.toggle != null) {
+                holder.toggle.setChecked(item.enabled, false);
+                holder.toggle.setEnabled(!repository.isBusy() && (item.available || item.enabled));
+                holder.toggle.setOnCheckedChangeListener((t, checked) -> {
+                    if (actions != null && checked != item.enabled) {
+                        actions.onToggleItem(item, checked);
+                    }
                 });
-                holder.actionBtn.setContentDescription("更多操作：" + item.name);
             }
 
-            holder.toggle.setVisibility(View.VISIBLE);
-            holder.toggle.setOnCheckedChangeListener(null);
-            holder.toggle.setChecked(item.enabled);
-            holder.toggle.setContentDescription((item.enabled ? "禁用 " : "启用 ") + item.name);
-            holder.toggle.jumpDrawablesToCurrentState();
-            holder.toggle.setEnabled(!repository.isBusy() && (item.available || item.enabled));
-            holder.toggle.setOnCheckedChangeListener((v, checked) -> {
-                if (actions != null && checked != item.enabled) {
-                    actions.onToggleItem(item, checked);
-                }
-            });
+            // 5. 更多 ▸ 展开折叠内嵌抽屉
+            boolean isExpanded = expandedPlugins.contains(item.name);
+            if (holder.detailsPanel != null) {
+                holder.detailsPanel.setVisibility(isExpanded ? View.VISIBLE : View.GONE);
+            }
+            if (holder.actionBtn != null) {
+                holder.actionBtn.setText(isExpanded ? "收起 ▴" : "更多 ▸");
+                holder.actionBtn.setOnClickListener(v -> {
+                    int pos = holder.getBindingAdapterPosition();
+                    if (pos == RecyclerView.NO_POSITION) return;
+                    if (expandedPlugins.contains(item.name)) {
+                        expandedPlugins.remove(item.name);
+                    } else {
+                        expandedPlugins.add(item.name);
+                    }
+                    notifyItemChanged(pos);
+                });
+            }
+
+            // 6. 展开抽屉内的详情与 4 个小按钮
+            String configPath = item.builtin
+                    ? "/data/adb/dsha/rootfs/root/dsha-" + item.name + "/"
+                    : "/data/adb/dsha/rootfs/root/.dsh/plugin-src/" + item.name + "/";
+            if (holder.detailText != null) {
+                holder.detailText.setText("开发者：" + (item.builtin ? "DSHA Team" : "社区扩展")
+                        + "\n版本：" + (item.version.isEmpty() ? "未知" : item.version)
+                        + (item.updateAvailable ? "（可更新 " + item.latestVersion + "）" : "")
+                        + "\n权限：网络 · 存储 · 通知"
+                        + "\n配置路径：" + configPath);
+            }
+
+            if (holder.btnAddr != null) {
+                holder.btnAddr.setOnClickListener(v -> copyText("配置路径", configPath));
+            }
+            if (holder.btnRename != null) {
+                holder.btnRename.setOnClickListener(v -> copyText("插件名称", item.name));
+            }
+            if (holder.btnExport != null) {
+                holder.btnExport.setOnClickListener(v -> {
+                    ArrayList<String> list = new ArrayList<>();
+                    list.add(item.name);
+                    if (actions != null) actions.onLaunchExport(item.name + ".tar.gz", list);
+                });
+            }
+            if (holder.btnUninstall != null) {
+                holder.btnUninstall.setOnClickListener(v -> {
+                    if (item.builtin) {
+                        Toast.makeText(requireContext(), "DSHA 系统内置核心插件无法卸载", Toast.LENGTH_SHORT).show();
+                    } else if (actions != null) {
+                        actions.onItemActionClick(item);
+                    }
+                });
+            }
+
             holder.itemView.setOnLongClickListener(v -> {
                 if (actions != null) actions.onItemActionClick(item);
                 return true;
