@@ -155,8 +155,7 @@ public final class MonetEngine {
                 btn.setTextColor(Color.WHITE);
             }
             // 浅色胶囊按钮类 (重启、在浏览器查看、次级操作等)
-            else if (btnId == R.id.launch_open || btnId == R.id.update_browser || btnId == R.id.btnActionCancel
-                    || btnId == R.id.lan_copy || btnId == R.id.lan_more) {
+            else if (btnId == R.id.launch_open || btnId == R.id.update_browser || btnId == R.id.btnActionCancel) {
                 btn.setBackground(createSolidPillDrawable(context, targetContainer, dp(context, 14)));
                 btn.setTextColor(targetPrimary);
             }
