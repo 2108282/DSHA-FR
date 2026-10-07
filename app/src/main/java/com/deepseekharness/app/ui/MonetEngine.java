@@ -145,7 +145,12 @@ public final class MonetEngine {
             }
         }
 
-        // 5. 按钮与操作胶囊全面着色 (深色主按钮变色彩 1，浅色胶囊变色彩 2 背景 + 色彩 1 文字)
+        // 5. 胶囊开关 DshaToggle 动态注入展开背景色 (随莫奈主色实时演色或秒级复原)
+        if (view instanceof DshaToggle) {
+            ((DshaToggle) view).setColorOn(targetPrimary);
+        }
+
+        // 6. 按钮与操作胶囊全面着色 (深色主按钮变色彩 1，浅色胶囊变色彩 2 背景 + 色彩 1 文字)
         if (view instanceof Button || (view instanceof TextView && view.isClickable() && view.getBackground() != null)) {
             TextView btn = (TextView) view;
             int btnId = btn.getId();

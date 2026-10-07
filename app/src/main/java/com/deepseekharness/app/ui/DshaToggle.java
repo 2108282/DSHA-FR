@@ -62,6 +62,9 @@ public class DshaToggle extends View {
 
         colorOff = ContextCompat.getColor(getContext(), R.color.raised);
         colorOn = ContextCompat.getColor(getContext(), R.color.primary);
+        try {
+            colorOn = MonetEngine.resolveCurrentPalette(getContext()).primaryColor;
+        } catch (Throwable ignored) {}
         colorBorder = ContextCompat.getColor(getContext(), R.color.line);
 
         bgPaint.setStyle(Paint.Style.FILL);
@@ -126,6 +129,13 @@ public class DshaToggle extends View {
         float thumbRadius = dp(10f);
 
         canvas.drawCircle(cx, cy, thumbRadius, thumbPaint);
+    }
+
+    public void setColorOn(int color) {
+        if (this.colorOn != color) {
+            this.colorOn = color;
+            invalidate();
+        }
     }
 
     public void toggle() {
