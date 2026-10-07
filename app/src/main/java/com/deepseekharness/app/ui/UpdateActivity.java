@@ -145,10 +145,24 @@ public final class UpdateActivity extends AppCompatActivity implements UpdateAct
             bytesView.setVisibility(state.bytesText.isEmpty() ? View.GONE : View.VISIBLE);
             bytesView.setText(state.bytesText);
         }
-        if (checkBtn != null) checkBtn.setVisibility(state.isCheckVisible ? View.VISIBLE : View.GONE);
-        if (downloadBtn != null) downloadBtn.setVisibility(state.isDownloadVisible ? View.VISIBLE : View.GONE);
-        if (installBtn != null) installBtn.setVisibility(state.isInstallVisible ? View.VISIBLE : View.GONE);
+        if (checkBtn != null) {
+            checkBtn.setEnabled(state.isCheckEnabled);
+            checkBtn.setVisibility(!state.isInstallEnabled ? View.VISIBLE : View.GONE);
+        }
+        if (downloadBtn != null) {
+            downloadBtn.setEnabled(state.isDownloadEnabled);
+            downloadBtn.setVisibility(state.isDownloadEnabled ? View.VISIBLE : View.GONE);
+        }
+        if (installBtn != null) {
+            installBtn.setEnabled(state.isInstallEnabled);
+            installBtn.setVisibility(state.isInstallEnabled ? View.VISIBLE : View.GONE);
+        }
         if (cancelBtn != null) cancelBtn.setVisibility(state.isBusy ? View.VISIBLE : View.GONE);
+        if (channelsGroup != null) {
+            for (int i = 0; i < channelsGroup.getChildCount(); i++) {
+                channelsGroup.getChildAt(i).setEnabled(!state.isBusy);
+            }
+        }
     }
 
     @Override
@@ -158,57 +172,52 @@ public final class UpdateActivity extends AppCompatActivity implements UpdateAct
 
     @Override
     public void onChannelSelect(boolean isPreview) {
-        repository.setChannel(isPreview ? UpdatePolicy.PREVIEW : UpdatePolicy.STABLE);
-        repository.check();
+        if (repository != null) {
+            repository.setChannel(isPreview ? UpdatePolicy.PREVIEW : UpdatePolicy.STABLE);
+        }
     }
 
     @Override
     public void onCheckClick() {
-        repository.check();
+        if (repository != null) repository.check();
     }
 
     @Override
     public void onDownloadClick() {
-        repository.download();
+        if (repository != null) repository.download();
     }
 
     @Override
     public void onCancelClick() {
-        repository.cancel();
+        if (repository != null) repository.cancel();
     }
 
     @Override
     public void onInstallClick() {
-        java.io.File apk = repository.state().getValue() != null ? repository.state().getValue().apk : null;
-        if (apk == null || !apk.isFile()) {
-            Toast.makeText(this, "未找到下载完成的安装包，请重新下载", Toast.LENGTH_SHORT).show();
-            return;
-        }
+        install();
+    }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            if (!getPackageManager().canRequestPackageInstalls()) {
+    private void install() {
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 26 && !getPackageManager().canRequestPackageInstalls()) {
                 resumeInstall = true;
                 startActivity(new Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                         Uri.parse("package:" + getPackageName())));
-                Toast.makeText(this, "请先允许“安装未知应用”权限", Toast.LENGTH_LONG).show();
                 return;
             }
+            Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".updates", repository.installableApk());
+            startActivity(new Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION));
+        } catch (Exception error) {
+            Toast.makeText(this, "无法安装：" + error.getMessage(), Toast.LENGTH_LONG).show();
         }
-
-        Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", apk);
-        Intent intent = new Intent(Intent.ACTION_VIEW);
-        intent.setDataAndType(uri, "application/vnd.android.package-archive");
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
-        startActivity(intent);
     }
 
     @Override
     public void onOpenBrowserClick() {
-        try {
-            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(AboutDialog.GITHUB_ROOT_URL + "/releases")));
-        } catch (Throwable t) {
-            Toast.makeText(this, "打开浏览器失败: " + t.getMessage(), Toast.LENGTH_SHORT).show();
-        }
+        UpdateRepository.State state = repository != null ? repository.state().getValue() : null;
+        AboutDialog.openBrowser(this, state != null && state.release != null ? state.release.pageUrl
+                : AboutDialog.GITHUB_ROOT_URL + "/releases");
     }
 
     @Override
@@ -216,7 +225,11 @@ public final class UpdateActivity extends AppCompatActivity implements UpdateAct
         super.onResume();
         if (resumeInstall) {
             resumeInstall = false;
-            onInstallClick();
+            if (android.os.Build.VERSION.SDK_INT < 26 || getPackageManager().canRequestPackageInstalls()) {
+                install();
+            } else {
+                Toast.makeText(this, "未允许安装更新，可稍后重试", Toast.LENGTH_SHORT).show();
+            }
         }
     }
 }
