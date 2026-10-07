@@ -354,13 +354,29 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
             pluginEmpty.setText(state.emptyText);
         }
 
-        // 6. 列表数据刷新
-        visibleItems.clear();
-        visibleItems.addAll(state.displayItems);
-        adapter.notifyDataSetChanged();
+        // 6. 列表数据刷新 (智能比对，坚决杜绝无谓的整表暴力重绘掐死动画)
+        boolean itemsChanged = isItemsDifferent(visibleItems, state.displayItems);
+        if (itemsChanged) {
+            visibleItems.clear();
+            visibleItems.addAll(state.displayItems);
+            adapter.notifyDataSetChanged();
+        }
 
         // 7. 安装确认弹窗检测（解析完成时立即弹出）
         checkShowInstallPreview();
+    }
+
+    private boolean isItemsDifferent(List<PluginRepository.Item> oldList, List<PluginRepository.Item> newList) {
+        if (oldList.size() != newList.size()) return true;
+        for (int i = 0; i < oldList.size(); i++) {
+            PluginRepository.Item a = oldList.get(i);
+            PluginRepository.Item b = newList.get(i);
+            if (!a.name.equals(b.name) || a.enabled != b.enabled || a.available != b.available
+                    || a.updateAvailable != b.updateAvailable || !a.version.equals(b.version)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
@@ -499,9 +515,12 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
                 if (holder.toggle.isChecked() != item.enabled) {
                     holder.toggle.setChecked(item.enabled, false);
                 }
-                holder.toggle.setEnabled(!repository.isBusy() && (item.available || item.enabled));
+                holder.toggle.setEnabled(item.available || item.enabled);
                 holder.toggle.setOnCheckedChangeListener((t, checked) -> {
                     if (actions != null && checked != item.enabled) {
+                        if (holder.statusBadge != null) {
+                            holder.statusBadge.setBadge(checked, checked ? "已启用" : "已禁用");
+                        }
                         actions.onToggleItem(item, checked);
                     }
                 });
@@ -558,11 +577,6 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
                     }
                 });
             }
-
-            holder.itemView.setOnLongClickListener(v -> {
-                if (actions != null) actions.onItemActionClick(item);
-                return true;
-            });
         }
 
         @Override
