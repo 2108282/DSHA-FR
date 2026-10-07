@@ -8,5 +8,4 @@ public interface WorkspaceActions {
     void onRestoreClick();
     void onRestoreSelected(Uri uri);
     void onApplyWorkdir(String path);
-    void onCheckRootClick();
 }

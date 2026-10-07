@@ -186,7 +186,7 @@ public class WorkspacePresenter implements WorkspaceActions {
         new Thread(() -> {
             try {
                 controller.stopWeb();
-                String err = BackupManager.restoreFromUri(context, controller, uri);
+                String err = BackupManager.restoreFromBackup(context, controller, uri);
                 mainHandler.post(() -> {
                     progress.dismiss();
                     if (err != null) {
