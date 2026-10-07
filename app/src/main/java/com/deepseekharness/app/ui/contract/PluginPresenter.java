@@ -11,7 +11,6 @@ import android.os.Looper;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
-import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 
 import com.deepseekharness.app.core.PluginRepository;
 import com.deepseekharness.app.ui.PluginFilePicker;
@@ -66,6 +65,10 @@ public class PluginPresenter implements PluginActions {
     public void setMarket(boolean market) {
         this.isMarket = market;
         recalculateState();
+    }
+
+    public boolean isHideBuiltin() {
+        return hideBuiltin;
     }
 
     public boolean isMarket() {
@@ -227,7 +230,7 @@ public class PluginPresenter implements PluginActions {
             return;
         }
         boolean[] checked = new boolean[names.size()];
-        AlertDialog dialog = new MaterialAlertDialogBuilder(activity)
+        AlertDialog dialog = new AlertDialog.Builder(activity)
                 .setTitle("选择要导出的插件")
                 .setMultiChoiceItems(names.toArray(new String[0]), checked, (d, which, value) -> {
                     checked[which] = value;
@@ -277,7 +280,7 @@ public class PluginPresenter implements PluginActions {
     @Override
     public void onStatusMessageClick() {
         if (repoState != null && !repoState.message.isEmpty()) {
-            new MaterialAlertDialogBuilder(activity)
+            new AlertDialog.Builder(activity)
                     .setTitle("插件操作结果")
                     .setMessage(repoState.message)
                     .setPositiveButton("关闭", null)
@@ -292,7 +295,7 @@ public class PluginPresenter implements PluginActions {
             return;
         }
         if (item.official && !enabled) {
-            new MaterialAlertDialogBuilder(activity)
+            new AlertDialog.Builder(activity)
                     .setTitle("禁用官方核心？")
                     .setMessage(item.name + " 是 Web 运行所需的核心，禁用后页面可能无法启动。")
                     .setPositiveButton("禁用", (d, which) -> repository.setEnabled(item, false))
@@ -317,7 +320,7 @@ public class PluginPresenter implements PluginActions {
         }
         if (item.deletable) actions.add("删除插件");
 
-        new MaterialAlertDialogBuilder(activity)
+        new AlertDialog.Builder(activity)
                 .setTitle(item.name)
                 .setItems(actions.toArray(new String[0]), (d, which) -> {
                     String action = actions.get(which);
@@ -335,7 +338,7 @@ public class PluginPresenter implements PluginActions {
                     } else if (action.startsWith("更新至 ")) {
                         repository.prepareUpdate(item);
                     } else if (action.startsWith("回退至 ") || action.startsWith("恢复至 ")) {
-                        new MaterialAlertDialogBuilder(activity)
+                        new AlertDialog.Builder(activity)
                                 .setTitle(item.builtin ? "恢复预装版本？" : "回退插件？")
                                 .setMessage(item.name + "：" + item.version + " → " + item.rollbackVersion
                                         + (item.builtin ? "\n恢复为底座预装内置版本，当前启用状态保留；重启 Web 生效。"
@@ -344,7 +347,7 @@ public class PluginPresenter implements PluginActions {
                                 .setPositiveButton(item.builtin ? "恢复" : "回退", (c, b) -> repository.rollback(item))
                                 .show();
                     } else if ("删除插件".equals(action)) {
-                        new MaterialAlertDialogBuilder(activity)
+                        new AlertDialog.Builder(activity)
                                 .setTitle("删除 " + item.name + "？")
                                 .setMessage("插件文件将被移除，相关配置和对话数据保留；重启 Web 生效。")
                                 .setNegativeButton("取消", null)

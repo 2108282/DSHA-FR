@@ -352,17 +352,22 @@
                     android:textColor="@color/text_muted"
                     android:textSize="12sp" />
 
-                <!-- 隐藏内置选项 (兼容旧功能，不突兀) -->
-                <CheckBox
-                    android:id="@+id/chkHideBuiltin"
+                <!-- “只看自己装的”药丸按钮 (样式与名称排序 1:1 绝对一致) -->
+                <TextView
+                    android:id="@+id/btnOnlyCustom"
                     android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
+                    android:layout_height="30dp"
                     android:layout_marginEnd="8dp"
-                    android:buttonTint="@color/primary"
-                    android:text="仅扩展"
+                    android:background="@drawable/bg_chip_clickable"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center"
+                    android:paddingHorizontal="12dp"
+                    android:stateListAnimator="@animator/btn_press_scale"
+                    android:text="只看自己装的"
                     android:textColor="@color/text_secondary"
-                    android:textSize="12sp"
-                    android:visibility="gone" />
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
 
                 <!-- 药丸排序按钮 (.sort-btn: 30dp 高; padding: 6px 12px; border-radius 999px) -->
                 <TextView

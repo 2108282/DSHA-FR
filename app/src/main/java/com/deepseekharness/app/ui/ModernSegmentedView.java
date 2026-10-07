@@ -214,15 +214,26 @@ public class ModernSegmentedView extends View {
         boolean changed = (this.selectedIndex != index);
         this.selectedIndex = index;
 
-        if (animator != null) {
-            animator.cancel();
+        float target = (index == 0) ? 0f : 1f;
+
+        // 若已经在向目标平滑滑动，继续让它跑完，绝不重复 cancel 打断！
+        if (animator != null && animator.isRunning()) {
+            return;
         }
 
-        float target = (index == 0) ? 0f : 1f;
+        if (progress == target) {
+            return;
+        }
+
+        if (animator != null) {
+            animator.cancel();
+            animator = null;
+        }
+
         if (animate && isAttachedToWindow()) {
             animator = ValueAnimator.ofFloat(progress, target);
-            animator.setDuration(180);
-            animator.setInterpolator(new PathInterpolator(0.2f, 0.8f, 0.4f, 1.0f));
+            animator.setDuration(240); // 240ms 优雅从容的平滑滑块位移
+            animator.setInterpolator(new PathInterpolator(0.2f, 0.8f, 0.2f, 1.0f));
             animator.addUpdateListener(a -> {
                 progress = (float) a.getAnimatedValue();
                 invalidate();

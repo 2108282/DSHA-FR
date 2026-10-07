@@ -72,7 +72,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
     private LinearLayout installedControls;
     private Button btnPluginUpdates;
     private EditText searchInput;
-    private CheckBox chkHideBuiltin;
+    private TextView btnOnlyCustom;
     private TextView pluginCount;
     private TextView btnSort;
     private TextView pluginEmpty;
@@ -160,6 +160,9 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
         btnImport = view.findViewById(R.id.btnImport);
         btnExport = view.findViewById(R.id.btnExport);
         btnImportFallback = view.findViewById(R.id.btnImportFallback);
+        if (btnImportFallback != null) {
+            btnImportFallback.setPaintFlags(btnImportFallback.getPaintFlags() | android.graphics.Paint.UNDERLINE_TEXT_FLAG);
+        }
         pluginBusy = view.findViewById(R.id.pluginBusy);
         statusText = view.findViewById(R.id.statusText);
         marketHelp = view.findViewById(R.id.marketHelp);
@@ -167,7 +170,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
         installedControls = view.findViewById(R.id.installedControls);
         btnPluginUpdates = view.findViewById(R.id.btnPluginUpdates);
         searchInput = view.findViewById(R.id.pluginSearch);
-        chkHideBuiltin = view.findViewById(R.id.chkHideBuiltin);
+        btnOnlyCustom = view.findViewById(R.id.btnOnlyCustom);
         pluginCount = view.findViewById(R.id.pluginCount);
         btnSort = view.findViewById(R.id.btnSort);
         pluginEmpty = view.findViewById(R.id.pluginEmpty);
@@ -203,7 +206,12 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
         btnSort.setOnClickListener(v -> actions.onToggleSortClick());
         statusText.setOnClickListener(v -> actions.onStatusMessageClick());
 
-        chkHideBuiltin.setOnCheckedChangeListener((v, checked) -> actions.onHideBuiltinChanged(checked));
+        if (btnOnlyCustom != null) {
+            btnOnlyCustom.setOnClickListener(v -> {
+                boolean currentHide = presenter != null && presenter.isHideBuiltin();
+                if (actions != null) actions.onHideBuiltinChanged(!currentHide);
+            });
+        }
 
         searchInput.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
@@ -288,7 +296,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
         installedControls = null;
         btnPluginUpdates = null;
         searchInput = null;
-        chkHideBuiltin = null;
+        btnOnlyCustom = null;
         pluginCount = null;
         btnSort = null;
         pluginEmpty = null;
@@ -333,6 +341,11 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
 
         // 4. 排序与统计
         if (btnSort != null) btnSort.setText(state.sortButtonText);
+        if (btnOnlyCustom != null) {
+            boolean isCustomOnly = presenter != null && presenter.isHideBuiltin();
+            btnOnlyCustom.setText(isCustomOnly ? "显示全部" : "只看自己装的");
+            btnOnlyCustom.setTextColor(requireContext().getColor(isCustomOnly ? R.color.primary : R.color.text_secondary));
+        }
         if (pluginCount != null) pluginCount.setText(state.countText);
 
         // 5. 空状态提示
