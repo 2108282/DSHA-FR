@@ -1,0 +1,865 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/surface">
+
+    <!-- 全局固定极光漫射图层 (Skia RenderEffect 硬件加速高斯模糊) -->
+    <View
+        android:id="@+id/global_aurora"
+        android:layout_width="320dp"
+        android:layout_height="320dp"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="-110dp"
+        android:layout_marginEnd="-80dp"
+        android:background="@drawable/bg_aurora_top_right"
+        android:importantForAccessibility="no" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <!-- 顶部统一标题栏 (52dp, 半透卡片白 card_glass, 细分割线) -->
+        <LinearLayout
+            android:id="@+id/app_bar"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:background="@color/card_glass"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="16dp">
+
+            <ImageView
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_cpu"
+                app:tint="@color/primary" />
+
+            <TextView
+                android:id="@+id/app_bar_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:layout_weight="1"
+                android:text="模型管理"
+                android:textColor="@color/text"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/btn_theme"
+                android:layout_width="wrap_content"
+                android:layout_height="34dp"
+                android:background="@drawable/bg_chip_clickable"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:paddingHorizontal="12dp"
+                android:stateListAnimator="@animator/chip_press_scale"
+                android:text="日间"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/line_soft" />
+
+        <!-- 滚动内容区 -->
+        <androidx.core.widget.NestedScrollView
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:fillViewport="true"
+            android:overScrollMode="never"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:clipChildren="false"
+                android:clipToPadding="false"
+                android:orientation="vertical"
+                android:paddingHorizontal="16dp"
+                android:paddingTop="14dp"
+                android:paddingBottom="56dp">
+
+                <!-- 返回胶囊按钮 (.back-btn) -->
+                <LinearLayout
+                    android:id="@+id/model_back"
+                    android:layout_width="wrap_content"
+                    android:layout_height="34dp"
+                    android:background="@drawable/bg_back_chip"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="12dp"
+                    android:stateListAnimator="@animator/chip_press_scale">
+
+                    <ImageView
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:contentDescription="@null"
+                        android:src="@drawable/ic_nav_back"
+                        app:tint="@color/text_secondary" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4dp"
+                        android:text="返回"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <!-- 大标题与说明文案 -->
+                <TextView
+                    android:id="@+id/tv_main_title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="模型配置与服务商"
+                    android:textColor="@color/text"
+                    android:textSize="22sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tv_main_desc"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="服务商、连接方式与模型目录。保存后与 Web UI 同步。"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="13sp" />
+
+                <!-- 状态横幅 (可动态显示连接与同步信息) -->
+                <LinearLayout
+                    android:id="@+id/layout_status_banner"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:background="@drawable/bg_input"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="12dp"
+                    android:paddingVertical="8dp"
+                    android:visibility="gone">
+
+                    <ImageView
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:contentDescription="@null"
+                        android:src="@drawable/ic_check_circle"
+                        app:tint="@color/primary" />
+
+                    <TextView
+                        android:id="@+id/tv_status_text"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <!-- ========================================================= -->
+                <!-- [容器 A] 服务商目录视图 (Directory Mode)                  -->
+                <!-- ========================================================= -->
+                <LinearLayout
+                    android:id="@+id/layout_directory_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:clipChildren="false"
+                    android:clipToPadding="false"
+                    android:orientation="vertical"
+                    android:visibility="visible">
+
+                    <!-- 区域 1: 已配置的服务商 -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:layout_marginTop="14dp"
+                        android:layout_marginBottom="4dp"
+                        android:letterSpacing="0.09"
+                        android:text="已配置的服务商"
+                        android:textAllCaps="true"
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+
+                    <com.deepseekharness.app.ui.ModernCardView
+                        android:id="@+id/card_configured_providers"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:clipToOutline="true"
+                        android:orientation="vertical"
+                        app:cardRadius="18dp">
+
+                        <LinearLayout
+                            android:id="@+id/layout_configured_providers_list"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical" />
+
+                        <!-- 空状态 -->
+                        <TextView
+                            android:id="@+id/tv_providers_empty"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center"
+                            android:paddingVertical="24dp"
+                            android:text="暂无已配置的服务商，请在下方添加"
+                            android:textColor="@color/text_muted"
+                            android:textSize="13sp"
+                            android:visibility="gone" />
+                    </com.deepseekharness.app.ui.ModernCardView>
+
+                    <!-- 区域 2: 添加服务商 -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:layout_marginTop="14dp"
+                        android:layout_marginBottom="4dp"
+                        android:letterSpacing="0.09"
+                        android:text="添加服务商"
+                        android:textAllCaps="true"
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+
+                    <com.deepseekharness.app.ui.ModernCardView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:clipToOutline="true"
+                        android:orientation="vertical"
+                        app:cardRadius="18dp">
+
+                        <!-- 行 1: 添加第三方模型 -->
+                        <LinearLayout
+                            android:id="@+id/row_add_custom"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:background="?attr/selectableItemBackground"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal"
+                            android:paddingHorizontal="16dp"
+                            android:paddingVertical="14dp">
+
+                            <FrameLayout
+                                android:layout_width="38dp"
+                                android:layout_height="38dp"
+                                android:background="@drawable/bg_settings_icon_box">
+
+                                <ImageView
+                                    android:layout_width="20dp"
+                                    android:layout_height="20dp"
+                                    android:layout_gravity="center"
+                                    android:contentDescription="@null"
+                                    android:src="@drawable/ic_ui_link"
+                                    app:tint="@color/primary" />
+                            </FrameLayout>
+
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="12dp"
+                                android:layout_weight="1"
+                                android:orientation="vertical">
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="添加第三方模型"
+                                    android:textColor="@color/text"
+                                    android:textSize="15sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="1dp"
+                                    android:text="填写 API 地址、密钥与模型，支持 OpenAI/Claude 协议"
+                                    android:textColor="@color/text_muted"
+                                    android:textSize="12sp" />
+                            </LinearLayout>
+
+                            <ImageView
+                                android:layout_width="18dp"
+                                android:layout_height="18dp"
+                                android:contentDescription="@null"
+                                android:src="@drawable/ic_chevron_right"
+                                app:tint="@color/text_muted" />
+                        </LinearLayout>
+
+                        <View
+                            android:layout_width="match_parent"
+                            android:layout_height="1dp"
+                            android:layout_marginStart="66dp"
+                            android:background="@color/line_soft" />
+
+                        <!-- 行 2: 选择内置服务商 -->
+                        <LinearLayout
+                            android:id="@+id/row_choose_builtin"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:background="?attr/selectableItemBackground"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal"
+                            android:paddingHorizontal="16dp"
+                            android:paddingVertical="14dp">
+
+                            <FrameLayout
+                                android:layout_width="38dp"
+                                android:layout_height="38dp"
+                                android:background="@drawable/bg_settings_icon_box">
+
+                                <ImageView
+                                    android:layout_width="20dp"
+                                    android:layout_height="20dp"
+                                    android:layout_gravity="center"
+                                    android:contentDescription="@null"
+                                    android:src="@drawable/ic_ui2_box"
+                                    app:tint="@color/primary" />
+                            </FrameLayout>
+
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="12dp"
+                                android:layout_weight="1"
+                                android:orientation="vertical">
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="选择内置服务商"
+                                    android:textColor="@color/text"
+                                    android:textSize="15sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="1dp"
+                                    android:text="使用 DSH 已预置支持的服务商配置模板"
+                                    android:textColor="@color/text_muted"
+                                    android:textSize="12sp" />
+                            </LinearLayout>
+
+                            <ImageView
+                                android:layout_width="18dp"
+                                android:layout_height="18dp"
+                                android:contentDescription="@null"
+                                android:src="@drawable/ic_chevron_right"
+                                app:tint="@color/text_muted" />
+                        </LinearLayout>
+                    </com.deepseekharness.app.ui.ModernCardView>
+
+                    <!-- 目录操作按钮 -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp"
+                        android:orientation="vertical">
+
+                        <Button
+                            android:id="@+id/btn_reload_config"
+                            android:layout_width="match_parent"
+                            android:layout_height="44dp"
+                            android:background="@drawable/m3_btn_tonal_expressive"
+                            android:stateListAnimator="@animator/btn_press_scale"
+                            android:text="重新读取配置"
+                            android:textAllCaps="false"
+                            android:textColor="@color/primary"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+
+                        <Button
+                            android:id="@+id/btn_continue_to_dsha"
+                            android:layout_width="match_parent"
+                            android:layout_height="46dp"
+                            android:layout_marginTop="10dp"
+                            android:background="@drawable/m3_btn_primary_expressive"
+                            android:elevation="3dp"
+                            android:stateListAnimator="@animator/btn_press_scale"
+                            android:text="继续进入 DSHA"
+                            android:textAllCaps="false"
+                            android:textColor="@color/accent_on"
+                            android:textSize="15sp"
+                            android:textStyle="bold"
+                            android:visibility="gone" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- ========================================================= -->
+                <!-- [容器 B] 服务商配置编辑视图 (Editor Mode)                 -->
+                <!-- ========================================================= -->
+                <LinearLayout
+                    android:id="@+id/layout_editor_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:clipChildren="false"
+                    android:clipToPadding="false"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <!-- 编辑分区 1: 连接配置 -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:layout_marginTop="14dp"
+                        android:layout_marginBottom="4dp"
+                        android:letterSpacing="0.09"
+                        android:text="连接配置"
+                        android:textAllCaps="true"
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+
+                    <com.deepseekharness.app.ui.ModernCardView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="16dp"
+                        app:cardRadius="18dp">
+
+                        <!-- 唯一标识 (自定义时可见) -->
+                        <LinearLayout
+                            android:id="@+id/container_route"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginBottom="6dp"
+                                android:text="唯一标识 (Provider ID)"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="12sp"
+                                android:textStyle="bold" />
+
+                            <EditText
+                                android:id="@+id/edit_route"
+                                android:layout_width="match_parent"
+                                android:layout_height="44dp"
+                                android:background="@drawable/bg_input"
+                                android:hint="my-provider (仅限小写英文与短横线)"
+                                android:importantForAutofill="no"
+                                android:inputType="textUri"
+                                android:paddingHorizontal="14dp"
+                                android:textColor="@color/text"
+                                android:textSize="14sp" />
+                        </LinearLayout>
+
+                        <!-- 显示名称 (非 DeepSeek 可见) -->
+                        <LinearLayout
+                            android:id="@+id/container_name"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="12dp"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginBottom="6dp"
+                                android:text="显示名称 (Display Name)"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="12sp"
+                                android:textStyle="bold" />
+
+                            <EditText
+                                android:id="@+id/edit_name"
+                                android:layout_width="match_parent"
+                                android:layout_height="44dp"
+                                android:background="@drawable/bg_input"
+                                android:hint="可选，如 OpenAI、Claude 等"
+                                android:importantForAutofill="no"
+                                android:inputType="text"
+                                android:paddingHorizontal="14dp"
+                                android:textColor="@color/text"
+                                android:textSize="14sp" />
+                        </LinearLayout>
+
+                        <!-- API 地址 -->
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="12dp"
+                            android:layout_marginBottom="6dp"
+                            android:text="API 地址 (Base URL)"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                        <EditText
+                            android:id="@+id/edit_endpoint"
+                            android:layout_width="match_parent"
+                            android:layout_height="44dp"
+                            android:background="@drawable/bg_input"
+                            android:hint="https://api.example.com/v1"
+                            android:importantForAutofill="no"
+                            android:inputType="textUri"
+                            android:paddingHorizontal="14dp"
+                            android:textColor="@color/text"
+                            android:textSize="14sp" />
+
+                        <!-- 连接协议 -->
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="12dp"
+                            android:layout_marginBottom="6dp"
+                            android:text="连接协议 (Protocol / API)"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                        <com.deepseekharness.app.ui.DshaSelectView
+                            android:id="@+id/select_protocol"
+                            android:layout_width="match_parent"
+                            android:layout_height="48dp" />
+
+                        <!-- API Key -->
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="12dp"
+                            android:layout_marginBottom="6dp"
+                            android:text="API Key (密钥)"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                        <EditText
+                            android:id="@+id/edit_key"
+                            android:layout_width="match_parent"
+                            android:layout_height="44dp"
+                            android:background="@drawable/bg_input"
+                            android:hint="留空保留已有密钥"
+                            android:importantForAutofill="no"
+                            android:inputType="textPassword"
+                            android:paddingHorizontal="14dp"
+                            android:textColor="@color/text"
+                            android:textSize="14sp" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:text="密钥不会在此回显。新密钥通过 DSH 凭据服务安全存储。"
+                            android:textColor="@color/text_muted"
+                            android:textSize="11sp" />
+                    </com.deepseekharness.app.ui.ModernCardView>
+
+                    <!-- 编辑分区 2: 自定义请求头 (非 DeepSeek 可见) -->
+                    <LinearLayout
+                        android:id="@+id/container_headers_section"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:clipChildren="false"
+                        android:clipToPadding="false"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="6dp"
+                            android:layout_marginTop="14dp"
+                            android:layout_marginBottom="4dp"
+                            android:letterSpacing="0.09"
+                            android:text="自定义请求头"
+                            android:textAllCaps="true"
+                            android:textColor="@color/text_muted"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                        <com.deepseekharness.app.ui.ModernCardView
+                            android:id="@+id/card_headers"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:padding="16dp"
+                            app:cardRadius="18dp">
+
+                            <LinearLayout
+                                android:id="@+id/layout_headers_list"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="vertical" />
+
+                            <Button
+                                android:id="@+id/btn_add_header"
+                                android:layout_width="wrap_content"
+                                android:layout_height="36dp"
+                                android:layout_marginTop="10dp"
+                                android:background="@drawable/m3_btn_tonal_expressive"
+                                android:paddingHorizontal="14dp"
+                                android:stateListAnimator="@animator/chip_press_scale"
+                                android:text="+ 添加请求头"
+                                android:textAllCaps="false"
+                                android:textColor="@color/primary"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="8dp"
+                                android:text="仅发送给此服务商；保存后用于模型请求与目录查询。"
+                                android:textColor="@color/text_muted"
+                                android:textSize="11sp" />
+                        </com.deepseekharness.app.ui.ModernCardView>
+                    </LinearLayout>
+
+                    <!-- 编辑分区 3: 模型目录 -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:layout_marginTop="14dp"
+                        android:layout_marginBottom="4dp"
+                        android:letterSpacing="0.09"
+                        android:text="模型目录"
+                        android:textAllCaps="true"
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+
+                    <com.deepseekharness.app.ui.ModernCardView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:clipToOutline="true"
+                        android:orientation="vertical"
+                        app:cardRadius="18dp">
+
+                        <LinearLayout
+                            android:id="@+id/layout_models_list"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical" />
+
+                        <!-- 操作按钮组 -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:paddingHorizontal="16dp"
+                            android:paddingVertical="12dp">
+
+                            <Button
+                                android:id="@+id/btn_fetch_models"
+                                android:layout_width="0dp"
+                                android:layout_height="38dp"
+                                android:layout_weight="1"
+                                android:background="@drawable/m3_btn_tonal_expressive"
+                                android:stateListAnimator="@animator/chip_press_scale"
+                                android:text="获取可用模型"
+                                android:textAllCaps="false"
+                                android:textColor="@color/primary"
+                                android:textSize="13sp"
+                                android:textStyle="bold"
+                                android:visibility="gone" />
+
+                            <Button
+                                android:id="@+id/btn_add_model"
+                                android:layout_width="0dp"
+                                android:layout_height="38dp"
+                                android:layout_marginStart="8dp"
+                                android:layout_weight="1"
+                                android:background="@drawable/m3_btn_tonal_expressive"
+                                android:stateListAnimator="@animator/chip_press_scale"
+                                android:text="+ 添加模型"
+                                android:textAllCaps="false"
+                                android:textColor="@color/primary"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:paddingHorizontal="16dp"
+                            android:paddingBottom="12dp"
+                            android:text="不修改目录会保留服务商原有模型与能力配置。"
+                            android:textColor="@color/text_muted"
+                            android:textSize="11sp" />
+                    </com.deepseekharness.app.ui.ModernCardView>
+
+                    <!-- 编辑分区 4: 高级设置与危险操作 -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:layout_marginTop="14dp"
+                        android:layout_marginBottom="4dp"
+                        android:letterSpacing="0.09"
+                        android:text="更多选项"
+                        android:textAllCaps="true"
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+
+                    <com.deepseekharness.app.ui.ModernCardView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:clipToOutline="true"
+                        android:orientation="vertical"
+                        app:cardRadius="18dp">
+
+                        <!-- 高级配置 -->
+                        <LinearLayout
+                            android:id="@+id/row_advanced"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:background="?attr/selectableItemBackground"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal"
+                            android:paddingHorizontal="16dp"
+                            android:paddingVertical="14dp">
+
+                            <FrameLayout
+                                android:layout_width="38dp"
+                                android:layout_height="38dp"
+                                android:background="@drawable/bg_settings_icon_box">
+
+                                <ImageView
+                                    android:layout_width="20dp"
+                                    android:layout_height="20dp"
+                                    android:layout_gravity="center"
+                                    android:contentDescription="@null"
+                                    android:src="@drawable/ic_settings_sliders"
+                                    app:tint="@color/primary" />
+                            </FrameLayout>
+
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="12dp"
+                                android:layout_weight="1"
+                                android:orientation="vertical">
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="高级配置 (JSON)"
+                                    android:textColor="@color/text"
+                                    android:textSize="15sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="1dp"
+                                    android:text="编辑附加扩展字段与特定服务商参数"
+                                    android:textColor="@color/text_muted"
+                                    android:textSize="12sp" />
+                            </LinearLayout>
+
+                            <ImageView
+                                android:layout_width="18dp"
+                                android:layout_height="18dp"
+                                android:contentDescription="@null"
+                                android:src="@drawable/ic_chevron_right"
+                                app:tint="@color/text_muted" />
+                        </LinearLayout>
+
+                        <!-- 删除此服务商配置 (非 DeepSeek 且已存在时可见) -->
+                        <View
+                            android:id="@+id/divider_delete_provider"
+                            android:layout_width="match_parent"
+                            android:layout_height="1dp"
+                            android:layout_marginStart="66dp"
+                            android:background="@color/line_soft"
+                            android:visibility="gone" />
+
+                        <LinearLayout
+                            android:id="@+id/row_delete_provider"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:background="?attr/selectableItemBackground"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal"
+                            android:paddingHorizontal="16dp"
+                            android:paddingVertical="14dp"
+                            android:visibility="gone">
+
+                            <FrameLayout
+                                android:layout_width="38dp"
+                                android:layout_height="38dp"
+                                android:background="@drawable/bg_btn_danger_small">
+
+                                <ImageView
+                                    android:layout_width="18dp"
+                                    android:layout_height="18dp"
+                                    android:layout_gravity="center"
+                                    android:contentDescription="@null"
+                                    android:src="@drawable/ic_close_white"
+                                    app:tint="@color/err" />
+                            </FrameLayout>
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="12dp"
+                                android:layout_weight="1"
+                                android:text="删除此服务商配置"
+                                android:textColor="@color/err"
+                                android:textSize="15sp"
+                                android:textStyle="bold" />
+
+                            <ImageView
+                                android:layout_width="18dp"
+                                android:layout_height="18dp"
+                                android:contentDescription="@null"
+                                android:src="@drawable/ic_chevron_right"
+                                app:tint="@color/text_muted" />
+                        </LinearLayout>
+                    </com.deepseekharness.app.ui.ModernCardView>
+
+                    <!-- 保存主按钮 -->
+                    <Button
+                        android:id="@+id/btn_save_provider"
+                        android:layout_width="match_parent"
+                        android:layout_height="46dp"
+                        android:layout_marginTop="20dp"
+                        android:background="@drawable/m3_btn_primary_expressive"
+                        android:elevation="3dp"
+                        android:outlineAmbientShadowColor="#00000000"
+                        android:outlineSpotShadowColor="#3847699F"
+                        android:stateListAnimator="@animator/btn_press_scale"
+                        android:text="保存并同步"
+                        android:textAllCaps="false"
+                        android:textColor="@color/accent_on"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+        </androidx.core.widget.NestedScrollView>
+
+    </LinearLayout>
+
+</FrameLayout>
