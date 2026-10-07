@@ -429,7 +429,8 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
         private final java.util.Set<String> expandedPlugins = new java.util.HashSet<>();
 
         class Holder extends RecyclerView.ViewHolder {
-            final TextView name, statusBadge, meta, description;
+            final TextView name, meta, description;
+            final ModernBadgeView statusBadge;
             final DshaToggle toggle;
             final Button actionBtn;
             final View detailsPanel;
@@ -464,12 +465,10 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
             PluginRepository.Item item = visibleItems.get(position);
             holder.name.setText(item.name);
 
-            // 1. 胶囊状态徽章 (.badge: badge-on / badge-off)
+            // 1. 胶囊状态徽章 (.badge: 纯 Skia 自绘 ModernBadgeView)
             boolean isEnabled = item.enabled;
             if (holder.statusBadge != null) {
-                holder.statusBadge.setText(isEnabled ? "已启用" : (item.available ? "已禁用" : "缺失"));
-                holder.statusBadge.setBackgroundResource(isEnabled ? R.drawable.bg_badge_on : R.drawable.bg_badge_off);
-                holder.statusBadge.setTextColor(requireContext().getColor(isEnabled ? R.color.ok : R.color.text_muted));
+                holder.statusBadge.setBadge(isEnabled, isEnabled ? "已启用" : (item.available ? "已禁用" : "缺失"));
             }
 
             // 2. 元信息
@@ -501,7 +500,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
             if (holder.actionBtn != null) {
                 holder.actionBtn.setText(isExpanded ? "收起 ▴" : "更多 ▸");
                 holder.actionBtn.setOnClickListener(v -> {
-                    int pos = holder.getBindingAdapterPosition();
+                    int pos = holder.getAdapterPosition();
                     if (pos == RecyclerView.NO_POSITION) return;
                     if (expandedPlugins.contains(item.name)) {
                         expandedPlugins.remove(item.name);
@@ -534,7 +533,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
                 holder.btnExport.setOnClickListener(v -> {
                     ArrayList<String> list = new ArrayList<>();
                     list.add(item.name);
-                    if (actions != null) actions.onLaunchExport(item.name + ".tar.gz", list);
+                    onLaunchExport(item.name + ".tar.gz", list);
                 });
             }
             if (holder.btnUninstall != null) {
