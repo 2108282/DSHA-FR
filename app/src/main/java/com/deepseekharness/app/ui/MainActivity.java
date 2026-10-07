@@ -108,6 +108,19 @@ public class MainActivity extends AppCompatActivity {
             themeBtn.setOnClickListener(v -> ThemeController.toggle(this));
         }
 
+        // 全局 Fragment 视图创建莫奈自动注入 (杜绝切页/切 Tab 莫奈失效)
+        getSupportFragmentManager().registerFragmentLifecycleCallbacks(
+                new androidx.fragment.app.FragmentManager.FragmentLifecycleCallbacks() {
+                    @Override
+                    public void onFragmentViewCreated(
+                            @androidx.annotation.NonNull androidx.fragment.app.FragmentManager fm,
+                            @androidx.annotation.NonNull androidx.fragment.app.Fragment f,
+                            @androidx.annotation.NonNull View v,
+                            @androidx.annotation.Nullable Bundle savedInstanceState) {
+                        MonetEngine.applyToViewTree(v, MonetEngine.resolveCurrentPalette(MainActivity.this));
+                    }
+                }, true);
+
         BottomNavigationView nav = findViewById(R.id.bottom_nav);
         nav.setOnItemSelectedListener(item -> {
             Fragment f;

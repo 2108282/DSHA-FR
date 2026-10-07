@@ -90,8 +90,8 @@ public final class ThemeNotifyFragment extends Fragment {
                 Toast.makeText(requireContext(),
                         isChecked ? "已启用莫奈动态取色" : "已停用莫奈动态取色",
                         Toast.LENGTH_SHORT).show();
-                if (getActivity() != null && !ThemeController.isDark(requireContext())) {
-                    ModernAndroidUi.applyMonetTheming(requireActivity());
+                if (getActivity() != null) {
+                    MonetEngine.applyToActivity(requireActivity());
                 }
             });
             View monetRow = v.findViewById(R.id.theme_notify_row_monet);
@@ -205,8 +205,8 @@ public final class ThemeNotifyFragment extends Fragment {
                 paletteStyleValueText.setText(styles.get(key));
             }
             updateDots(paletteStyleDotsContainer, key, seedColor);
-            if (getActivity() != null && !ThemeController.isDark(requireContext())) {
-                ModernAndroidUi.applyMonetTheming(requireActivity());
+            if (getActivity() != null) {
+                MonetEngine.applyToActivity(requireActivity());
             }
         });
     }
