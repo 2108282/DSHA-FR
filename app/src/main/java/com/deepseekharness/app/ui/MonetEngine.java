@@ -15,12 +15,13 @@ import android.widget.TextView;
 import androidx.core.graphics.ColorUtils;
 
 import com.deepseekharness.app.R;
+import com.deepseekharness.app.ui.MonetThemeHelper;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 
 /**
  * 莫奈全景取色与极光动态演色引擎:
- * 1. 严格约束: 仅在白天模式 (!isDark) 且开启莫奈取色时生效; 黑夜模式坚决维持科技深蓝灰黑不变。
- * 2. 覆盖范围: 图标、按钮背景与文字、大背景与右上角极光高斯漫射光晕。
+ * 1. 严格约束: 仅在白天模式 (!isDark) 且开启莫奈取色时生效; 黑夜模式坚决维持冷靛深蓝灰黑不变。
+ * 2. 覆盖范围: 完整采纳莫奈 3 色体系，全面覆盖所有深色主按钮、浅色次级胶囊、图标前景与极光漫射背景。
  * 3. 闭环支持: 关闭时 100% 彻底还原默认原色; 切页面/切 Tab 全程生命周期自动跟随，永不失效。
  */
 public final class MonetEngine {
@@ -28,6 +29,7 @@ public final class MonetEngine {
     // 默认标准原色 (未开莫奈或关闭时还原使用)
     public static final int DEFAULT_PRIMARY_DAY = 0xFF47699F;
     public static final int DEFAULT_CONTAINER_DAY = 0xFFEBF0F8;
+    public static final int DEFAULT_TERTIARY_DAY = 0xFF355070;
     public static final int DEFAULT_SURFACE_DAY = 0xFFF7F8FA;
 
     public static final int DEFAULT_PRIMARY_NIGHT = 0xFF8AA8D6;
@@ -36,46 +38,54 @@ public final class MonetEngine {
 
     public static final class PaletteInfo {
         public final boolean isMonetActive;
-        public final int primaryColor;
-        public final int containerColor;
-        public final int surfaceColor;
+        public final int primaryColor;       // 色彩 1: 深色主强调色
+        public final int containerColor;     // 色彩 2: 浅色容器色
+        public final int tertiaryColor;      // 色彩 3: 点缀辅助色
+        public final int surfaceColor;       // 背景色
 
-        public PaletteInfo(boolean isMonetActive, int primaryColor, int containerColor, int surfaceColor) {
+        public PaletteInfo(boolean isMonetActive, int primaryColor, int containerColor, int tertiaryColor, int surfaceColor) {
             this.isMonetActive = isMonetActive;
             this.primaryColor = primaryColor;
             this.containerColor = containerColor;
+            this.tertiaryColor = tertiaryColor;
             this.surfaceColor = surfaceColor;
         }
     }
 
     public static PaletteInfo resolveCurrentPalette(Context context) {
         if (context == null) {
-            return new PaletteInfo(false, DEFAULT_PRIMARY_DAY, DEFAULT_CONTAINER_DAY, DEFAULT_SURFACE_DAY);
+            return new PaletteInfo(false, DEFAULT_PRIMARY_DAY, DEFAULT_CONTAINER_DAY, DEFAULT_TERTIARY_DAY, DEFAULT_SURFACE_DAY);
         }
 
         boolean dark = ThemeController.isDark(context);
         if (dark) {
             // 黑夜模式坚决维持原有深色原色，不进行莫奈取色
-            return new PaletteInfo(false, DEFAULT_PRIMARY_NIGHT, 0xFF243049, 0xFF10141B);
+            return new PaletteInfo(false, DEFAULT_PRIMARY_NIGHT, 0xFF243049, 0xFF7DA7F4, 0xFF10141B);
         }
 
         boolean monetEnabled = ThemeController.isMonetEnabled(context);
         if (!monetEnabled) {
-            return new PaletteInfo(false, DEFAULT_PRIMARY_DAY, DEFAULT_CONTAINER_DAY, DEFAULT_SURFACE_DAY);
+            return new PaletteInfo(false, DEFAULT_PRIMARY_DAY, DEFAULT_CONTAINER_DAY, DEFAULT_TERTIARY_DAY, DEFAULT_SURFACE_DAY);
         }
 
-        // 白天且开启莫奈: 动态提取壁纸种子色并按所选风格匹配
+        // 白天且开启莫奈: 动态提取壁纸种子色并按所选风格匹配完整的 3 个代表色
         int seedColor = MonetThemeHelper.getWallpaperSeedColor(context);
         String style = ThemeController.getMonetPaletteStyle(context);
         int[] preview = SheetSettingsFragment.getStylePreviewColors(style, seedColor);
-        int primary = (preview != null && preview.length > 0) ? preview[0] : DEFAULT_PRIMARY_DAY;
 
-        // 生成温润通透的莫奈浅色容器色 (混入约 12% 主色)
-        int container = ColorUtils.blendARGB(0xFFFFFFFF, primary, 0.12f);
-        // 大背景色保持纯净浅底，微染 2% 莫奈色
+        int primary = (preview != null && preview.length > 0) ? preview[0] : DEFAULT_PRIMARY_DAY;
+        int container = (preview != null && preview.length > 1) ? preview[1] : ColorUtils.blendARGB(0xFFFFFFFF, primary, 0.14f);
+        int tertiary = (preview != null && preview.length > 2) ? preview[2] : primary;
+
+        // 如果次色较暗，提亮为优雅浅底容器色，保证浅色按钮上的深色字绝对清晰
+        if (ColorUtils.calculateLuminance(container) < 0.65f) {
+            container = ColorUtils.blendARGB(0xFFFFFFFF, container, 0.20f);
+        }
+
+        // 大背景色微混 2% 莫奈色
         int surface = ColorUtils.blendARGB(0xFFF7F8FA, primary, 0.02f);
 
-        return new PaletteInfo(true, primary, container, surface);
+        return new PaletteInfo(true, primary, container, tertiary, surface);
     }
 
     /**
@@ -99,7 +109,7 @@ public final class MonetEngine {
         int targetPrimary = palette.primaryColor;
         int targetContainer = palette.containerColor;
 
-        // 1. 底栏导航着色
+        // 1. 底栏导航动态着色
         if (view instanceof BottomNavigationView) {
             BottomNavigationView nav = (BottomNavigationView) view;
             int[][] states = new int[][]{
@@ -114,7 +124,7 @@ public final class MonetEngine {
             return;
         }
 
-        // 2. 极光漫射背景层动态生成与更新 (支持自由切换任意莫奈色光晕)
+        // 2. 极光漫射背景层动态生成与更新
         if (view.getId() == R.id.global_aurora) {
             updateAuroraGradient(view, targetPrimary, palette.isMonetActive);
             return;
@@ -126,16 +136,7 @@ public final class MonetEngine {
             return;
         }
 
-        // 4. 图标盒背景 (bg_settings_icon_box) 动态变色为 containerColor
-        int viewId = view.getId();
-        if (viewId == R.id.theme_notify_row_persistent || viewId == R.id.theme_notify_row_monet
-                || viewId == R.id.settings_row_theme_notify || viewId == R.id.settings_row_config
-                || viewId == R.id.settings_row_workspace || viewId == R.id.settings_row_quickchat
-                || viewId == R.id.settings_row_update || viewId == R.id.settings_row_selftest) {
-            // 在子树中继续寻找图标盒与小图标
-        }
-
-        // 5. ImageView 着色: 如果原本使用了主题色，动态赋予新主色
+        // 4. ImageView 着色: 如果原本使用了主题色，动态赋予新主色
         if (view instanceof ImageView) {
             ImageView iv = (ImageView) view;
             ColorStateList tint = iv.getImageTintList();
@@ -144,24 +145,29 @@ public final class MonetEngine {
             }
         }
 
-        // 6. 按钮着色 (主按钮变 primary 背景，浅色胶囊变 container 背景 + primary 字体)
-        if (view instanceof Button) {
-            Button btn = (Button) view;
+        // 5. 按钮与操作胶囊全面着色 (深色主按钮变色彩 1，浅色胶囊变色彩 2 背景 + 色彩 1 文字)
+        if (view instanceof Button || (view instanceof TextView && view.isClickable() && view.getBackground() != null)) {
+            TextView btn = (TextView) view;
             int btnId = btn.getId();
 
-            // 主按钮类 (启动、开始修复等)
-            if (btnId == R.id.launch_start || btnId == R.id.btnActionConfirm || btnId == R.id.btnDialogConfirm) {
-                btn.setBackground(createSolidPillDrawable(context, targetPrimary, dp(context, 14)));
-                btn.setTextColor(Color.WHITE);
-            }
-            // 浅色胶囊按钮类 (重启、在浏览器查看、次级操作等)
-            else if (btnId == R.id.launch_open || btnId == R.id.update_browser || btnId == R.id.btnActionCancel) {
-                btn.setBackground(createSolidPillDrawable(context, targetContainer, dp(context, 14)));
-                btn.setTextColor(targetPrimary);
+            // 豁免危险警告按钮 (停止服务、删除、卸载等)，保持警示红醒目
+            boolean isDanger = (btnId == R.id.launch_stop || btnId == R.id.btnPluginUninstall
+                    || btnId == R.id.btnDiscardConfirm || btnId == R.id.term_ctrlc);
+
+            if (!isDanger) {
+                if (isPrimaryButton(btn)) {
+                    // 深色主按钮: 背景色彩 1 (Primary)，文字纯白高对比度
+                    btn.setBackground(createSolidPillDrawable(context, targetPrimary, dp(context, 14)));
+                    btn.setTextColor(Color.WHITE);
+                } else if (isTonalButton(btn)) {
+                    // 浅色胶囊按钮: 背景色彩 2 (Container)，文字色彩 1 (Primary)
+                    btn.setBackground(createSolidPillDrawable(context, targetContainer, dp(context, 14)));
+                    btn.setTextColor(targetPrimary);
+                }
             }
         }
 
-        // 7. 递归子元素
+        // 6. 递归子元素
         if (view instanceof ViewGroup) {
             ViewGroup group = (ViewGroup) view;
             int count = group.getChildCount();
@@ -169,6 +175,32 @@ public final class MonetEngine {
                 applyToViewTree(group.getChildAt(i), palette);
             }
         }
+    }
+
+    private static boolean isPrimaryButton(TextView view) {
+        int id = view.getId();
+        if (id == R.id.launch_start || id == R.id.btnActionConfirm || id == R.id.btnDialogConfirm
+                || id == R.id.welcome_btn || id == R.id.term_send || id == R.id.config_taskset_save
+                || id == R.id.cred_copy_bridge_token || id == R.id.cred_copy_auth_url
+                || id == R.id.cred_copy_lan_addr || id == R.id.update_copy_cmd) {
+            return true;
+        }
+        int curTextColor = view.getCurrentTextColor();
+        return (view instanceof Button) && (curTextColor == Color.WHITE || curTextColor == 0xFFFFFFFF);
+    }
+
+    private static boolean isTonalButton(TextView view) {
+        int id = view.getId();
+        if (id == R.id.launch_open || id == R.id.update_browser || id == R.id.btnActionCancel
+                || id == R.id.btnDialogCancel || id == R.id.btnDiscardCancel
+                || id == R.id.cred_enter_web || id == R.id.update_copy_mirror_cmd
+                || id == R.id.cred_close || id == R.id.btnPluginAddr || id == R.id.btnPluginRename
+                || id == R.id.btnPluginExport || id == R.id.term_clear || id == R.id.term_pty
+                || id == R.id.pty_font_dec || id == R.id.pty_font_inc || id == R.id.pty_simple
+                || id == R.id.launch_port_chip_3080 || id == R.id.launch_port_chip_3088) {
+            return true;
+        }
+        return (view instanceof Button);
     }
 
     /**
