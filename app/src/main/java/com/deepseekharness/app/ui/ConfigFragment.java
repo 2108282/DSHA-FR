@@ -22,30 +22,28 @@ import com.deepseekharness.app.ui.contract.ConfigPresenter;
 import com.deepseekharness.app.ui.contract.ConfigUiState;
 
 /**
- * 详细配置二级页：1:1 像素级 Skia 现代卡片设计 (ModernCardView)，纯渲染与契约驱动。
+ * 详细配置二级页：1:1 像素级 Skia 现代卡片设计 (ModernCardView + DshaToggle)，纯渲染与契约驱动。
  */
 public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCallback {
 
     private ConfigPresenter presenter;
     private ConfigActions actions;
 
-    private View subBack;
-    private View workspaceEntry;
     private View advHeader;
     private View advBody;
     private ImageView advArrow;
     private EditText portInput;
     private EditText tasksetInput;
-    private CheckBox confirmShellCheck;
-    private CheckBox lanModeCheck;
-    private CheckBox overlayStreamCheck;
+
+    private DshaToggle confirmShellToggle;
+    private DshaToggle overlayStreamToggle;
+    private DshaToggle sensorsToggle;
+    private DshaToggle locationToggle;
+
     private View overlayStyleBtn;
     private View translateBtn;
-    private CheckBox sensorsCheck;
-    private CheckBox locationCheck;
     private View allFilesBtn;
     private TextView allFilesStatusText;
-    private Button saveBtn;
     private View batteryOptBtn;
     private View a11yBtn;
     private TextView a11yStatusText;
@@ -53,6 +51,8 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
     private CheckBox asrContinuousCheck;
     private View asrCheckBtn;
     private View asrFixBtn;
+
+    private boolean isBinding = false;
 
     @Nullable
     @Override
@@ -68,30 +68,12 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         presenter = new ConfigPresenter(requireActivity(), this);
         actions = presenter;
 
-        subBack = view.findViewById(R.id.sub_back);
-        workspaceEntry = view.findViewById(R.id.config_workspace_entry);
+        // 1. 折叠栏（端口与 CPU 亲和度）
         advHeader = view.findViewById(R.id.config_adv_header);
         advBody = view.findViewById(R.id.config_adv_body);
         advArrow = view.findViewById(R.id.config_adv_arrow);
         portInput = view.findViewById(R.id.config_port);
         tasksetInput = view.findViewById(R.id.config_taskset);
-        confirmShellCheck = view.findViewById(R.id.config_confirm_shell);
-        lanModeCheck = view.findViewById(R.id.config_lan_mode);
-        overlayStreamCheck = view.findViewById(R.id.config_overlay_stream);
-        overlayStyleBtn = view.findViewById(R.id.config_overlay_style);
-        translateBtn = view.findViewById(R.id.config_translate);
-        sensorsCheck = view.findViewById(R.id.config_cap_sensors);
-        locationCheck = view.findViewById(R.id.config_cap_location);
-        allFilesBtn = view.findViewById(R.id.config_all_files);
-        allFilesStatusText = view.findViewById(R.id.config_all_files_status);
-        saveBtn = view.findViewById(R.id.config_save);
-        batteryOptBtn = view.findViewById(R.id.config_battery_opt);
-        a11yBtn = view.findViewById(R.id.config_a11y);
-        a11yStatusText = view.findViewById(R.id.config_a11y_status);
-        asrStatusText = view.findViewById(R.id.config_asr_status);
-        asrContinuousCheck = view.findViewById(R.id.config_asr_continuous);
-        asrCheckBtn = view.findViewById(R.id.config_asr_btn_check);
-        asrFixBtn = view.findViewById(R.id.config_asr_btn_fix);
 
         advHeader.setOnClickListener(v -> {
             boolean isVisible = advBody.getVisibility() == View.VISIBLE;
@@ -101,10 +83,76 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
             }
         });
 
-        if (subBack != null) {
-            subBack.setOnClickListener(v -> actions.onBack());
+        // 端口与 Taskset 输入自动保存（失焦时即刻持久化）
+        if (portInput != null) {
+            portInput.setOnFocusChangeListener((v, hasFocus) -> {
+                if (!hasFocus && actions != null) {
+                    actions.onSavePort(portInput.getText().toString());
+                }
+            });
         }
-        workspaceEntry.setOnClickListener(v -> actions.onOpenWorkspace());
+        if (tasksetInput != null) {
+            tasksetInput.setOnFocusChangeListener((v, hasFocus) -> {
+                if (!hasFocus && actions != null) {
+                    actions.onSaveTaskset(tasksetInput.getText().toString());
+                }
+            });
+        }
+
+        // 2. 四大单独开关与整行联动 (DshaToggle 纯 Skia 自绘)
+        confirmShellToggle = view.findViewById(R.id.config_toggle_confirm_shell);
+        if (confirmShellToggle != null) {
+            confirmShellToggle.setOnCheckedChangeListener((toggle, isChecked) -> {
+                if (isBinding) return;
+                actions.onToggleConfirmShell(isChecked);
+            });
+            View row = view.findViewById(R.id.config_row_confirm_shell);
+            if (row != null) row.setOnClickListener(v -> confirmShellToggle.toggle());
+        }
+
+        overlayStreamToggle = view.findViewById(R.id.config_toggle_overlay_stream);
+        if (overlayStreamToggle != null) {
+            overlayStreamToggle.setOnCheckedChangeListener((toggle, isChecked) -> {
+                if (isBinding) return;
+                actions.onToggleOverlayStream(isChecked);
+            });
+            View row = view.findViewById(R.id.config_row_overlay_stream);
+            if (row != null) row.setOnClickListener(v -> overlayStreamToggle.toggle());
+        }
+
+        sensorsToggle = view.findViewById(R.id.config_toggle_sensors);
+        if (sensorsToggle != null) {
+            sensorsToggle.setOnCheckedChangeListener((toggle, isChecked) -> {
+                if (isBinding) return;
+                actions.onToggleSensors(isChecked);
+            });
+            View row = view.findViewById(R.id.config_row_sensors);
+            if (row != null) row.setOnClickListener(v -> sensorsToggle.toggle());
+        }
+
+        locationToggle = view.findViewById(R.id.config_toggle_location);
+        if (locationToggle != null) {
+            locationToggle.setOnCheckedChangeListener((toggle, isChecked) -> {
+                if (isBinding) return;
+                actions.onToggleLocation(isChecked);
+            });
+            View row = view.findViewById(R.id.config_row_location);
+            if (row != null) row.setOnClickListener(v -> locationToggle.toggle());
+        }
+
+        // 3. 扩展与权限入口
+        overlayStyleBtn = view.findViewById(R.id.config_overlay_style);
+        translateBtn = view.findViewById(R.id.config_translate);
+        allFilesBtn = view.findViewById(R.id.config_all_files);
+        allFilesStatusText = view.findViewById(R.id.config_all_files_status);
+        batteryOptBtn = view.findViewById(R.id.config_battery_opt);
+        a11yBtn = view.findViewById(R.id.config_a11y);
+        a11yStatusText = view.findViewById(R.id.config_a11y_status);
+        asrStatusText = view.findViewById(R.id.config_asr_status);
+        asrContinuousCheck = view.findViewById(R.id.config_asr_continuous);
+        asrCheckBtn = view.findViewById(R.id.config_asr_btn_check);
+        asrFixBtn = view.findViewById(R.id.config_asr_btn_fix);
+
         overlayStyleBtn.setOnClickListener(v -> actions.onOpenOverlayStyle());
         allFilesBtn.setOnClickListener(v -> actions.onOpenAllFilesSettings());
         batteryOptBtn.setOnClickListener(v -> actions.onOpenBatteryOptimization());
@@ -117,48 +165,51 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
 
         asrContinuousCheck.setOnCheckedChangeListener((btn, checked) -> actions.onToggleAsrContinuous(checked));
 
-        saveBtn.setOnClickListener(v -> actions.onSaveConfig(
-                portInput.getText().toString(),
-                tasksetInput.getText().toString(),
-                confirmShellCheck.isChecked(),
-                lanModeCheck.isChecked(),
-                overlayStreamCheck.isChecked(),
-                sensorsCheck.isChecked(),
-                locationCheck.isChecked()
-        ));
-
         presenter.init();
     }
 
     @Override
     public void onResume() {
         super.onResume();
+        syncActivityTitle(true);
         if (presenter != null) {
             presenter.refreshState();
         }
     }
 
     @Override
+    public void onPause() {
+        super.onPause();
+        // 界面切换时自动保存端口与 Taskset
+        if (actions != null) {
+            if (portInput != null) actions.onSavePort(portInput.getText().toString());
+            if (tasksetInput != null) actions.onSaveTaskset(tasksetInput.getText().toString());
+        }
+    }
+
+    @Override
     public void onDestroyView() {
+        syncActivityTitle(false);
+        if (confirmShellToggle != null) confirmShellToggle.setOnCheckedChangeListener(null);
+        if (overlayStreamToggle != null) overlayStreamToggle.setOnCheckedChangeListener(null);
+        if (sensorsToggle != null) sensorsToggle.setOnCheckedChangeListener(null);
+        if (locationToggle != null) locationToggle.setOnCheckedChangeListener(null);
+
         presenter = null;
         actions = null;
-        subBack = null;
-        workspaceEntry = null;
         advHeader = null;
         advBody = null;
         advArrow = null;
         portInput = null;
         tasksetInput = null;
-        confirmShellCheck = null;
-        lanModeCheck = null;
-        overlayStreamCheck = null;
+        confirmShellToggle = null;
+        overlayStreamToggle = null;
+        sensorsToggle = null;
+        locationToggle = null;
         overlayStyleBtn = null;
         translateBtn = null;
-        sensorsCheck = null;
-        locationCheck = null;
         allFilesBtn = null;
         allFilesStatusText = null;
-        saveBtn = null;
         batteryOptBtn = null;
         a11yBtn = null;
         a11yStatusText = null;
@@ -169,17 +220,35 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         super.onDestroyView();
     }
 
+    private void syncActivityTitle(boolean isSubpage) {
+        if (!isAdded()) return;
+        TextView activityTitle = requireActivity().findViewById(R.id.app_title);
+        if (activityTitle != null) {
+            activityTitle.setText(isSubpage ? "详细配置" : getString(R.string.nav_settings));
+        }
+    }
+
     @Override
     public void onRender(ConfigUiState state) {
         if (!isAdded() || getView() == null) return;
 
-        if (portInput != null) portInput.setText(state.port);
-        if (tasksetInput != null) tasksetInput.setText(state.taskset);
-        if (confirmShellCheck != null) confirmShellCheck.setChecked(state.isConfirmShell);
-        if (lanModeCheck != null) lanModeCheck.setChecked(state.isLanMode);
-        if (overlayStreamCheck != null) overlayStreamCheck.setChecked(state.isOverlayStream);
-        if (sensorsCheck != null) sensorsCheck.setChecked(state.isCapSensors);
-        if (locationCheck != null) locationCheck.setChecked(state.isCapLocation);
+        isBinding = true;
+        if (portInput != null && !portInput.hasFocus()) portInput.setText(state.port);
+        if (tasksetInput != null && !tasksetInput.hasFocus()) tasksetInput.setText(state.taskset);
+
+        if (confirmShellToggle != null && confirmShellToggle.isChecked() != state.isConfirmShell) {
+            confirmShellToggle.setChecked(state.isConfirmShell, false, false);
+        }
+        if (overlayStreamToggle != null && overlayStreamToggle.isChecked() != state.isOverlayStream) {
+            overlayStreamToggle.setChecked(state.isOverlayStream, false, false);
+        }
+        if (sensorsToggle != null && sensorsToggle.isChecked() != state.isCapSensors) {
+            sensorsToggle.setChecked(state.isCapSensors, false, false);
+        }
+        if (locationToggle != null && locationToggle.isChecked() != state.isCapLocation) {
+            locationToggle.setChecked(state.isCapLocation, false, false);
+        }
+        isBinding = false;
 
         if (asrContinuousCheck != null) {
             asrContinuousCheck.setOnCheckedChangeListener(null);
@@ -192,14 +261,6 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         if (allFilesStatusText != null) allFilesStatusText.setText(state.allFilesStatusText);
         if (a11yStatusText != null) a11yStatusText.setText(state.a11yStatusText);
         if (asrStatusText != null) asrStatusText.setText(state.asrStatusText);
-    }
-
-    @Override
-    public void onOpenWorkspace() {
-        getParentFragmentManager().beginTransaction()
-                .replace(R.id.fragment_container, new WorkspaceFragment())
-                .addToBackStack("workspace")
-                .commit();
     }
 
     @Override

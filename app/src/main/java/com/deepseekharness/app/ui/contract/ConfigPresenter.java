@@ -23,7 +23,6 @@ public class ConfigPresenter implements ConfigActions {
 
     public interface ViewCallback {
         void onRender(ConfigUiState state);
-        void onOpenWorkspace();
         void onGoBack();
         void onRequestLocationPermission();
     }
@@ -51,7 +50,6 @@ public class ConfigPresenter implements ConfigActions {
         String port = config.getPort();
         String taskset = config.getTaskset();
         boolean confirmShell = config.isConfirmShell();
-        boolean lanMode = config.isLanMode();
         boolean overlayStream = sp.getBoolean("overlay_stream", false);
         boolean capSensors = sp.getBoolean("cap_sensors", false);
         boolean capLocation = sp.getBoolean("cap_location", false);
@@ -74,39 +72,62 @@ public class ConfigPresenter implements ConfigActions {
         String asrStatus = checkAsrStatus();
 
         ConfigUiState state = new ConfigUiState(
-                port, taskset, confirmShell, lanMode, overlayStream, capSensors,
+                port, taskset, confirmShell, overlayStream, capSensors,
                 capLocation, asrContinuous, allFilesStatus, a11yStatus, asrStatus
         );
         mainHandler.post(() -> callback.onRender(state));
     }
 
     @Override
-    public void onSaveConfig(String port, String taskset, boolean confirmShell, boolean lanMode,
-                             boolean overlayStream, boolean capSensors, boolean capLocation) {
-        config.setPort(port);
+    public void onSavePort(String port) {
+        if (port != null && !port.trim().isEmpty()) {
+            config.setPort(port.trim());
+        }
+    }
+
+    @Override
+    public void onSaveTaskset(String taskset) {
         String cleanTaskset = taskset != null ? taskset.trim().replaceAll("[^0-9,-]", "") : "";
         config.setTaskset(cleanTaskset);
         applyTasksetImmediately(cleanTaskset);
-        config.setConfirmShell(confirmShell);
-        config.setLanMode(lanMode);
+    }
 
+    @Override
+    public void onToggleConfirmShell(boolean enabled) {
+        config.setConfirmShell(enabled);
+        toast(enabled ? "已开启危险 Shell 操作拦截确认" : "已关闭危险 Shell 拦截确认");
+        refreshState();
+    }
+
+    @Override
+    public void onToggleOverlayStream(boolean enabled) {
         context.getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE).edit()
-                .putBoolean("overlay_stream", overlayStream)
-                .putBoolean("cap_sensors", capSensors)
-                .putBoolean("cap_location", capLocation)
-                .apply();
+                .putBoolean("overlay_stream", enabled).apply();
+        toast(enabled ? "已开启屏幕顶部流式输出" : "已关闭屏幕顶部流式输出");
+        refreshState();
+    }
 
-        if (capLocation && context.checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION)
+    @Override
+    public void onToggleSensors(boolean enabled) {
+        context.getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE).edit()
+                .putBoolean("cap_sensors", enabled).apply();
+        toast(enabled ? "已允许读取传感器与手电" : "已禁用传感器与手电直通");
+        refreshState();
+    }
+
+    @Override
+    public void onToggleLocation(boolean enabled) {
+        context.getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE).edit()
+                .putBoolean("cap_location", enabled).apply();
+        if (enabled && context.checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION)
                 != PackageManager.PERMISSION_GRANTED) {
             callback.onRequestLocationPermission();
         }
-
-        toast("配置已保存");
+        toast(enabled ? "已允许读取位置" : "已禁用位置直通");
         refreshState();
     }
 
     @Override public void onBack() { callback.onGoBack(); }
-    @Override public void onOpenWorkspace() { callback.onOpenWorkspace(); }
     @Override public void onOpenOverlayStyle() { OverlayStyleDialog.show(activity); }
     @Override public void onOpenAllFilesSettings() { openAllFilesAccess(); }
     @Override public void onOpenBatteryOptimization() { openBatteryOptimization(); }
@@ -189,9 +210,9 @@ public class ConfigPresenter implements ConfigActions {
             try {
                 String pkg = context.getPackageName();
                 String cmd = "settings put secure voice_recognition_service \"com.xiaomi.mibrain.speech/com.xiaomi.mibrain.speech.asr.AsrService\""
-                        + " && pm grant " + pkg + " android.permission.RECORD_AUDIO"
-                        + " && cmd appops set com.xiaomi.mibrain.speech RECORD_AUDIO allow"
-                        + " && cmd appops set " + pkg + " RECORD_AUDIO allow";
+                + " && pm grant " + pkg + " android.permission.RECORD_AUDIO"
+                + " && cmd appops set com.xiaomi.mibrain.speech RECORD_AUDIO allow"
+                + " && cmd appops set " + pkg + " RECORD_AUDIO allow";
                 HttpShellService.execRootCommand(cmd);
                 mainHandler.post(() -> {
                     refreshState();

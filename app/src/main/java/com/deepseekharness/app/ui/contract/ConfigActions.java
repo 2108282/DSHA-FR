@@ -1,10 +1,13 @@
 package com.deepseekharness.app.ui.contract;
 
 public interface ConfigActions {
-    void onSaveConfig(String port, String taskset, boolean confirmShell, boolean lanMode,
-                      boolean overlayStream, boolean capSensors, boolean capLocation);
+    void onSavePort(String port);
+    void onSaveTaskset(String taskset);
+    void onToggleConfirmShell(boolean enabled);
+    void onToggleOverlayStream(boolean enabled);
+    void onToggleSensors(boolean enabled);
+    void onToggleLocation(boolean enabled);
     void onBack();
-    void onOpenWorkspace();
     void onOpenOverlayStyle();
     void onOpenAllFilesSettings();
     void onOpenBatteryOptimization();
