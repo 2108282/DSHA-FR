@@ -16,6 +16,10 @@ import android.view.WindowManager;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import androidx.core.graphics.ColorUtils;
+
+import com.deepseekharness.app.ui.MonetEngine;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -62,15 +66,26 @@ public final class OverlayController {
     public static final int DEF_HOLD = 6;
     public static final int DEF_ALPHA = 85;
 
-    /** 预设底色（不做取色器：悬浮条只需要「在任何壁纸上都读得清」，几个深色够用）。 */
+    /**
+     * 预设底色列表：
+     * - 0: 莫奈动态（跟随系统壁纸 Material You 调色板与 App 昼夜模式自适应演色）
+     * - 1: 素雅纯白（极简明亮浅色风格）
+     * - 2: 深灰蓝（经典科技深色）
+     * - 3: 纯黑（OLED 纯黑极客风格）
+     * - 4: 深海蓝（深邃墨蓝）
+     * - 5: 深墨绿（沉稳墨绿）
+     * - 6: 深紫（暗夜极客紫）
+     */
     public static final int[] BG_PRESETS = {
-            0x11141A,   // 深灰蓝（默认）
+            -1,         // 莫奈动态（特殊标记）
+            0xFFFFFF,   // 素雅纯白
+            0x11141A,   // 深灰蓝
             0x000000,   // 纯黑
             0x0D1B2A,   // 深海蓝
             0x102A17,   // 深墨绿
             0x1E1030,   // 深紫
     };
-    public static final String[] BG_NAMES = {"深灰蓝", "纯黑", "深海蓝", "深墨绿", "深紫"};
+    public static final String[] BG_NAMES = {"莫奈动态", "素雅纯白", "深灰蓝", "纯黑", "深海蓝", "深墨绿", "深紫"};
 
     /** 每行按多少字符估算。宽度由系统折行决定，这里只用来决定「留多少尾部内容」。 */
     /** 每行的显示宽度见 {@link OverlayLines#DEFAULT_WIDTH}。下面两个是缓冲上限：
@@ -162,10 +177,37 @@ public final class OverlayController {
         return clamp(prefs(ctx).getInt(K_ALPHA, DEF_ALPHA), 20, 100);
     }
 
+    /**
+     * 获取指定预设索引对应的实际 RGB 基色（未施加透明度）。
+     * 莫奈动态模式下会实时从 MonetEngine 解析当前系统壁纸和深浅色模式的容器色彩。
+     */
+    public static int getRawPresetColor(Context ctx, int idx) {
+        int validIdx = clamp(idx, 0, BG_PRESETS.length - 1);
+        int preset = BG_PRESETS[validIdx];
+        if (preset == -1) {
+            try {
+                MonetEngine.PaletteInfo palette = MonetEngine.resolveCurrentPalette(ctx);
+                return palette.containerColor;
+            } catch (Throwable t) {
+                return 0xFFEBF0F8;
+            }
+        }
+        return preset;
+    }
+
     private static int bgColor(Context ctx) {
         int idx = clamp(prefs(ctx).getInt(K_BG, 0), 0, BG_PRESETS.length - 1);
+        int rgb = getRawPresetColor(ctx, idx);
         int a = Math.round(alphaPct(ctx) * 255f / 100f);
-        return (a << 24) | (BG_PRESETS[idx] & 0xFFFFFF);
+        return (a << 24) | (rgb & 0xFFFFFF);
+    }
+
+    /**
+     * 判断当前悬浮条背景在视觉上是否为浅色（用于前景文字对比度自适应翻转）。
+     */
+    public static boolean isLightBackground(Context ctx) {
+        int bg = bgColor(ctx);
+        return ColorUtils.calculateLuminance(bg | 0xFF000000) > 0.45;
     }
 
     private static int clamp(int v, int lo, int hi) {
@@ -475,13 +517,28 @@ public final class OverlayController {
 
     private static void applyStyle(Context ctx) {
         if (root == null) return;
+        int currentBg = bgColor(ctx);
+        boolean isLight = isLightBackground(ctx);
+
         GradientDrawable bg = new GradientDrawable();
         bg.setCornerRadius(dp(ctx, 16));
-        bg.setColor(bgColor(ctx));
+        bg.setColor(currentBg);
+        // 浅色背景加 1dp 微边框，避免浅色壁纸下边缘融化；深色背景加柔和微细边
+        bg.setStroke(dp(ctx, 1), isLight ? 0x24000000 : 0x1AFFFFFF);
         root.setBackground(bg);
+
         // 字号每次显示都重新应用：用户在配置页拉完滑块，下一条内容就是新字号，
         // 不必重启 App。断行宽度是从 paint 量的，所以它跟着自动变。
-        if (label != null) label.setTextSize(textSp(ctx));
+        // 文字颜色根据底色明暗自适应：浅色底用高可读性深墨黑（0xFF0F172A），深色底用纯白
+        if (label != null) {
+            label.setTextSize(textSp(ctx));
+            label.setTextColor(isLight ? 0xFF0F172A : Color.WHITE);
+        }
+
+        // 危险命令提示语自适应对比度：浅底使用醒目焦糖琥珀色（0xFFB45309），深底使用亮黄（0xFFFFC66D）
+        if (confirmHint != null) {
+            confirmHint.setTextColor(isLight ? 0xFFB45309 : 0xFFFFC66D);
+        }
     }
 
     private static Handler mainHandler() {

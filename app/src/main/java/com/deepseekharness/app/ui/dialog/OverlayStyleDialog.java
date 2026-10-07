@@ -5,7 +5,9 @@ import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
+import android.view.View;
 import android.widget.CheckBox;
+import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
@@ -13,6 +15,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AlertDialog;
+import androidx.core.graphics.ColorUtils;
 
 import com.deepseekharness.app.OverlayController;
 import com.deepseekharness.app.util.Constants;
@@ -45,18 +48,33 @@ public final class OverlayStyleDialog {
 
         box.addView(sectionLabel.apply("底色预设"));
         final int[] pickedBg = {sp.getInt(OverlayController.K_BG, 0)};
+
+        HorizontalScrollView swatchScroll = new HorizontalScrollView(context);
+        swatchScroll.setHorizontalScrollBarEnabled(false);
+        swatchScroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
+
         LinearLayout swatches = new LinearLayout(context);
         swatches.setOrientation(LinearLayout.HORIZONTAL);
+        swatchScroll.addView(swatches);
+
         final TextView[] cells = new TextView[OverlayController.BG_PRESETS.length];
 
         Runnable paintSwatches = () -> {
             for (int i = 0; i < cells.length; i++) {
                 if (cells[i] == null) continue;
+                int rawColor = OverlayController.getRawPresetColor(context, i);
+                boolean isLight = ColorUtils.calculateLuminance(rawColor | 0xFF000000) > 0.45;
+
                 GradientDrawable bg = new GradientDrawable();
                 bg.setCornerRadius(dp.apply(12));
-                bg.setColor(0xFF000000 | OverlayController.BG_PRESETS[i]);
-                if (i == pickedBg[0]) bg.setStroke(dp.apply(2), Color.parseColor("#7DA7F4"));
+                bg.setColor(0xFF000000 | (rawColor & 0xFFFFFF));
+                if (i == pickedBg[0]) {
+                    bg.setStroke(dp.apply(2), Color.parseColor("#3B82F6"));
+                } else {
+                    bg.setStroke(dp.apply(1), isLight ? 0x24000000 : 0x1AFFFFFF);
+                }
                 cells[i].setBackground(bg);
+                cells[i].setTextColor(isLight ? 0xFF0F172A : 0xFFFFFFFF);
             }
         };
 
@@ -64,12 +82,13 @@ public final class OverlayStyleDialog {
             final int idx = i;
             TextView cell = new TextView(context);
             cell.setText(OverlayController.BG_NAMES[i]);
-            cell.setTextColor(0xFFFFFFFF);
-            cell.setTextSize(11f);
+            cell.setTextSize(12f);
+            cell.setTypeface(cell.getTypeface(), android.graphics.Typeface.BOLD);
             cell.setGravity(Gravity.CENTER);
-            cell.setPadding(dp.apply(6), dp.apply(10), dp.apply(6), dp.apply(10));
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-            lp.rightMargin = dp.apply(4);
+            cell.setPadding(dp.apply(14), dp.apply(10), dp.apply(14), dp.apply(10));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            lp.rightMargin = dp.apply(8);
             cell.setLayoutParams(lp);
             cell.setOnClickListener(v -> {
                 pickedBg[0] = idx;
@@ -79,7 +98,7 @@ public final class OverlayStyleDialog {
             swatches.addView(cell);
         }
         paintSwatches.run();
-        box.addView(swatches);
+        box.addView(swatchScroll);
 
         class SliderHelper {
             SeekBar add(String title, int min, int max, int value, String unit) {

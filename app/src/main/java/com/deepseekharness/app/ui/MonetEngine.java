@@ -181,16 +181,25 @@ public final class MonetEngine {
         int g = Color.green(primaryColor);
         int b = Color.blue(primaryColor);
 
-        // 严格对齐原本 bg_aurora_top_right 的层次透明度
-        int startColor = Color.argb(isMonetActive ? 0x22 : 0x15, r, g, b);
-        int centerColor = Color.argb(isMonetActive ? 0x0E : 0x0B, r, g, b);
-        int endColor = Color.argb(0x00, r, g, b);
+        // 确保容器通栏撑满屏幕 match_parent，消除任何左右方向上的竖直截断边缘
+        ViewGroup.LayoutParams vlp = auroraView.getLayoutParams();
+        if (vlp != null && vlp.width != ViewGroup.LayoutParams.MATCH_PARENT) {
+            vlp.width = ViewGroup.LayoutParams.MATCH_PARENT;
+            auroraView.setLayoutParams(vlp);
+        }
+
+        // 4 阶指数级超平滑衰减色阶: 从右上角核心柔光向左下自然消融
+        int c0 = Color.argb(isMonetActive ? 0x22 : 0x16, r, g, b);
+        int c1 = Color.argb(isMonetActive ? 0x11 : 0x0A, r, g, b);
+        int c2 = Color.argb(isMonetActive ? 0x04 : 0x02, r, g, b);
+        int c3 = Color.argb(0x00, r, g, b);
 
         GradientDrawable aurora = new GradientDrawable();
-        aurora.setShape(GradientDrawable.OVAL);
+        aurora.setShape(GradientDrawable.RECTANGLE);
         aurora.setGradientType(GradientDrawable.RADIAL_GRADIENT);
-        aurora.setGradientRadius(dp(context, 200));
-        aurora.setColors(new int[]{startColor, centerColor, endColor});
+        aurora.setGradientCenter(1.0f, 0.0f); // 圆心定在右上角顶点，平滑向中间辐射
+        aurora.setGradientRadius(dp(context, 360));
+        aurora.setColors(new int[]{c0, c1, c2, c3});
         auroraView.setBackground(aurora);
     }
 

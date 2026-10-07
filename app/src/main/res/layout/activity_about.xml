@@ -8,11 +8,8 @@
     <!-- 全局固定极光漫射图层 (1:1 对齐 HTML .aurora-1) -->
     <View
         android:id="@+id/global_aurora"
-        android:layout_width="320dp"
+        android:layout_width="match_parent"
         android:layout_height="320dp"
-        android:layout_gravity="top|end"
-        android:layout_marginTop="-110dp"
-        android:layout_marginEnd="-80dp"
         android:background="@drawable/bg_aurora_top_right"
         android:importantForAccessibility="no" />
 
