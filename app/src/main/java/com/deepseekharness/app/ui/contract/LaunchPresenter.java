@@ -184,7 +184,20 @@ public class LaunchPresenter implements LaunchActions {
             }
         }
 
-        String statusDesc = customStatusMsg;
+        String statusDesc;
+        if (!customStatusMsg.isEmpty()) {
+            statusDesc = customStatusMsg;
+        } else if (ready) {
+            statusDesc = "环境完整，核心进程运行正常（端口：" + getSavedPort() + "）";
+        } else if (running) {
+            statusDesc = "DSH 进程已拉起，正在连接鉴权接口…";
+        } else if (stopping) {
+            statusDesc = "正在停止后台进程与网络桥接…";
+        } else if (starting) {
+            statusDesc = "正在解压内置环境并拉起 DSH 核心…";
+        } else {
+            statusDesc = "点击「启动」开启 DSH 核心服务";
+        }
 
         LaunchUiState state = new LaunchUiState(
                 title,
