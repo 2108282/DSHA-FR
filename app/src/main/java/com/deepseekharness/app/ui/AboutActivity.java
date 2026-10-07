@@ -66,7 +66,6 @@ public final class AboutActivity extends AppCompatActivity {
             copyToClipboard("QQ群号", QQ_GROUP);
             Toast.makeText(this, "QQ 群号已复制：" + QQ_GROUP, Toast.LENGTH_SHORT).show();
         });
-        findViewById(R.id.about_row_license).setOnClickListener(v -> showLicenseDialog());
     }
 
     @Override
@@ -93,20 +92,4 @@ public final class AboutActivity extends AppCompatActivity {
         } catch (Throwable ignored) {}
     }
 
-    private void showLicenseDialog() {
-        new AlertDialog.Builder(this)
-                .setTitle("开源协议 (MIT License)")
-                .setMessage("Copyright (c) 2026 DSHA-FR Contributors\n\n"
-                        + "Permission is hereby granted, free of charge, to any person obtaining a copy "
-                        + "of this software and associated documentation files (the \"Software\"), to deal "
-                        + "in the Software without restriction, including without limitation the rights "
-                        + "to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies "
-                        + "of the Software, and to permit persons to whom the Software is furnished to do so, "
-                        + "subject to the following conditions:\n\n"
-                        + "The above copyright notice and this permission notice shall be included in all "
-                        + "copies or substantial portions of the Software.")
-                .setPositiveButton("访问仓库 LICENSE", (d, w) -> openUrl(GITHUB_ROOT_URL + "/blob/main/LICENSE"))
-                .setNegativeButton("关闭", null)
-                .show();
-    }
 }

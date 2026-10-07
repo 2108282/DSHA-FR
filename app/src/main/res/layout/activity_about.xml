@@ -139,6 +139,7 @@
                         android:outlineSpotShadowColor="#3847699F">
 
                         <ImageView
+                            android:id="@+id/about_logo_icon"
                             android:layout_width="40dp"
                             android:layout_height="40dp"
                             android:layout_gravity="center"
@@ -205,7 +206,7 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Root 仓库"
+                                android:text="DSHA-FR 仓库地址"
                                 android:textColor="@color/text"
                                 android:textSize="15sp"
                                 android:textStyle="bold" />
@@ -256,7 +257,7 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="原版 DSHA 仓库"
+                                android:text="原版 DSHA 仓库 (其他作者)"
                                 android:textColor="@color/text"
                                 android:textSize="15sp"
                                 android:textStyle="bold" />
@@ -329,67 +330,9 @@
                             app:tint="@color/text_muted" />
                     </LinearLayout>
 
-                    <View
-                        android:layout_width="match_parent"
-                        android:layout_height="1dp"
-                        android:layout_marginStart="16dp"
-                        android:layout_marginEnd="16dp"
-                        android:background="@android:color/transparent" />
-
-                    <!-- 行 4: 开源协议 -->
-                    <LinearLayout
-                        android:id="@+id/about_row_license"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:background="?attr/selectableItemBackground"
-                        android:clickable="true"
-                        android:focusable="true"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal"
-                        android:paddingHorizontal="16dp"
-                        android:paddingVertical="15dp">
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="开源协议"
-                                android:textColor="@color/text"
-                                android:textSize="15sp"
-                                android:textStyle="bold" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="1dp"
-                                android:text="详见仓库 LICENSE (MIT License)"
-                                android:textColor="@color/text_muted"
-                                android:textSize="12sp" />
-                        </LinearLayout>
-
-                        <ImageView
-                            android:layout_width="18dp"
-                            android:layout_height="18dp"
-                            android:contentDescription="@null"
-                            android:src="@drawable/ic_chevron_right"
-                            app:tint="@color/text_muted" />
-                    </LinearLayout>
                 </com.deepseekharness.app.ui.ModernCardView>
 
-                <!-- 底部鸣谢 -->
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="20dp"
-                    android:gravity="center"
-                    android:text="DSHA-FR 基于开源项目 DSHA 二次开发"
-                    android:textColor="@color/text_muted"
-                    android:textSize="12sp" />
+
 
             </LinearLayout>
         </androidx.core.widget.NestedScrollView>

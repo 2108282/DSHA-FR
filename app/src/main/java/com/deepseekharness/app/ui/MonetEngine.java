@@ -136,9 +136,12 @@ public final class MonetEngine {
             return;
         }
 
-        // 4. ImageView 着色: 如果原本使用了主题色，动态赋予新主色
+        // 4. ImageView 着色: 如果原本使用了主题色，动态赋予新主色 (豁免关于页中央 Logo 图标)
         if (view instanceof ImageView) {
             ImageView iv = (ImageView) view;
+            if (iv.getId() == R.id.about_logo_icon) {
+                return; // 保持中央 Logo 独立纯白与经典底板，坚决不跟随莫奈取色变化
+            }
             ColorStateList tint = iv.getImageTintList();
             if (tint != null) {
                 iv.setImageTintList(ColorStateList.valueOf(targetPrimary));
