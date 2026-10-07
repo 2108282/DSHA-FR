@@ -1,42 +1,123 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/surface"
-    android:orientation="vertical">
+    android:background="@color/surface">
 
-    <androidx.viewpager2.widget.ViewPager2
-        android:id="@+id/welcome_pager"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1" />
-
-    <LinearLayout
-        android:id="@+id/welcome_dots"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center_horizontal"
-        android:layout_marginBottom="@dimen/gap_block"
-        android:gravity="center"
-        android:orientation="horizontal" />
+    <!-- 全局固定极光漫射图层 (Skia RenderEffect 硬件加速高斯模糊) -->
+    <View
+        android:id="@+id/global_aurora"
+        android:layout_width="320dp"
+        android:layout_height="320dp"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="-110dp"
+        android:layout_marginEnd="-80dp"
+        android:background="@drawable/bg_aurora_top_right"
+        android:importantForAccessibility="no" />
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:paddingStart="@dimen/page_pad"
-        android:paddingEnd="@dimen/page_pad"
-        android:paddingBottom="@dimen/gap_section">
+        android:layout_height="match_parent"
+        android:orientation="vertical">
 
-        <Button
-            android:id="@+id/welcome_btn"
+        <!-- 顶部统一透明标题栏 (沿用当前方案，52dp，背景透明无分割线) -->
+        <LinearLayout
+            android:id="@+id/app_bar"
             android:layout_width="match_parent"
-            android:layout_height="@dimen/btn_height"
-            android:background="@drawable/m3_btn_primary_expressive"
-            android:text="下一步"
-            android:textAllCaps="false"
-            android:textColor="@color/m3_btn_primary_text"
-            android:textSize="@dimen/text_body"
-            android:textStyle="bold" />
+            android:layout_height="52dp"
+            android:background="@android:color/transparent"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="16dp">
+
+            <FrameLayout
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:background="@drawable/bg_settings_icon_box">
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_terminal"
+                    app:tint="@color/primary" />
+            </FrameLayout>
+
+            <TextView
+                android:id="@+id/app_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:layout_weight="1"
+                android:text="DSHA-FR"
+                android:textColor="@color/text"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <!-- 纯图标太阳/月亮切换胶囊 (36dp x 36dp) -->
+            <FrameLayout
+                android:id="@+id/btn_theme"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:background="@drawable/bg_chip_clickable"
+                android:clickable="true"
+                android:focusable="true"
+                android:stateListAnimator="@animator/chip_press_scale">
+
+                <ImageView
+                    android:id="@+id/img_theme_icon"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="切换主题"
+                    android:src="@drawable/ic_sun"
+                    app:tint="@color/text_secondary" />
+            </FrameLayout>
+        </LinearLayout>
+
+        <!-- ViewPager2 页面滑动区 -->
+        <androidx.viewpager2.widget.ViewPager2
+            android:id="@+id/welcome_pager"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <!-- 底部固定操作控制区 (包含动态胶囊指示点与全宽主按钮) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingHorizontal="24dp"
+            android:paddingTop="12dp"
+            android:paddingBottom="24dp">
+
+            <!-- 指示器小圆点容器 -->
+            <LinearLayout
+                android:id="@+id/welcome_dots"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginBottom="16dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal" />
+
+            <!-- 主操作按钮 (48dp, 纯 Skia 现代胶囊, 具备按压微缩放) -->
+            <Button
+                android:id="@+id/welcome_btn"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:background="@drawable/m3_btn_primary_expressive"
+                android:elevation="3dp"
+                android:outlineAmbientShadowColor="#00000000"
+                android:outlineSpotShadowColor="#3847699F"
+                android:stateListAnimator="@animator/btn_press_scale"
+                android:text="下一步"
+                android:textAllCaps="false"
+                android:textColor="@color/accent_on"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+        </LinearLayout>
     </LinearLayout>
-</LinearLayout>
+</FrameLayout>

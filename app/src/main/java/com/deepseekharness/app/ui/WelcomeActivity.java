@@ -1,11 +1,15 @@
 package com.deepseekharness.app.ui;
 
 import android.content.Intent;
+import android.graphics.drawable.GradientDrawable;
+import android.os.Build;
 import android.os.Bundle;
+import android.util.TypedValue;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -25,15 +29,36 @@ import java.util.List;
 
 public class WelcomeActivity extends AppCompatActivity implements WelcomeActions {
 
-    private final TextView[] dots = new TextView[3];
+    private final View[] dotViews = new View[3];
     private ViewPager2 pager;
     private Button actionBtn;
     private final WelcomeActions actions = this;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
+        ThemeController.apply(this);
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_welcome);
+
+        // 极光漫射效果 (Android 12+)
+        View auroraView = findViewById(R.id.global_aurora);
+        if (auroraView != null && Build.VERSION.SDK_INT >= 31) {
+            float blurPx = 80f * getResources().getDisplayMetrics().density;
+            try {
+                auroraView.setRenderEffect(android.graphics.RenderEffect.createBlurEffect(
+                        blurPx, blurPx, android.graphics.Shader.TileMode.CLAMP));
+            } catch (Throwable ignored) { }
+        }
+
+        // 顶栏日夜间纯图标切换 (白天显示太阳，黑夜显示月亮，零文字)
+        View themeBtn = findViewById(R.id.btn_theme);
+        ImageView themeIcon = findViewById(R.id.img_theme_icon);
+        if (themeBtn != null && themeIcon != null) {
+            boolean dark = ThemeController.isDark(this);
+            themeIcon.setImageResource(dark ? R.drawable.ic_moon : R.drawable.ic_sun);
+            themeIcon.setContentDescription(dark ? "夜间模式" : "日间模式");
+            themeBtn.setOnClickListener(v -> ThemeController.toggle(this));
+        }
 
         pager = findViewById(R.id.welcome_pager);
         actionBtn = findViewById(R.id.welcome_btn);
@@ -42,17 +67,14 @@ public class WelcomeActivity extends AppCompatActivity implements WelcomeActions
         pager.setAdapter(new PageAdapter());
         pager.setUserInputEnabled(true);
 
+        // 初始化 1:1 对齐概念稿的胶囊指示器
         for (int i = 0; i < 3; i++) {
-            TextView d = new TextView(this);
-            d.setText("●");
-            d.setTextColor(getColor(R.color.text_muted));
-            d.setTextSize(10);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            lp.setMargins(6, 0, 6, 0);
-            d.setLayoutParams(lp);
-            dotsBox.addView(d);
-            dots[i] = d;
+            View dot = new View(this);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(8), dp(8));
+            lp.setMargins(dp(4), 0, dp(4), 0);
+            dot.setLayoutParams(lp);
+            dotsBox.addView(dot);
+            dotViews[i] = dot;
         }
 
         pager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
@@ -68,9 +90,27 @@ public class WelcomeActivity extends AppCompatActivity implements WelcomeActions
     }
 
     private void render(WelcomeUiState state) {
+        int primaryColor = getColor(R.color.primary);
+        int mutedColor = getColor(R.color.line);
+
         for (int i = 0; i < 3; i++) {
-            dots[i].setTextColor(getColor(i == state.position ? R.color.primary : R.color.text_muted));
+            View dot = dotViews[i];
+            boolean isActive = (i == state.position);
+            int width = isActive ? dp(26) : dp(8);
+
+            LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) dot.getLayoutParams();
+            if (lp.width != width) {
+                lp.width = width;
+                dot.setLayoutParams(lp);
+            }
+
+            GradientDrawable shape = new GradientDrawable();
+            shape.setShape(GradientDrawable.RECTANGLE);
+            shape.setCornerRadius(dp(999));
+            shape.setColor(isActive ? primaryColor : mutedColor);
+            dot.setBackground(shape);
         }
+
         if (actionBtn != null) {
             actionBtn.setText(state.buttonText);
         }
@@ -80,7 +120,7 @@ public class WelcomeActivity extends AppCompatActivity implements WelcomeActions
     public void onNextOrStartClick() {
         int cur = pager.getCurrentItem();
         if (cur < 2) {
-            pager.setCurrentItem(cur + 1);
+            pager.setCurrentItem(cur + 1, true);
         } else {
             new ConfigStore(this).setWelcomed(true);
             startActivity(new Intent(this, MainActivity.class));
@@ -90,8 +130,12 @@ public class WelcomeActivity extends AppCompatActivity implements WelcomeActions
 
     @Override
     public void onPageSelected(int position) {
-        String text = (position == 2) ? "开始" : "下一步";
+        String text = (position == 2) ? "开始使用" : "下一步";
         render(new WelcomeUiState(position, text));
+    }
+
+    private int dp(int v) {
+        return Math.round(v * getResources().getDisplayMetrics().density);
     }
 
     private class PageAdapter extends RecyclerView.Adapter<PageAdapter.Holder> {

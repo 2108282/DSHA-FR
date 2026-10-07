@@ -1,92 +1,262 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/surface"
-    android:fillViewport="true">
+    android:background="@android:color/transparent"
+    android:fillViewport="true"
+    android:overScrollMode="never"
+    android:scrollbars="none">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:paddingStart="@dimen/page_pad_wide"
-        android:paddingTop="56dp"
-        android:paddingEnd="@dimen/page_pad_wide"
-        android:paddingBottom="@dimen/gap_section">
+        android:paddingHorizontal="20dp"
+        android:paddingTop="20dp"
+        android:paddingBottom="24dp">
 
+        <!-- 页面标题 -->
         <TextView
-            style="@style/DshaText.Display"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="四个页面" />
+            android:letterSpacing="-0.01"
+            android:text="四个页面"
+            android:textColor="@color/text"
+            android:textSize="24sp"
+            android:textStyle="bold" />
 
         <TextView
-            style="@style/DshaText.Label"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/gap_tight"
-            android:layout_marginBottom="@dimen/gap_section"
+            android:layout_marginTop="4dp"
+            android:layout_marginBottom="16dp"
             android:text="启动、终端、市场、设置，底栏一切换"
-            android:textColor="@color/text_muted" />
+            android:textColor="@color/text_muted"
+            android:textSize="13sp" />
 
-        <LinearLayout
+        <!-- 1. 启动卡片 -->
+        <com.deepseekharness.app.ui.ModernCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="@dimen/gap_control"
-            android:background="@drawable/m3_card_expressive"
-            android:gravity="center_vertical"
+            android:layout_marginBottom="12dp"
             android:orientation="horizontal"
-            android:padding="@dimen/card_pad">
-            <TextView android:layout_width="36dp" android:layout_height="36dp" android:layout_marginEnd="@dimen/gap_control" android:background="@drawable/bg_chip" android:gravity="center" android:text="1" android:textColor="@color/primary" android:textStyle="bold" />
-            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="启动" android:textColor="@color/text" android:textSize="@dimen/text_body" android:textStyle="bold" />
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:text="启动 Web UI，点「进入」在软件里打开" android:textColor="@color/text_muted" android:textSize="@dimen/text_caption" />
-            </LinearLayout>
-        </LinearLayout>
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="14dp"
+            app:cardRadius="18dp">
 
-        <LinearLayout
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <FrameLayout
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:background="@drawable/bg_settings_icon_box">
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="启动"
+                        android:src="@drawable/ic_wifi"
+                        app:tint="@color/primary" />
+                </FrameLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="14dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="启动"
+                        android:textColor="@color/text"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="启动 Web UI，点「进入」在软件里打开"
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp" />
+                </LinearLayout>
+            </LinearLayout>
+        </com.deepseekharness.app.ui.ModernCardView>
+
+        <!-- 2. 终端卡片 -->
+        <com.deepseekharness.app.ui.ModernCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="@dimen/gap_control"
-            android:background="@drawable/m3_card_expressive"
-            android:gravity="center_vertical"
+            android:layout_marginBottom="12dp"
             android:orientation="horizontal"
-            android:padding="@dimen/card_pad">
-            <TextView android:layout_width="36dp" android:layout_height="36dp" android:layout_marginEnd="@dimen/gap_control" android:background="@drawable/bg_chip" android:gravity="center" android:text="2" android:textColor="@color/primary" android:textStyle="bold" />
-            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="终端" android:textColor="@color/text" android:textSize="@dimen/text_body" android:textStyle="bold" />
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:text="进 Linux 环境敲命令" android:textColor="@color/text_muted" android:textSize="@dimen/text_caption" />
-            </LinearLayout>
-        </LinearLayout>
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="14dp"
+            app:cardRadius="18dp">
 
-        <LinearLayout
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <FrameLayout
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:background="@drawable/bg_settings_icon_box">
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="终端"
+                        android:src="@drawable/ic_terminal"
+                        app:tint="@color/primary" />
+                </FrameLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="14dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="终端"
+                        android:textColor="@color/text"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="进 Linux 环境敲命令"
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp" />
+                </LinearLayout>
+            </LinearLayout>
+        </com.deepseekharness.app.ui.ModernCardView>
+
+        <!-- 3. 市场卡片 -->
+        <com.deepseekharness.app.ui.ModernCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="@dimen/gap_control"
-            android:background="@drawable/m3_card_expressive"
-            android:gravity="center_vertical"
+            android:layout_marginBottom="12dp"
             android:orientation="horizontal"
-            android:padding="@dimen/card_pad">
-            <TextView android:layout_width="36dp" android:layout_height="36dp" android:layout_marginEnd="@dimen/gap_control" android:background="@drawable/bg_chip" android:gravity="center" android:text="3" android:textColor="@color/primary" android:textStyle="bold" />
-            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="市场" android:textColor="@color/text" android:textSize="@dimen/text_body" android:textStyle="bold" />
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:text="浏览、安装、开关插件" android:textColor="@color/text_muted" android:textSize="@dimen/text_caption" />
-            </LinearLayout>
-        </LinearLayout>
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="14dp"
+            app:cardRadius="18dp">
 
-        <LinearLayout
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <FrameLayout
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:background="@drawable/bg_settings_icon_box">
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="市场"
+                        android:src="@drawable/ic_plugins"
+                        app:tint="@color/primary" />
+                </FrameLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="14dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="市场"
+                        android:textColor="@color/text"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="浏览、安装、开关插件"
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp" />
+                </LinearLayout>
+            </LinearLayout>
+        </com.deepseekharness.app.ui.ModernCardView>
+
+        <!-- 4. 设置卡片 -->
+        <com.deepseekharness.app.ui.ModernCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="@dimen/gap_control"
-            android:background="@drawable/m3_card_expressive"
-            android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:padding="@dimen/card_pad">
-            <TextView android:layout_width="36dp" android:layout_height="36dp" android:layout_marginEnd="@dimen/gap_control" android:background="@drawable/bg_chip" android:gravity="center" android:text="4" android:textColor="@color/primary" android:textStyle="bold" />
-            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="设置" android:textColor="@color/text" android:textSize="@dimen/text_body" android:textStyle="bold" />
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:text="API key、安装、工作区、备份" android:textColor="@color/text_muted" android:textSize="@dimen/text_caption" />
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="14dp"
+            app:cardRadius="18dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <FrameLayout
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:background="@drawable/bg_settings_icon_box">
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="设置"
+                        android:src="@drawable/ic_settings_sliders"
+                        app:tint="@color/primary" />
+                </FrameLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="14dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="设置"
+                        android:textColor="@color/text"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="API key、工作区、数据与备份"
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp" />
+                </LinearLayout>
             </LinearLayout>
-        </LinearLayout>
+        </com.deepseekharness.app.ui.ModernCardView>
+
     </LinearLayout>
-</ScrollView>
+</androidx.core.widget.NestedScrollView>
