@@ -82,6 +82,15 @@ export declare function detectIosWebKit(nav: {
     userAgent: string;
     maxTouchPoints: number;
 }, supports: ((condition: string) => boolean) | null): boolean;
+/** Marker set on html when running as an installed standalone PWA / fullscreen app. */
+export declare const STANDALONE_MARKER = "data-mobile-standalone";
+/**
+ * CSS custom property carrying the viewport height WITHOUT the soft keyboard
+ * (px), maintained by the viewport effect below. Mobile cards that must not
+ * move when the keyboard appears size themselves with it instead of a viewport
+ * unit — see the settings sheet / shortcut card rules in layout.css.ts.
+ */
+export declare const STABLE_VIEWPORT_VAR = "--dsh-web-mobile-vh";
 /**
  * Phone chrome: KEEP the system status bar (no fullscreen) and make it
  * blend into the page. On narrow screens:
@@ -123,6 +132,22 @@ export declare function installPhoneChrome(ctx: ClientContext): void;
  * did nothing but retract the drawer, 2026-09-13).
  */
 export declare const TAP_CLOSE_NAV_SELECTOR = "button[data-dsh-taskboard-entry], button[data-dsh-ssh-entry], [class*=\"newSession\"], [class*=\"sessionRow\"], [class*=\"searchResultRow\"], [class*=\"searchResultWorkspace\"], [class*=\"panelRow\"]";
+/**
+ * The one drawer toggle every non-gesture entry point shares: a CLOSE animates
+ * into the closed slot and flips the host marker only once it has landed
+ * (closeDrawerAnimated's late commit — spec 2026-08-27), an OPEN stays a plain
+ * toggle so the host's own .28s transform transition plays.
+ *
+ * Load-bearing for layering, not just for looks (2026-09-25): the popover
+ * band's modal-root raise is gated on our backdrop being on screen, and the
+ * backdrop outlives the marker flip by design (fade .2s + removal 260ms). A
+ * closer that flips the marker while the column is still painted therefore
+ * leaves an open modal under the drawer band for the length of the
+ * transition — that is the 快捷键弹层「抽搐/闪」 root cause. Routing every
+ * closer through here removes the window at the source instead of relying on
+ * the band to cover it.
+ */
+export declare function toggleDrawer(ctx: ClientContext): void;
 export declare function installOverlayInteractions(ctx: ClientContext): void;
 /**
  * Register the shared DOM reconciler tasks. Returns a disposer that

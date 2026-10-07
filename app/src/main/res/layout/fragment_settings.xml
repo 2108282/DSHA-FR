@@ -1,54 +1,52 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/surface"
-    android:fillViewport="true">
+    android:background="@android:color/transparent"
+    android:clipChildren="false"
+    android:clipToPadding="false"
+    android:fillViewport="true"
+    android:overScrollMode="never"
+    android:scrollbars="none">
 
+    <!-- 主体内容垂直容器 (1:1 对齐 HTML .content: padding 14px 16px 96px; gap 12px) -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:clipChildren="false"
+        android:clipToPadding="false"
         android:orientation="vertical"
-        android:paddingStart="@dimen/page_pad"
-        android:paddingTop="@dimen/gap_tight"
-        android:paddingEnd="@dimen/page_pad"
-        android:paddingBottom="@dimen/gap_section">
+        android:paddingHorizontal="16dp"
+        android:paddingTop="14dp"
+        android:paddingBottom="96dp">
 
+        <!-- ==================== 1. 区域分组：模块 (.sec-label) ==================== -->
         <TextView
-            style="@style/DshaText.Overline"
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="@dimen/gap_hair"
-            android:layout_marginBottom="@dimen/gap_control"
+            android:layout_marginStart="6dp"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="4dp"
+            android:letterSpacing="0.09"
             android:text="模块"
-            android:textColor="@color/text_muted" />
+            android:textAllCaps="true"
+            android:textColor="@color/text_muted"
+            android:textSize="12sp"
+            android:textStyle="bold" />
 
-        <LinearLayout
-            android:id="@+id/settings_tabs"
+        <!-- 模块卡片 (.gcard: Skia 硬件加速微阴影, 18dp 圆角, 1px 边框) -->
+        <com.deepseekharness.app.ui.ModernCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="@drawable/m3_card_expressive"
+            android:layout_marginTop="4dp"
+            android:clipToOutline="true"
             android:orientation="vertical"
-            android:padding="4dp" />
+            app:cardRadius="18dp">
 
-        <TextView
-            style="@style/DshaText.Overline"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="@dimen/gap_hair"
-            android:layout_marginTop="@dimen/gap_block"
-            android:layout_marginBottom="@dimen/gap_control"
-            android:text="其他"
-            android:textColor="@color/text_muted" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="@drawable/m3_card_expressive"
-            android:orientation="vertical">
-
+            <!-- 1.1 行：配置 -->
             <LinearLayout
-                android:id="@+id/settings_update"
+                android:id="@+id/settings_row_config"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:background="?attr/selectableItemBackground"
@@ -56,25 +54,243 @@
                 android:focusable="true"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
-                android:padding="@dimen/card_pad">
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="15dp">
 
                 <FrameLayout
-                    android:layout_width="36dp"
-                    android:layout_height="36dp"
-                    android:background="@drawable/bg_chip">
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:background="@drawable/bg_settings_icon_box">
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="配置"
+                        android:src="@drawable/ic_settings_sliders"
+                        app:tint="@color/primary" />
+                </FrameLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="配置"
+                        android:textColor="@color/text"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="1dp"
+                        android:text="端口 · 行为 · 权限"
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_chevron_right"
+                    app:tint="@color/text_muted" />
+            </LinearLayout>
+
+            <!-- 细分割线 (.divider: 1px, margin-left: 66px) -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginStart="66dp"
+                android:background="@color/line_soft" />
+
+            <!-- 1.2 行：数据与备份 -->
+            <LinearLayout
+                android:id="@+id/settings_row_workspace"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="15dp">
+
+                <FrameLayout
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:background="@drawable/bg_settings_icon_box">
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="数据与备份"
+                        android:src="@drawable/ic_settings_database"
+                        app:tint="@color/primary" />
+                </FrameLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="数据与备份"
+                        android:textColor="@color/text"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="1dp"
+                        android:text="备份恢复 · 保存位置 · 工作区"
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_chevron_right"
+                    app:tint="@color/text_muted" />
+            </LinearLayout>
+
+            <!-- 细分割线 (.divider: 1px, margin-left: 66px) -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginStart="66dp"
+                android:background="@color/line_soft" />
+
+            <!-- 1.3 行：快捷对话设置 -->
+            <LinearLayout
+                android:id="@+id/settings_row_quickchat"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="15dp">
+
+                <FrameLayout
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:background="@drawable/bg_settings_icon_box">
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="快捷对话设置"
+                        android:src="@drawable/ic_settings_quickchat"
+                        app:tint="@color/primary" />
+                </FrameLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="快捷对话设置"
+                        android:textColor="@color/text"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="1dp"
+                        android:text="反色 · 圈定即搜 · 白天黑夜透明度"
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_chevron_right"
+                    app:tint="@color/text_muted" />
+            </LinearLayout>
+
+        </com.deepseekharness.app.ui.ModernCardView>
+
+        <!-- ==================== 2. 区域分组：其他 (.sec-label) ==================== -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="4dp"
+            android:letterSpacing="0.09"
+            android:text="其他"
+            android:textAllCaps="true"
+            android:textColor="@color/text_muted"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <!-- 其他卡片 (.gcard: Skia 硬件加速微阴影, 18dp 圆角, 1px 边框) -->
+        <com.deepseekharness.app.ui.ModernCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:clipToOutline="true"
+            android:orientation="vertical"
+            app:cardRadius="18dp">
+
+            <!-- 2.1 行：检查更新 -->
+            <LinearLayout
+                android:id="@+id/settings_row_update"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="15dp">
+
+                <FrameLayout
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:background="@drawable/bg_settings_icon_box">
 
                     <ImageView
                         android:layout_width="20dp"
                         android:layout_height="20dp"
                         android:layout_gravity="center"
                         android:contentDescription="检查更新"
-                        android:src="@drawable/ic_update" />
+                        android:src="@drawable/ic_settings_refresh"
+                        app:tint="@color/primary" />
                 </FrameLayout>
 
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="@dimen/gap_control"
+                    android:layout_marginStart="12dp"
                     android:layout_weight="1"
                     android:orientation="vertical">
 
@@ -83,34 +299,37 @@
                         android:layout_height="wrap_content"
                         android:text="检查更新"
                         android:textColor="@color/text"
-                        android:textSize="@dimen/text_body"
+                        android:textSize="15sp"
                         android:textStyle="bold" />
 
                     <TextView
                         android:id="@+id/settings_update_sub"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/gap_hair"
+                        android:layout_marginTop="1dp"
                         android:text="升级 DSH 核心 · 客户端与模块"
                         android:textColor="@color/text_muted"
-                        android:textSize="@dimen/text_caption" />
+                        android:textSize="12sp" />
                 </LinearLayout>
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="›"
-                    android:textColor="@color/text_muted"
-                    android:textSize="@dimen/text_title" />
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_chevron_right"
+                    app:tint="@color/text_muted" />
             </LinearLayout>
 
+            <!-- 细分割线 (.divider: 1px, margin-left: 66px) -->
             <View
                 android:layout_width="match_parent"
-                android:layout_height="@dimen/stroke"
-                android:background="@color/line" />
+                android:layout_height="1dp"
+                android:layout_marginStart="66dp"
+                android:background="@color/line_soft" />
 
+            <!-- 2.2 行：诊断与修复 -->
             <LinearLayout
-                android:id="@+id/settings_selftest"
+                android:id="@+id/settings_row_selftest"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:background="?attr/selectableItemBackground"
@@ -118,21 +337,27 @@
                 android:focusable="true"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
-                android:padding="@dimen/card_pad">
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="15dp">
 
-                <TextView
-                    android:layout_width="36dp"
-                    android:layout_height="36dp"
-                    android:background="@drawable/bg_chip"
-                    android:gravity="center"
-                    android:text="✓"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="@dimen/text_title" />
+                <FrameLayout
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:background="@drawable/bg_settings_icon_box">
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="诊断与修复"
+                        android:src="@drawable/ic_check_circle"
+                        app:tint="@color/primary" />
+                </FrameLayout>
 
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="@dimen/gap_control"
+                    android:layout_marginStart="12dp"
                     android:layout_weight="1"
                     android:orientation="vertical">
 
@@ -141,33 +366,36 @@
                         android:layout_height="wrap_content"
                         android:text="诊断与修复"
                         android:textColor="@color/text"
-                        android:textSize="@dimen/text_body"
+                        android:textSize="15sp"
                         android:textStyle="bold" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/gap_hair"
+                        android:layout_marginTop="1dp"
                         android:text="脱敏反馈 · 导出报告 · 证书 / npm 修复"
                         android:textColor="@color/text_muted"
-                        android:textSize="@dimen/text_caption" />
+                        android:textSize="12sp" />
                 </LinearLayout>
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="›"
-                    android:textColor="@color/text_muted"
-                    android:textSize="@dimen/text_title" />
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_chevron_right"
+                    app:tint="@color/text_muted" />
             </LinearLayout>
 
+            <!-- 细分割线 (.divider: 1px, margin-left: 66px) -->
             <View
                 android:layout_width="match_parent"
-                android:layout_height="@dimen/stroke"
-                android:background="@color/line" />
+                android:layout_height="1dp"
+                android:layout_marginStart="66dp"
+                android:background="@color/line_soft" />
 
+            <!-- 2.3 行：原生环境与存储直通自愈 -->
             <LinearLayout
-                android:id="@+id/settings_apply_patches"
+                android:id="@+id/settings_row_patches"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:background="?attr/selectableItemBackground"
@@ -175,21 +403,27 @@
                 android:focusable="true"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
-                android:padding="@dimen/card_pad">
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="15dp">
 
-                <TextView
-                    android:layout_width="36dp"
-                    android:layout_height="36dp"
-                    android:background="@drawable/bg_chip"
-                    android:gravity="center"
-                    android:text="🛠"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="@dimen/text_title" />
+                <FrameLayout
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:background="@drawable/bg_settings_icon_box">
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="原生环境自愈"
+                        android:src="@drawable/ic_settings_wrench"
+                        app:tint="@color/primary" />
+                </FrameLayout>
 
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="@dimen/gap_control"
+                    android:layout_marginStart="12dp"
                     android:layout_weight="1"
                     android:orientation="vertical">
 
@@ -198,34 +432,36 @@
                         android:layout_height="wrap_content"
                         android:text="原生环境与存储直通自愈"
                         android:textColor="@color/text"
-                        android:textSize="@dimen/text_body"
+                        android:textSize="15sp"
                         android:textStyle="bold" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/gap_hair"
-                        android:lineSpacingExtra="2dp"
-                        android:text="内部存储直通 · 默认工作区检查 · DNS 修复 · 3095 设备桥 · 插件自愈"
+                        android:layout_marginTop="1dp"
+                        android:text="内部存储直通 · DNS · 3095 设备桥 · 插件自愈"
                         android:textColor="@color/text_muted"
-                        android:textSize="@dimen/text_caption" />
+                        android:textSize="12sp" />
                 </LinearLayout>
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="›"
-                    android:textColor="@color/text_muted"
-                    android:textSize="@dimen/text_title" />
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_chevron_right"
+                    app:tint="@color/text_muted" />
             </LinearLayout>
 
+            <!-- 细分割线 (.divider: 1px, margin-left: 66px) -->
             <View
                 android:layout_width="match_parent"
-                android:layout_height="@dimen/stroke"
-                android:background="@color/line" />
+                android:layout_height="1dp"
+                android:layout_marginStart="66dp"
+                android:background="@color/line_soft" />
 
+            <!-- 2.4 行：常驻后台服务通知 -->
             <LinearLayout
-                android:id="@+id/settings_persistent_notification_row"
+                android:id="@+id/settings_row_persistent_notif"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:background="?attr/selectableItemBackground"
@@ -233,21 +469,27 @@
                 android:focusable="true"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
-                android:padding="@dimen/card_pad">
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="15dp">
 
-                <TextView
-                    android:layout_width="36dp"
-                    android:layout_height="36dp"
-                    android:background="@drawable/bg_chip"
-                    android:gravity="center"
-                    android:text="🔔"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="@dimen/text_title" />
+                <FrameLayout
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:background="@drawable/bg_settings_icon_box">
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="常驻后台服务通知"
+                        android:src="@drawable/ic_settings_bell"
+                        app:tint="@color/primary" />
+                </FrameLayout>
 
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="@dimen/gap_control"
+                    android:layout_marginStart="12dp"
                     android:layout_weight="1"
                     android:orientation="vertical">
 
@@ -256,33 +498,36 @@
                         android:layout_height="wrap_content"
                         android:text="常驻后台服务通知"
                         android:textColor="@color/text"
-                        android:textSize="@dimen/text_body"
+                        android:textSize="15sp"
                         android:textStyle="bold" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/gap_hair"
+                        android:layout_marginTop="1dp"
                         android:text="随核心模块运转常驻通知栏，点击恢复抽屉"
                         android:textColor="@color/text_muted"
-                        android:textSize="@dimen/text_caption" />
+                        android:textSize="12sp" />
                 </LinearLayout>
 
-                <androidx.appcompat.widget.SwitchCompat
-                    android:id="@+id/settings_persistent_notification_switch"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:clickable="true"
-                    android:focusable="false" />
+                <!-- 纯 Skia 自绘平滑微阴影开关 (.toggle: 44x26dp, 180ms 缓动) -->
+                <com.deepseekharness.app.ui.DshaToggle
+                    android:id="@+id/settings_persistent_notification_toggle"
+                    android:layout_width="44dp"
+                    android:layout_height="26dp"
+                    android:layout_marginStart="8dp" />
             </LinearLayout>
 
+            <!-- 细分割线 (.divider: 1px, margin-left: 66px) -->
             <View
                 android:layout_width="match_parent"
-                android:layout_height="@dimen/stroke"
-                android:background="@color/line" />
+                android:layout_height="1dp"
+                android:layout_marginStart="66dp"
+                android:background="@color/line_soft" />
 
+            <!-- 2.5 行：关于 DSHA-FR -->
             <LinearLayout
-                android:id="@+id/settings_reextract"
+                android:id="@+id/settings_row_about"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:background="?attr/selectableItemBackground"
@@ -290,79 +535,27 @@
                 android:focusable="true"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
-                android:padding="@dimen/card_pad">
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="15dp">
 
-                <TextView
-                    android:layout_width="36dp"
-                    android:layout_height="36dp"
-                    android:background="@drawable/bg_chip"
-                    android:gravity="center"
-                    android:text="⟳"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="@dimen/text_title" />
+                <FrameLayout
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:background="@drawable/bg_settings_icon_box">
 
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="@dimen/gap_control"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="重新解压内置环境"
-                        android:textColor="@color/text"
-                        android:textSize="@dimen/text_body"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/gap_hair"
-                        android:text="dsh / npm 损坏时用；配置与对话记录会保留"
-                        android:textColor="@color/text_muted"
-                        android:textSize="@dimen/text_caption" />
-                </LinearLayout>
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="›"
-                    android:textColor="@color/text_muted"
-                    android:textSize="@dimen/text_title" />
-            </LinearLayout>
-
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="@dimen/stroke"
-                android:background="@color/line" />
-
-            <LinearLayout
-                android:id="@+id/settings_about"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:background="?attr/selectableItemBackground"
-                android:clickable="true"
-                android:focusable="true"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:padding="@dimen/card_pad">
-
-                <TextView
-                    android:layout_width="36dp"
-                    android:layout_height="36dp"
-                    android:background="@drawable/bg_chip"
-                    android:gravity="center"
-                    android:text="i"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="@dimen/text_title"
-                    android:textStyle="bold" />
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="关于 DSHA-FR"
+                        android:src="@drawable/ic_settings_info"
+                        app:tint="@color/primary" />
+                </FrameLayout>
 
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="@dimen/gap_control"
+                    android:layout_marginStart="12dp"
                     android:layout_weight="1"
                     android:orientation="vertical">
 
@@ -371,36 +564,39 @@
                         android:layout_height="wrap_content"
                         android:text="关于 DSHA-FR"
                         android:textColor="@color/text"
-                        android:textSize="@dimen/text_body"
+                        android:textSize="15sp"
                         android:textStyle="bold" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="@dimen/gap_hair"
+                        android:layout_marginTop="1dp"
                         android:text="GitHub 仓库 · QQ 交流群 · 开源协议"
                         android:textColor="@color/text_muted"
-                        android:textSize="@dimen/text_caption" />
+                        android:textSize="12sp" />
                 </LinearLayout>
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="›"
-                    android:textColor="@color/text_muted"
-                    android:textSize="@dimen/text_title" />
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_chevron_right"
+                    app:tint="@color/text_muted" />
             </LinearLayout>
-        </LinearLayout>
 
+        </com.deepseekharness.app.ui.ModernCardView>
+
+        <!-- ==================== 3. 底部版本号 (.ver) ==================== -->
         <TextView
             android:id="@+id/settings_ver"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/gap_block"
+            android:layout_marginTop="10dp"
             android:fontFamily="monospace"
             android:gravity="center"
-            android:text="DSHA-FR"
+            android:text="DSHA-FR v0.2.0-rc.2-u1"
             android:textColor="@color/text_muted"
-            android:textSize="@dimen/text_caption" />
+            android:textSize="12sp" />
+
     </LinearLayout>
-</ScrollView>
+</androidx.core.widget.NestedScrollView>

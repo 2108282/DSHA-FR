@@ -51,29 +51,13 @@ const pickIcon = (names) => {
     return missingIcon;
 };
 /** 输入区文件入口（回形针）。 */
-exports.IconPaperclip = pickIcon([
-    'IconPaperclipOutlineMedium',
-    'IconPaperclipOutlineRegular',
-    'IconPaperclipOutline16',
-]);
+exports.IconPaperclip = pickIcon(['IconPaperclipOutlineRegular', 'IconPaperclipOutline16']);
 /** 抽屉页脚的会话日志导出。 */
-exports.IconDownload = pickIcon([
-    'IconDownloadOutlineMedium',
-    'IconDownloadOutlineRegular',
-    'IconDownloadOutline16',
-]);
+exports.IconDownload = pickIcon(['IconDownloadOutlineRegular', 'IconDownloadOutline16']);
 /** 会话头部的目录抽屉开关。 */
-exports.IconPanelLeft = pickIcon([
-    'IconPanelLeftOutlineMedium',
-    'IconPanelLeftOutlineRegular',
-    'IconPanelLeftOutline16',
-]);
+exports.IconPanelLeft = pickIcon(['IconPanelLeftOutlineRegular', 'IconPanelLeftOutline16']);
 /** 会话头部的 Files/右侧栏入口。 */
-exports.IconFolderOpen = pickIcon([
-    'IconFolderOpenOutlineMedium',
-    'IconFolderOpenOutlineRegular',
-    'IconFolderOpenOutline16',
-]);
+exports.IconFolderOpen = pickIcon(['IconFolderOpenOutlineRegular', 'IconFolderOpenOutline16']);
 };
 __modules["effects/gesture-guard.js"] = function (require, module, exports) {
 "use strict";
@@ -452,6 +436,383 @@ function createReconcilerCore(options) {
     };
 }
 };
+__modules["effects/stats-line.js"] = function (require, module, exports) {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.statsAnchorAlive = statsAnchorAlive;
+exports.createStatsLineTask = createStatsLineTask;
+// The official conversation status row (turns / steps / LLM time / TTFT /
+// cache) has a hashed class, so the stylesheet cannot target it directly.
+// Mark the exact row on narrow screens by text: a [class*=_root] that
+// carries the metrics text and no composer input (textarea or the
+// data-composer-input Lexical node; the composer card also ends in
+// _root and can mention turns in its model line). The CSS then lays the
+// marked row out as ONE horizontally scrolling line with every metric
+// reachable.
+// Fast-path predicate: is the previously marked strip still alive in place?
+// Re-verifying one anchor per flush is O(1); the full-tree hunt in mark()
+// grows with the conversation and runs on every streaming token.
+function statsAnchorAlive(el) {
+    if (el === null || !el.isConnected)
+        return false;
+    if (el.closest('[data-phase]') === null)
+        return false;
+    // The strip must stay inside the composer stack, but it need not be a
+    // DIRECT child of it: 0.1.5 nests the status row (bOPqQW_root) under the
+    // composer card wrapper (uV2eYG_root), so the marked element sits one level
+    // deeper than on rc.2 hosts. Ancestry is still the right test — only the
+    // marker's own subtree position changed, not its container relationship.
+    return el.closest('[class*="_composerStack"]') !== null;
+}
+function createStatsLineTask() {
+    // React-owned nodes must never be relocated (issue #104): on unmount React
+    // calls parent.removeChild(child) against the parent it rendered the node
+    // into, so a node this task moved makes that throw NotFoundError and the
+    // SlotErrorBoundary blanks the whole composer slot until a reload. The
+    // offline-reconnect rebuild hits exactly this path. Both folded readouts
+    // (context ring, TPS text) therefore STAY where React rendered them; the
+    // visible slot is held by a plugin-owned placeholder element React does not
+    // track, and the host node is absolutely positioned on top of it.
+    // Coordinates refresh on every flush and on viewport resizes — the keyboard
+    // changes layout without any DOM mutation to wake the reconciler.
+    // The overlay must resolve against a positioned ancestor. The host rarely
+    // positions these containers, so mark the expected one (CSS sets
+    // position: relative for the marker, without !important so host styles stay
+    // in charge) and let placeOverlay walk to whichever ancestor actually ends
+    // up positioned — the math is self-consistent with any container.
+    const ensurePositioned = (el, marker) => {
+        if (getComputedStyle(el).position === 'static')
+            el.setAttribute('data-mobile-nav', marker);
+    };
+    const positionedAncestor = (el) => {
+        for (let node = el.parentElement; node !== null; node = node.parentElement) {
+            if (getComputedStyle(node).position !== 'static')
+                return node;
+        }
+        return null;
+    };
+    const placeOverlay = (host, reserve) => {
+        const container = positionedAncestor(host);
+        if (container === null)
+            return;
+        const box = reserve.getBoundingClientRect();
+        const base = container.getBoundingClientRect();
+        const left = box.left - base.left - container.clientLeft;
+        // Center the host on its slot vertically, not top-align it. Measured
+        // 2026-09-29 (issue #140 acceptance): the 20px ring top-aligned on its
+        // 16px reserve hung its center at y=793 while the neighbouring keys sit
+        // at 789-791 — reported as「不与其他小UI对齐」. Centering is a no-op for
+        // same-height overlays (the 0.1.5/0.1.6 TPS text) and aligns the ring
+        // with the cluster. hostRect is read BEFORE the style write below; its
+        // height does not depend on top/left, so the math is stable across flushes.
+        const hostRect = host.getBoundingClientRect();
+        const top = box.top - base.top - container.clientTop - (hostRect.height - box.height) / 2;
+        const styled = host;
+        if (styled.style.left !== `${left}px`)
+            styled.style.left = `${left}px`;
+        if (styled.style.top !== `${top}px`)
+            styled.style.top = `${top}px`;
+    };
+    // The composer root renders the TPS readout ("TPS 89.4 tok/s") as its own
+    // row BELOW the status strip; fold it into the strip so every metric sits
+    // on one line. Idempotent: the placeholder's text mirrors the readout and
+    // the readout itself is overlaid on the placeholder's box.
+    const moveTps = (stats) => {
+        const stack = stats.closest('[class*="_composerStack"]');
+        if (stack === null)
+            return;
+        let reserve = stats.querySelector(':scope > [data-mobile-nav="stats-tps-reserve"]');
+        for (const el of stack.querySelectorAll('div')) {
+            const text = (el.textContent ?? '').trim();
+            if (!/^TPS\s+\d/.test(text))
+                continue;
+            if (el.children.length > 0)
+                continue;
+            if (el.getAttribute('data-mobile-nav') === 'stats-tps')
+                continue;
+            if (reserve === null) {
+                reserve = document.createElement('span');
+                reserve.setAttribute('data-mobile-nav', 'stats-tps-reserve');
+                reserve.setAttribute('aria-hidden', 'true');
+                stats.appendChild(reserve);
+            }
+            const live = el.textContent ?? '';
+            if (reserve.textContent !== live)
+                reserve.textContent = live;
+            el.setAttribute('data-mobile-nav', 'stats-tps');
+            const tpsRow = el.parentElement;
+            if (tpsRow === null)
+                continue;
+            ensurePositioned(tpsRow, 'stats-tps-row');
+            placeOverlay(el, reserve);
+            // The strip's last child is the flex shrink group: mirror whatever
+            // width the placeholder settled on so the overlay clips with the same
+            // ellipsis instead of overlapping the neighbouring group.
+            const width = reserve.getBoundingClientRect().width;
+            const styled = el;
+            if (styled.style.maxWidth !== `${width}px`)
+                styled.style.maxWidth = `${width}px`;
+            return;
+        }
+    };
+    // 2026-09-23（店主最终确认）：**环要、百分比数字不要** —— 环显示在输入框行
+    // 的右簇（模型/麦克风旁），CSS 用 font-size:0 只留环、隐掉 "45%" 文本；统计条
+    // 拿满整宽。与 moveTps 同款 overlay：环留在 React 渲染的 dock 原位，插件自建
+    // 占位 span 顶住右簇槽位（16px 环 + 2px 边距，行 gap 补足余量）。
+    const moveRing = (statsOrDock) => {
+        let dock = null;
+        if (statsOrDock !== null && statsOrDock !== undefined) {
+            if (statsOrDock.matches?.('[data-composer-dock], [class*="_dock"]')) {
+                dock = statsOrDock;
+            }
+            else {
+                const holder = statsOrDock.parentElement;
+                dock = holder?.parentElement ?? holder;
+            }
+        }
+        if (dock === null) {
+            dock = document.querySelector('[data-composer-dock], [class*="_dock"]');
+        }
+        if (dock === null)
+            return;
+        // Search the composer dock for the real ContextMeter.
+        // 1. MUST NOT match dsh-api-dashboard (.dshadb_barwrap or [class*="dshadb_"]).
+        // 2. MUST contain an svg circle and percentage text (real context meter).
+        const pool = [...dock.children];
+        if (dock.parentElement !== null)
+            pool.push(...dock.parentElement.children);
+        const ring = pool.find((child) => {
+            if (child.querySelector('textarea, [data-composer-input]') !== null)
+                return false;
+            if (child.matches('[class*="dshadb_"], .dshadb_barwrap') ||
+                child.querySelector('[class*="dshadb_"]') !== null) {
+                return false;
+            }
+            const hasCircle = child.querySelector('svg circle') !== null;
+            const hasPercent = /\d\s*%/.test(child.textContent ?? '');
+            return hasCircle && hasPercent;
+        });
+        if (ring === undefined)
+            return;
+        const row = document.querySelector('[data-composer-card] [class*="_row"] [class*="_trailing"]');
+        if (row === null)
+            return;
+        let reserve = row.querySelector(':scope > [data-mobile-nav="stats-ring-reserve"]');
+        // Position reserve STRICTLY before the send / activity button (never behind/underneath).
+        let insertBeforeNode = null;
+        const activity = row.querySelector('[class*="_activity"], [class*="_primary"]');
+        if (activity !== null) {
+            let n = activity;
+            while (n && n.parentElement !== row)
+                n = n.parentElement;
+            insertBeforeNode = n;
+        }
+        if (reserve === null) {
+            reserve = document.createElement('span');
+            reserve.setAttribute('data-mobile-nav', 'stats-ring-reserve');
+            row.insertBefore(reserve, insertBeforeNode);
+        }
+        else if (reserve.nextSibling !== insertBeforeNode) {
+            row.insertBefore(reserve, insertBeforeNode);
+        }
+        if (ring.getAttribute('data-mobile-nav') !== 'stats-ring') {
+            ring.setAttribute('data-mobile-nav', 'stats-ring');
+        }
+        const ringParent = ring.parentElement ?? dock;
+        if (ringParent !== null)
+            ensurePositioned(ringParent, 'stats-ring-dock');
+        placeOverlay(ring, reserve);
+    };
+    let viewportHandler = null;
+    const relayout = () => {
+        const anchor = document.querySelector('[data-mobile-nav="stats"]');
+        if (anchor !== null)
+            moveTps(anchor);
+        moveRing();
+    };
+    // Wake-up channel. Upstream's reconciler observes documentElement with
+    // subtree:true and notes the '*' tree key on every mutation, so this task
+    // re-runs constantly. This fork deliberately made that observer lean
+    // (container attributes only, no subtree — streaming tokens never wake it),
+    // so stats-line owns a NARROWLY scoped observer on the composer stack
+    // instead. The message list lives outside the composer stack, so per-token
+    // appends never fire it; only composer-internal changes (the strip mounting,
+    // pill/TPS text updates) do. Self-healing: when the marked strip leaves the
+    // tree, the fast path fails, the dead path re-attaches to the current stack.
+    let scopeObserver = null;
+    let rafId = null;
+    const SELF_SELECTOR = '[data-mobile-nav="stats-ring"], [data-mobile-nav="stats-tps"], [data-mobile-nav="stats-ring-reserve"], [data-mobile-nav="stats-tps-reserve"]';
+    const scheduleMark = () => {
+        if (rafId !== null)
+            return;
+        rafId = requestAnimationFrame(() => {
+            rafId = null;
+            mark();
+        });
+    };
+    const attachScope = () => {
+        const stack = document.querySelector('[class*="_composerStack"]');
+        if (stack === null)
+            return;
+        if (scopeObserver === null) {
+            scopeObserver = new MutationObserver((records) => {
+                // Ignore our own overlay/reserve mutations: placeOverlay writes style
+                // (not observed) and moveTps/moveRing write text/append placeholders,
+                // which would otherwise echo straight back into mark().
+                for (const record of records) {
+                    const el = record.target instanceof Element ? record.target : record.target.parentElement;
+                    if (el !== null && el.closest(SELF_SELECTOR) !== null)
+                        continue;
+                    scheduleMark();
+                    return;
+                }
+            });
+        }
+        scopeObserver.disconnect();
+        scopeObserver.observe(stack, { childList: true, subtree: true, characterData: true });
+    };
+    let reanchorId = null;
+    // The strip renders asynchronously (session projections resolve after the
+    // mobile effect installs), and the stack itself can remount on session
+    // switches. A cheap idle-speed re-anchor covers both without the subtree
+    // cost: while the anchor is alive this is one querySelector plus two
+    // ancestor walks, ~3x/sec.
+    const reanchor = () => {
+        const anchor = document.querySelector('[data-mobile-nav="stats"]');
+        if (anchor !== null && statsAnchorAlive(anchor))
+            return;
+        mark();
+    };
+    const mark = () => {
+        // Keyboard open/close and viewport rotations relayout the composer without
+        // any DOM mutation, so the overlays need their own re-layout channel.
+        if (viewportHandler === null) {
+            viewportHandler = relayout;
+            window.addEventListener('resize', relayout);
+            window.visualViewport?.addEventListener('resize', relayout);
+        }
+        // Independent ContextMeter overlay: as long as the dock and meter exist,
+        // position the context ring in the composer's trailing cluster right away.
+        // Never gate moveRing on discovering a stats strip.
+        moveRing();
+        // Fast path: the marked strip usually survives React rebuilds between
+        // tokens; re-verifying the anchor is O(1) while the full-tree hunt below
+        // grows with the conversation. moveTps still re-runs so a rebuilt TPS
+        // readout is re-folded.
+        const anchor = document.querySelector('[data-mobile-nav="stats"]');
+        if (anchor !== null && statsAnchorAlive(anchor)) {
+            moveTps(anchor);
+            return;
+        }
+        // Stale marker on a node that left the composer stack/phase context:
+        // drop it so the slow path can re-anchor cleanly.
+        anchor?.removeAttribute('data-mobile-nav');
+        // The stack may have (re)mounted since activation — re-aim the scoped
+        // observer before hunting in it.
+        attachScope();
+        // Scope decision: the status row is a DESCENDANT of the composer stack,
+        // not necessarily its child. On rc.2 hosts it is a direct child (its own
+        // `_root`); on 0.1.5 the composer card wrapper (uV2eYG_root) sits between
+        // the stack and the row (bOPqQW_root), so requiring a direct child made
+        // the hunt permanently miss and the strip was never marked (measured: row
+        // present at 16,814 carrying "8 turns 582 steps · 103 tok/s" while
+        // [data-mobile-nav="stats"] was absent). Body blocks outside the stack are
+        // still skipped by the containment test below.
+        const stack = document.querySelector('[class*="_composerStack"]');
+        if (stack === null)
+            return;
+        for (const root of stack.querySelectorAll('[data-composer-stats], [class*="_root"]')) {
+            // The status row lives inside the composer stack. The query is already
+            // scoped to the stack, so every candidate is inside it by construction —
+            // message-area blocks that mention turns/steps never enter this loop. (A
+            // `stack.contains(root)` guard stood here and its comment claimed to skip
+            // those blocks; it was unreachable.)
+            // The todo plan strip also lives in the composer stack and its root
+            // ends in _root. Its items may legitimately contain "步"/"steps" in
+            // their text, so never mistake it (or any interactive dock panel)
+            // for the stats strip.
+            if (root.matches('[data-testid="todo-panel"]'))
+                continue;
+            // Dock panels are skipped by never marking a candidate whose buttons are
+            // actionable controls. 0.1.5 renders the status row ITSELF as two
+            // popover buttons (bOPqQW_pill, aria-haspopup="dialog"), so an
+            // "any button" guard excluded the one row this task exists to mark
+            // (measured: bOPqQW_root rejected solely by hasButton, marker count 0).
+            // Every popover button counts as a status widget: the composer's real
+            // controls (model bar, context meter) carry no metrics text and are
+            // filtered by the text test above, and a panel with an actionable button
+            // still fails here.
+            const buttons = root.querySelectorAll('button');
+            if (buttons.length > 0 && ![...buttons].every((button) => button.getAttribute('aria-haspopup') !== null))
+                continue;
+            const text = root.textContent ?? '';
+            if (!/(turns|steps|\bLLM\b|轮|步)/.test(text))
+                continue;
+            // Composer card must never be mistaken for the status strip; exclude
+            // its input region across both composer DOMs (textarea / Lexical
+            // contentEditable marked data-composer-input).
+            if (root.querySelector('textarea, [data-composer-input]') !== null)
+                continue;
+            root.setAttribute('data-mobile-nav', 'stats');
+            moveTps(root);
+            return;
+        }
+    };
+    // Scope decision: the TPS readout updates are childList/characterData text
+    // mutations inside the composer stack, so this task can only wake on the
+    // tree key. This fork's reconciler never notes '*' (see attachScope above),
+    // so the task carries its own scoped observer plus an idle re-anchor; the
+    // expensive composer-stack scan still only runs when the anchor is stale.
+    let started = false;
+    return {
+        name: 'stats-line',
+        scopes: ['*'],
+        ensure: () => {
+            attachScope();
+            if (!started) {
+                started = true;
+                reanchorId = setInterval(reanchor, 350);
+            }
+            mark();
+        },
+        dispose: () => {
+            // Hand the official layout back: drop every marker (the strip loses its
+            // one-line layout, ring/TPS overlays return to static flow) and remove
+            // the plugin-owned placeholders.
+            if (viewportHandler !== null) {
+                window.removeEventListener('resize', viewportHandler);
+                window.visualViewport?.removeEventListener('resize', viewportHandler);
+                viewportHandler = null;
+            }
+            if (rafId !== null) {
+                cancelAnimationFrame(rafId);
+                rafId = null;
+            }
+            if (reanchorId !== null) {
+                clearInterval(reanchorId);
+                reanchorId = null;
+            }
+            scopeObserver?.disconnect();
+            scopeObserver = null;
+            started = false;
+            for (const el of document.querySelectorAll('[data-mobile-nav="stats-ring"], [data-mobile-nav="stats-tps"]')) {
+                const styled = el;
+                styled.style.left = '';
+                styled.style.top = '';
+                styled.style.maxWidth = '';
+            }
+            for (const key of ['stats', 'stats-ring', 'stats-ring-dock', 'stats-tps', 'stats-tps-row']) {
+                for (const el of document.querySelectorAll(`[data-mobile-nav="${key}"]`)) {
+                    el.removeAttribute('data-mobile-nav');
+                }
+            }
+            for (const el of document.querySelectorAll('[data-mobile-nav="stats-ring-reserve"], [data-mobile-nav="stats-tps-reserve"]')) {
+                el.remove();
+            }
+        },
+    };
+}
+};
 __modules["core/sessions-compat.js"] = function (require, module, exports) {
 "use strict";
 // Sessions service shape drifted in 0.1.6-alpha.2 (audit doc §10.1): a2
@@ -641,265 +1002,6 @@ function createSheetRiseTask() {
         },
         dispose: () => {
             seen.clear();
-        },
-    };
-}
-};
-__modules["effects/stats-line.js"] = function (require, module, exports) {
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.statsAnchorAlive = statsAnchorAlive;
-exports.createStatsLineTask = createStatsLineTask;
-// The official conversation status row (turns / steps / LLM time / TTFT /
-// cache) has a hashed class, so the stylesheet cannot target it directly.
-// Mark the exact row on narrow screens by text: a [class*=_root] that
-// carries the metrics text and no composer input (textarea or the
-// data-composer-input Lexical node; the composer card also ends in
-// _root and can mention turns in its model line). The CSS then lays the
-// marked row out as ONE horizontally scrolling line with every metric
-// reachable.
-// Fast-path predicate: is the previously marked strip still alive in place?
-// Re-verifying one anchor per flush is O(1); the full-tree hunt in mark()
-// grows with the conversation and runs on every streaming token.
-function statsAnchorAlive(el) {
-    if (el === null || !el.isConnected)
-        return false;
-    if (el.closest('[data-phase]') === null)
-        return false;
-    // The strip must stay inside the composer stack, but it need not be a
-    // DIRECT child of it: 0.1.5 nests the status row (bOPqQW_root) under the
-    // composer card wrapper (uV2eYG_root), so the marked element sits one level
-    // deeper than on rc.2 hosts. Ancestry is still the right test — only the
-    // marker's own subtree position changed, not its container relationship.
-    return el.closest('[class*="_composerStack"]') !== null;
-}
-function createStatsLineTask() {
-    // React-owned nodes must never be relocated (issue #104): on unmount React
-    // calls parent.removeChild(child) against the parent it rendered the node
-    // into, so a node this task moved makes that throw NotFoundError and the
-    // SlotErrorBoundary blanks the whole composer slot until a reload. The
-    // offline-reconnect rebuild hits exactly this path. Both folded readouts
-    // (context ring, TPS text) therefore STAY where React rendered them; the
-    // visible slot is held by a plugin-owned placeholder element React does not
-    // track, and the host node is absolutely positioned on top of it.
-    // Coordinates refresh on every flush and on viewport resizes — the keyboard
-    // changes layout without any DOM mutation to wake the reconciler.
-    // The overlay must resolve against a positioned ancestor. The host rarely
-    // positions these containers, so mark the expected one (CSS sets
-    // position: relative for the marker, without !important so host styles stay
-    // in charge) and let placeOverlay walk to whichever ancestor actually ends
-    // up positioned — the math is self-consistent with any container.
-    const ensurePositioned = (el, marker) => {
-        if (getComputedStyle(el).position === 'static')
-            el.setAttribute('data-mobile-nav', marker);
-    };
-    const positionedAncestor = (el) => {
-        for (let node = el.parentElement; node !== null; node = node.parentElement) {
-            if (getComputedStyle(node).position !== 'static')
-                return node;
-        }
-        return null;
-    };
-    const placeOverlay = (host, reserve) => {
-        const container = positionedAncestor(host);
-        if (container === null)
-            return;
-        const box = reserve.getBoundingClientRect();
-        const base = container.getBoundingClientRect();
-        const left = box.left - base.left - container.clientLeft;
-        const top = box.top - base.top - container.clientTop;
-        const styled = host;
-        if (styled.style.left !== `${left}px`)
-            styled.style.left = `${left}px`;
-        if (styled.style.top !== `${top}px`)
-            styled.style.top = `${top}px`;
-    };
-    // The composer root renders the TPS readout ("TPS 89.4 tok/s") as its own
-    // row BELOW the status strip; fold it into the strip so every metric sits
-    // on one line. Idempotent: the placeholder's text mirrors the readout and
-    // the readout itself is overlaid on the placeholder's box.
-    const moveTps = (stats) => {
-        const stack = stats.closest('[class*="_composerStack"]');
-        if (stack === null)
-            return;
-        let reserve = stats.querySelector(':scope > [data-mobile-nav="stats-tps-reserve"]');
-        for (const el of stack.querySelectorAll('div')) {
-            const text = (el.textContent ?? '').trim();
-            if (!/^TPS\s+\d/.test(text))
-                continue;
-            if (el.children.length > 0)
-                continue;
-            if (el.getAttribute('data-mobile-nav') === 'stats-tps')
-                continue;
-            if (reserve === null) {
-                reserve = document.createElement('span');
-                reserve.setAttribute('data-mobile-nav', 'stats-tps-reserve');
-                reserve.setAttribute('aria-hidden', 'true');
-                stats.appendChild(reserve);
-            }
-            const live = el.textContent ?? '';
-            if (reserve.textContent !== live)
-                reserve.textContent = live;
-            el.setAttribute('data-mobile-nav', 'stats-tps');
-            const tpsRow = el.parentElement;
-            if (tpsRow === null)
-                continue;
-            ensurePositioned(tpsRow, 'stats-tps-row');
-            placeOverlay(el, reserve);
-            // The strip's last child is the flex shrink group: mirror whatever
-            // width the placeholder settled on so the overlay clips with the same
-            // ellipsis instead of overlapping the neighbouring group.
-            const width = reserve.getBoundingClientRect().width;
-            const styled = el;
-            if (styled.style.maxWidth !== `${width}px`)
-                styled.style.maxWidth = `${width}px`;
-            return;
-        }
-    };
-    // 2026-09-23（店主最终确认）：**环要、百分比数字不要** —— 环显示在输入框行
-    // 的右簇（模型/麦克风旁），CSS 用 font-size:0 只留环、隐掉 "45%" 文本；统计条
-    // 拿满整宽。与 moveTps 同款 overlay：环留在 React 渲染的 dock 原位，插件自建
-    // 占位 span 顶住右簇槽位（16px 环 + 2px 边距，行 gap 补足余量）。
-    const moveRing = (stats) => {
-        const holder = stats.parentElement;
-        const dock = holder === null ? null : holder.parentElement;
-        if (dock === null)
-            return;
-        const ring = [...dock.children].find((child) => !child.contains(stats) && /\d\s*%/.test(child.textContent ?? ''));
-        if (ring === undefined)
-            return;
-        const row = document.querySelector('[data-composer-card] [class*="_row"] [class*="_trailing"]');
-        if (row === null)
-            return;
-        let reserve = row.querySelector(':scope > [data-mobile-nav="stats-ring-reserve"]');
-        const primary = row.querySelector(':scope > [class*="_primary"]');
-        if (reserve === null) {
-            reserve = document.createElement('span');
-            reserve.setAttribute('data-mobile-nav', 'stats-ring-reserve');
-            row.insertBefore(reserve, primary);
-        }
-        else if (primary === null ? row.lastElementChild !== reserve : reserve.nextElementSibling !== primary) {
-            // React rebuilt the row and shuffled its children around our
-            // placeholder: put the reserved slot back at the anchor position.
-            row.insertBefore(reserve, primary);
-        }
-        if (ring.getAttribute('data-mobile-nav') !== 'stats-ring') {
-            ring.setAttribute('data-mobile-nav', 'stats-ring');
-        }
-        ensurePositioned(dock, 'stats-ring-dock');
-        placeOverlay(ring, reserve);
-    };
-    let viewportHandler = null;
-    const relayout = () => {
-        const anchor = document.querySelector('[data-mobile-nav="stats"]');
-        if (anchor === null)
-            return;
-        moveTps(anchor);
-        moveRing(anchor);
-    };
-    const mark = () => {
-        // Keyboard open/close and viewport rotations relayout the composer without
-        // any DOM mutation, so the overlays need their own re-layout channel.
-        if (viewportHandler === null) {
-            viewportHandler = relayout;
-            window.addEventListener('resize', relayout);
-            window.visualViewport?.addEventListener('resize', relayout);
-        }
-        // Fast path: the marked strip usually survives React rebuilds between
-        // tokens; re-verifying the anchor is O(1) while the full-tree hunt below
-        // grows with the conversation. moveTps still re-runs so a rebuilt TPS
-        // readout is re-folded.
-        const anchor = document.querySelector('[data-mobile-nav="stats"]');
-        if (anchor !== null && statsAnchorAlive(anchor)) {
-            moveTps(anchor);
-            moveRing(anchor);
-            return;
-        }
-        // Stale marker on a node that left the composer stack/phase context:
-        // drop it so the slow path can re-anchor cleanly.
-        anchor?.removeAttribute('data-mobile-nav');
-        // Scope decision: the status row is a DESCENDANT of the composer stack,
-        // not necessarily its child. On rc.2 hosts it is a direct child (its own
-        // `_root`); on 0.1.5 the composer card wrapper (uV2eYG_root) sits between
-        // the stack and the row (bOPqQW_root), so requiring a direct child made
-        // the hunt permanently miss and the strip was never marked (measured: row
-        // present at 16,814 carrying "8 turns 582 steps · 103 tok/s" while
-        // [data-mobile-nav="stats"] was absent). Body blocks outside the stack are
-        // still skipped by the containment test below.
-        const stack = document.querySelector('[class*="_composerStack"]');
-        if (stack === null)
-            return;
-        for (const root of stack.querySelectorAll('[class*="_root"]')) {
-            // The status row lives inside the composer stack. The query is already
-            // scoped to the stack, so every candidate is inside it by construction —
-            // message-area blocks that mention turns/steps never enter this loop. (A
-            // `stack.contains(root)` guard stood here and its comment claimed to skip
-            // those blocks; it was unreachable.)
-            // The todo plan strip also lives in the composer stack and its root
-            // ends in _root. Its items may legitimately contain "步"/"steps" in
-            // their text, so never mistake it (or any interactive dock panel)
-            // for the stats strip.
-            if (root.matches('[data-testid="todo-panel"]'))
-                continue;
-            // Dock panels are skipped by never marking a candidate whose buttons are
-            // actionable controls. 0.1.5 renders the status row ITSELF as two
-            // popover buttons (bOPqQW_pill, aria-haspopup="dialog"), so an
-            // "any button" guard excluded the one row this task exists to mark
-            // (measured: bOPqQW_root rejected solely by hasButton, marker count 0).
-            // Every popover button counts as a status widget: the composer's real
-            // controls (model bar, context meter) carry no metrics text and are
-            // filtered by the text test above, and a panel with an actionable button
-            // still fails here.
-            const buttons = root.querySelectorAll('button');
-            if (buttons.length > 0 && ![...buttons].every((button) => button.getAttribute('aria-haspopup') !== null))
-                continue;
-            const text = root.textContent ?? '';
-            if (!/(turns|steps|\bLLM\b|轮|步)/.test(text))
-                continue;
-            // Composer card must never be mistaken for the status strip; exclude
-            // its input region across both composer DOMs (textarea / Lexical
-            // contentEditable marked data-composer-input).
-            if (root.querySelector('textarea, [data-composer-input]') !== null)
-                continue;
-            root.setAttribute('data-mobile-nav', 'stats');
-            moveTps(root);
-            moveRing(root);
-            return;
-        }
-    };
-    // Scope decision: the TPS readout updates are childList/characterData text
-    // mutations inside the composer stack, so this task can only wake on the
-    // tree key. A subtree-scoped observer would need one observer per
-    // container, which the single full-tree observer design intentionally
-    // avoids; the expensive composer-stack scan stays the cost of re-anchoring
-    // markers that React rebuilds every token.
-    return {
-        name: 'stats-line',
-        scopes: ['*'],
-        ensure: mark,
-        dispose: () => {
-            // Hand the official layout back: drop every marker (the strip loses its
-            // one-line layout, ring/TPS overlays return to static flow) and remove
-            // the plugin-owned placeholders.
-            if (viewportHandler !== null) {
-                window.removeEventListener('resize', viewportHandler);
-                window.visualViewport?.removeEventListener('resize', viewportHandler);
-                viewportHandler = null;
-            }
-            for (const el of document.querySelectorAll('[data-mobile-nav="stats-ring"], [data-mobile-nav="stats-tps"]')) {
-                const styled = el;
-                styled.style.left = '';
-                styled.style.top = '';
-                styled.style.maxWidth = '';
-            }
-            for (const key of ['stats', 'stats-ring', 'stats-ring-dock', 'stats-tps', 'stats-tps-row']) {
-                for (const el of document.querySelectorAll(`[data-mobile-nav="${key}"]`)) {
-                    el.removeAttribute('data-mobile-nav');
-                }
-            }
-            for (const el of document.querySelectorAll('[data-mobile-nav="stats-ring-reserve"], [data-mobile-nav="stats-tps-reserve"]')) {
-                el.remove();
-            }
         },
     };
 }
@@ -2459,6 +2561,11 @@ function endStroke(ctx, event, rtl, viewportWidthPx) {
         markStrokeConsumed(event.target);
         cooldownUntil = performance.now() + COOLDOWN_MS;
     }
+    if (modal) {
+        // Gesturing on a modal: consume synthetic click so release never clicks buttons underneath
+        markStrokeConsumed(event.target);
+        return;
+    }
     if (filesMode && verdict === 'none') {
         // A 'none' files release is still a gesture (panel open + leftward, or
         // too short): consume its synthetic click so it cannot flip the panel
@@ -2666,7 +2773,7 @@ function installSidebarSwipe(ctx, filesToggle) {
 __modules["effects/phone-chrome.js"] = function (require, module, exports) {
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.TAP_CLOSE_NAV_SELECTOR = exports.TOUCH_QUERY = exports.DESKTOP_QUERY = exports.MOBILE_QUERY = void 0;
+exports.TAP_CLOSE_NAV_SELECTOR = exports.STABLE_VIEWPORT_VAR = exports.STANDALONE_MARKER = exports.TOUCH_QUERY = exports.DESKTOP_QUERY = exports.MOBILE_QUERY = void 0;
 exports.installMobileEffect = installMobileEffect;
 exports.findFrame = findFrame;
 exports.getFrame = getFrame;
@@ -2676,14 +2783,15 @@ exports.installReconciler = installReconciler;
 exports.addReconcilerTask = addReconcilerTask;
 exports.detectIosWebKit = detectIosWebKit;
 exports.installPhoneChrome = installPhoneChrome;
+exports.toggleDrawer = toggleDrawer;
 exports.installOverlayInteractions = installOverlayInteractions;
 exports.registerReconcileTasks = registerReconcileTasks;
 const gesture_guard_ts_1 = require("./effects/gesture-guard.js");
 const session_row_fiber_ts_1 = require("./effects/session-row-fiber.js");
 const reconciler_core_ts_1 = require("./core/reconciler-core.js");
+const stats_line_ts_1 = require("./effects/stats-line.js");
 const sessions_compat_ts_1 = require("./core/sessions-compat.js");
 const aionui_compat_ts_1 = require("./effects/aionui-compat.js");
-const stats_line_ts_1 = require("./effects/stats-line.js");
 const preview_fullscreen_ts_1 = require("./effects/preview-fullscreen.js");
 const overlay_backdrop_fab_ts_1 = require("./effects/overlay-backdrop-fab.js");
 const file_viewer_compat_ts_1 = require("./effects/file-viewer-compat.js");
@@ -2711,20 +2819,6 @@ exports.DESKTOP_QUERY = '(min-width: 1024px)';
  *  layout but still gets the 「删除会话」 item. Mouse-driven or pointer-less
  *  windows never arm it, at any width. */
 exports.TOUCH_QUERY = '(pointer: coarse)';
-/** Long press on a session row opens its ⋯ menu — the phone equivalent of the
- *  desktop hover that reveals the row actions (the host renders them with
- *  `display: none` until `:hover` or `menuOpen`, neither of which touch ever
- *  reaches). Long enough to be deliberate, short enough to read as a context
- *  menu. */
-const LONG_PRESS_MS = 500;
-/** Pointer travel that cancels a long press (the swipe layer locks at 8px). */
-const LONG_PRESS_MOVE_PX = 10;
-/** How long the lift may not close the menu the press opened: the host menu
- *  closes on pointerleave, and the finger lift itself fires one. */
-const LONG_PRESS_MENU_GUARD_MS = 1200;
-/** Window in which the press's own synthesized click is swallowed, so the lift
- *  neither navigates the row nor collapses the drawer. */
-const LONG_PRESS_CLICK_SWALLOW_MS = 800;
 /** Finger-down to finger-up travel that still counts as a tap on a session row
  *  (#49). Per-axis (`isTapWithinSlop` is max-norm, not Euclidean): the drawer
  *  list scrolls vertically, so a 60px vertical drift must not navigate while a
@@ -2761,7 +2855,10 @@ function installMobileEffect(ctx, label, install, query = exports.MOBILE_QUERY) 
 }
 /** The AppFrame element: direct parent of the shell overlay layer. */
 function findFrame() {
-    return document.querySelector('[data-shell-overlay]')?.parentElement ?? null;
+    const overlay = document.querySelector('[data-shell-overlay]');
+    if (overlay?.parentElement)
+        return overlay.parentElement;
+    return document.querySelector('[data-mobile-nav="frame"], [class*="pI_x6G_frame"], [class*="frame"]:has(> [class*="sidebarCol"])');
 }
 /** Resolve the plugin-owned frame marker, falling back to the raw shell frame. */
 function getFrame() {
@@ -2806,6 +2903,7 @@ function ensureDismissShadow() {
     }
     pane.insertBefore(element, pane.firstElementChild);
 }
+let onFrameMountedCallback = null;
 /**
  * Frame marker controller: owns `data-mobile-nav="frame"` and every plugin
  * marker that can survive on the shell-owned frame. Installed once at apply
@@ -2822,17 +2920,76 @@ function installFrameController() {
         return () => { };
     frameControllerInstalled = true;
     let frame = null;
-    const removeTask = addReconcilerTask({
-        name: 'frame-marker',
-        scopes: ['*'],
-        ensure: () => {
-            frame = findFrame();
-            if (frame !== null && !frame.hasAttribute('data-mobile-nav')) {
+    let mountObserver = null;
+    let rafId = null;
+    const markFrame = () => {
+        frame = findFrame();
+        if (frame !== null) {
+            if (!frame.hasAttribute('data-mobile-nav')) {
                 frame.setAttribute('data-mobile-nav', 'frame');
             }
             ensureDismissShadow();
+            if (onFrameMountedCallback !== null) {
+                onFrameMountedCallback(frame);
+            }
+            return true;
+        }
+        return false;
+    };
+    // 1. 立即检查
+    if (!markFrame()) {
+        // 2. 深度监听首屏 #root 或 body 子树挂载，命中 AppFrame 后立刻断开，不影响后续流式传输性能
+        if (typeof document !== 'undefined') {
+            const rootTarget = document.getElementById('root') ?? document.body;
+            if (rootTarget !== null) {
+                mountObserver = new MutationObserver(() => {
+                    if (markFrame() && mountObserver !== null) {
+                        mountObserver.disconnect();
+                        mountObserver = null;
+                        if (rafId !== null) {
+                            cancelAnimationFrame(rafId);
+                            rafId = null;
+                        }
+                    }
+                });
+                mountObserver.observe(rootTarget, { childList: true, subtree: true });
+            }
+            // 3. 极速 rAF 轮询兜底（前 30 帧），一旦命中立即清理
+            let rafTries = 0;
+            const pollFrame = () => {
+                if (markFrame()) {
+                    if (mountObserver !== null) {
+                        mountObserver.disconnect();
+                        mountObserver = null;
+                    }
+                    rafId = null;
+                    return;
+                }
+                if (++rafTries < 30) {
+                    rafId = requestAnimationFrame(pollFrame);
+                }
+                else {
+                    rafId = null;
+                }
+            };
+            rafId = requestAnimationFrame(pollFrame);
+        }
+    }
+    const removeTask = addReconcilerTask({
+        name: 'frame-marker',
+        scopes: ['*', 'data-sidebar-collapsed'],
+        ensure: () => {
+            markFrame();
         },
         dispose: () => {
+            if (mountObserver !== null) {
+                mountObserver.disconnect();
+                mountObserver = null;
+            }
+            if (rafId !== null) {
+                cancelAnimationFrame(rafId);
+                rafId = null;
+            }
             if (frame !== null) {
                 frame.removeAttribute('data-mobile-nav');
                 frame.removeAttribute('data-mobile-preview-full');
@@ -2846,6 +3003,14 @@ function installFrameController() {
         },
     });
     return () => {
+        if (mountObserver !== null) {
+            mountObserver.disconnect();
+            mountObserver = null;
+        }
+        if (rafId !== null) {
+            cancelAnimationFrame(rafId);
+            rafId = null;
+        }
         removeTask();
         frameControllerInstalled = false;
     };
@@ -2880,44 +3045,66 @@ function installReconciler(ctx) {
         return () => { };
     reconcilerInstalled = true;
     installMobileEffect(ctx, 'dsh-web-mobile: DOM reconciler', () => {
-        // Coalesce every mutation burst (typing, animations, per-token TPS
-        // re-renders) into one dirty-key pass per animation frame. Each task
-        // declares scopes so only intersecting tasks run on a given flush.
+        // Only observe container attributes (no childList, no subtree scanning)
+        // so streaming tokens / DOM node insertions never wake the reconciler or trigger reflow.
         const observer = new MutationObserver((records) => {
-            // DSHA 优化：若变动全部来自输入框编辑区，说明用户正在输入，跳过重算防掉帧/失焦
-            let hasNonTyping = false;
-            for (const record of records) {
-                const target = record.target;
-                const el = target && (target.nodeType === 1 ? target : target.parentElement);
-                if (!el || !el.closest('[contenteditable], [data-input-scroll], [class*="_composer"], [class*="composer"]')) {
-                    hasNonTyping = true;
-                    break;
-                }
-            }
-            if (!hasNonTyping)
-                return;
             const keys = new Set();
             for (const record of records) {
-                keys.add(record.type === 'attributes' && record.attributeName !== null ? record.attributeName : '*');
+                if (record.type === 'attributes' && record.attributeName !== null) {
+                    keys.add(record.attributeName);
+                }
+                else if (record.type === 'childList') {
+                    attachFrame();
+                }
             }
-            core.note(keys);
+            if (keys.size > 0)
+                core.note(keys);
         });
+        let observedFrame = null;
+        const attachFrame = () => {
+            const f = getFrame();
+            if (f !== null && f !== observedFrame) {
+                observedFrame = f;
+                observer.observe(f, {
+                    attributes: true,
+                    attributeFilter: [
+                        'data-phase',
+                        'data-sidebar-collapsed',
+                        'data-aionui-explorer-open',
+                        'data-aionui-preview-open',
+                        'data-mobile-preview-full',
+                    ],
+                });
+                core.note(new Set(['data-sidebar-collapsed', 'data-phase']));
+            }
+        };
+        onFrameMountedCallback = () => {
+            attachFrame();
+        };
+        attachFrame();
+        if (document.body) {
+            observer.observe(document.body, {
+                attributes: true,
+                childList: true,
+                subtree: false,
+                attributeFilter: [
+                    'data-phase',
+                    'data-ds-dark-theme',
+                ],
+            });
+        }
         observer.observe(document.documentElement, {
-            childList: true,
-            subtree: true,
             attributes: true,
             attributeFilter: [
                 'style',
                 'class',
                 'data-phase',
                 'data-sidebar-collapsed',
-                'data-aionui-explorer-open',
-                'data-aionui-preview-open',
-                'data-mobile-preview-full',
             ],
         });
         core.activate();
         return () => {
+            onFrameMountedCallback = null;
             observer.disconnect();
             core.deactivate();
         };
@@ -2964,6 +3151,8 @@ function detectIosWebKit(nav, supports) {
 }
 /** Marker the iOS-only zoom-guard CSS is scoped to (html element). */
 const IOS_MARKER = 'data-mobile-nav-ios';
+/** Marker set on html when running as an installed standalone PWA / fullscreen app. */
+exports.STANDALONE_MARKER = 'data-mobile-standalone';
 /**
  * Viewport content the plugin owns while the mobile branch is armed.
  * Deliberately zoom-free: iOS 10+ ignores maximum-scale/user-scalable for
@@ -2972,6 +3161,13 @@ const IOS_MARKER = 'data-mobile-nav-ios';
  * floor (data-mobile-nav-ios), not a zoom ban (#45).
  */
 const VIEWPORT_CONTENT = 'width=device-width, initial-scale=1, viewport-fit=cover';
+/**
+ * CSS custom property carrying the viewport height WITHOUT the soft keyboard
+ * (px), maintained by the viewport effect below. Mobile cards that must not
+ * move when the keyboard appears size themselves with it instead of a viewport
+ * unit — see the settings sheet / shortcut card rules in layout.css.ts.
+ */
+exports.STABLE_VIEWPORT_VAR = '--dsh-web-mobile-vh';
 const findViewportMeta = () => document.querySelector('meta[name="viewport"]');
 /**
  * Phone chrome: KEEP the system status bar (no fullscreen) and make it
@@ -3057,7 +3253,56 @@ function installPhoneChrome(ctx) {
         themeMeta.content = bodyBg();
         if (themeMeta.parentElement === null)
             document.head.appendChild(themeMeta);
+        const syncStandalone = () => {
+            const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
+                window.matchMedia('(display-mode: fullscreen)').matches ||
+                Boolean(navigator.standalone);
+            if (isStandalone) {
+                root.setAttribute(exports.STANDALONE_MARKER, '');
+            }
+            else {
+                root.removeAttribute(exports.STANDALONE_MARKER);
+            }
+        };
+        syncStandalone();
+        const standaloneMq = window.matchMedia('(display-mode: standalone)');
+        standaloneMq.addEventListener('change', syncStandalone);
+        // The keyboard-less viewport height (STABLE_VIEWPORT_VAR).
+        //
+        // Measured 2026-09-25 on the reporter's phone (Android 16 WebView,
+        // adjustResize): raising the soft keyboard takes the layout viewport from
+        // 754 to 471, and vh / svh / lvh / dvh ALL follow it (all four measured at
+        // 471) — no CSS unit on this engine can ignore the keyboard. So every card
+        // sized by a viewport unit shrank with it: the settings sheet and the
+        // shortcut modal each collapsed a step, which is the reporter's 「又闪一下」
+        // when they tapped the search field; the previous release's .2s max-height
+        // transition only turned that step into a 150ms slow-motion lurch.
+        //
+        // The keyboard changes height but NOT width, so the height is tracked on a
+        // monotonic rule: update only when it grows, or when the width changes
+        // (rotation / real window resize). The value therefore stays at the
+        // keyboard-less height, the two cards keep their size when the keyboard
+        // appears, and the keyboard simply covers their lower half. Content that
+        // would fall behind the keyboard gets a keyboard-sized bottom padding on
+        // the scroller (layout.css.ts), which shifts nothing visible.
+        let stableVh = 0;
+        let stableWidth = 0;
+        const syncStableViewport = () => {
+            const height = window.innerHeight;
+            const width = window.innerWidth;
+            if (stableVh === 0 || height > stableVh || width !== stableWidth) {
+                stableVh = height;
+                stableWidth = width;
+                root.style.setProperty(exports.STABLE_VIEWPORT_VAR, `${height}px`);
+            }
+        };
+        syncStableViewport();
+        window.addEventListener('resize', syncStableViewport);
         return () => {
+            standaloneMq.removeEventListener('change', syncStandalone);
+            root.removeAttribute(exports.STANDALONE_MARKER);
+            window.removeEventListener('resize', syncStableViewport);
+            root.style.removeProperty(exports.STABLE_VIEWPORT_VAR);
             metaObserver.disconnect();
             headObserver.disconnect();
             observer.disconnect();
@@ -3089,6 +3334,25 @@ function installPhoneChrome(ctx) {
  * did nothing but retract the drawer, 2026-09-13).
  */
 exports.TAP_CLOSE_NAV_SELECTOR = 'button[data-dsh-taskboard-entry], button[data-dsh-ssh-entry], [class*="newSession"], [class*="sessionRow"], [class*="searchResultRow"], [class*="searchResultWorkspace"], [class*="panelRow"]';
+/**
+ * The one drawer toggle every non-gesture entry point shares: a CLOSE animates
+ * into the closed slot and flips the host marker only once it has landed
+ * (closeDrawerAnimated's late commit — spec 2026-08-27), an OPEN stays a plain
+ * toggle so the host's own .28s transform transition plays.
+ *
+ * Load-bearing for layering, not just for looks (2026-09-25): the popover
+ * band's modal-root raise is gated on our backdrop being on screen, and the
+ * backdrop outlives the marker flip by design (fade .2s + removal 260ms). A
+ * closer that flips the marker while the column is still painted therefore
+ * leaves an open modal under the drawer band for the length of the
+ * transition — that is the 快捷键弹层「抽搐/闪」 root cause. Routing every
+ * closer through here removes the window at the source instead of relying on
+ * the band to cover it.
+ */
+function toggleDrawer(ctx) {
+    if (!(0, sidebar_swipe_ts_1.closeDrawerAnimated)(ctx))
+        ctx.layout.toggleSidebar();
+}
 function installOverlayInteractions(ctx) {
     installMobileEffect(ctx, 'dsh-web-mobile: drawer close (Escape + navigate)', () => {
         // Every non-gesture close funnels through here (backdrop tap, Escape, the
@@ -3097,8 +3361,7 @@ function installOverlayInteractions(ctx) {
         // land before it (closeDrawerAnimated) - while opening stays a plain toggle
         // so the host's own .28s transform transition plays.
         const toggleSidebar = () => {
-            if (!(0, sidebar_swipe_ts_1.closeDrawerAnimated)(ctx))
-                ctx.layout.toggleSidebar();
+            toggleDrawer(ctx);
         };
         const drawerOpen = () => {
             const frame = getFrame();
@@ -3114,7 +3377,11 @@ function installOverlayInteractions(ctx) {
         };
         // Capture phase: run before the shell or a plugin processes the click,
         // so takeover panels never render under the open drawer.
-        const drawerRoot = () => document.querySelector('[data-mobile-nav="frame"] > :first-child');
+        const drawerRoot = () => {
+            const f = getFrame();
+            return (f?.querySelector(':scope > :first-child') ??
+                document.querySelector('[data-mobile-nav="frame"] > :first-child, [class*="sidebarCol"]'));
+        };
         // Shared frame: inside the drawer, on a row navigation target, and not on
         // one of its buttons. Deliberately free of the DSHA tap-close exemption —
         // onDrawerPointerDown arms long-press through this base, and starving that
@@ -3152,70 +3419,15 @@ function installOverlayInteractions(ctx) {
         let navSignatureAtArm = '';
         let navObserver = null;
         let navTimer = null;
-        // 2026-09-22 交互契约（群内统一）：单击 = 选中、双击 = 打开、长按 = 改会话名。
-        // 宿主 0.1.7 把「改会话名」挂在会话行标题的 dblclick 上（onRenameRequest），
-        // 而这恰好是双击手势要用的那个事件：双击会既打开会话又弹改名框。所以真实
-        // dblclick 在这里被吞掉（下方 onDrawerDoubleClick），长按则重放同一个事件去
-        // 开宿主自己的改名框（requestRowRename）——只有我们派发的那一个事件被放行。
-        // Touch has no hover, so the host's `_rowActions` — the ⋯ menu anchor — never
-        // shows up by itself: only `:hover` and `menuOpen` reveal it. Long press used
-        // to be the touch path to that menu; it belongs to rename now, so the mobile
-        // stylesheet pins `_rowActions` open instead (删除 / 归档 / 分叉 仍有触屏入口).
-        // The host menu closes on pointerleave, which the finger lift itself fires,
-        // and that lift still synthesizes a click on the row: both need guarding.
-        let pressTimer = null;
-        let pressOrigin = null;
-        let pressRow = null;
-        let pressFired = false;
-        let menuGuardUntil = 0;
-        let swallowClickUntil = 0;
-        let swallowClickRow = null;
-        const clearPress = () => {
-            if (pressTimer !== null)
-                window.clearTimeout(pressTimer);
-            pressTimer = null;
-            pressOrigin = null;
-            pressRow = null;
-            pressFired = false;
-        };
-        const openRowMenu = (row) => {
-            // A menu already on screen owns the gesture (host touch path, another
-            // plugin's long press); clicking the anchor again would close it.
-            if (document.querySelector('[role="menu"]') !== null)
-                return;
-            const button = row.querySelector('[class*="_rowActions"] button');
-            if (button === null)
-                return;
-            menuGuardUntil = performance.now() + LONG_PRESS_MENU_GUARD_MS;
-            button.click();
-        };
-        /** The only `dblclick`s allowed through to the host are the ones we
-         *  dispatch ourselves: a real one is the double *tap* that means "open the
-         *  session", and letting it reach the title would open the rename dialog on
-         *  the same gesture. Identity, not a flag on the event: nothing else can
-         *  forge it. */
-        const syntheticDoubleClicks = new WeakSet();
-        /** 长按 = 改会话名：宿主把改名挂在标题的 dblclick 上，这里重放那个事件，
-         *  而不是复制一套弹窗链路（宿主的 rename 状态机是包内私有的）。
-         *  @returns 是否成功派发；宿主标记变了、拿不到标题时为 false，调用方回退。 */
-        const requestRowRename = (row) => {
-            const title = row.querySelector('[class*="_title"]');
-            if (title === null)
-                return false;
-            const event = new MouseEvent('dblclick', { bubbles: true, cancelable: true, view: window });
-            syntheticDoubleClicks.add(event);
-            title.dispatchEvent(event);
-            return true;
-        };
-        /** Swallow the host's title-double-click rename (the 2026-09-22 contract puts
-         *  rename on long press, and double tap on "open"). Capture phase on
-         *  `document`, so the event never reaches React's root container and the
-         *  title's own onDoubleClick cannot run. Armed only inside the mobile
-         *  environment (this effect is MOBILE_QUERY-gated), so mouse-driven desktops
-         *  keep the host behaviour untouched. */
+        // 会话行交互契约：单击 = 选中、双击 = 打开。
+        // 侧边栏彻底禁用长按改名计时器以防误触；重命名等操作通过每行右侧常驻的 ⋯ 按钮访问。
+        /** Swallow the host's title-double-click rename (double tap is reserved for
+         *  "open session" on mobile). Capture phase on `document`, so the event
+         *  never reaches React's root container and the title's own onDoubleClick
+         *  cannot run. Armed only inside the mobile environment (this effect is
+         *  MOBILE_QUERY-gated), so mouse-driven desktops keep the host behaviour
+         *  untouched. */
         const onDrawerDoubleClick = (event) => {
-            if (syntheticDoubleClicks.has(event))
-                return;
             const target = event.target;
             if (!(target instanceof Element))
                 return;
@@ -3319,74 +3531,33 @@ function installOverlayInteractions(ctx) {
             touchDownAt = event.pointerType === 'touch' || event.pointerType === 'pen'
                 ? { x: event.clientX, y: event.clientY }
                 : null;
-            clearPress();
+            const target = event.target;
+            if (drawerOpen() && target instanceof Element) {
+                const drawer = drawerRoot();
+                const isInsideDrawer = drawer !== null && drawer.contains(target);
+                const isToggleBtn = target.closest('[data-mobile-nav="toggle"], [data-dsh-responsive-part="sidebar-toggle"], [class*="toggle"], button[aria-label*="sidebar" i], button[aria-label*="侧边栏"]') !== null;
+                if (!isInsideDrawer && !isToggleBtn) {
+                    // 点击右边空白区域准备收起抽屉：拦截 pointerdown 避免焦点转移或软键盘误唤起
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                }
+            }
             if (event.pointerType !== 'touch' && event.pointerType !== 'pen')
                 return;
             if ((0, gesture_guard_ts_1.isStrokeLocked)())
                 return;
-            const target = event.target;
             // isDrawerNavTarget already means "inside the drawer, on a row navigation
             // target, and not on one of its buttons" — and it must stay the
             // exemption-free base: arming long-press through the tap-close predicate
             // made DSHA rows un-armable, killing their only touch path to the ⋯ menu.
             if (!isDrawerNavTarget(target) || !(target instanceof Element))
                 return;
-            const row = target.closest('[class*="_sessionRow"]');
-            if (row === null || target.closest('[class*="_rowActions"]') !== null)
-                return;
-            pressOrigin = { x: event.clientX, y: event.clientY };
-            pressRow = row;
-            pressTimer = window.setTimeout(() => {
-                pressTimer = null;
-                if (pressRow === null)
-                    return;
-                pressFired = true;
-                // 长按 = 改会话名。拿不到标题（宿主标记变了）就退回 ⋯ 菜单：长按至少还能
-                // 到达行操作，而不是变成一个什么都不做的死手势。
-                if (!requestRowRename(pressRow))
-                    openRowMenu(pressRow);
-            }, LONG_PRESS_MS);
+            // 彻底禁用长按重命名：不启动任何改名计时器，杜绝误触；重命名等操作通过右侧常显的 ⋯ 按钮访问
         };
-        const onDrawerPointerMove = (event) => {
-            if (pressOrigin === null)
-                return;
-            if ((0, gesture_guard_ts_1.isStrokeLocked)()) {
-                clearPress();
-                return;
-            }
-            if (Math.abs(event.clientX - pressOrigin.x) > LONG_PRESS_MOVE_PX
-                || Math.abs(event.clientY - pressOrigin.y) > LONG_PRESS_MOVE_PX) {
-                clearPress();
-            }
-        };
-        // The host menu closes on pointerleave of its anchor; the finger lift fires
-        // one right after the press opened the menu, so stay out of the way until
-        // the finger is long gone.
-        const onDrawerPointerLeave = (event) => {
-            if (performance.now() > menuGuardUntil)
-                return;
-            const target = event.target;
-            if (!(target instanceof Element))
-                return;
-            if (target.closest('[class*="_rowActions"]') === null
-                && target.closest('[class*="_sessionRow"]') === null)
-                return;
-            event.stopPropagation();
-        };
+        const onDrawerPointerMove = (_event) => { };
+        const onDrawerPointerLeave = (_event) => { };
         const onDrawerClick = (event) => {
-            // The long press's own synthesized click is the one click that must not
-            // act: the row was not tapped, and the menu it opened must survive. One
-            // click only — a later tap on the ⋯ reaches React normally.
-            const target = event.target;
-            if (swallowClickRow !== null && performance.now() <= swallowClickUntil) {
-                if (target instanceof Element && (target === swallowClickRow || swallowClickRow.contains(target))) {
-                    swallowClickUntil = 0;
-                    swallowClickRow = null;
-                    event.preventDefault();
-                    event.stopPropagation();
-                    return;
-                }
-            }
             // A classified swipe already toggled the drawer; never let its
             // synthetic tap also close it / navigate a row (gesture-guard).
             // isStrokeLocked: a stroke axis-locked mid-swipe (audit S0) — the
@@ -3394,21 +3565,40 @@ function installOverlayInteractions(ctx) {
             // which runs AFTER this handler on the same release event.
             if ((0, gesture_guard_ts_1.isStrokeLocked)() || (0, gesture_guard_ts_1.consumeIfGestured)(event))
                 return;
-            // The backdrop keeps its own listener, but the third-party mobile shim
-            // stops click propagation at the frame for anything outside the drawer
-            // (its own dismiss path), so that listener never sees the tap. Decide
-            // here instead — before both the shim and the element handler.
-            if (target instanceof Element && target.closest('[data-mobile-nav="backdrop"]') !== null) {
-                if (drawerOpen())
+            const target = event.target;
+            // 点击抽屉外部空白区域收起抽屉
+            if (drawerOpen() && target instanceof Element) {
+                const drawer = drawerRoot();
+                const isInsideDrawer = drawer !== null && drawer.contains(target);
+                const isToggleBtn = target.closest('[data-mobile-nav="toggle"], [data-dsh-responsive-part="sidebar-toggle"], [class*="toggle"], button[aria-label*="sidebar" i], button[aria-label*="侧边栏"]') !== null;
+                // 1. 点击遮罩层直接收起
+                if (target.closest('[data-mobile-nav="backdrop"]') !== null) {
+                    event.preventDefault();
+                    event.stopPropagation();
                     toggleSidebar();
-                return;
+                    return;
+                }
+                // 2. 点击右侧空出来的位置（不在抽屉内且非开关按钮）：立即收起，并阻止穿透点击背景内容
+                if (!isInsideDrawer && !isToggleBtn) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    toggleSidebar();
+                    return;
+                }
             }
             // A touch row-tap owns the close (pointerup or the navigation observer);
             // let the row's click reach React without toggling the drawer twice.
             if (performance.now() - lastTouchNavAt < 500)
                 return;
-            if (shouldCloseOnTapInsideDrawer(target))
+            if (shouldCloseOnTapInsideDrawer(target)) {
                 toggleSidebar();
+            }
+            else if (target instanceof Element &&
+                target.closest('button[aria-haspopup="dialog"], [class*="VOzbGW_trigger"]') !== null) {
+                // Tapping the settings trigger inside the drawer: close drawer so settings sheet gets full screen
+                if (drawerOpen())
+                    toggleSidebar();
+            }
         };
         const onDrawerPointerUp = (event) => {
             // A classified swipe must not arm the nav observer or toggle again
@@ -3421,19 +3611,21 @@ function installOverlayInteractions(ctx) {
                 return;
             if (event.pointerType !== 'touch' && event.pointerType !== 'pen')
                 return;
-            const pressed = pressFired;
-            const pressedRow = pressRow;
-            clearPress();
-            if (pressed && pressedRow !== null) {
-                // The press already opened the menu: the lift must not also navigate
-                // or close the drawer.
-                swallowClickUntil = performance.now() + LONG_PRESS_CLICK_SWALLOW_MS;
-                swallowClickRow = pressedRow;
-                return;
-            }
             const target = event.target;
             if (!(target instanceof Element))
                 return;
+            // 若在抽屉外抬手：直接触发收起
+            if (drawerOpen()) {
+                const drawer = drawerRoot();
+                const isInsideDrawer = drawer !== null && drawer.contains(target);
+                const isToggleBtn = target.closest('[data-mobile-nav="toggle"], [data-dsh-responsive-part="sidebar-toggle"], [class*="toggle"], button[aria-label*="sidebar" i], button[aria-label*="侧边栏"]') !== null;
+                if (!isInsideDrawer && !isToggleBtn) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    toggleSidebar();
+                    return;
+                }
+            }
             if (!shouldCloseOnTapInsideDrawer(target))
                 return;
             const row = target.closest('[role="treeitem"]');
@@ -3491,10 +3683,31 @@ function installOverlayInteractions(ctx) {
             if (drawerOpen())
                 toggleSidebar();
         };
+        // 绝对禁止在手机端调用外部编辑器打开配置文件（cordis.patch.yml），捕获阶段直接拦截
+        const onPreventOpenConfig = (event) => {
+            const target = event.target;
+            if (!(target instanceof Element))
+                return;
+            const btn = target.closest('button, [role="button"]');
+            if (btn === null)
+                return;
+            const text = btn.textContent ?? '';
+            const title = btn.getAttribute('title') ?? '';
+            const aria = btn.getAttribute('aria-label') ?? '';
+            if (text.includes('配置文件') ||
+                text.includes('configuration file') ||
+                title.includes('配置文件') ||
+                aria.includes('配置文件') ||
+                btn.closest('[data-slot="settings.action"], [class*="me01iq_action"]') !== null) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+        };
         document.addEventListener('dsha-session-open', onDshaSessionOpen);
         document.addEventListener('dblclick', onDrawerDoubleClick, true);
         document.addEventListener('keydown', onKeyDown, true);
         document.addEventListener('click', onDrawerClick, true);
+        document.addEventListener('click', onPreventOpenConfig, true);
         document.addEventListener('pointerdown', onDrawerPointerDown, true);
         document.addEventListener('pointermove', onDrawerPointerMove, true);
         document.addEventListener('pointerleave', onDrawerPointerLeave, true);
@@ -3504,11 +3717,11 @@ function installOverlayInteractions(ctx) {
             // Also marks the close spent, so a queued `fire` cannot outlive the effect.
             disarmCloseOnNav();
             touchDownAt = null;
-            clearPress();
             document.removeEventListener('dsha-session-open', onDshaSessionOpen);
             document.removeEventListener('dblclick', onDrawerDoubleClick, true);
             document.removeEventListener('keydown', onKeyDown, true);
             document.removeEventListener('click', onDrawerClick, true);
+            document.removeEventListener('click', onPreventOpenConfig, true);
             document.removeEventListener('pointerdown', onDrawerPointerDown, true);
             document.removeEventListener('pointermove', onDrawerPointerMove, true);
             document.removeEventListener('pointerleave', onDrawerPointerLeave, true);
@@ -3534,8 +3747,12 @@ function registerReconcileTasks(ctx, panelExit) {
         addReconcilerTask((0, preview_fullscreen_ts_1.createPreviewFullscreenTask)(t)),
         addReconcilerTask((0, aionui_compat_ts_1.createPreviewCloseTask)()),
         addReconcilerTask((0, aionui_compat_ts_1.createSheetRiseTask)()),
+        // stats-line: mark the official turns/steps/usage row so the CSS lays it
+        // out as ONE full-width line, and overlay the context ring into the
+        // composer row's right cluster. Without it the ring drops to its own row
+        // under the pills and the composer bottom reads as two stacked rows.
         addReconcilerTask((0, stats_line_ts_1.createStatsLineTask)()),
-        addReconcilerTask((0, overlay_backdrop_fab_ts_1.createOverlayTask)(t, () => ctx.layout.toggleSidebar(), panelExit)),
+        addReconcilerTask((0, overlay_backdrop_fab_ts_1.createOverlayTask)(t, () => toggleDrawer(ctx), panelExit)),
         addReconcilerTask(panelExit.task),
         addReconcilerTask((0, file_viewer_compat_ts_1.createFileViewerMarkerTask)()),
     ];
@@ -3609,7 +3826,6 @@ const open_files_panel_ts_1 = require("./components/open-files-panel.js");
 /**
  * Mobile-only icon buttons next to the session title:
  * - toggle: opens the directory drawer on narrow screens.
- * - jobs-placeholder: persistent background jobs button in the top bar.
  * - files: opens the file browser directly — one tap, no drawer round-trip.
  *   Which surface that is (host right sidebar vs. the third-party explorer
  *   sheet) is decided in open-files-panel.ts. The hero/blank phases have no
@@ -3621,44 +3837,7 @@ function MobileNavToggle({ toggleSidebar, t }) {
     const toggleExplorer = () => {
         (0, open_files_panel_ts_1.openFilesPanel)();
     };
-    const handleJobsClick = () => {
-        // If official job trigger is present, proxy click
-        const officialTrigger = document.querySelector('[class*="QsffPG_trigger"], [class*="_trigger"]:has([class*="triggerDot"]), [data-jobs-trigger]');
-        if (officialTrigger) {
-            officialTrigger.click();
-            return;
-        }
-        // Friendly floating toast if no active jobs running
-        const existing = document.querySelector('[data-mobile-jobs-toast]');
-        if (existing)
-            return;
-        const toast = document.createElement('div');
-        toast.setAttribute('data-mobile-jobs-toast', '');
-        toast.textContent = '暂无正在执行的后台任务';
-        Object.assign(toast.style, {
-            position: 'fixed',
-            top: 'calc(env(safe-area-inset-top, 0px) + 62px)',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            background: 'var(--dsw-alias-bg-elevated, #242528)',
-            color: 'var(--dsw-alias-label-primary, #ffffff)',
-            border: '1px solid var(--dsw-alias-border-base, rgba(127,127,127,0.25))',
-            borderRadius: '8px',
-            padding: '6px 14px',
-            fontSize: '12px',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
-            zIndex: '99999',
-            pointerEvents: 'none',
-            transition: 'opacity 0.25s ease',
-            whiteSpace: 'nowrap',
-        });
-        document.body.appendChild(toast);
-        setTimeout(() => {
-            toast.style.opacity = '0';
-            setTimeout(() => toast.remove(), 250);
-        }, 1600);
-    };
-    return ((0, jsx_runtime_1.jsxs)(jsx_runtime_1.Fragment, { children: [(0, jsx_runtime_1.jsx)("button", { type: "button", "data-mobile-nav": "toggle", "aria-label": t('open'), title: t('open'), onClick: () => toggleSidebar(), children: (0, jsx_runtime_1.jsx)(icon_compat_ts_1.IconPanelLeft, { size: 16 }) }), (0, jsx_runtime_1.jsx)("button", { type: "button", "data-mobile-nav": "jobs-placeholder", "aria-label": "\u540E\u53F0\u4EFB\u52A1", title: "\u540E\u53F0\u4EFB\u52A1", onClick: handleJobsClick, children: (0, jsx_runtime_1.jsxs)("svg", { width: "16", height: "16", viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", strokeWidth: "1.5", strokeLinecap: "round", strokeLinejoin: "round", children: [(0, jsx_runtime_1.jsx)("polyline", { points: "3 5 7 8 3 11" }), (0, jsx_runtime_1.jsx)("line", { x1: "9", y1: "11", x2: "13", y2: "11" })] }) }), (0, jsx_runtime_1.jsx)("button", { type: "button", "data-mobile-nav": "files", "aria-label": t('files'), title: t('files'), onClick: toggleExplorer, children: (0, jsx_runtime_1.jsx)(icon_compat_ts_1.IconFolderOpen, { size: 16 }) })] }));
+    return ((0, jsx_runtime_1.jsxs)(jsx_runtime_1.Fragment, { children: [(0, jsx_runtime_1.jsx)("button", { type: "button", "data-mobile-nav": "toggle", "aria-label": t('open'), title: t('open'), onClick: () => toggleSidebar(), children: (0, jsx_runtime_1.jsx)(icon_compat_ts_1.IconPanelLeft, { size: 16 }) }), (0, jsx_runtime_1.jsx)("button", { type: "button", "data-mobile-nav": "files", "aria-label": t('files'), title: t('files'), onClick: toggleExplorer, children: (0, jsx_runtime_1.jsx)(icon_compat_ts_1.IconFolderOpen, { size: 16 }) })] }));
 }
 };
 __modules["components/MobileDrawerFooter.js"] = function (require, module, exports) {
@@ -3744,8 +3923,7 @@ exports.BASE_CSS = `
 /* ---------- base control styles (rendered at any width, hidden where unused) ---------- */
 
 [data-mobile-nav="toggle"],
-[data-mobile-nav="files"],
-[data-mobile-nav="jobs-placeholder"] {
+[data-mobile-nav="files"] {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3762,15 +3940,12 @@ exports.BASE_CSS = `
 }
 [data-mobile-nav="toggle"]:hover,
 [data-mobile-nav="files"]:hover,
-[data-mobile-nav="jobs-placeholder"]:hover,
 [data-mobile-nav="toggle"]:active,
-[data-mobile-nav="files"]:active,
-[data-mobile-nav="jobs-placeholder"]:active {
+[data-mobile-nav="files"]:active {
   background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, .06));
 }
 [data-mobile-nav="toggle"]:focus-visible,
-[data-mobile-nav="files"]:focus-visible,
-[data-mobile-nav="jobs-placeholder"]:focus-visible {
+[data-mobile-nav="files"]:focus-visible {
   outline: 2px solid var(--dsw-alias-state-business-primary, #4f6ef7);
   outline-offset: 1px;
 }
@@ -3929,12 +4104,27 @@ exports.BASE_CSS = `
      matches. Do not reintroduce a hash here without re-measuring.
      Measured 2026-09-19: with the drawer open (column z 1300) the workspace
      Rename dialog sat entirely under it and needed the drawer closed first.
-     Raise the portal root, not the dialog, and only while the drawer is open —
-     the closed-drawer and desktop stacks keep the host's own ordering. Our
-     own delete backdrop matches this rule too since the 2026-09-24 centered
-     rework (its direct child card carries role=dialog) — harmlessly: it sets
-     the same 1400 the dedicated rule below sets. */
-  body:has([data-mobile-nav="frame"]:not([data-sidebar-collapsed]))
+     Raise the portal root, not the dialog.
+     GATE (2026-09-25, real device): the gate is OUR BACKDROP'S PRESENCE, not
+     the drawer-open marker. Marker and paint disagree for the whole close
+     transition — the backdrop fades over .2s and is removed 260ms after the
+     marker flips (overlay-backdrop-fab.ts), the column transitions .28s
+     (layout.css.ts) and React swaps the pane subtree ~200ms late — so a
+     marker-gated raise went dark inside that window and the drawer band
+     covered any open modal. Measured on the reporter's phone (Android 16
+     WebView) with the shortcut modal open: forcing data-sidebar-collapsed
+     dropped this root 1400 -> 1000 and made elementsFromPoint(0.85w, .30h)
+     return [data-mobile-nav="backdrop"] — rgba(0,0,0,.45) over the modal's
+     white = luminance 141, matching the reporter's recording (140 behind a
+     280px drawer edge). That is the "快捷键弹层抽搐/闪" report: a ~200-280ms
+     dark frame with the drawer over the shortcut modal, not a compositing
+     tear. The backdrop's presence IS the drawing condition, so gating on it
+     has no such window; with no backdrop the host's own ordering stands (a
+     menu opened inside a modal still sorts above it). Our own delete backdrop
+     matches this rule too since the 2026-09-24 centered rework (its direct
+     child card carries role=dialog) — harmlessly: it sets the same 1400 the
+     dedicated rule below sets. */
+  body:has([data-mobile-nav="backdrop"])
     > div:has(> [role="dialog"][aria-modal="true"]) {
     z-index: 1400 !important;
   }
@@ -4060,14 +4250,15 @@ exports.BASE_CSS = `
   }
 }
 /* Settings sheet entrance: the official dialog mounts with no animation at
-   all, so it snaps in. Fade + slight rise/scale reads as a proper sheet. */
+   all, so it snaps in. A slight rise/scale reads as a proper sheet.
+   No opacity arm (issue #124, 2026-09-25): checker scene 4 screencast caught
+   the fade double-exposing the still-open drawer underneath the panel
+   (frame a005) — sliding in fully opaque keeps the motion, drops the bleed. */
 @keyframes dsh-web-mobile-sheet-in {
   from {
-    opacity: 0;
     transform: translateY(14px) scale(.98);
   }
   to {
-    opacity: 1;
     transform: none;
   }
 }
@@ -4131,6 +4322,9 @@ exports.LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND touc
   body {
     touch-action: pan-y pinch-zoom !important;
     overscroll-behavior-x: none !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    overflow: hidden !important;
   }
 
   /* AppFrame: the drawer takes the sidebar column out of grid flow, so the
@@ -4158,10 +4352,21 @@ exports.LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND touc
      which sheet happens to be injected later. Measured before and after with
      scripts/probes/cascade-conflict-probe.mjs: no computed value moves, the
      rule only stops depending on sheet order (audit D-5 option A). */
-  html [data-mobile-nav="frame"] {
+  html [data-mobile-nav="frame"],
+  html:has([data-mobile-nav]) [class*="pI_x6G_frame"],
+  html:has([data-mobile-nav]) [class*="frame"]:has(> [class*="sidebarCol"]) {
     box-sizing: border-box !important;
     position: relative !important;
     grid-template-columns: minmax(0, 1fr) 0 0 !important;
+    grid-template-rows: minmax(0, 1fr) !important;
+    height: 100% !important;
+    max-height: 100% !important;
+    overflow: hidden !important;
+    padding-top: 0px !important;
+  }
+  html[data-mobile-standalone] [data-mobile-nav="frame"],
+  html[data-mobile-standalone]:has([data-mobile-nav]) [class*="pI_x6G_frame"],
+  html[data-mobile-standalone]:has([data-mobile-nav]) [class*="frame"]:has(> [class*="sidebarCol"]) {
     padding-top: env(safe-area-inset-top, 0px) !important;
   }
 
@@ -4188,70 +4393,34 @@ exports.LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND touc
   [data-mobile-nav="frame"] > :first-child {
     position: absolute !important;
     inset: 0 auto 0 0 !important;
-    /* !important is load-bearing: the host ships
-       [data-dsh-frame] [data-pane="sidebar"] { width: min(88vw, 320px) !important }
-       under (max-width: 768px), which at 390px resolves to a flat 320px and
-       BEATS a plain declaration here - measured: our max-content never applied
-       and the column stayed 320px.
-       280 is the drawer's hard floor, measured by sweeping the column width from
-       304 down to 264: the inner surface is a FIXED 280px box and never
-       reflows, so every pixel below 280 is simply clipped off its right edge
-       (the list stays 270px at every width and its right edge sits at 278, so
-       270 and below cut into the list itself). At exactly 280 the panel is fully
-       intact - only the 12px of its right-hand padding is given up - which is
-       what the owner asked for over the previous 304. Going narrower is a
-       one-line change, but it starts eating content. */
     width: min(88vw, 280px) !important;
-    /* 1300 is a contract with base.css: the host pins its native sidebarCol at
-       z-index:1100 and paints its mid layers up to that band, so the drawer must
-       sit above the host stack AND above our own backdrop at 1250 (which dims
-       the content area). At 40 the backdrop covered the drawer itself, so
-       opening it showed a full-screen dim with no drawer (measured 2026-09-13
-       at 390px: backdrop [0,0,390,844] z1250 over column [0,0,320,844] z40, and
-       elementFromPoint(40,300) returned the backdrop). Keep in sync with the
-       backdrop z in base.css. */
     z-index: 1300 !important;
     transform: translateX(-110%);
     transition: transform .28s var(--ds-ease-in-out, ease-in-out);
-    /* Keep the drawer's own content below the status bar / notch: the drawer
-       spans the full frame height (its absolute containing block is the
-       frame's padding box, so the frame's own safe-area padding does NOT
-       reach it). The drawer background paints the status-bar strip, which
-       the client's theme-color meta matches, so the strip reads seamless. */
-    padding-top: env(safe-area-inset-top, 0px) !important;
-    /* Kill the official sidebarCol right border: with the backdrop the edge
-       reads cleanly, and the settings dialog (width:100% of this box) stays
-       pixel-flush with the drawer. */
+    padding-top: 0px !important;
     border-right: none !important;
-
-    /* The drawer's inner surface is 280px wide while the column is 88vw/320px, so
-     the remaining 40px showed our own column background as a vertical strip
-     along the right edge (measured: content right edge 280, column 320; the
-     owner reported a white bar). The inner surface owns that band instead, so
-     the strip is filled by the drawer's real surface colour. */
-    /* The 40px band is a STACKING result, not a colour one: the drawer's inner
-     surface is only 280px wide (host markup), while our column is 320px and
-     carries z-index 1300 - so the column's own background paints OVER the
-     surface's right 40px. Pixel-verified from a screenshot with the drawer open:
-     x=10..270 rgb(249,250,251) (the surface) against x=285..315 rgb(255,255,255)
-     (our white column). Repainting the column with the surface's own value makes
-     the seam invisible whatever the theme does; the surface underneath keeps its
-     own colour for the 280px it does cover. */
     background: var(--dsw-alias-bg-surface, #f9fafb);
-    /* Drawer swipe gestures (edge swipe-in / content swipe-out, see
-     docs/specs/2026-08-27-sidebar-swipe-gestures.md).
-     One rule is load-bearing for the gesture layer: dropping pan-x on the
-     drawer lets horizontal pointermove events reach the gesture code —
-     WITHOUT it the browser treats a horizontal stroke as a pan, fires
-     pointercancel and the gesture never classifies (vertical panning stays
-     intact). Start-hit is decided purely by geometry on the document
-     capture listener (START_ZONE_RATIO = 0.45 of the viewport width, ~176px
-     at 390px); there is no hotspot element (removed per audit C2,
-     2026-08-27). pinch-zoom rides along with the
-     root value so a browser-applied zoom stays undoable inside the drawer
-     too (#45); touch-action intersects down the ancestor chain, so a bare
-     pan-y here would cancel the root's pinch permission. */
     touch-action: pan-y pinch-zoom !important;
+  }
+  html[data-mobile-standalone] [data-mobile-nav="frame"] > :first-child {
+    padding-top: env(safe-area-inset-top, 0px) !important;
+  }
+  [data-mobile-nav="frame"] > [class*="sidebarCol"],
+  html:has([data-mobile-nav]) [class*="frame"]:has(> [class*="sidebarCol"]) > [class*="sidebarCol"] {
+    position: absolute !important;
+    inset: 0 auto 0 0 !important;
+    width: min(88vw, 280px) !important;
+    z-index: 1300 !important;
+    transform: translateX(-110%);
+    transition: transform .28s var(--ds-ease-in-out, ease-in-out);
+    padding-top: 0px !important;
+    border-right: none !important;
+    background: var(--dsw-alias-bg-surface, #f9fafb);
+    touch-action: pan-y pinch-zoom !important;
+  }
+  html[data-mobile-standalone] [data-mobile-nav="frame"] > [class*="sidebarCol"],
+  html[data-mobile-standalone]:has([data-mobile-nav]) [class*="frame"]:has(> [class*="sidebarCol"]) > [class*="sidebarCol"] {
+    padding-top: env(safe-area-inset-top, 0px) !important;
   }
 
   /* Closed slot, at the host's OWN specificity. 0.1.5 added a narrow-branch
@@ -4269,7 +4438,9 @@ exports.LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND touc
      a min(88vw, 280px) column translated -110% of its own width, i.e. -308px
      at 390px. The gesture layer never depended on this rule - it writes an
      inline transform !important - so only the CSS-driven click paths regressed. */
-  [data-mobile-nav="frame"][data-sidebar-collapsed] > :first-child {
+  [data-mobile-nav="frame"][data-sidebar-collapsed] > :first-child,
+  [data-mobile-nav="frame"][data-sidebar-collapsed] > [class*="sidebarCol"],
+  html:has([data-mobile-nav]) [class*="frame"][data-sidebar-collapsed]:has(> [class*="sidebarCol"]) > [class*="sidebarCol"] {
     width: min(88vw, 280px) !important;
     transform: translateX(-110%) !important;
   }
@@ -4283,7 +4454,9 @@ exports.LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND touc
      overflow:hidden drawer to scrollLeft=102, and every static child (plus the
      fixed overlay) shifts 102px off-screen. With transform:none the overlay is
      viewport-anchored: it dims the full screen and the sheet sits at left:8. */
-  [data-mobile-nav="frame"]:not([data-sidebar-collapsed]) > :first-child {
+  [data-mobile-nav="frame"]:not([data-sidebar-collapsed]) > :first-child,
+  [data-mobile-nav="frame"]:not([data-sidebar-collapsed]) > [class*="sidebarCol"],
+  html:has([data-mobile-nav]) [class*="frame"]:not([data-sidebar-collapsed]):has(> [class*="sidebarCol"]) > [class*="sidebarCol"] {
     transform: none !important;
   }
 
@@ -4354,6 +4527,9 @@ exports.LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND touc
      instead of silently double-padding. The rule lives in the mobile branch,
      so desktop keeps the host layout. */
   [data-sidebar-right-panel="fullscreen"] {
+    padding-top: 0px !important;
+  }
+  html[data-mobile-standalone] [data-sidebar-right-panel="fullscreen"] {
     padding-top: env(safe-area-inset-top, 0px) !important;
   }
 
@@ -4395,6 +4571,15 @@ exports.LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND touc
     display: none !important;
     width: 0;
     height: 0;
+  }
+
+  /* Long-conversation off-screen rendering optimization:
+     In long sessions with dozens of turns and thousands of DOM nodes,
+     content-visibility: auto skips layout and paint for off-screen message
+     items during streaming token updates, preventing main-thread lag. */
+  [data-phase] [class*="_flowItem"] {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 120px;
   }
   /* Message action rows (copy / run-time badges) can overflow the right
      edge on narrow screens — keep them inside the message width. */
@@ -5014,15 +5199,13 @@ exports.LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND touc
      re-hide needs no !important: the grid rule's display is a normal
      declaration and our style tag loads last. The header carries no children in
      hero (drawer entry is the FAB), so hiding it frees the dead 85px too. */
-  [data-mobile-nav="frame"] [data-phase] header[class*="_headerHidden"] {
-    display: none;
-  }
-  /* 0.1.6-alpha.2 renamed the hero-empty marker: headerHidden -> headerBlank
-     (audit §1 row 3), so the rule above is a dead needle on alpha.2 and this
-     one is dead on rc hosts — together they cover both generations. Same
-     (0,3,1) shape, same no-!important reasoning as above. */
-  [data-mobile-nav="frame"] [data-phase] header[class*="headerBlank"] {
-    display: none;
+  [data-mobile-nav="frame"] [data-phase] header[class*="_headerHidden"],
+  html:has([data-mobile-nav]) header[class*="_headerHidden"],
+  [data-mobile-nav="frame"] header[class*="_headerHidden"],
+  [data-mobile-nav="frame"] [data-phase] header[class*="headerBlank"],
+  html:has([data-mobile-nav]) header[class*="headerBlank"],
+  [data-mobile-nav="frame"] header[class*="headerBlank"] {
+    display: none !important;
   }
   /* Header popovers resolve against the header, not against their 28px flow
      box. 0.1.5's background-job chip anchors its menu with
@@ -5135,12 +5318,24 @@ exports.LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND touc
     top: 12px !important;
     z-index: 2 !important;
   }
-  /* Files and jobs buttons flow naturally inside the header toolbar */
+  /* The files opener is pinned to the header's right corner, mirroring the
+     directory toggle on the left (same 8px edge, same 12px seat). In flow it
+     can never reach that corner: the host reserves the last 44px of the title
+     cluster for a utilities seat that is EMPTY on mobile - measured at 390px,
+     headerUtilities sits at x=374 with width 0 while the title cluster carries
+     padding-right: 44px - so the button stopped at x=300..328 and left 62px of
+     bare header to its right (2026-09-14 phone-side report: the opener is not
+     pinned to the top-right corner). Absolute positioning also returns its
+     28px of flow width to the title lane, and the containing block is the same
+     one the toggle resolves against, so both controls shift together with the
+     frame's safe-area padding. The 44px reservation itself is trimmed to the
+     28px band this button actually paints in the compact-rows block below, so
+     the title lane keeps the difference. */
   [data-mobile-nav="files"] {
-    position: static !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
+    position: absolute !important;
+    right: 8px !important;
+    left: auto !important;
+    top: 12px !important;
     z-index: 2 !important;
   }
   [data-mobile-nav="frame"] [data-phase] header [class*="_headerActions"] {
@@ -5650,29 +5845,40 @@ exports.LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND touc
     justify-content: flex-start !important;
   }
   [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [data-mobile-nav="files"] {
-    position: static !important;
-    top: auto !important;
-    right: auto !important;
-    left: auto !important;
-    order: 3 !important;
-    width: 32px !important;
-    height: 32px !important;
-    min-width: 32px !important;
-    flex: 0 0 32px !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    background: transparent !important;
-    border: none !important;
-    border-radius: 6px !important;
-    color: var(--dsw-alias-label-secondary, #888) !important;
-    cursor: pointer !important;
-    padding: 0 !important;
+    width: 36px !important;
+    height: 36px !important;
+    flex: 0 0 36px !important;
+    /* Keep the 36px seat the reference phone UI shows (opener box 316..352 at
+       360px, icon 326..342): it is the geometry the lane's 46px reservation
+       above is tuned against. Mirror the toggle's centre (top:6px for a 28px
+       control -> centre y=20) by lifting the taller box to top:2px. */
+    top: 2px !important;
   }
-  /* 隐藏重复的右侧 Corner，避免遮盖文件树与操作区 */
-  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) > :first-child > :last-child[class*="_headerCorner"],
-  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="_headerCorner"] {
+  /* 新宿主把「右侧栏入口」放进了 titleRow 的 headerCorner。手机上市宿右侧栏
+     就是 Files 面板，所以它和插件的文件按钮是同一个面板的两个入口；而它带
+     margin-right:-16px，36px 盒子在 360px 视口下会从文件按钮右侧漏出一角
+     （2026-09-22 实测：corner [332,2 36x36]、图标 343..358 外露，被视口裁切），
+     与参考图"右上角只有一个文件夹图标"不一致，也与插件自己的文件按钮重复。
+     只针对标题行内的 corner，老一代宿主（corner 是唯一入口）不受影响。 */
+  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="wSkVaW_titleRow"] > [class*="_headerCorner"] {
     display: none !important;
+  }
+  /* 右上角换人：0.1.6 把「右侧栏展开按钮」放进了 headerCorner，而插件的
+     老规则「header > :first-child > :last-child 显示 none」在 0.1.5
+     藏的是「会话日志胶囊」；新结构里 titleRow 的 :last-child 变成 corner，
+     于是右侧栏入口被误藏、面板在手机上打不开。这里把 corner 放出来，
+     同时让出「⋯」菜单那一格（360px 一行塞不下两个）。 */
+  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) > :first-child > :last-child[class*="_headerCorner"] {
+    display: flex !important;
+    flex: 0 0 auto !important;
+    margin-left: 4px !important;
+    margin-right: 0 !important;
+  }
+  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="_headerCorner"] button {
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    min-height: 36px !important;
   }
   [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="_headerUtilities"] {
     display: none !important;
@@ -5680,186 +5886,84 @@ exports.LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND touc
   [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [role="tablist"] {
     width: 100% !important;
     margin-top: 4px !important;
-    padding-right: 8px !important;
-    box-sizing: border-box !important;
   }
+  /* 标签行右侧的两个状态 chip：
+     · 后台任务 chip（dsh-client-ui-jobs 的 QsffPG_root）
+     · 子代理谱系 chip（dsh-client-ui-subagent 的 ZKlsPq_root）
+     它们在动作行里会和标题窗口 + 预设 + 文件抢同一条 flex，实测直接叠在一起
+     （进子代理会话时最明显）。两块都绝对定位到「对话/轨迹」行右侧，动作行只留
+     [预设][文件]；标签行右侧按 chip 宽度预留，标签变多横向滑动也不会钻到下面。
+     两个 chip 同时存在时，子代理排在后台任务左边。 */
   [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) {
     position: relative !important;
   }
-
-  /* 1. Agent Team 按钮：order 1，紧凑自适应不撑爆整行 */
-  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [data-team-action] {
-    order: 1 !important;
-    display: inline-flex !important;
-    align-items: center !important;
+  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [role="tablist"] {
+    padding-right: 8px !important;
+    /* 宿主的标签行宽度是满宽、默认 content-box，加 padding 会把它顶到
+       x=8..368（右缘越过 header 右缘 360 共 8px，header.scrollWidth-clientWidth=8），
+       也就是下面那条 118px 预留里有 8px 落在屏外。补 border-box 把它收回来，
+       预留才是"整整 118px"。 */
+    box-sizing: border-box !important;
+  }
+  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]):has([class*="QsffPG_root"]) [role="tablist"] {
+    padding-right: 118px !important;
+  }
+   /* Agent Team chip（VoX2oq_root，data-team-action）被 rc 代 pin 规则钉死
+      （flex 0 0 auto + order 2，实测 98.7px），动作行里唯一可缩的模式 chip
+      被压到 56.2px（390px 实测「创造模式」只剩「创造…」）。模式 chip 是
+      手机端唯一的模式切换入口（pitfalls ⑤：必须保字），团队 chip 的完整
+      文字在自己的面板里有承载（点开即达），所以让它先让：保持 order:2
+      不变（创造在前、团队在后的次序不能翻），只把不可缩改成可缩，并加
+      收缩下限保住图标点击区；内部省略号窗口由 rc 代的
+      > button / > button > * 规则继续供给。特异性 (0,5,1) 高于 pin 规则
+      (0,4,1)，且 !important，不依赖书写顺序；:has 门控保证 rc 宿主不命中。
+      2026-09-23 下限 44 → 28（用户拍板）：宿主自己那条 @container(width<=480px)
+      把标签藏了，手机档这颗 chip 实际只剩 14px 图标，44px 的盒子成了那一行
+      最宽的空占位（真机 dpr 4：图标右缘 291 → 文件按钮图标左缘 326，观感 35px
+      留白）。28 = 图标 14 + 宿主自带左右内边距 7（.VoX2oq_trigger padding），
+      与本插件 toggle/files 同尺寸，不再额外扩拍击区。 */
+  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [data-team-action][class*="_root"] {
     flex: 0 1 auto !important;
-    max-width: 110px !important;
+    min-width: 28px !important;
   }
-  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [data-team-action] button {
-    height: 30px !important;
-    min-height: 30px !important;
-    padding: 0 6px !important;
-    font-size: 12px !important;
-    white-space: nowrap !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    gap: 4px !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
+  /* 团队 chip 图标在「标准模式」与文件按钮之间居中（2026-09-26 用户拍板）。
+     真机 360px / dpr 4 实测（无障碍盒 = 绘制盒）：标准模式 205..274、团队 chip
+     278..306、文件按钮 316..352 —— 左缝 4、右缝 10，盒心 292 落在区间心 295 左侧。
+     只做绘制层位移（宿主 .VoX2oq_root 本来就是 position:relative，不新增包含块、
+     也不动它自己的弹层锚定），布局一个像素不变：46px 承重预留保持原样（见
+     pitfalls「header 拥挤」），文件按钮不会被压。位移后两缝 7/7，图标正好居中。
+     只在真·手机档生效：768–1023 平板档排布不同，不套这台手机的魔数。 */
+  @media (max-width: 767px) and (pointer: coarse) {
+    [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [data-team-action][class*="_root"] {
+      left: 3px !important;
+    }
   }
-
-  /* 2. 后台任务按钮：order 2，常驻在上面那一排（解除绝对定位与 bottom: 0） */
   [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="_headerActions"] [class*="QsffPG_root"] {
-    position: static !important;
-    bottom: auto !important;
-    right: auto !important;
-    order: 2 !important;
-    height: 30px !important;
-    min-height: 30px !important;
-    display: inline-flex !important;
-    align-items: center !important;
+    position: absolute !important;
+    right: 8px !important;
+    /* 和子代理 chip 同一套：贴 header 底边 + 下内边距 9px = 与标签文字齐平。 */
+    bottom: 0 !important;
+    height: 25px !important;
+    min-height: 25px !important;
+    /* 必须显式 flex：宿主 .QsffPG_root 只声明了 position:relative，是 block 容器，
+       下面那条 align-items 在 block 上完全无效 —— 里面的 inline-flex 按钮会按基线
+       落位，实测低 6.8px、内容挂出 header 下沿（69.5 -> 75.8），和第 11 条那类
+       "chip 与标签行不齐平"是同一毛病。谱系 chip 的 .ZKlsPq_root 本身就是
+       inline-flex，所以只有 jobs 这个 root 需要补。 */
+    display: flex !important;
+    align-items: stretch !important;
     z-index: 3 !important;
     margin: 0 !important;
     min-width: 0 !important;
-    max-width: 100px !important;
+    max-width: 118px !important;
     flex: 0 0 auto !important;
   }
   [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="QsffPG_root"] > button {
-    height: 30px !important;
-    min-height: 30px !important;
-    padding: 0 6px !important;
-    line-height: 18px !important;
+    height: 25px !important;
+    min-height: 25px !important;
+    padding: 0 2px 9px !important;
+    line-height: 16px !important;
     align-items: center !important;
-  }
-
-  /* 当官方无活跃任务时呈现常驻占位任务按钮：order 2 */
-  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [data-mobile-nav="jobs-placeholder"] {
-    position: static !important;
-    top: auto !important;
-    right: auto !important;
-    left: auto !important;
-    order: 2 !important;
-    width: 32px !important;
-    height: 32px !important;
-    min-width: 32px !important;
-    flex: 0 0 32px !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    background: transparent !important;
-    border: none !important;
-    border-radius: 6px !important;
-    color: var(--dsw-alias-label-secondary, #888) !important;
-    cursor: pointer !important;
-    padding: 0 !important;
-  }
-  /* 当官方活跃任务出现时，隐藏占位按钮，显示带运行指示器的官方按钮 */
-  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]):has([class*="QsffPG_root"]) [data-mobile-nav="jobs-placeholder"] {
-    display: none !important;
-  }
-
-  /* =========================================================================
-     【满宽弹性修复】0.1.7 会话头部操作栏撑满整行，根除右侧空白与左移
-     ========================================================================= */
-
-  /* header 顶层容器：重置 grid 与右侧多余 padding */
-  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) {
-    padding-left: 0 !important;
-    padding-right: 8px !important;
-    padding-top: 0 !important;
-    box-sizing: border-box !important;
-    display: flex !important;
-    flex-direction: column !important;
-    min-height: 0 !important;
-  }
-
-  /* 彻底屏蔽右侧干扰节点与前置空节点 */
-  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="_headerLeading"],
-  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [data-conversation-header-leading],
-  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="_headerUtilities"],
-  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="_headerCorner"],
-  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [data-conversation-header-corner] {
-    display: none !important;
-    width: 0 !important;
-    height: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-  }
-
-  /* 会话标题行：满宽 Flex，左侧留出抽屉开关位置 */
-  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="_titleRow"] {
-    display: flex !important;
-    flex-wrap: nowrap !important;
-    align-items: center !important;
-    justify-content: space-between !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    box-sizing: border-box !important;
-    padding-left: 36px !important;
-    padding-right: 0 !important;
-    margin: 0 !important;
-    height: 40px !important;
-    min-height: 40px !important;
-    position: relative !important;
-  }
-
-  /* 标题簇容器：满宽占据全部可用空间，左右两端自然对齐 */
-  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="_titleCluster"] {
-    display: flex !important;
-    flex-wrap: nowrap !important;
-    align-items: center !important;
-    justify-content: space-between !important;
-    width: 100% !important;
-    flex: 1 1 100% !important;
-    min-width: 0 !important;
-    max-width: 100% !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    gap: 8px !important;
-    overflow: visible !important;
-  }
-
-  /* 标题文字：弹性收缩，超长自动省略，不被左边缘切字 */
-  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="_titleCluster"] > [class*="_crumbs"] {
-    flex: 0 1 auto !important;
-    min-width: 0 !important;
-    max-width: 120px !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    white-space: nowrap !important;
-    display: flex !important;
-    align-items: center !important;
-  }
-  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="_crumbs"] * {
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    white-space: nowrap !important;
-    max-width: 100% !important;
-  }
-
-  /* 右侧操作按钮区：靠右排列至屏幕最右端 */
-  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="_headerActions"] {
-    display: inline-flex !important;
-    flex-wrap: nowrap !important;
-    align-items: center !important;
-    justify-content: flex-end !important;
-    gap: 6px !important;
-    flex: 1 1 auto !important;
-    min-width: 0 !important;
-    margin-left: auto !important;
-    padding: 0 !important;
-    overflow: visible !important;
-  }
-  /* 模式预设（switcher）：极简紧凑展示，避免长文字抢占右侧三大按钮空间 */
-  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="_switcherRoot"] {
-    order: 0 !important;
-    max-width: 60px !important;
-    overflow: hidden !important;
-  }
-  [data-mobile-nav="frame"] [data-phase] header:has([class*="_headerLeading"]) [class*="_switcherRoot"] [class*="_label"]:not(:has(> svg)) {
-    display: none !important;
   }
   /* 头部弹层定位（jobs 任务列表 / subagent 谱系 / 预设菜单都会命中的同一族）：
      插件老规则是「弹层左缘 = chip 左缘 + 8px」，那条规则成立的年代 chip 都
@@ -6153,35 +6257,54 @@ exports.LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND touc
      (with the path input) is hidden by the > :first-child > :first-child
      display:none rule below, and the user can no longer type a path
      (issue #12, 2026-08-16). The picker family keeps the official layout
-     on mobile in every mode. */
-  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) {
-    position: absolute !important;
+     on mobile in every mode.
+
+     The keyboard-shortcut modal (dsh-client-ui-shortcuts, the same
+     primitives Modal → data-shortcut-modal="shortcuts") needs the same
+     exclusion for the same class of reason: its first child is the
+     CONTENT column (nhfO0a_contents = header + search row + list +
+     footer), not a nav row, and its footer holds <button> children, so
+     the family predicate matched it and the sheet rules transposed the
+     whole dialog — measured 2026-09-25 at 390px: the
+     > :first-child { flex-direction: row } rule laid search row / list /
+     footer SIDE BY SIDE (x=20 / 118 / 278, list 1296px tall, spilling
+     far outside the sheet), and > :first-child > :first-child
+     { display: none } swallowed the 「快捷键」 title together with its
+     close button (owner report). The host tags every modal of this
+     family: data-shortcut-modal="settings" on the settings sheet,
+     "shortcuts" on this one — gating on that attribute (not on a hashed
+     class) keeps the official centered card, the same treatment the
+     export dialog gets. */
+  [data-shortcut-modal="settings"],
+  [role="dialog"][data-shortcut-modal="settings"],
+  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])):not([data-shortcut-modal="shortcuts"]) {
+    position: fixed !important;
     left: 8px !important;
-    /* Fixed top (no translateY): a transform on the panel combined with the
-       panel overflowing the max-content drawer shifts the fixed overlay's
-       coordinate frame, dragging the whole sidebar content off-screen. The
-       safe-area inset keeps the sheet below the status bar / notch. */
-    top: calc(env(safe-area-inset-top, 0px) + 12px) !important;
-    width: calc(100vw - 16px);
-    max-width: calc(100vw - 16px);
-    /* Height follows the content (no dead space under a short page); it
-       caps at 100dvh-24 (less the safe-area top) and the options area
-       scrolls only then. */
+    right: 8px !important;
+    margin: 0 auto !important;
+    /* Fixed top with safe-area inset: keep the sheet pinned firmly to the top of visual viewport,
+       never drifting downward due to parent container scrolling or transforms. */
+    top: calc(env(safe-area-inset-top, 0px) + 8px) !important;
+    width: calc(100vw - 16px) !important;
+    max-width: calc(100vw - 16px) !important;
+    z-index: 1400 !important;
+    /* Height follows the content; caps at stable viewport height */
     height: auto;
     max-height: min(800px, calc(100vh - 24px - env(safe-area-inset-top, 0px)));
-    max-height: min(800px, calc(100dvh - 24px - env(safe-area-inset-top, 0px)));
+    max-height: min(800px, calc(var(--dsh-web-mobile-vh, 100dvh) - 24px - env(safe-area-inset-top, 0px)));
+    transition: max-height .2s var(--ds-ease-out, ease-in-out);
     flex-direction: column !important;
     border-radius: 14px !important;
     animation: dsh-web-mobile-sheet-in .22s var(--ds-ease-out, ease-in-out);
   }
   /* The settings sheet's dimmed mask fades in with the panel (the mask is
      the first child of the overlay that directly contains the sheet). */
-  :has(> [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"]))) > :first-child {
+  :has(> [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])):not([data-shortcut-modal="shortcuts"])) > :first-child {
     animation: dsh-web-mobile-fade .18s var(--ds-ease-out, ease-in-out);
   }
   @media (prefers-reduced-motion: reduce) {
-    [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])),
-    :has(> [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"]))) > :first-child {
+    [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])):not([data-shortcut-modal="shortcuts"]),
+    :has(> [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])):not([data-shortcut-modal="shortcuts"])) > :first-child {
       animation: none !important;
     }
   }
@@ -6193,14 +6316,14 @@ exports.LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND touc
   /* Nav bar: hide the "Settings" caption (redundant on a full-width sheet)
      and wrap the tab list so every tab is visible — a horizontal scroll cut
      the last tab ("Plugins") off with no affordance to scroll. */
-  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > :first-child {
+  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])):not([data-shortcut-modal="shortcuts"]) > :first-child {
     width: 100%;
     flex-direction: row !important;
     align-items: center;
     gap: 6px;
     padding: 10px 12px 8px;
   }
-  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > :first-child > :first-child {
+  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])):not([data-shortcut-modal="shortcuts"]) > :first-child > :first-child {
     display: none !important;
   }
   /* The tab strip stays clear of the toolbar: the toolbar (the close ✕ on
@@ -6227,7 +6350,7 @@ exports.LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND touc
      2026-09-24) reproduces the reparent-era scroller geometry (its box
      ended 6px short of the toolbar). The strip must be anchored by its
      class. */
-  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > :first-child [class*="_navList"] {
+  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])):not([data-shortcut-modal="shortcuts"]) > :first-child [class*="_navList"] {
     flex: 1 1 auto;
     min-width: 0;
     flex-direction: row !important;
@@ -6243,20 +6366,20 @@ exports.LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND touc
      reads fat on a phone; 2px keeps the scroll affordance without the
      bulk. (Portal-aware copies of the frame-scoped rules in compat.css,
      which died with the rc.2 portal move.) */
-  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > :first-child [class*="_navList"]::-webkit-scrollbar {
+  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])):not([data-shortcut-modal="shortcuts"]) > :first-child [class*="_navList"]::-webkit-scrollbar {
     height: 2px !important;
   }
-  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > :first-child [class*="_navList"]::-webkit-scrollbar-thumb {
+  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])):not([data-shortcut-modal="shortcuts"]) > :first-child [class*="_navList"]::-webkit-scrollbar-thumb {
     background: var(--dsw-alias-border-l2, rgba(0, 0, 0, .22)) !important;
     border-radius: 1px !important;
   }
-  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > :first-child [class*="_navList"]::-webkit-scrollbar-track {
+  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])):not([data-shortcut-modal="shortcuts"]) > :first-child [class*="_navList"]::-webkit-scrollbar-track {
     background: transparent !important;
   }
   /* Cells stay whole inside the scroller: no shrink, no wrap, compact
      metrics. (Portal-aware copies of the frame-scoped rules in compat.css,
      which died with the rc.2 portal move.) */
-  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > :first-child [class*="_navCell"] {
+  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])):not([data-shortcut-modal="shortcuts"]) > :first-child [class*="_navCell"] {
     flex: 0 0 auto !important;
     white-space: nowrap !important;
     padding: 6px 8px !important;
@@ -6264,7 +6387,7 @@ exports.LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND touc
     font-size: 13px !important;
     justify-content: flex-start !important;
   }
-  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > :first-child [class*="_navCell"] svg {
+  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])):not([data-shortcut-modal="shortcuts"]) > :first-child [class*="_navCell"] svg {
     width: 14px !important;
     height: 14px !important;
     flex: none !important;
@@ -6298,7 +6421,7 @@ exports.LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND touc
      settings-toolbar-reparent task. Card headers live deeper — inside
      the options scroll area — and match neither, so no per-plugin hash
      guards are needed. */
-  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > :last-child > [class*="_header"]:not([class*="_headerActions"]) {
+  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])):not([data-shortcut-modal="shortcuts"]) > :last-child > [class*="_header"]:not([class*="_headerActions"]) {
     position: absolute;
     top: 10px;
     right: 12px;
@@ -6329,11 +6452,11 @@ exports.LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND touc
     height: 32px;
     min-height: 32px;
   }
-  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > :last-child > [class*="_header"]:not([class*="_headerActions"]) > * {
+  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])):not([data-shortcut-modal="shortcuts"]) > :last-child > [class*="_header"]:not([class*="_headerActions"]) > * {
     margin-left: 0 !important;
     margin-right: 0 !important;
   }
-  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > :last-child > [class*="_header"]:not([class*="_headerActions"]) > :last-child {
+  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])):not([data-shortcut-modal="shortcuts"]) > :last-child > [class*="_header"]:not([class*="_headerActions"]) > :last-child {
     position: relative;
     width: 32px;
     height: 32px;
@@ -6351,25 +6474,24 @@ exports.LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND touc
      button starts ~13px under the ✕'s bottom edge and must keep its own
      top-right corner. Anchored to the button (position:relative above),
      so the extension travels with the pinned toolbar. */
-  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > :last-child > [class*="_header"]:not([class*="_headerActions"]) > :last-child::after {
+  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])):not([data-shortcut-modal="shortcuts"]) > :last-child > [class*="_header"]:not([class*="_headerActions"]) > :last-child::after {
     content: "";
     position: absolute;
     inset: -6px -6px 0 -6px;
     border-radius: 50%;
   }
   /* The config-file action (a settings.action slot — dsh-version-update's
-     "打开配置文件") is hidden on phones: it is rarely needed here, and its
-     ~94px next to the 32px close made the pinned toolbar 138px wide —
-     wide enough to swallow the nav strip's first cells while the strip
-     still wrapped (2026-09-25 report, the other half of the same
-     regression as the scroller fix above). The close ✕ is the toolbar's
-     SIBLING, not its child (verified in the live DOM: header children are
-     [actions, close]), so hiding the actions never removes the way out.
-     Desktop keeps the button: this whole block sits inside the mobile
-     media wrapper. (Portal-aware replacement for the frame-scoped rule in
-     compat.css, which died with the rc.2 portal move.) */
-  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > :last-child > [class*="_header"]:not([class*="_headerActions"]) [class*="_actions"] {
+     "打开配置文件") is completely hidden and disabled on phones: it is rarely
+     needed here, and tapping or gesturing near it would accidentally invoke
+     external Android file viewers to open cordis.patch.yml. */
+  [data-slot="settings.action"],
+  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])):not([data-shortcut-modal="shortcuts"]) > :last-child > [class*="_header"]:not([class*="_headerActions"]) > [class*="_actions"],
+  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])):not([data-shortcut-modal="shortcuts"]) > :last-child > [class*="_header"]:not([class*="_headerActions"]) > [data-slot="settings.action"] {
     display: none !important;
+    pointer-events: none !important;
+    visibility: hidden !important;
+    width: 0 !important;
+    height: 0 !important;
   }
   /* Appearance mode cards: the official cube row renders three tall
      vertical cards (~268px) that eat half the sheet. Turn them into a
@@ -6389,11 +6511,11 @@ exports.LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND touc
   }
   /* Content: the options scroll area gets bottom breathing room so the last
      row never sits flush against the sheet's rounded corner. */
-  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > :last-child {
+  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])):not([data-shortcut-modal="shortcuts"]) > :last-child {
     flex: 1 1 auto;
     min-height: 0;
   }
-  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])) > :last-child > :last-child {
+  [aria-modal="true"]:has(> :first-child > :last-child > button):not(:has([role="navigation"])):not(:has([class*="ZuhsRW"])):not([data-shortcut-modal="shortcuts"]) > :last-child > :last-child {
     padding: 0 12px 24px;
   }
   /* 0.1.6-alpha.2 宿主的插件管理页（dsh-client-ui-plugin-manager 渲染的
@@ -6425,11 +6547,86 @@ exports.LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND touc
     margin-left: var(--dsh-web-mobile-panel-clearance) !important;
     width: calc(100% - var(--dsh-web-mobile-panel-clearance)) !important;
   }
-  /* 详情 crumb 是被拉伸的 flex item（没有 width:100%），margin 就是对的工具。 */
+  /* 详情 crumb 是被拉伸的 flex item（没有 width:100%），margin 就是对的工具。
+     **0.1.7-rc.2 起「直子」形态落空**：宿主把 crumb 套进了 DetailTop 的根盒
+     （实测链 [data-plugin-detail] > div.X_2TxG_detailTop > button.X_2TxG_crumb），
+     于是上面三条「> button:first-child」在详情页全部 matches()=false ——
+     crumb 的 margin-left 计算值 0px，停在宿主 padding 上：盒 [24,28,342,14]、
+     自带箭头图标 [24,28,14,14]、文字 span x=44，整条压在 FAB 盒
+     [10,12,38,38]（右缘 48）里 —— 图标 14px 全遮、文字首字压 4px；
+     elementFromPoint 在图标中心与文字首字处都命中 FAB，点「返回插件列表」
+     实际触发的是 FAB 的 exit-panel（2026-09-25 报障截图同形）。
+     所以保留直子三条（旧代宿主仍走它们），再按 crumb 自己的哈希片段补三条
+     后代选择器。片段取「_crumb」：同前缀的 svg.crumbIcon 不是 button 天然排除，
+     本子树里也没有别的 crumb 家族（文件面板 ZuhsRW_crumb* 在另一棵树）。
+     实测让位后 crumb 变 [56,28,310,14] —— flex 拉伸项自己收窄 32px，无横向
+     溢出（面板 scrollWidth 恒 390），点文字可正常返回列表。 */
   [data-mobile-nav="frame"] section[data-plugin-panel] [data-plugin-detail] > button:first-child,
   [data-mobile-nav="frame"] section[data-plugin-panel] [data-plugin-item-detail] > button:first-child,
-  [data-mobile-nav="frame"] section[data-plugin-panel] [data-plugin-row-detail] > button:first-child {
+  [data-mobile-nav="frame"] section[data-plugin-panel] [data-plugin-row-detail] > button:first-child,
+  [data-mobile-nav="frame"] section[data-plugin-panel] [data-plugin-detail] button[class*="_crumb"],
+  [data-mobile-nav="frame"] section[data-plugin-panel] [data-plugin-item-detail] button[class*="_crumb"],
+  [data-mobile-nav="frame"] section[data-plugin-panel] [data-plugin-row-detail] button[class*="_crumb"] {
     margin-left: var(--dsh-web-mobile-panel-clearance) !important;
+  }
+  /* 快捷键弹层在手机上的落地形态。上面那条 :not([data-shortcut-modal="shortcuts"])
+     只是把它从设置面板家族里摘出来、还它官方的内部排版（2026-09-25 实测：纵向列
+     回来了、标题「快捷键」回来了、列表 441px 可滚、无横向溢出、docScrollWidth
+     恒 390）。但官方的外框在手机上仍会「抽搐」：宿主 Modal 的 _root 是
+     position:fixed; inset:0; align-items:center（视口居中），而弹层打开时会自动
+     聚焦搜索框（实测 activeElement = INPUT「搜索快捷键」），手机随即弹软键盘 ——
+     视口一缩，居中卡片就整体重排/回弹，肉眼即抖动。所以这里给它插件自己的「纸片」
+     几何：顶部锚定（键盘怎么变，上缘都钉在 12px）+ 与设置面板同款左缘/宽度/圆角/
+     入场动画。高度沿用宿主的 600px：nhfO0a_contents 是 flex:1 1 0%，要有一个确定的
+     高度才撑得开列表，故不改成 auto；max-height 再按视口收口，超出的部分进列表自己
+     的 scroll（_list 已是 flex:1 + min-height:0 + overflow-y:auto），与设置面板同款。
+     宿主那 30px 的 translateY 是桌面居中卡的微调，顶部锚定后必须归零。 */
+  [aria-modal="true"][data-shortcut-modal="shortcuts"] {
+    position: absolute !important;
+    left: 8px !important;
+    top: calc(env(safe-area-inset-top, 0px) + 12px) !important;
+    width: calc(100vw - 16px) !important;
+    max-width: calc(100vw - 16px) !important;
+    /* 同上：键盘不进这层的高度。这一层下面就是键盘，卡片缩一次就一定被看见，
+       所以用「不含键盘的视口高度」定高 → 点搜索框时卡片纹丝不动，键盘盖住下半截。 */
+    max-height: min(760px, calc(var(--dsh-web-mobile-vh, 100dvh) - 24px - env(safe-area-inset-top, 0px))) !important;
+    transition: max-height .2s var(--ds-ease-out, ease-in-out);
+    transform: none !important;
+    border-radius: 14px !important;
+    /* 不做透明度淡入。改动前（#124 修法二刀，2026-09-25）设置面板的
+       dsh-web-mobile-sheet-in 还带 opacity 段，而本层叠在**同样全宽全白**的
+       设置面板上，淡入的 .22s 里两层文字互相透出：CDP screencast 逐帧实拍
+       （390×844）第 10-15 帧能看到「权限/语言/外观」与「快捷键速查/新会话」
+       重影，肉眼就是「闪」。该刀后 sheet-in 已是纯滑入，不再有透明度重影的
+       机制；本层维持瞬时出现（不写 animation 会落回宿主的 _modalEnter，
+       同样是透明度淡入）；遮罩自己的淡入保留，整体仍是一次正常的弹层出现。 */
+    animation: none !important;
+  }
+  /* 手机档收掉搜索行（报障人拍板 2026-09-25：「加回来又闪了，不要这个了，手机上也不怎么用」）。
+     因果已由报障人两次实机复现钉死：**行在 → 打开就闪；行藏 → 不闪**。机理：宿主 Modal 会把
+     焦点抢到 [data-modal-autofocus]（就是这个搜索框），键盘在弹层打开那一瞬就抬起来，布局
+     视口随之 754→471，整页重排 —— 就是「全屏闪」。收掉这个唯一的文本输入，弹层里就再也
+     弹不出键盘，那一步不存在；而不是靠 focus 影子去拦（那条守卫在这台引擎上并不总是拦得住）。
+     只做 CSS 隐藏，**绝不删宿主节点**：宿主是 React 渲染的，删掉它卸载时 parent.removeChild
+     会抛 NotFoundError，被 SlotErrorBoundary 吞掉后整个 slot 变空白（见 pitfalls「搬宿主
+     React 节点」）。想恢复搜索只需删掉这两行，但要接受打开瞬间那一下全屏闪。 */
+  /* 手机档（窄屏）才收；768–1023 的平板档与桌面档照旧保留搜索
+     （报障人 2026-09-25 拍板：「手机端不要了，平板电脑端照旧」）。 */
+  @media (max-width: 767px) {
+    [aria-modal="true"][data-shortcut-modal="shortcuts"] [class*="_searchRow"] {
+      display: none !important;
+    }
+  }
+  /* 这一层的遮罩也在每次挂载时跑宿主的 _modalEnter（0.2s 透明度淡入）：全屏亮度在
+     0.24 档上渐变一次，肉眼看就是「全屏闪」。上一版只掐了卡片自己的动画、**故意保留**
+     了遮罩的淡入；报障人 2026-09-25 的反馈（「全屏闪」）说明那一步同样看得见。
+     这里连同卡片一起瞬时化：弹层与遮罩同帧出现、同帧消失，中间没有渐变。 */
+  :has(> [aria-modal="true"][data-shortcut-modal="shortcuts"]) > [class*="_mask"]::after {
+    animation: none !important;
+    /* 手机档这个弹层只能从设置面板里打开，而设置面板自己已经压了一层 0.24 的遮罩；
+       再叠一层就是全屏暗度 0.24 → 0.42 的一步 —— 报障人说的「全屏闪」。这一层不再
+       重复变暗：屏幕的整体明暗在弹层开合前后完全一致，剩下的变化只有卡片本身。 */
+    background: transparent !important;
   }
   /* ---------- sidebar panel enter / exit (see effects/panel-exit.ts) ----------
      A sidebar panel REPLACES the main area. Two motions, both short and
@@ -6561,6 +6758,17 @@ exports.LAYOUT_CSS = `/* ---------- mobile-only layout (narrow viewport AND touc
      只作用于抽屉里的会话行，搜索行（searchResultRow）不受影响。 */
   [data-mobile-nav="frame"] [class*="sessionRow"] [class*="_rowActions"] {
     display: inline-flex !important;
+  }
+  /* 隐藏左侧多余的静态常驻标志：右侧操作区已包含常驻切换按钮，避免置顶时左右重复显示两个图钉 */
+  [data-mobile-nav="frame"] [class*="sessionRow"] [class*="pinIndicator"] {
+    display: none !important;
+  }
+  /* 归档按钮不放在表面（防误触，归档入口保留在 ⋯ 菜单内），表面仅保留 ⋯ 菜单与常驻按钮 */
+  [data-mobile-nav="frame"] [class*="sessionRow"] [class*="_rowActions"] button[aria-label*="归档"],
+  [data-mobile-nav="frame"] [class*="sessionRow"] [class*="_rowActions"] button[aria-label*="archive" i],
+  [data-mobile-nav="frame"] [class*="sessionRow"] [class*="_rowActions"] button[aria-label*="Archive"],
+  [data-mobile-nav="frame"] [class*="sessionRow"] [class*="_rowActions"] button[aria-label*="封存"] {
+    display: none !important;
   }
 }
 `;
@@ -6984,6 +7192,29 @@ exports.COMPAT_CSS = `@media (max-width: 1023px) and (pointer: coarse) {
     }
   }
 
+  /* Installed-plugins list text layout (migrated from JS MutationObserver to pure CSS) */
+  [role="dialog"] [class*="irow"]:not([class*="irowActions"]):not([class*="irowTrailing"]),
+  [data-dsh-market-root] [class*="irow"]:not([class*="irowActions"]):not([class*="irowTrailing"]) {
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 4px 10px !important;
+  }
+  [role="dialog"] [class*="irow"]:not([class*="irowActions"]):not([class*="irowTrailing"]) > :first-child,
+  [data-dsh-market-root] [class*="irow"]:not([class*="irowActions"]):not([class*="irowTrailing"]) > :first-child {
+    flex: 1 1 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+  [role="dialog"] [class*="irow"] [class*="spec"],
+  [role="dialog"] [class*="irow"] [class*="nm"],
+  [data-dsh-market-root] [class*="irow"] [class*="spec"],
+  [data-dsh-market-root] [class*="irow"] [class*="nm"] {
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: 100% !important;
+  }
+
   /* ---------- dsh-usage-stats polish: usage & balance panel ----------
      The panel's stats row shows three token counters side by side
      (today / month / total). The counters use tabular nowrap figures whose
@@ -7025,6 +7256,17 @@ exports.COMPAT_CSS = `@media (max-width: 1023px) and (pointer: coarse) {
      :has(> :first-child > :last-child > button) gate (settings sheet only;
      export dialog and directory picker stay excluded). Nothing to restore
      here — do not re-add behind a frame selector. */
+  /* Completely hide the openDocument config file button on all mobile screens */
+  [data-slot="settings.action"],
+  [class*="me01iq_action"],
+  [role="dialog"] button:has(svg):has(path[d*="M14"]),
+  button[title*="配置文件"],
+  button[aria-label*="配置文件"] {
+    display: none !important;
+    pointer-events: none !important;
+    visibility: hidden !important;
+  }
+
   /* Setting rows: no mobile rework — the host renders compact space-between
      rows natively (.Pt1bsG_row: text left, control right, 16px vertical
      padding, .5px divider). The previous "stack each row" rule family
@@ -7698,7 +7940,6 @@ exports.COMPAT_CSS = `@media (max-width: 1023px) and (pointer: coarse) {
     }
   }
 }
-
 `;
 };
 __modules["styles/misc.css.js"] = function (require, module, exports) {
@@ -8406,8 +8647,12 @@ function installSessionMenuDelete(ctx) {
                 // the right follow-up after deleting the current session; on the
                 // desktop layout (wide touch) the same call would collapse the
                 // always-visible sidebar panel, so gate it on the mobile query.
+                // toggleDrawer keeps that semantics (it falls back to the plain toggle
+                // when the drawer is not open) while making the close a late commit,
+                // so the marker cannot flip while the column is still painted — the
+                // window in which the drawer band covers an open modal (2026-09-25).
                 if (wasCurrent && window.matchMedia(phone_chrome_ts_1.MOBILE_QUERY).matches)
-                    ctx.layout.toggleSidebar();
+                    (0, phone_chrome_ts_1.toggleDrawer)(ctx);
             });
             host.appendChild(backdrop);
             backdrop.appendChild(card);
@@ -9279,6 +9524,102 @@ function installModelMenuAnchor(ctx) {
     });
 }
 };
+__modules["effects/shortcut-modal-keyboard-guard.js"] = function (require, module, exports) {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.installShortcutModalKeyboardGuard = installShortcutModalKeyboardGuard;
+const phone_chrome_ts_1 = require("./effects/phone-chrome.js");
+/**
+ * Mobile guard: the keyboard-shortcut modal must not raise the soft keyboard
+ * by itself.
+ *
+ * `dsh-client-ui-shortcuts` renders its search field with the host marker
+ * `data-modal-autofocus` (`<input data-modal-autofocus …/>`), and the
+ * primitives Modal focuses that field when the modal mounts. On desktop that
+ * is the right default. On a phone it costs the user half the screen the
+ * moment the sheet opens — the page is a shortcut EDITOR and the search box is
+ * its secondary affordance — and it also makes the sheet jump, because the
+ * modal is sized by `100dvh`: the keyboard shrinking the viewport resizes it
+ * (measured 2026-09-25: `dvh` 844 → 520 takes the dialog from 600px to 496px,
+ * i.e. the card snaps right after it appears; on the host's centered card the
+ * same change moved the top edge 152 → 84, the earlier 「抽搐」 report).
+ *
+ * Why not the own-property shadow `composer-keyboard-guard.ts` uses: that
+ * focus happens during React's COMMIT (the Modal's layout-effect path), which
+ * is still inside the task that inserted the node. A MutationObserver callback
+ * is a microtask and therefore runs AFTER it — measured: with the own no-op
+ * `focus` already installed on the field, `document.activeElement` was still
+ * the field. So the guard has to be in place BEFORE the modal is inserted,
+ * which leaves exactly one synchronous hook: the method itself. While either
+ * modal of this family is in the DOM we shadow `HTMLInputElement.prototype.focus`
+ * and no-op it for the shortcut modal's autofocus field; the shadow is removed
+ * as soon as neither modal is present (and on dispose), so nothing outlives the
+ * user's visit to that sheet.
+ *
+ * A TAP is unaffected: the browser focuses natively, and the shadow only
+ * replaces the JS method. Search therefore stays one tap away, and the shadow
+ * also stops the host's `modifiedCount`-driven re-focus from pulling the caret
+ * out of a field the user is already using.
+ *
+ * DOM contract (verified against 0.1.7-rc.2):
+ * - `[data-shortcut-modal="settings"]` — the settings sheet (the only opener).
+ * - `[data-shortcut-modal="shortcuts"]` — the shortcut modal.
+ * - `[data-modal-autofocus]` — the field the Modal focuses on mount.
+ * Re-audit all three when the host or dsh-client-ui-shortcuts upgrades.
+ */
+const SETTINGS_MODAL = '[data-shortcut-modal="settings"]';
+const SHORTCUT_MODAL = '[data-shortcut-modal="shortcuts"]';
+/** The field the Modal's mount-time focus must not reach, on phones only. */
+const AUTOFOCUS_FIELD = SHORTCUT_MODAL + ' [data-modal-autofocus]';
+/**
+ * Keep the shortcut modal's search field from grabbing focus (and the soft
+ * keyboard) by itself, on the mobile breakpoint only.
+ * @param ctx - client root context.
+ */
+function installShortcutModalKeyboardGuard(ctx) {
+    (0, phone_chrome_ts_1.installMobileEffect)(ctx, 'dsh-web-mobile: shortcut modal keyboard guard', () => {
+        const proto = HTMLInputElement.prototype;
+        // Captured once per arming so restore always puts the real method back.
+        let original = null;
+        const arm = () => {
+            if (original !== null)
+                return;
+            const previous = proto.focus;
+            original = previous;
+            proto.focus = function focus(options) {
+                if (this.matches(AUTOFOCUS_FIELD))
+                    return;
+                previous.call(this, options);
+            };
+        };
+        const disarm = () => {
+            if (original === null)
+                return;
+            proto.focus = original;
+            original = null;
+        };
+        const sync = () => {
+            const present = document.querySelector(SETTINGS_MODAL) !== null ||
+                document.querySelector(SHORTCUT_MODAL) !== null;
+            if (present)
+                arm();
+            else
+                disarm();
+        };
+        // childList only (no subtree): both modal roots are portaled to body as
+        // direct children, and a subtree observer would run on every mutation the
+        // app makes. The settings sheet is present before the shortcut modal mounts,
+        // so the shadow is already installed when the Modal focuses its field.
+        const observer = new MutationObserver(sync);
+        observer.observe(document.body, { childList: true });
+        sync();
+        return () => {
+            observer.disconnect();
+            disarm();
+        };
+    });
+}
+};
 __modules["core/layout-compat.js"] = function (require, module, exports) {
 "use strict";
 // The layout service face drifted between host generations. rc.6's ILayout
@@ -9569,32 +9910,6 @@ function installPanelRowExit(ctx, exitPanel) {
     });
 }
 };
-__modules["core/raf-scheduler.js"] = function (require, module, exports) {
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.createRafScheduler = createRafScheduler;
-function createRafScheduler(raf, caf) {
-    let pending = 0;
-    let queued = false;
-    return {
-        schedule(fn) {
-            if (queued)
-                return;
-            queued = true;
-            pending = raf(() => {
-                queued = false;
-                fn();
-            });
-        },
-        cancel() {
-            if (!queued)
-                return;
-            caf(pending);
-            queued = false;
-        },
-    };
-}
-};
 __modules["debug.js"] = function (require, module, exports) {
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -9783,9 +10098,9 @@ const composer_plus_toggle_ts_1 = require("./effects/composer-plus-toggle.js");
 const workspace_chip_toggle_ts_1 = require("./effects/workspace-chip-toggle.js");
 const team_chip_toggle_ts_1 = require("./effects/team-chip-toggle.js");
 const model_menu_anchor_ts_1 = require("./effects/model-menu-anchor.js");
+const shortcut_modal_keyboard_guard_ts_1 = require("./effects/shortcut-modal-keyboard-guard.js");
 const aionui_compat_ts_1 = require("./effects/aionui-compat.js");
 const panel_exit_ts_1 = require("./effects/panel-exit.js");
-const raf_scheduler_ts_1 = require("./core/raf-scheduler.js");
 const debug_ts_1 = require("./debug.js");
 const locales_ts_1 = require("./i18n/locales.js");
 /** Required services (cordis fiber inject — the loader passes all module exports as an object plugin). */
@@ -9823,123 +10138,6 @@ function apply(ctx) {
             tag.remove();
         };
     }, 'dsh-web-mobile: styles');
-    // Hard-fix the installed-plugins list text layout: the host market UI
-    // injects its own CSS after this plugin's stylesheet, so CSS overrides can
-    // be beaten. Inline !important styles win over every external rule. Keep
-    // the selector on outer rows only; irowActions/irowTrailing are nested
-    // flex containers and must retain the market's own action geometry.
-    ctx.effect(() => {
-        const mq = window.matchMedia(phone_chrome_ts_1.MOBILE_QUERY);
-        const rowSelector = '[class*="irow"]:not([class*="irowActions"]):not([class*="irowTrailing"])';
-        const set = (el, props) => {
-            for (const [key, value] of Object.entries(props)) {
-                el.style.setProperty(key, value, 'important');
-            }
-        };
-        const unset = (el, props) => {
-            for (const key of props)
-                el.style.removeProperty(key);
-        };
-        const rowProps = ['flex-wrap', 'align-items', 'gap'];
-        const firstProps = ['flex', 'max-width', 'min-width'];
-        const textProps = ['white-space', 'overflow', 'text-overflow', 'max-width'];
-        const clear = () => {
-            document.querySelectorAll(rowSelector).forEach((row) => {
-                unset(row, rowProps);
-                const first = row.children[0];
-                if (first)
-                    unset(first, firstProps);
-                row.querySelectorAll(':scope > button, :scope > [class*="owner"], :scope > [class*="grow"]').forEach((el) => {
-                    unset(el, ['order']);
-                });
-                const spec = row.querySelector('[class*="spec"]');
-                const nm = row.querySelector('[class*="nm"]');
-                if (spec)
-                    unset(spec, textProps);
-                if (nm)
-                    unset(nm, textProps);
-            });
-        };
-        const apply = () => {
-            // The market rows only exist while the market UI is mounted (inside a
-            // settings dialog). Skip the full-document class-substring scan on every
-            // streamed mutation frame with no dialog open; dshmarket keeps the
-            // data-dsh-market-root marker (1.20.x), [role="dialog"] covers the
-            // settings dialog generically so a marker change degrades to cost, not
-            // to a silently dead effect.
-            if (document.querySelector('[data-dsh-market-root], [role="dialog"]') === null)
-                return;
-            document.querySelectorAll(rowSelector).forEach((row) => {
-                set(row, {
-                    'flex-wrap': 'wrap',
-                    'align-items': 'center',
-                    'gap': '4px 10px',
-                });
-                const first = row.children[0];
-                if (first) {
-                    set(first, {
-                        'flex': '1 1 100%',
-                        'max-width': '100%',
-                        'min-width': '0',
-                    });
-                }
-                const spec = row.querySelector('[class*="spec"]');
-                const nm = row.querySelector('[class*="nm"]');
-                if (spec) {
-                    set(spec, {
-                        'white-space': 'nowrap',
-                        'overflow': 'hidden',
-                        'text-overflow': 'ellipsis',
-                        'max-width': '100%',
-                    });
-                }
-                if (nm) {
-                    set(nm, {
-                        'white-space': 'nowrap',
-                        'overflow': 'hidden',
-                        'text-overflow': 'ellipsis',
-                        'max-width': '100%',
-                    });
-                }
-            });
-        };
-        const arm = () => {
-            clear();
-            if (mq.matches)
-                apply();
-        };
-        arm();
-        // Streaming floods this observer with document-wide childList batches;
-        // coalesce to one apply per frame and re-check the breakpoint at flush
-        // time so a queued callback never writes mobile styles on desktop.
-        const scheduler = (0, raf_scheduler_ts_1.createRafScheduler)((cb) => window.requestAnimationFrame(cb), (id) => window.cancelAnimationFrame(id));
-        const mo = new MutationObserver((records) => {
-            if (records) {
-                let hasNonTyping = false;
-                for (const r of records) {
-                    const t = r.target;
-                    const el = t && (t.nodeType === 1 ? t : t.parentElement);
-                    if (!el || !el.closest('[contenteditable], [data-input-scroll], [class*="_composer"], [class*="composer"]')) {
-                        hasNonTyping = true;
-                        break;
-                    }
-                }
-                if (!hasNonTyping)
-                    return;
-            }
-            if (mq.matches)
-                scheduler.schedule(() => { if (mq.matches)
-                    apply(); });
-        });
-        mo.observe(document.documentElement, { childList: true, subtree: true });
-        mq.addEventListener('change', arm);
-        return () => {
-            scheduler.cancel();
-            mo.disconnect();
-            mq.removeEventListener('change', arm);
-            clear();
-        };
-    }, 'dsh-web-mobile: installed-list-inline-styles');
     // Leaving a sidebar panel. The host's panels replace the main area and ship
     // no way back, so every exit route (system back, re-tapping the selected
     // panel row, the FAB) shares this one action.
@@ -9992,6 +10190,11 @@ function apply(ctx) {
     // Model/reasoning menu portals to <body>; the CSS centering rule died with the
     // portal move, so re-anchor it on the trigger here (owner report: opens far left).
     (0, model_menu_anchor_ts_1.installModelMenuAnchor)(ctx);
+    // Shortcut modal (settings → 通用设置 → 快捷键): the host focuses its search
+    // field on open, which raises the soft keyboard over a page the user came to
+    // EDIT, and the keyboard shrinking the viewport resizes the sheet (owner
+    // report: 「打开的时候还是会闪，而且还会唤起键盘」).
+    (0, shortcut_modal_keyboard_guard_ts_1.installShortcutModalKeyboardGuard)(ctx);
     (0, phone_chrome_ts_1.installPhoneChrome)(ctx);
     (0, aionui_compat_ts_1.installAionuiCompat)(ctx);
     // Debug badge (?mobile-nav-debug=1): live state overlay for phone-side
