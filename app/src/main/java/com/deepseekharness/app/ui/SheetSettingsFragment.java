@@ -138,11 +138,11 @@ public class SheetSettingsFragment extends Fragment {
         // 4. 低位自动恢复默认高度开关（DshaToggle 纯 Skia 自绘）
         DshaToggle autoRestoreToggle = v.findViewById(R.id.sheet_settings_auto_restore_toggle);
         if (autoRestoreToggle != null) {
-            autoRestoreToggle.setChecked(cfg.isSheetAutoRestoreHeight(), false, false);
+            autoRestoreToggle.setChecked(cfg.isSheetAutoRestoreDefault(), false, false);
             autoRestoreToggle.setOnCheckedChangeListener((toggle, isChecked) -> {
-                cfg.setSheetAutoRestoreHeight(isChecked);
+                cfg.setSheetAutoRestoreDefault(isChecked);
                 Toast.makeText(requireContext(),
-                        isChecked ? "已开启低于 45% 自动恢复默认高度" : "已关闭低位自动恢复",
+                        isChecked ? "已开启：抽屉低于 45% 时下次自动回弹至默认高度" : "已关闭：抽屉保持上次停留高度",
                         Toast.LENGTH_SHORT).show();
             });
             View autoRestoreRow = v.findViewById(R.id.sheet_settings_auto_restore_row);
@@ -193,11 +193,11 @@ public class SheetSettingsFragment extends Fragment {
             });
         }
 
-        // 7. 默认展开高度
+        // 7. 抽屉默认展开高度与吸附档位 (30~95%)
         EditText heightInput = v.findViewById(R.id.sheet_settings_height_input);
         Button heightSave = v.findViewById(R.id.sheet_settings_height_save);
         if (heightInput != null) {
-            heightInput.setText(String.valueOf(cfg.getSheetDefaultHeight()));
+            heightInput.setText(String.valueOf(cfg.getSheetHeightPercent()));
         }
         if (heightSave != null) {
             heightSave.setOnClickListener(x -> {
@@ -206,295 +206,357 @@ public class SheetSettingsFragment extends Fragment {
                     val = Integer.parseInt(heightInput.getText().toString().trim());
                 } catch (Exception ignored) {}
                 if (val < 30 || val > 95) {
-                    Toast.makeText(requireContext(), "请输入 30 ~ 95 之间的数值", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(requireContext(), "请输入 30 ~ 95 之间的百分比", Toast.LENGTH_SHORT).show();
                     return;
                 }
-                cfg.setSheetDefaultHeight(val);
-                Toast.makeText(requireContext(), "已保存默认展开高度为 " + val + "%（下次唤起抽屉生效）", Toast.LENGTH_SHORT).show();
+                cfg.setSheetHeightPercent(val);
+                Toast.makeText(requireContext(), "已将默认高度与吸附档位设为 " + val + "%", Toast.LENGTH_SHORT).show();
             });
         }
 
-        // 8. 左右屏幕间距
+        // 8. 左右屏幕独立边距 (0~100 dp)
         EditText marginLeftInput = v.findViewById(R.id.sheet_settings_margin_left_input);
         EditText marginRightInput = v.findViewById(R.id.sheet_settings_margin_right_input);
         Button marginSave = v.findViewById(R.id.sheet_settings_margin_save);
-        if (marginLeftInput != null) {
+        if (marginLeftInput != null && marginRightInput != null) {
             marginLeftInput.setText(String.valueOf(cfg.getSheetMarginLeft()));
-        }
-        if (marginRightInput != null) {
             marginRightInput.setText(String.valueOf(cfg.getSheetMarginRight()));
         }
         if (marginSave != null) {
             marginSave.setOnClickListener(x -> {
-                int left = 0;
-                int right = 0;
+                int l = 0, r = 0;
                 try {
-                    left = Integer.parseInt(marginLeftInput.getText().toString().trim());
+                    l = Integer.parseInt(marginLeftInput.getText().toString().trim());
+                    r = Integer.parseInt(marginRightInput.getText().toString().trim());
                 } catch (Exception ignored) {}
-                try {
-                    right = Integer.parseInt(marginRightInput.getText().toString().trim());
-                } catch (Exception ignored) {}
-                if (left < 0 || left > 60 || right < 0 || right > 60) {
-                    Toast.makeText(requireContext(), "边距请输入 0 ~ 60 dp 之间的数值", Toast.LENGTH_SHORT).show();
+                if (l < 0 || l > 100 || r < 0 || r > 100) {
+                    Toast.makeText(requireContext(), "边距建议在 0 ~ 100 dp 之间", Toast.LENGTH_SHORT).show();
                     return;
                 }
-                cfg.setSheetMarginLeft(left);
-                cfg.setSheetMarginRight(right);
-                Toast.makeText(requireContext(), "已保存左右屏幕间距（左 " + left + " dp，右 " + right + " dp）", Toast.LENGTH_SHORT).show();
+                cfg.setSheetMarginLeft(l);
+                cfg.setSheetMarginRight(r);
+                Toast.makeText(requireContext(), "边距已保存：左 " + l + "dp，右 " + r + "dp（下次唤起生效）", Toast.LENGTH_SHORT).show();
             });
         }
 
         return v;
     }
 
-    private static String getPaletteStyleTitle(int style) {
-        switch (style) {
-            case 0: return "浮雕柔和 (Tonal Spot)";
-            case 1: return "中性低饱和 (Neutral)";
-            case 2: return "鲜明浓郁 (Vibrant)";
-            case 3: return "富表现力 (Expressive)";
-            case 4: return "丰富多彩 (Rainbow)";
-            case 5: return "高饱和度 (Fruit Salad)";
-            case 6: return "单色灰阶 (Monochrome)";
-            case 7: return "保真取色 (Fidelity)";
-            case 8: return "内容匹配 (Content)";
-            default: return "浮雕柔和 (Tonal Spot)";
+    private static int dp(Context ctx, int v) {
+        return Math.round(v * ctx.getResources().getDisplayMetrics().density);
+    }
+
+    public static String getPaletteStyleTitle(String style) {
+        if (style == null) return "Tonal Spot";
+        switch (style.toLowerCase()) {
+            case "neutral": return "Neutral";
+            case "vibrant": return "Vibrant";
+            case "expressive": return "Expressive";
+            case "rainbow": return "Rainbow";
+            case "fruit_salad": return "Fruit Salad";
+            case "monochrome": return "Monochrome";
+            case "fidelity": return "Fidelity";
+            case "tonal_spot":
+            default:
+                return "Tonal Spot";
         }
     }
 
-    private static String getColorSpecTitle(int spec) {
-        switch (spec) {
-            case 0: return "Material 3 Expressive 2025";
-            case 1: return "Material 3 (Classic)";
-            case 2: return "Material You (Monet)";
-            default: return "Material 3 Expressive 2025";
+    public static String getColorSpecTitle(String spec) {
+        if ("spec_2021".equalsIgnoreCase(spec)) {
+            return "Material 3 2021";
+        }
+        return "Material 3\nExpressive 2025";
+    }
+
+    public static int[] getStylePreviewColors(String style, int seedColor) {
+        float[] hsl = new float[3];
+        ColorUtils.colorToHSL(seedColor, hsl);
+        float h = hsl[0];
+        String s = style != null ? style.toLowerCase() : "tonal_spot";
+        switch (s) {
+            case "neutral":
+                return new int[]{
+                        ColorUtils.HSLToColor(new float[]{h, 0.12f, 0.45f}),
+                        ColorUtils.HSLToColor(new float[]{h, 0.08f, 0.72f}),
+                        ColorUtils.HSLToColor(new float[]{(h + 15f) % 360f, 0.18f, 0.85f})
+                };
+            case "vibrant":
+                return new int[]{
+                        ColorUtils.HSLToColor(new float[]{h, 0.95f, 0.48f}),
+                        ColorUtils.HSLToColor(new float[]{h, 0.65f, 0.72f}),
+                        ColorUtils.HSLToColor(new float[]{(h + 50f) % 360f, 0.75f, 0.85f})
+                };
+            case "expressive":
+                float eh = (h + 120f) % 360f;
+                return new int[]{
+                        ColorUtils.HSLToColor(new float[]{eh, 0.85f, 0.42f}),
+                        ColorUtils.HSLToColor(new float[]{eh, 0.45f, 0.72f}),
+                        ColorUtils.HSLToColor(new float[]{(eh + 120f) % 360f, 0.55f, 0.85f})
+                };
+            case "rainbow":
+                return new int[]{
+                        ColorUtils.HSLToColor(new float[]{h, 0.85f, 0.45f}),
+                        ColorUtils.HSLToColor(new float[]{(h + 30f) % 360f, 0.35f, 0.72f}),
+                        ColorUtils.HSLToColor(new float[]{(h + 300f) % 360f, 0.65f, 0.85f})
+                };
+            case "fruit_salad":
+                float fh = (h - 50f + 360f) % 360f;
+                return new int[]{
+                        ColorUtils.HSLToColor(new float[]{fh, 0.85f, 0.40f}),
+                        ColorUtils.HSLToColor(new float[]{fh, 0.45f, 0.72f}),
+                        ColorUtils.HSLToColor(new float[]{(fh + 70f) % 360f, 0.55f, 0.85f})
+                };
+            case "monochrome":
+                return new int[]{
+                        Color.parseColor("#1E293B"),
+                        Color.parseColor("#64748B"),
+                        Color.parseColor("#94A3B8")
+                };
+            case "fidelity":
+                return new int[]{
+                        ColorUtils.HSLToColor(new float[]{h, 0.85f, 0.45f}),
+                        ColorUtils.HSLToColor(new float[]{h, 0.45f, 0.72f}),
+                        ColorUtils.HSLToColor(new float[]{(h + 180f) % 360f, 0.65f, 0.48f})
+                };
+            case "tonal_spot":
+            default:
+                return new int[]{
+                        ColorUtils.HSLToColor(new float[]{h, 0.75f, 0.45f}),
+                        ColorUtils.HSLToColor(new float[]{h, 0.35f, 0.72f}),
+                        ColorUtils.HSLToColor(new float[]{(h + 60f) % 360f, 0.45f, 0.85f})
+                };
         }
     }
 
-    private static void updatePaletteStyleDots(LinearLayout container, int style, int seedColor) {
-        container.removeAllViews();
-        Context ctx = container.getContext();
-        int[] palette = MonetThemeHelper.generatePaletteColors(seedColor, style, false);
-        int[] previewIndices = new int[]{1, 5, 8}; // Primary, Container, Accent
-        for (int idx : previewIndices) {
-            if (idx >= palette.length) continue;
-            View dot = new View(ctx);
-            int size = dp(ctx, 12);
+    private static View createPaletteDotsView(Context context, int[] colors) {
+        LinearLayout dots = new LinearLayout(context);
+        dots.setOrientation(LinearLayout.HORIZONTAL);
+        dots.setGravity(Gravity.CENTER_VERTICAL);
+        int size = dp(context, 8);
+        int gap = dp(context, 4);
+        for (int i = 0; i < colors.length; i++) {
+            View dot = new View(context);
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(size, size);
-            lp.setMarginEnd(dp(ctx, 4));
+            if (i > 0) lp.setMarginStart(gap);
             dot.setLayoutParams(lp);
             GradientDrawable d = new GradientDrawable();
             d.setShape(GradientDrawable.OVAL);
-            d.setColor(palette[idx]);
+            d.setColor(colors[i]);
             dot.setBackground(d);
-            container.addView(dot);
+            dots.addView(dot);
         }
+        return dots;
     }
 
-    private static void showPaletteStyleDialog(Context ctx, ConfigStore cfg, TextView styleValueView, LinearLayout styleDotsView) {
-        Dialog dialog = new Dialog(ctx);
+    private void updatePaletteStyleDots(LinearLayout dotsContainer, String style, int seedColor) {
+        if (dotsContainer == null || getContext() == null) return;
+        dotsContainer.removeAllViews();
+        int[] colors = getStylePreviewColors(style, seedColor);
+        dotsContainer.addView(createPaletteDotsView(getContext(), colors));
+    }
+
+    private void showPaletteStyleDialog(Context context, ConfigStore cfg, TextView styleValue, LinearLayout styleDots) {
+        Dialog dialog = new Dialog(context);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
-        dialog.setContentView(buildPaletteStyleDialogView(ctx, cfg, dialog, styleValueView, styleDotsView));
-        Window window = dialog.getWindow();
-        if (window != null) {
-            window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-            window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            window.setGravity(Gravity.CENTER);
+
+        Window win = dialog.getWindow();
+        if (win != null) {
+            win.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         }
-        dialog.show();
-    }
 
-    private static View buildPaletteStyleDialogView(Context ctx, ConfigStore cfg, Dialog dialog, TextView styleValueView, LinearLayout styleDotsView) {
-        boolean isDark = ThemeController.isDark(ctx);
-        int seedColor = MonetThemeHelper.getWallpaperSeedColor(ctx);
-
-        LinearLayout root = new LinearLayout(ctx);
+        LinearLayout root = new LinearLayout(context);
         root.setOrientation(LinearLayout.VERTICAL);
-        int pad = dp(ctx, 20);
+        int pad = dp(context, 16);
         root.setPadding(pad, pad, pad, pad);
+
         GradientDrawable bg = new GradientDrawable();
-        bg.setCornerRadius(dp(ctx, 24));
-        bg.setColor(ctx.getColor(R.color.card));
+        bg.setShape(GradientDrawable.RECTANGLE);
+        bg.setCornerRadius(dp(context, 18));
+        boolean dark = cfg.isSheetInvertColor();
+        bg.setColor(dark ? Color.parseColor("#F01E222A") : Color.parseColor("#F8FFFFFF"));
+        bg.setStroke(dp(context, 1), dark ? Color.parseColor("#354A5568") : Color.parseColor("#20000000"));
         root.setBackground(bg);
 
-        TextView title = new TextView(ctx);
-        title.setText("选择莫奈色彩风格");
-        title.setTextSize(18);
-        title.setTextColor(ctx.getColor(R.color.text));
-        title.setTypeface(title.getTypeface(), android.graphics.Typeface.BOLD);
-        title.setPadding(0, 0, 0, dp(ctx, 16));
+        TextView title = new TextView(context);
+        title.setText("选择色彩风格");
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17);
+        title.setTextColor(dark ? Color.parseColor("#E2E8F0") : Color.parseColor("#0F172A"));
+        title.setTypeface(null, android.graphics.Typeface.BOLD);
+        title.setPadding(dp(context, 8), dp(context, 4), dp(context, 8), dp(context, 12));
         root.addView(title);
 
-        ScrollView scroll = new ScrollView(ctx);
-        LinearLayout list = new LinearLayout(ctx);
+        ScrollView sv = new ScrollView(context);
+        LinearLayout list = new LinearLayout(context);
         list.setOrientation(LinearLayout.VERTICAL);
 
-        Map<Integer, String> styles = new LinkedHashMap<>();
-        styles.put(0, "浮雕柔和 (Tonal Spot)\nAndroid 标准壁纸取色，色调柔和平衡");
-        styles.put(1, "中性低饱和 (Neutral)\n低饱和度冷淡色调，几乎不偏色");
-        styles.put(2, "鲜明浓郁 (Vibrant)\n色彩更浓郁饱满，视觉冲击力强");
-        styles.put(3, "富表现力 (Expressive)\n强调色彩反差，主色与强调色跨度大");
-        styles.put(4, "丰富多彩 (Rainbow)\n活泼多色阶过渡");
-        styles.put(5, "高饱和度 (Fruit Salad)\n如同水果沙拉般明亮跳脱的色彩搭配");
-        styles.put(6, "单色灰阶 (Monochrome)\n纯粹无彩度的优雅灰黑白设计");
-        styles.put(7, "保真取色 (Fidelity)\n极高保真度还原壁纸原本的核心色度");
-        styles.put(8, "内容匹配 (Content)\n针对多媒体界面优化的适应性取色");
+        Map<String, String> styles = new LinkedHashMap<>();
+        styles.put("tonal_spot", "Tonal Spot");
+        styles.put("neutral", "Neutral");
+        styles.put("vibrant", "Vibrant");
+        styles.put("expressive", "Expressive");
+        styles.put("rainbow", "Rainbow");
+        styles.put("fruit_salad", "Fruit Salad");
+        styles.put("monochrome", "Monochrome");
+        styles.put("fidelity", "Fidelity");
 
-        int currentStyle = cfg.getSheetPaletteStyle();
+        String current = cfg.getSheetPaletteStyle();
+        int seedColor = MonetThemeHelper.getWallpaperSeedColor(context);
 
-        for (Map.Entry<Integer, String> entry : styles.entrySet()) {
-            final int style = entry.getKey();
-            String desc = entry.getValue();
+        for (Map.Entry<String, String> entry : styles.entrySet()) {
+            final String key = entry.getKey();
+            final String name = entry.getValue();
 
-            LinearLayout item = new LinearLayout(ctx);
+            LinearLayout item = new LinearLayout(context);
             item.setOrientation(LinearLayout.HORIZONTAL);
             item.setGravity(Gravity.CENTER_VERTICAL);
-            item.setPadding(dp(ctx, 12), dp(ctx, 12), dp(ctx, 12), dp(ctx, 12));
+            item.setPadding(dp(context, 12), dp(context, 10), dp(context, 12), dp(context, 10));
             item.setClickable(true);
             item.setFocusable(true);
 
-            TypedValue outValue = new TypedValue();
-            ctx.getTheme().resolveAttribute(android.R.attr.selectableItemBackground, outValue, true);
-            item.setBackgroundResource(outValue.resourceId);
+            TypedValue tv = new TypedValue();
+            context.getTheme().resolveAttribute(android.R.attr.selectableItemBackground, tv, true);
+            item.setBackgroundResource(tv.resourceId);
 
-            LinearLayout dots = new LinearLayout(ctx);
-            dots.setOrientation(LinearLayout.HORIZONTAL);
-            dots.setGravity(Gravity.CENTER_VERTICAL);
-            updatePaletteStyleDots(dots, style, seedColor);
-            item.addView(dots);
+            int[] previewColors = getStylePreviewColors(key, seedColor);
+            item.addView(createPaletteDotsView(context, previewColors));
 
-            TextView label = new TextView(ctx);
-            label.setText(desc);
-            label.setTextSize(14);
-            label.setTextColor(ctx.getColor(style == currentStyle ? R.color.primary : R.color.text));
-            if (style == currentStyle) {
-                label.setTypeface(label.getTypeface(), android.graphics.Typeface.BOLD);
+            TextView label = new TextView(context);
+            label.setText(name);
+            label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+            label.setTextColor(dark ? Color.parseColor("#E2E8F0") : Color.parseColor("#1E293B"));
+            if (key.equalsIgnoreCase(current)) {
+                label.setTextColor(context.getColor(R.color.primary));
+                label.setTypeface(null, android.graphics.Typeface.BOLD);
             }
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-            lp.setMarginStart(dp(ctx, 10));
+            lp.setMarginStart(dp(context, 12));
             label.setLayoutParams(lp);
             item.addView(label);
 
-            if (style == currentStyle) {
-                TextView check = new TextView(ctx);
+            if (key.equalsIgnoreCase(current)) {
+                TextView check = new TextView(context);
                 check.setText("✓");
-                check.setTextSize(16);
-                check.setTextColor(ctx.getColor(R.color.primary));
-                check.setTypeface(check.getTypeface(), android.graphics.Typeface.BOLD);
+                check.setTextColor(context.getColor(R.color.primary));
+                check.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+                check.setTypeface(null, android.graphics.Typeface.BOLD);
                 item.addView(check);
             }
 
-            item.setOnClickListener(v -> {
-                cfg.setSheetPaletteStyle(style);
-                if (styleValueView != null) {
-                    styleValueView.setText(getPaletteStyleTitle(style) + " ▾");
+            item.setOnClickListener(v2 -> {
+                cfg.setSheetPaletteStyle(key);
+                if (styleValue != null) {
+                    styleValue.setText(name + " ▾");
                 }
-                if (styleDotsView != null) {
-                    updatePaletteStyleDots(styleDotsView, style, seedColor);
+                if (styleDots != null) {
+                    updatePaletteStyleDots(styleDots, key, seedColor);
                 }
-                MonetThemeHelper.clearCache(ctx);
-                QuickChatSheetActivity.refreshThemeFromConfig(ctx);
+                MonetThemeHelper.clearCache(context);
+                QuickChatSheetActivity.refreshThemeFromConfig(context);
                 dialog.dismiss();
             });
 
             list.addView(item);
         }
 
-        scroll.addView(list);
-        root.addView(scroll);
-        return root;
-    }
+        sv.addView(list);
+        root.addView(sv);
 
-    private static void showColorSpecDialog(Context ctx, ConfigStore cfg, TextView specValueView) {
-        Dialog dialog = new Dialog(ctx);
-        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
-        dialog.setContentView(buildColorSpecDialogView(ctx, cfg, dialog, specValueView));
-        Window window = dialog.getWindow();
-        if (window != null) {
-            window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-            window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            window.setGravity(Gravity.CENTER);
-        }
+        dialog.setContentView(root);
         dialog.show();
     }
 
-    private static View buildColorSpecDialogView(Context ctx, ConfigStore cfg, Dialog dialog, TextView specValueView) {
-        LinearLayout root = new LinearLayout(ctx);
+    private void showColorSpecDialog(Context context, ConfigStore cfg, TextView specValue) {
+        Dialog dialog = new Dialog(context);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+
+        Window win = dialog.getWindow();
+        if (win != null) {
+            win.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        }
+
+        LinearLayout root = new LinearLayout(context);
         root.setOrientation(LinearLayout.VERTICAL);
-        int pad = dp(ctx, 20);
+        int pad = dp(context, 16);
         root.setPadding(pad, pad, pad, pad);
+
         GradientDrawable bg = new GradientDrawable();
-        bg.setCornerRadius(dp(ctx, 24));
-        bg.setColor(ctx.getColor(R.color.card));
+        bg.setShape(GradientDrawable.RECTANGLE);
+        bg.setCornerRadius(dp(context, 18));
+        boolean dark = cfg.isSheetInvertColor();
+        bg.setColor(dark ? Color.parseColor("#F01E222A") : Color.parseColor("#F8FFFFFF"));
+        bg.setStroke(dp(context, 1), dark ? Color.parseColor("#354A5568") : Color.parseColor("#20000000"));
         root.setBackground(bg);
 
-        TextView title = new TextView(ctx);
+        TextView title = new TextView(context);
         title.setText("选择色彩标准");
-        title.setTextSize(18);
-        title.setTextColor(ctx.getColor(R.color.text));
-        title.setTypeface(title.getTypeface(), android.graphics.Typeface.BOLD);
-        title.setPadding(0, 0, 0, dp(ctx, 16));
+        title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17);
+        title.setTextColor(dark ? Color.parseColor("#E2E8F0") : Color.parseColor("#0F172A"));
+        title.setTypeface(null, android.graphics.Typeface.BOLD);
+        title.setPadding(dp(context, 8), dp(context, 4), dp(context, 8), dp(context, 12));
         root.addView(title);
 
-        Map<Integer, String> specs = new LinkedHashMap<>();
-        specs.put(0, "Material 3 Expressive 2025\n谷歌 2025 最新前沿表现力色彩规范，更高饱和与对比");
-        specs.put(1, "Material 3 (Classic)\n经典 Material Design 3 色调体系，严谨低调");
-        specs.put(2, "Material You (Monet)\n原生 Android 12/13 经典莫奈算法，高保真还原");
+        LinearLayout list = new LinearLayout(context);
+        list.setOrientation(LinearLayout.VERTICAL);
 
-        int currentSpec = cfg.getSheetColorSpec();
+        Map<String, String> specs = new LinkedHashMap<>();
+        specs.put("spec_2025", "Material 3 Expressive 2025\n更具层次与表现力的现代调色");
+        specs.put("spec_2021", "Material 3 2021\n经典 Material 3 基础色板");
 
-        for (Map.Entry<Integer, String> entry : specs.entrySet()) {
-            final int spec = entry.getKey();
-            String desc = entry.getValue();
+        String current = cfg.getSheetColorSpec();
 
-            LinearLayout item = new LinearLayout(ctx);
+        for (Map.Entry<String, String> entry : specs.entrySet()) {
+            final String key = entry.getKey();
+            final String desc = entry.getValue();
+
+            LinearLayout item = new LinearLayout(context);
             item.setOrientation(LinearLayout.HORIZONTAL);
             item.setGravity(Gravity.CENTER_VERTICAL);
-            item.setPadding(dp(ctx, 12), dp(ctx, 14), dp(ctx, 12), dp(ctx, 14));
+            item.setPadding(dp(context, 12), dp(context, 12), dp(context, 12), dp(context, 12));
             item.setClickable(true);
             item.setFocusable(true);
 
-            TypedValue outValue = new TypedValue();
-            ctx.getTheme().resolveAttribute(android.R.attr.selectableItemBackground, outValue, true);
-            item.setBackgroundResource(outValue.resourceId);
+            TypedValue tv = new TypedValue();
+            context.getTheme().resolveAttribute(android.R.attr.selectableItemBackground, tv, true);
+            item.setBackgroundResource(tv.resourceId);
 
-            TextView label = new TextView(ctx);
+            TextView label = new TextView(context);
             label.setText(desc);
-            label.setTextSize(14);
-            label.setTextColor(ctx.getColor(spec == currentSpec ? R.color.primary : R.color.text));
-            if (spec == currentSpec) {
-                label.setTypeface(label.getTypeface(), android.graphics.Typeface.BOLD);
+            label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+            label.setLineSpacing(dp(context, 2), 1f);
+            label.setTextColor(dark ? Color.parseColor("#E2E8F0") : Color.parseColor("#1E293B"));
+            if (key.equalsIgnoreCase(current)) {
+                label.setTextColor(context.getColor(R.color.primary));
+                label.setTypeface(null, android.graphics.Typeface.BOLD);
             }
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
             label.setLayoutParams(lp);
             item.addView(label);
 
-            if (spec == currentSpec) {
-                TextView check = new TextView(ctx);
+            if (key.equalsIgnoreCase(current)) {
+                TextView check = new TextView(context);
                 check.setText("✓");
-                check.setTextSize(16);
-                check.setTextColor(ctx.getColor(R.color.primary));
-                check.setTypeface(check.getTypeface(), android.graphics.Typeface.BOLD);
+                check.setTextColor(context.getColor(R.color.primary));
+                check.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+                check.setTypeface(null, android.graphics.Typeface.BOLD);
                 item.addView(check);
             }
 
-            item.setOnClickListener(v -> {
-                cfg.setSheetColorSpec(spec);
-                if (specValueView != null) {
-                    specValueView.setText(getColorSpecTitle(spec) + " ▾");
+            item.setOnClickListener(v2 -> {
+                cfg.setSheetColorSpec(key);
+                if (specValue != null) {
+                    specValue.setText(getColorSpecTitle(key) + " ▾");
                 }
-                MonetThemeHelper.clearCache(ctx);
-                QuickChatSheetActivity.refreshThemeFromConfig(ctx);
+                MonetThemeHelper.clearCache(context);
+                QuickChatSheetActivity.refreshThemeFromConfig(context);
                 dialog.dismiss();
             });
 
-            root.addView(item);
+            list.addView(item);
         }
 
-        return root;
-    }
-
-    private static int dp(Context ctx, int v) {
-        return Math.round(v * ctx.getResources().getDisplayMetrics().density);
+        root.addView(list);
+        dialog.setContentView(root);
+        dialog.show();
     }
 }

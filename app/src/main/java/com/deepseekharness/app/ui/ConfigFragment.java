@@ -1,5 +1,6 @@
 package com.deepseekharness.app.ui;
 
+import android.Manifest;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -188,15 +189,17 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
             });
         }
 
-        if (allFilesStatusText != null) {
-            allFilesStatusText.setText(state.hasAllFilesAccess ? "已授予完全访问权限" : "未授予，点击跳转系统设置授权");
-        }
-        if (a11yStatusText != null) {
-            a11yStatusText.setText(state.isA11yRunning ? "无障碍服务已开启并正在运行" : "服务未开启或已被系统冻结，点击跳转开启");
-        }
-        if (asrStatusText != null && state.asrStatus != null) {
-            asrStatusText.setText(state.asrStatus);
-        }
+        if (allFilesStatusText != null) allFilesStatusText.setText(state.allFilesStatusText);
+        if (a11yStatusText != null) a11yStatusText.setText(state.a11yStatusText);
+        if (asrStatusText != null) asrStatusText.setText(state.asrStatusText);
+    }
+
+    @Override
+    public void onOpenWorkspace() {
+        getParentFragmentManager().beginTransaction()
+                .replace(R.id.fragment_container, new WorkspaceFragment())
+                .addToBackStack("workspace")
+                .commit();
     }
 
     @Override
@@ -205,10 +208,10 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
     }
 
     @Override
-    public void onNavigateToWorkspace() {
-        getParentFragmentManager().beginTransaction()
-                .replace(R.id.fragment_container, new WorkspaceFragment())
-                .addToBackStack("config")
-                .commit();
+    public void onRequestLocationPermission() {
+        requestPermissions(new String[]{
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+        }, 104);
     }
 }
