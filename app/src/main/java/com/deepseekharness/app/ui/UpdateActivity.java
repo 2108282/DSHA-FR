@@ -171,6 +171,12 @@ public final class UpdateActivity extends AppCompatActivity implements UpdateAct
     }
 
     @Override
+    public void finish() {
+        super.finish();
+        overridePendingTransition(R.anim.fragment_pop_enter, R.anim.fragment_pop_exit);
+    }
+
+    @Override
     public void onChannelSelect(boolean isPreview) {
         if (repository != null) {
             repository.setChannel(isPreview ? UpdatePolicy.PREVIEW : UpdatePolicy.STABLE);

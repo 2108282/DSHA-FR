@@ -14,10 +14,12 @@ import androidx.appcompat.app.AlertDialog;
 
 import com.deepseekharness.app.HarnessService;
 import com.deepseekharness.app.HttpShellService;
+import com.deepseekharness.app.R;
 import com.deepseekharness.app.core.ConfigStore;
 import com.deepseekharness.app.core.HarnessController;
-import com.deepseekharness.app.ui.AboutDialog;
+import com.deepseekharness.app.ui.AboutActivity;
 import com.deepseekharness.app.ui.DiagnosticActivity;
+import com.deepseekharness.app.ui.UpdateActivity;
 
 public class SettingsPresenter implements SettingsActions {
 
@@ -72,62 +74,21 @@ public class SettingsPresenter implements SettingsActions {
 
     @Override
     public void onCheckUpdateClick() {
-        String[] options = {
-                "① 升级DSH核心",
-                "② DSHA-FR 客户端与 Magisk/KSU 模块 (Release)"
-        };
-        new AlertDialog.Builder(activity)
-                .setTitle("检查与获取更新")
-                .setItems(options, (d, which) -> {
-                    if (which == 0) {
-                        showDshUpdate();
-                    } else if (which == 1) {
-                        openUrl(AboutDialog.GITHUB_ROOT_URL + "/releases");
-                    }
-                })
-                .setNegativeButton("关闭", null)
-                .show();
-    }
-
-    private void showDshUpdate() {
-        new AlertDialog.Builder(activity)
-                .setTitle("升级DSH核心")
-                .setMessage("当前版本: 请在核心中查看\n\n"
-                        + "可在浏览器查看官方 GitHub 上游最新发布日志，或在终端执行 npm 升级命令:\n\n"
-                        + "npm i -g @deepseek-ai/dsh@（版本号）")
-                .setPositiveButton("查看官方 Release", (d, w) ->
-                        openUrl("https://github.com/deepseek-ai/deepseek-harness/releases"))
-                .setNeutralButton("复制升级命令", (d, w) -> copyText("npm i -g @deepseek-ai/dsh@（版本号）"))
-                .setNegativeButton("返回", null)
-                .show();
-    }
-
-    private void openUrl(String url) {
-        try {
-            activity.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
-        } catch (Throwable t) {
-            Toast.makeText(context, "打开链接失败: " + t.getMessage(), Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    private void copyText(String text) {
-        try {
-            ClipboardManager cm = (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
-            if (cm != null) {
-                cm.setPrimaryClip(ClipData.newPlainText("cmd", text));
-                Toast.makeText(context, "已复制到剪贴板", Toast.LENGTH_SHORT).show();
-            }
-        } catch (Throwable ignored) {}
+        Intent intent = new Intent(context, UpdateActivity.class);
+        activity.startActivity(intent);
+        activity.overridePendingTransition(R.anim.fragment_enter, R.anim.fragment_exit);
     }
 
     @Override
     public void onRunSelftestClick() {
         activity.startActivity(new Intent(context, DiagnosticActivity.class));
+        activity.overridePendingTransition(R.anim.fragment_enter, R.anim.fragment_exit);
     }
 
     @Override
     public void onAboutClick() {
-        activity.startActivity(new Intent(context, com.deepseekharness.app.ui.AboutActivity.class));
+        activity.startActivity(new Intent(context, AboutActivity.class));
+        activity.overridePendingTransition(R.anim.fragment_enter, R.anim.fragment_exit);
     }
 
     @Override

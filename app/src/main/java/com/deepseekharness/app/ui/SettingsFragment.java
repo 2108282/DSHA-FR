@@ -141,6 +141,9 @@ public class SettingsFragment extends Fragment implements SettingsPresenter.View
     public void onOpenSubFragment(int index) {
         if (!isAdded() || index < 0 || index >= TAB_OPTIONS.length) return;
         getParentFragmentManager().beginTransaction()
+                .setCustomAnimations(
+                        R.anim.fragment_enter, R.anim.fragment_exit,
+                        R.anim.fragment_pop_enter, R.anim.fragment_pop_exit)
                 .replace(R.id.fragment_container, TAB_OPTIONS[index].factory.get())
                 .addToBackStack("settings")
                 .commit();

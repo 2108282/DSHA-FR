@@ -88,6 +88,12 @@ public final class DiagnosticActivity extends AppCompatActivity implements Diagn
     }
 
     @Override
+    public void finish() {
+        super.finish();
+        overridePendingTransition(R.anim.fragment_pop_enter, R.anim.fragment_pop_exit);
+    }
+
+    @Override
     public void onRepairClick() {
         if (repository != null) repository.repairNetworkTools();
     }

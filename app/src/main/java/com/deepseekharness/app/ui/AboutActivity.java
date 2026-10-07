@@ -66,6 +66,12 @@ public final class AboutActivity extends AppCompatActivity {
         findViewById(R.id.about_row_license).setOnClickListener(v -> showLicenseDialog());
     }
 
+    @Override
+    public void finish() {
+        super.finish();
+        overridePendingTransition(R.anim.fragment_pop_enter, R.anim.fragment_pop_exit);
+    }
+
     private void openUrl(String url) {
         try {
             startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))
