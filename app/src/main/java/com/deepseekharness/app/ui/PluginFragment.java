@@ -320,8 +320,8 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
         if (pluginBusy != null) pluginBusy.setVisibility(state.isBusy ? View.VISIBLE : View.GONE);
         if (statusText != null) statusText.setText(state.statusMessage);
 
-        // 3. 按钮可用态
-        if (btnPluginInstall != null) btnPluginInstall.setEnabled(state.isInstallButtonEnabled);
+        // 3. 按钮可用态 (保持 HTML 原画鲜亮 primary 色)
+        if (btnPluginInstall != null) btnPluginInstall.setEnabled(!state.isBusy);
         if (linkHint != null) linkHint.setText(state.linkHintText);
 
         boolean notBusy = !state.isBusy;
@@ -481,9 +481,11 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
             holder.description.setText(item.description.isEmpty()
                     ? (item.official ? "官方核心" : item.builtin ? "DSHA 内置插件" : "第三方插件") : item.description);
 
-            // 4. 自绘胶囊开关 (DshaToggle)
+            // 4. 自绘胶囊开关 (DshaToggle - 保护平滑位移动画不被列表刷新打断)
             if (holder.toggle != null) {
-                holder.toggle.setChecked(item.enabled, false);
+                if (holder.toggle.isChecked() != item.enabled) {
+                    holder.toggle.setChecked(item.enabled, false);
+                }
                 holder.toggle.setEnabled(!repository.isBusy() && (item.available || item.enabled));
                 holder.toggle.setOnCheckedChangeListener((t, checked) -> {
                     if (actions != null && checked != item.enabled) {
@@ -511,15 +513,13 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
                 });
             }
 
-            // 6. 展开抽屉内的详情与 4 个小按钮
+            // 6. 展开抽屉内的详情与 4 个小按钮 (移除开发者与权限，仅保留版本与配置路径)
             String configPath = item.builtin
                     ? "/data/adb/dsha/rootfs/root/dsha-" + item.name + "/"
                     : "/data/adb/dsha/rootfs/root/.dsh/plugin-src/" + item.name + "/";
             if (holder.detailText != null) {
-                holder.detailText.setText("开发者：" + (item.builtin ? "DSHA Team" : "社区扩展")
-                        + "\n版本：" + (item.version.isEmpty() ? "未知" : item.version)
+                holder.detailText.setText("版本：" + (item.version.isEmpty() ? "未知" : item.version)
                         + (item.updateAvailable ? "（可更新 " + item.latestVersion + "）" : "")
-                        + "\n权限：网络 · 存储 · 通知"
                         + "\n配置路径：" + configPath);
             }
 

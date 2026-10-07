@@ -141,14 +141,18 @@ public class DshaToggle extends View {
     }
 
     public void setChecked(boolean checked, boolean animate) {
-        if (this.isChecked == checked && animator == null) return;
+        float target = checked ? 1f : 0f;
+        if (this.isChecked == checked) {
+            if (animator != null && animator.isRunning()) return; // 正在朝目标平滑位移中，不打断动画
+            if (progress == target) return;
+        }
         this.isChecked = checked;
 
         if (animator != null) {
             animator.cancel();
+            animator = null;
         }
 
-        float target = checked ? 1f : 0f;
         if (animate && isAttachedToWindow()) {
             animator = ValueAnimator.ofFloat(progress, target);
             animator.setDuration(180);

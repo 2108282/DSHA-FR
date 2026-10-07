@@ -50,15 +50,16 @@
 
                 <TextView
                     android:id="@+id/pluginName"
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:layout_weight="1"
                     android:ellipsize="end"
-                    android:maxLines="1"
+                    android:maxLines="2"
                     android:textColor="@color/text"
-                    android:textSize="15sp"
+                    android:textSize="14.5sp"
                     android:textStyle="bold" />
 
-                <!-- 纯 Skia 自绘胶囊状态徽章 (.badge: height 20px; border-radius 999px) -->
+                <!-- 纯 Skia 自绘胶囊状态徽章 (.badge: height 20px; border-radius 999px; 固定优先保留) -->
                 <com.deepseekharness.app.ui.ModernBadgeView
                     android:id="@+id/pluginStatusBadge"
                     android:layout_width="wrap_content"
