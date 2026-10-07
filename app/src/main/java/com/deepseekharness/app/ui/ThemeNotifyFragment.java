@@ -110,9 +110,12 @@ public final class ThemeNotifyFragment extends Fragment {
         // ==================== 4. 启用悬浮栏开关 ====================
         DshaToggle floatingToggle = v.findViewById(R.id.theme_notify_toggle_floating);
         if (floatingToggle != null) {
-            floatingToggle.setChecked(cfg.isFloatingStatusEnabled(), false, false);
+            boolean isOverlay = requireContext().getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE)
+                    .getBoolean("overlay_stream", false);
+            floatingToggle.setChecked(isOverlay, false, false);
             floatingToggle.setOnCheckedChangeListener((btn, isChecked) -> {
-                cfg.setFloatingStatusEnabled(isChecked);
+                requireContext().getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE).edit()
+                        .putBoolean("overlay_stream", isChecked).apply();
                 Toast.makeText(requireContext(),
                         isChecked ? "屏幕顶部悬浮栏已启用" : "屏幕顶部悬浮栏已关闭",
                         Toast.LENGTH_SHORT).show();
@@ -199,7 +202,9 @@ public final class ThemeNotifyFragment extends Fragment {
             item.setOrientation(LinearLayout.HORIZONTAL);
             item.setGravity(Gravity.CENTER_VERTICAL);
             item.setPadding(dp(16), dp(11), dp(16), dp(11));
-            item.setBackgroundResource(R.drawable.bg_dropdown_item);
+            TypedValue tvBg = new TypedValue();
+            context.getTheme().resolveAttribute(android.R.attr.selectableItemBackground, tvBg, true);
+            item.setBackgroundResource(tvBg.resourceId);
             item.setClickable(true);
             item.setFocusable(true);
 
@@ -214,13 +219,10 @@ public final class ThemeNotifyFragment extends Fragment {
             item.addView(tv, lp);
 
             if (isSelected) {
-                TextView check = new TextView(context);
-                check.setText("✓");
-                check.setTextSize(16);
-                check.setTypeface(null, android.graphics.Typeface.BOLD);
-                check.setTextColor(context.getColor(R.color.primary));
-                check.setGravity(Gravity.CENTER);
-                item.addView(check, new LinearLayout.LayoutParams(dp(22), dp(22)));
+                ImageView check = new ImageView(context);
+                check.setImageResource(R.drawable.ic_check_mini);
+                check.setImageTintList(android.content.res.ColorStateList.valueOf(context.getColor(R.color.primary)));
+                item.addView(check, new LinearLayout.LayoutParams(dp(18), dp(18)));
             }
 
             item.setOnClickListener(v -> {

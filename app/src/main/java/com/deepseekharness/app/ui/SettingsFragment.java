@@ -97,14 +97,10 @@ public class SettingsFragment extends Fragment implements SettingsPresenter.View
 
     @Override
     public void onDestroyView() {
-        if (persistentNotifToggle != null) {
-            persistentNotifToggle.setOnCheckedChangeListener(null);
-        }
         presenter = null;
         actions = null;
         verText = null;
         updateSubText = null;
-        persistentNotifToggle = null;
         super.onDestroyView();
     }
 
