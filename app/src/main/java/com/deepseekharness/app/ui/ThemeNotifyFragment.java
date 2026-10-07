@@ -179,6 +179,7 @@ public final class ThemeNotifyFragment extends Fragment {
         if ("fruit_salad".equals(key)) return "Fruit Salad";
         if ("monochrome".equals(key)) return "Monochrome";
         if ("fidelity".equals(key)) return "Fidelity";
+        if ("content".equals(key)) return "Content";
         return "Tonal Spot";
     }
 
@@ -193,6 +194,7 @@ public final class ThemeNotifyFragment extends Fragment {
         styles.put("fruit_salad", "Fruit Salad");
         styles.put("monochrome", "Monochrome");
         styles.put("fidelity", "Fidelity");
+        styles.put("content", "Content");
 
         String currentKey = context.getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE)
                 .getString(PREF_KEY_PALETTE_STYLE, "tonal_spot");

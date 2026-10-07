@@ -286,6 +286,7 @@ public class SheetSettingsFragment extends Fragment {
         styles.put("fruit_salad", "Fruit Salad");
         styles.put("monochrome", "Monochrome");
         styles.put("fidelity", "Fidelity");
+        styles.put("content", "Content");
 
         String current = cfg.getSheetPaletteStyle();
         int seedColor = MonetThemeHelper.getWallpaperSeedColor(context);
@@ -508,6 +509,12 @@ public class SheetSettingsFragment extends Fragment {
                         ColorUtils.HSLToColor(new float[]{h, 0.85f, 0.45f}),
                         ColorUtils.HSLToColor(new float[]{h, 0.45f, 0.72f}),
                         ColorUtils.HSLToColor(new float[]{(h + 180f) % 360f, 0.65f, 0.48f})
+                };
+            case "content":
+                return new int[]{
+                        ColorUtils.HSLToColor(new float[]{h, Math.min(1.0f, hsl[1] * 1.1f), 0.46f}),
+                        ColorUtils.HSLToColor(new float[]{h, Math.min(1.0f, hsl[1] * 0.7f), 0.72f}),
+                        ColorUtils.HSLToColor(new float[]{(h + 30f) % 360f, Math.min(1.0f, hsl[1] * 0.8f), 0.85f})
                 };
             case "tonal_spot":
             default:
