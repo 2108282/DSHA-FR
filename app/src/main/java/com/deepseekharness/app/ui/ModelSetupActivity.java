@@ -299,15 +299,19 @@ public final class ModelSetupActivity extends AppCompatActivity {
         }
         if (draft.entry != null) {
             capture();
-            new DshaDialogBuilder(this)
-                    .setTitle(t("放弃本次编辑？", "Discard these edits?"))
-                    .setMessage(t("当前未保存的修改将会丢失，确定要退出编辑吗？", "Unsaved changes will be discarded. Are you sure?"))
-                    .setNegativeButton(t("继续编辑", "Keep editing"), null)
-                    .setPositiveButton(t("放弃", "Discard"), (d, w) -> {
-                        draft.clear();
-                        showDirectory();
-                    })
-                    .show();
+            View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_discard_edits, null);
+            AlertDialog dialog = new DshaDialogBuilder(this).setView(dialogView).create();
+            Button btnCancel = dialogView.findViewById(R.id.btnDiscardCancel);
+            Button btnConfirm = dialogView.findViewById(R.id.btnDiscardConfirm);
+            if (btnCancel != null) btnCancel.setOnClickListener(v -> dialog.dismiss());
+            if (btnConfirm != null) {
+                btnConfirm.setOnClickListener(v -> {
+                    dialog.dismiss();
+                    draft.clear();
+                    showDirectory();
+                });
+            }
+            dialog.show();
             return;
         }
         finish();
@@ -389,8 +393,10 @@ public final class ModelSetupActivity extends AppCompatActivity {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(dp(16), dp(13), dp(16), dp(13));
-        row.setBackgroundResource(R.drawable.bg_card_clickable);
+        row.setPadding(dp(16), dp(14), dp(16), dp(14));
+        android.util.TypedValue selVal = new android.util.TypedValue();
+        getTheme().resolveAttribute(android.R.attr.selectableItemBackground, selVal, true);
+        row.setBackgroundResource(selVal.resourceId);
         row.setClickable(true);
         row.setFocusable(true);
 
@@ -519,7 +525,7 @@ public final class ModelSetupActivity extends AppCompatActivity {
         if (parent.getChildCount() > 0) {
             View divider = new View(this);
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1));
-            lp.leftMargin = dp(56);
+            lp.leftMargin = dp(62);
             divider.setLayoutParams(lp);
             divider.setBackgroundColor(getColor(R.color.line_soft));
             parent.addView(divider);
@@ -528,8 +534,10 @@ public final class ModelSetupActivity extends AppCompatActivity {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(dp(12), dp(12), dp(12), dp(12));
-        row.setBackgroundResource(R.drawable.bg_card_clickable);
+        row.setPadding(dp(14), dp(13), dp(14), dp(13));
+        android.util.TypedValue choiceVal = new android.util.TypedValue();
+        getTheme().resolveAttribute(android.R.attr.selectableItemBackground, choiceVal, true);
+        row.setBackgroundResource(choiceVal.resourceId);
         row.setClickable(true);
         row.setFocusable(true);
 

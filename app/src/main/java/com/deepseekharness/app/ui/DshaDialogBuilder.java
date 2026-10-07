@@ -1,6 +1,10 @@
 package com.deepseekharness.app.ui;
 
 import android.content.Context;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
+import android.view.Window;
+import android.view.WindowManager;
 import androidx.appcompat.app.AlertDialog;
 import com.deepseekharness.app.R;
 
@@ -9,44 +13,39 @@ import com.deepseekharness.app.R;
  */
 public class DshaDialogBuilder extends AlertDialog.Builder {
 
+  private boolean isCustomView = false;
+
   public DshaDialogBuilder(Context context) {
     super(context, R.style.Dialog_DSHA_Alert);
+  }
+
+  @Override
+  public AlertDialog.Builder setView(android.view.View view) {
+    isCustomView = true;
+    return super.setView(view);
+  }
+
+  @Override
+  public AlertDialog.Builder setView(int layoutResId) {
+    isCustomView = true;
+    return super.setView(layoutResId);
   }
 
   @Override
   public AlertDialog create() {
     AlertDialog dialog = super.create();
     if (dialog.getWindow() != null) {
-      android.view.Window window = dialog.getWindow();
+      Window window = dialog.getWindow();
       window.setWindowAnimations(R.style.Animation_DSHA_Dialog);
-      window
-          .getDecorView()
-          .post(
-              () -> {
-                if (dialog.isShowing() && window.getDecorView().getWindowToken() != null)
-                  sizeOnce(window, window.getDecorView());
-              });
+      if (isCustomView) {
+        // 自定义卡片弹窗：将外层 Window 背景设为完全透明，彻底消除双层嵌套产生的黑色扁框
+        window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        // 一步预设窗口属性为 MATCH_PARENT，由内部布局的 padding 自适应居中，严禁在 post 中二次移动
+        window.setLayout(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.WRAP_CONTENT);
+      }
     }
     return dialog;
-  }
-
-  private void sizeOnce(android.view.Window window, android.view.View view) {
-    android.view.WindowManager.LayoutParams attributes = window.getAttributes();
-    int gravity = attributes.gravity;
-    if ((gravity & android.view.Gravity.VERTICAL_GRAVITY_MASK) == android.view.Gravity.BOTTOM
-        || attributes.width == android.view.ViewGroup.LayoutParams.MATCH_PARENT) return;
-    {
-      android.content.res.Resources resources = getContext().getResources();
-      float density = resources.getDisplayMetrics().density;
-      int width =
-          Math.min(
-              Math.round(560 * density),
-              Math.min(
-                  resources.getDisplayMetrics().widthPixels,
-                  Math.round(resources.getConfiguration().screenWidthDp * density)));
-      int maxHeight = Math.round((resources.getConfiguration().screenHeightDp - 24) * density);
-      int height = view.getHeight() > maxHeight ? maxHeight : attributes.height;
-      if (width != attributes.width || height != attributes.height) window.setLayout(width, height);
-    }
   }
 }
