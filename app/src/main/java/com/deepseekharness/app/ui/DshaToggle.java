@@ -43,6 +43,7 @@ public class DshaToggle extends View {
     private int colorOff;
     private int colorOn;
     private int colorBorder;
+    private boolean customColorSet = false;
 
     public DshaToggle(Context context) {
         this(context, null);
@@ -102,7 +103,28 @@ public class DshaToggle extends View {
     }
 
     @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        ensureThemeColor();
+    }
+
+    private void ensureThemeColor() {
+        if (!customColorSet) {
+            try {
+                colorOff = ContextCompat.getColor(getContext(), R.color.raised);
+                colorBorder = ContextCompat.getColor(getContext(), R.color.line);
+                borderPaint.setColor(colorBorder);
+                int themePrimary = MonetEngine.resolveCurrentPalette(getContext()).primaryColor;
+                if (themePrimary != 0) {
+                    this.colorOn = themePrimary;
+                }
+            } catch (Throwable ignored) {}
+        }
+    }
+
+    @Override
     protected void onDraw(Canvas canvas) {
+        ensureThemeColor();
         super.onDraw(canvas);
         float radius = getHeight() / 2f;
 
@@ -132,6 +154,7 @@ public class DshaToggle extends View {
     }
 
     public void setColorOn(int color) {
+        this.customColorSet = true;
         if (this.colorOn != color) {
             this.colorOn = color;
             invalidate();
@@ -155,6 +178,7 @@ public class DshaToggle extends View {
     }
 
     public void setChecked(boolean checked, boolean animate, boolean fromUser) {
+        ensureThemeColor();
         float target = checked ? 1f : 0f;
         if (this.isChecked == checked) {
             if (animator != null && animator.isRunning()) return; // 正在朝目标平滑位移中，不打断动画

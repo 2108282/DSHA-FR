@@ -5,8 +5,13 @@ import android.content.Context;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.widget.Button;
 import android.widget.CheckBox;
-import android.widget.LinearLayout;
+import android.widget.ImageView;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -15,6 +20,8 @@ import androidx.appcompat.app.AlertDialog;
 import com.deepseekharness.app.BackupManager;
 import com.deepseekharness.app.R;
 import com.deepseekharness.app.core.HarnessController;
+import com.deepseekharness.app.ui.DshaDialogBuilder;
+import com.deepseekharness.app.ui.MonetEngine;
 import com.deepseekharness.app.util.BackupScope;
 
 public class WorkspacePresenter implements WorkspaceActions {
@@ -61,93 +68,102 @@ public class WorkspacePresenter implements WorkspaceActions {
     @Override
     public void onBackupClick() {
         try {
-            chooseScopeAndBackup();
+            showBackupScopeDialog();
         } catch (Throwable t) {
             Toast.makeText(context, "打开备份选项失败: " + t.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
 
-    private void chooseScopeAndBackup() {
-        final CharSequence[] choices = new CharSequence[BackupScope.ALL.length];
-        for (int i = 0; i < BackupScope.ALL.length; i++) {
-            choices[i] = BackupScope.label(BackupScope.ALL[i]) + "\n" + BackupScope.describe(BackupScope.ALL[i]);
+    /**
+     * 1:1 对齐插件安装弹窗规范：基于 ModernCardView 的纯 Skia 风格备份范围与安全选项弹窗
+     */
+    private void showBackupScopeDialog() {
+        View dialogView = LayoutInflater.from(activity).inflate(R.layout.dialog_backup_scope, null);
+        AlertDialog dialog = new DshaDialogBuilder(activity).setView(dialogView).create();
+
+        RadioGroup scopeGroup = dialogView.findViewById(R.id.dialogBackupScopeGroup);
+        RadioButton radioFull = dialogView.findViewById(R.id.radioScopeFull);
+        RadioButton radioSessions = dialogView.findViewById(R.id.radioScopeSessions);
+        RadioButton radioSettings = dialogView.findViewById(R.id.radioScopeSettings);
+        RadioButton radioPlugins = dialogView.findViewById(R.id.radioScopePlugins);
+        TextView tvPathHint = dialogView.findViewById(R.id.dialogBackupPathHint);
+        CheckBox cbApiKey = dialogView.findViewById(R.id.dialogBackupCbApiKey);
+        Button btnCancel = dialogView.findViewById(R.id.btnBackupCancel);
+        Button btnConfirm = dialogView.findViewById(R.id.btnBackupConfirm);
+
+        final int[] currentScope = {BackupScope.FULL};
+
+        Runnable updatePathHint = () -> {
+            if (tvPathHint != null) {
+                String prefix = BackupScope.fileNamePrefix(currentScope[0]);
+                tvPathHint.setText("保存位置：Download/DSHA/" + prefix + "latest.tar.gz");
+            }
+        };
+        updatePathHint.run();
+
+        if (scopeGroup != null) {
+            scopeGroup.setOnCheckedChangeListener((group, checkedId) -> {
+                if (checkedId == R.id.radioScopeSessions) {
+                    currentScope[0] = BackupScope.SESSIONS;
+                } else if (checkedId == R.id.radioScopeSettings) {
+                    currentScope[0] = BackupScope.SETTINGS;
+                } else if (checkedId == R.id.radioScopePlugins) {
+                    currentScope[0] = BackupScope.PLUGINS;
+                } else {
+                    currentScope[0] = BackupScope.FULL;
+                }
+                updatePathHint.run();
+            });
         }
-        final int[] selected = {0};
-        new AlertDialog.Builder(activity)
-                .setTitle("选择备份范围")
-                .setSingleChoiceItems(choices, 0, (d, which) -> selected[0] = which)
-                .setPositiveButton("下一步", (d, which) -> confirmBackup(BackupScope.ALL[selected[0]]))
-                .setNegativeButton("取消", null)
-                .show();
-    }
 
-    private void confirmBackup(final int scope) {
-        float density = activity.getResources().getDisplayMetrics().density;
-        int padH = (int) (20 * density);
-        int padTop = (int) (8 * density);
+        if (btnCancel != null) {
+            btnCancel.setOnClickListener(v -> dialog.dismiss());
+        }
 
-        LinearLayout layout = new LinearLayout(activity);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(padH, padTop, padH, 0);
+        if (btnConfirm != null) {
+            btnConfirm.setOnClickListener(v -> {
+                dialog.dismiss();
+                boolean includeApiKey = cbApiKey != null && cbApiKey.isChecked();
+                doBackup(currentScope[0], includeApiKey);
+            });
+        }
 
-        TextView summaryView = new TextView(activity);
-        String summary = "即将备份：" + BackupScope.label(scope)
-                + "\n" + BackupScope.describe(scope)
-                + "\n\n保存位置：Download/DSHA/" + BackupScope.fileNamePrefix(scope) + "latest.tar.gz";
-        summaryView.setText(summary);
-        summaryView.setTextSize(14);
-        summaryView.setTextColor(androidx.core.content.ContextCompat.getColor(activity, R.color.text_secondary));
-        summaryView.setLineSpacing(0f, 1.25f);
-        layout.addView(summaryView);
-
-        CheckBox cbApiKey = new CheckBox(activity);
-        cbApiKey.setText("同时备份 API key（关掉更安全，恢复后需重填）");
-        cbApiKey.setTextSize(14);
-        cbApiKey.setTextColor(androidx.core.content.ContextCompat.getColor(activity, R.color.text));
-        cbApiKey.setChecked(false);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-        );
-        lp.topMargin = (int) (14 * density);
-        cbApiKey.setLayoutParams(lp);
-        layout.addView(cbApiKey);
-
-        new AlertDialog.Builder(activity)
-                .setTitle("确认备份")
-                .setView(layout)
-                .setPositiveButton("开始备份", (d, w) -> doBackup(scope, cbApiKey.isChecked()))
-                .setNegativeButton("取消", null)
-                .show();
+        MonetEngine.applyToViewTree(dialogView, MonetEngine.resolveCurrentPalette(activity));
+        dialog.show();
     }
 
     private void doBackup(final int scope, final boolean includeApiKey) {
         Toast.makeText(context, "开始备份…", Toast.LENGTH_SHORT).show();
-        AlertDialog progress = new AlertDialog.Builder(activity)
-                .setTitle("备份中")
-                .setMessage("正在打包所选数据…")
-                .setCancelable(false)
-                .show();
+        AlertDialog progress = showLoadingDialog("备份中", "正在打包所选数据并校验…");
 
         new Thread(() -> {
             String path = BackupManager.backupToExternal(context, controller, scope, includeApiKey);
             mainHandler.post(() -> {
                 progress.dismiss();
                 if (path == null) {
-                    new AlertDialog.Builder(activity)
-                            .setTitle("备份失败")
-                            .setMessage(BackupManager.lastError())
-                            .setPositiveButton("关闭", null)
-                            .show();
+                    showActionConfirmDialog(
+                            R.drawable.ic_settings_database,
+                            "备份失败",
+                            BackupManager.lastError() != null ? BackupManager.lastError() : "未知错误，请检查存储权限",
+                            null,
+                            "关闭",
+                            null,
+                            null
+                    );
                 } else {
-                    new AlertDialog.Builder(activity)
-                            .setTitle("备份成功（已校验）")
-                            .setMessage("已备份 " + BackupScope.label(scope)
-                                    + (includeApiKey ? "（已包含 API Key）" : "（未包含 API Key）")
-                                    + "\n\n保存位置：\n" + path
-                                    + "\n\n归档已通过条目数与大小校验。")
-                            .setPositiveButton("关闭", null)
-                            .show();
+                    String msg = "已备份 " + BackupScope.label(scope)
+                            + (includeApiKey ? "（已包含 API Key）" : "（未包含 API Key）")
+                            + "\n\n保存位置：\n" + path
+                            + "\n\n归档已通过条目数与大小完整性校验。";
+                    showActionConfirmDialog(
+                            R.drawable.ic_check_circle,
+                            "备份成功（已校验）",
+                            msg,
+                            null,
+                            "完成",
+                            null,
+                            null
+                    );
                 }
             });
         }, "dsha-backup").start();
@@ -163,24 +179,27 @@ public class WorkspacePresenter implements WorkspaceActions {
     }
 
     private void confirmRestore() {
-        new AlertDialog.Builder(activity)
-                .setTitle("恢复备份")
-                .setMessage("选择要恢复的备份文件（Download/DSHA/ 下的 .tar.gz）。\n\n"
-                        + "会覆盖当前配置/对话（恢复前会自动把现有 .dsh 挪到 .dsh.pre-restore-* 保留）。\n确定？")
-                .setPositiveButton("选择文件", (d, w) -> callback.onLaunchRestorePicker())
-                .setNegativeButton("取消", null)
-                .show();
+        String msg = "请从存储中选择要恢复的备份文件（Download/DSHA/ 下的 .tar.gz）。\n\n"
+                + "• 自动保护：恢复前会自动将现有配置安全重命名保留\n"
+                + "• 覆盖生效：将解压并合并覆盖配置与历史会话\n"
+                + "• 隔离安全：仅作用于 DSHA 原生容器运行环境";
+
+        showActionConfirmDialog(
+                R.drawable.ic_sheet_restore,
+                "确认恢复数据？",
+                msg,
+                "取消",
+                "选择文件",
+                null,
+                () -> callback.onLaunchRestorePicker()
+        );
     }
 
     @Override
     public void onRestoreSelected(Uri uri) {
         if (uri == null) return;
         Toast.makeText(context, "开始恢复…", Toast.LENGTH_SHORT).show();
-        AlertDialog progress = new AlertDialog.Builder(activity)
-                .setTitle("恢复中")
-                .setMessage("正在解压覆盖并合并数据…")
-                .setCancelable(false)
-                .show();
+        AlertDialog progress = showLoadingDialog("恢复中", "正在解压覆盖并合并数据…");
 
         new Thread(() -> {
             try {
@@ -189,27 +208,89 @@ public class WorkspacePresenter implements WorkspaceActions {
                 mainHandler.post(() -> {
                     progress.dismiss();
                     init();
-                    new AlertDialog.Builder(activity)
-                            .setTitle("恢复完成（已校验）")
-                            .setMessage(report + "\n\n建议立即重启服务以加载恢复的数据。")
-                            .setPositiveButton("立即重启", (d, w) -> {
+                    showActionConfirmDialog(
+                            R.drawable.ic_check_circle,
+                            "恢复完成（已校验）",
+                            report + "\n\n建议立即重启服务以加载恢复的数据。",
+                            "稍后手动启动",
+                            "立即重启",
+                            null,
+                            () -> {
                                 controller.stopWeb();
                                 controller.startWeb(status -> {});
                                 Toast.makeText(context, "正在重启服务…", Toast.LENGTH_SHORT).show();
-                            })
-                            .setNegativeButton("稍后手动启动", null)
-                            .show();
+                            }
+                    );
                 });
             } catch (Throwable t) {
                 mainHandler.post(() -> {
                     progress.dismiss();
-                    new AlertDialog.Builder(activity)
-                            .setTitle("恢复失败")
-                            .setMessage(t.getMessage() != null ? t.getMessage() : t.toString())
-                            .setPositiveButton("关闭", null)
-                            .show();
+                    showActionConfirmDialog(
+                            R.drawable.ic_settings_database,
+                            "恢复失败",
+                            t.getMessage() != null ? t.getMessage() : t.toString(),
+                            null,
+                            "关闭",
+                            null,
+                            null
+                    );
                 });
             }
         }, "dsha-restore").start();
+    }
+
+    private AlertDialog showLoadingDialog(String title, String message) {
+        View view = LayoutInflater.from(activity).inflate(R.layout.dialog_loading_action, null);
+        TextView tvTitle = view.findViewById(R.id.dialogLoadingTitle);
+        TextView tvMsg = view.findViewById(R.id.dialogLoadingMessage);
+        if (tvTitle != null && title != null) tvTitle.setText(title);
+        if (tvMsg != null && message != null) tvMsg.setText(message);
+
+        AlertDialog dialog = new DshaDialogBuilder(activity)
+                .setView(view)
+                .setCancelable(false)
+                .create();
+        MonetEngine.applyToViewTree(view, MonetEngine.resolveCurrentPalette(activity));
+        dialog.show();
+        return dialog;
+    }
+
+    private void showActionConfirmDialog(int iconRes, String title, String message,
+                                         String cancelText, String confirmText,
+                                         Runnable onCancel, Runnable onConfirm) {
+        View dialogView = LayoutInflater.from(activity).inflate(R.layout.dialog_confirm_action, null);
+        AlertDialog dialog = new DshaDialogBuilder(activity).setView(dialogView).create();
+
+        ImageView imgIcon = dialogView.findViewById(R.id.dialogActionIcon);
+        TextView tvTitle = dialogView.findViewById(R.id.dialogActionTitle);
+        TextView tvMessage = dialogView.findViewById(R.id.dialogActionMessage);
+        Button btnCancel = dialogView.findViewById(R.id.btnActionCancel);
+        Button btnConfirm = dialogView.findViewById(R.id.btnActionConfirm);
+
+        if (imgIcon != null) imgIcon.setImageResource(iconRes);
+        if (tvTitle != null) tvTitle.setText(title);
+        if (tvMessage != null) tvMessage.setText(message);
+
+        if (cancelText == null && btnCancel != null) {
+            btnCancel.setVisibility(View.GONE);
+        } else if (btnCancel != null) {
+            btnCancel.setVisibility(View.VISIBLE);
+            btnCancel.setText(cancelText);
+            btnCancel.setOnClickListener(v -> {
+                dialog.dismiss();
+                if (onCancel != null) onCancel.run();
+            });
+        }
+
+        if (btnConfirm != null) {
+            if (confirmText != null) btnConfirm.setText(confirmText);
+            btnConfirm.setOnClickListener(v -> {
+                dialog.dismiss();
+                if (onConfirm != null) onConfirm.run();
+            });
+        }
+
+        MonetEngine.applyToViewTree(dialogView, MonetEngine.resolveCurrentPalette(activity));
+        dialog.show();
     }
 }

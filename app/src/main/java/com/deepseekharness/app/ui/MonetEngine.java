@@ -13,6 +13,7 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.core.graphics.ColorUtils;
+import androidx.core.widget.ImageViewCompat;
 
 import com.deepseekharness.app.R;
 import com.deepseekharness.app.ui.MonetThemeHelper;
@@ -136,15 +137,22 @@ public final class MonetEngine {
             return;
         }
 
+        // 3.5. 图标盒容器着色: 浅色容器色 (Container)
+        if (view.getId() == R.id.pluginIconBox || view.getId() == R.id.dialogBackupIconBox) {
+            view.setBackground(createSolidPillDrawable(context, targetContainer, dp(context, 14)));
+        }
+
         // 4. ImageView 着色: 如果原本使用了主题色，动态赋予新主色 (豁免关于页中央 Logo 图标)
         if (view instanceof ImageView) {
             ImageView iv = (ImageView) view;
             if (iv.getId() == R.id.about_logo_icon) {
                 return; // 保持中央 Logo 独立纯白与经典底板，坚决不跟随莫奈取色变化
             }
-            ColorStateList tint = iv.getImageTintList();
-            if (tint != null) {
-                iv.setImageTintList(ColorStateList.valueOf(targetPrimary));
+            if (iv.getId() == R.id.pluginIcon || iv.getId() == R.id.dialogActionIcon
+                    || iv.getId() == R.id.dialogBackupIcon || iv.getId() == R.id.appbar_icon
+                    || iv.getId() == R.id.btnRefresh
+                    || ImageViewCompat.getImageTintList(iv) != null || iv.getImageTintList() != null) {
+                ImageViewCompat.setImageTintList(iv, ColorStateList.valueOf(targetPrimary));
             }
         }
 
@@ -188,9 +196,9 @@ public final class MonetEngine {
     private static boolean isPrimaryButton(TextView view) {
         int id = view.getId();
         if (id == R.id.launch_start || id == R.id.btnActionConfirm || id == R.id.btnDialogConfirm
-                || id == R.id.welcome_btn || id == R.id.term_send || id == R.id.config_taskset_save
-                || id == R.id.cred_copy_bridge_token || id == R.id.cred_copy_auth_url
-                || id == R.id.cred_copy_lan_addr || id == R.id.update_copy_cmd) {
+                || id == R.id.btnBackupConfirm || id == R.id.welcome_btn || id == R.id.term_send
+                || id == R.id.config_taskset_save || id == R.id.cred_copy_bridge_token
+                || id == R.id.cred_copy_auth_url || id == R.id.cred_copy_lan_addr || id == R.id.update_copy_cmd) {
             return true;
         }
         int curTextColor = view.getCurrentTextColor();
@@ -201,8 +209,8 @@ public final class MonetEngine {
         int id = view.getId();
         if (id == R.id.launch_open || id == R.id.update_browser || id == R.id.btnActionCancel
                 || id == R.id.btnDialogCancel || id == R.id.btnDiscardCancel
-                || id == R.id.cred_enter_web || id == R.id.update_copy_mirror_cmd
-                || id == R.id.cred_close || id == R.id.btnPluginAddr || id == R.id.btnPluginRename
+                || id == R.id.btnBackupCancel || id == R.id.cred_enter_web || id == R.id.update_copy_mirror_cmd
+                || id == R.id.cred_close || id == R.id.pluginActions || id == R.id.btnPluginAddr || id == R.id.btnPluginRename
                 || id == R.id.btnPluginExport || id == R.id.term_clear || id == R.id.term_pty
                 || id == R.id.pty_font_dec || id == R.id.pty_font_inc || id == R.id.pty_simple
                 || id == R.id.launch_port_chip_3080 || id == R.id.launch_port_chip_3088) {

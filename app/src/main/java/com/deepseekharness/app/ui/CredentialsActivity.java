@@ -95,6 +95,7 @@ public class CredentialsActivity extends AppCompatActivity {
         });
 
         refreshData();
+        MonetEngine.applyToActivity(this);
     }
 
     @Override

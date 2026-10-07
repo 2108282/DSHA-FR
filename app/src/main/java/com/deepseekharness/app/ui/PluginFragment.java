@@ -256,6 +256,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
         }
 
         presenter.recalculateState();
+        MonetEngine.applyToViewTree(v, MonetEngine.resolveCurrentPalette(requireContext()));
     }
 
     @Override
@@ -676,6 +677,9 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
                     }
                 });
             }
+
+            // 莫奈全景动态演色适配 (图标盒、图标、更多展开按钮、地址/名称/导出按钮、Toggle 开关)
+            MonetEngine.applyToViewTree(holder.itemView, MonetEngine.resolveCurrentPalette(holder.itemView.getContext()));
         }
 
         @Override

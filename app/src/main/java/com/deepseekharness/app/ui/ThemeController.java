@@ -39,7 +39,7 @@ public final class ThemeController {
     public static boolean isMonetEnabled(Context context) {
         if (context == null) return false;
         return context.getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE)
-                .getBoolean("theme_monet_extracted", false);
+                .getBoolean("theme_monet_extracted", true);
     }
 
     public static String getMonetPaletteStyle(Context context) {

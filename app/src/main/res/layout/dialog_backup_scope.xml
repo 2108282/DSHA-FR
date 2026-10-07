@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:clipChildren="false"
+    android:clipToPadding="false"
+    android:padding="20dp">
+
+    <!-- 弹窗主体卡片 (纯 Skia ModernCardView: 20dp 圆角, 硬件加速微阴影) -->
+    <com.deepseekharness.app.ui.ModernCardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp"
+        app:cardRadius="20dp">
+
+        <!-- 1. 顶部标题行: 40dp 浅蓝圆角图标盒 + 18sp 粗体标题 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <FrameLayout
+                android:id="@+id/dialogBackupIconBox"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_settings_icon_box">
+
+                <ImageView
+                    android:id="@+id/dialogBackupIcon"
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_settings_database"
+                    app:tint="@color/primary" />
+            </FrameLayout>
+
+            <TextView
+                android:id="@+id/dialogBackupTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:text="创建数据备份"
+                android:textColor="@color/text"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- 2. 备份范围单选项容器 (RadioGroup 风格选择条目) -->
+        <RadioGroup
+            android:id="@+id/dialogBackupScopeGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:orientation="vertical">
+
+            <!-- 选项 1: 全量备份 -->
+            <RadioButton
+                android:id="@+id/radioScopeFull"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_input"
+                android:buttonTint="@color/primary"
+                android:checked="true"
+                android:lineSpacingMultiplier="1.25"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="10dp"
+                android:text="全量备份（推荐）\n配置、对话、插件与工作区文件"
+                android:textColor="@color/text"
+                android:textSize="13sp" />
+
+            <!-- 选项 2: 仅会话记录 -->
+            <RadioButton
+                android:id="@+id/radioScopeSessions"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/bg_input"
+                android:buttonTint="@color/primary"
+                android:lineSpacingMultiplier="1.25"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="10dp"
+                android:text="仅备份对话记录\n打包会话历史与附件，不含设置和插件"
+                android:textColor="@color/text"
+                android:textSize="13sp" />
+
+            <!-- 选项 3: 仅设置 -->
+            <RadioButton
+                android:id="@+id/radioScopeSettings"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/bg_input"
+                android:buttonTint="@color/primary"
+                android:lineSpacingMultiplier="1.25"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="10dp"
+                android:text="仅备份设置参数\n打包核心 settings.yaml 运行配置"
+                android:textColor="@color/text"
+                android:textSize="13sp" />
+
+            <!-- 选项 4: 仅插件 -->
+            <RadioButton
+                android:id="@+id/radioScopePlugins"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/bg_input"
+                android:buttonTint="@color/primary"
+                android:lineSpacingMultiplier="1.25"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="10dp"
+                android:text="仅备份扩展插件\n打包插件清单与已安装扩展包源码"
+                android:textColor="@color/text"
+                android:textSize="13sp" />
+        </RadioGroup>
+
+        <!-- 3. 说明与安全选项面板 (bg_input 半透槽) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_input"
+            android:orientation="vertical"
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="12dp">
+
+            <TextView
+                android:id="@+id/dialogBackupPathHint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:lineSpacingMultiplier="1.3"
+                android:text="保存位置：Download/DSHA/DSHA-backup-*.tar.gz"
+                android:textColor="@color/text_secondary"
+                android:textSize="12.5sp" />
+
+            <CheckBox
+                android:id="@+id/dialogBackupCbApiKey"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:buttonTint="@color/primary"
+                android:checked="false"
+                android:text="同时备份 API Key（关掉更安全，恢复后需重填）"
+                android:textColor="@color/text"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <!-- 4. 底部双操作按钮行 (44dp, 间距 10dp) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnBackupCancel"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_weight="1"
+                android:background="@drawable/m3_btn_tonal_expressive"
+                android:stateListAnimator="@animator/btn_press_scale"
+                android:text="取消"
+                android:textAllCaps="false"
+                android:textColor="@color/primary"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnBackupConfirm"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_marginStart="10dp"
+                android:layout_weight="1.2"
+                android:background="@drawable/m3_btn_primary_expressive"
+                android:stateListAnimator="@animator/btn_press_scale"
+                android:text="开始备份"
+                android:textAllCaps="false"
+                android:textColor="@color/accent_on"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+    </com.deepseekharness.app.ui.ModernCardView>
+
+</FrameLayout>
