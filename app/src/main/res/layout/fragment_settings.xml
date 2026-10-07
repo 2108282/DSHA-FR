@@ -90,7 +90,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="1dp"
-                        android:text="端口 · 行为 · 权限"
+                        android:text="行为 · CPU调度 · 权限"
                         android:textColor="@color/text_muted"
                         android:textSize="12sp" />
                 </LinearLayout>

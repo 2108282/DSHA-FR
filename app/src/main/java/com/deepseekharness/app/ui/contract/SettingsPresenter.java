@@ -18,7 +18,6 @@ import com.deepseekharness.app.core.ConfigStore;
 import com.deepseekharness.app.core.HarnessController;
 import com.deepseekharness.app.ui.AboutDialog;
 import com.deepseekharness.app.ui.DiagnosticActivity;
-import com.deepseekharness.app.ui.DshaDialogBuilder;
 
 public class SettingsPresenter implements SettingsActions {
 
@@ -77,7 +76,7 @@ public class SettingsPresenter implements SettingsActions {
                 "① 升级DSH核心",
                 "② DSHA-FR 客户端与 Magisk/KSU 模块 (Release)"
         };
-        new DshaDialogBuilder(activity)
+        new AlertDialog.Builder(activity)
                 .setTitle("检查与获取更新")
                 .setItems(options, (d, which) -> {
                     if (which == 0) {
@@ -91,7 +90,7 @@ public class SettingsPresenter implements SettingsActions {
     }
 
     private void showDshUpdate() {
-        new DshaDialogBuilder(activity)
+        new AlertDialog.Builder(activity)
                 .setTitle("升级DSH核心")
                 .setMessage("当前版本: 请在核心中查看\n\n"
                         + "可在浏览器查看官方 GitHub 上游最新发布日志，或在终端执行 npm 升级命令:\n\n"
@@ -145,7 +144,7 @@ public class SettingsPresenter implements SettingsActions {
                     + "· 导入备份包或重装模块后的首次环境修复；\n"
                     + "· 插件市场或内置插件报依赖找不到时。";
 
-            new DshaDialogBuilder(activity)
+            new AlertDialog.Builder(activity)
                     .setTitle("原生环境与存储直通自愈")
                     .setMessage(msg)
                     .setPositiveButton("开始自愈修复", (d, w) -> runApplyPatches())
@@ -157,7 +156,7 @@ public class SettingsPresenter implements SettingsActions {
     }
 
     private void runApplyPatches() {
-        AlertDialog progress = new DshaDialogBuilder(activity)
+        AlertDialog progress = new AlertDialog.Builder(activity)
                 .setTitle("正在自愈")
                 .setMessage("正在执行原生环境与直通校验，请稍候…")
                 .setCancelable(false)
@@ -235,7 +234,7 @@ public class SettingsPresenter implements SettingsActions {
 
             mainHandler.post(() -> {
                 progress.dismiss();
-                new DshaDialogBuilder(activity)
+                new AlertDialog.Builder(activity)
                         .setTitle("自愈完成")
                         .setMessage(report.toString() + "\n\n建议重启 Web 服务使修改全部生效。")
                         .setPositiveButton("立即重启服务", (d, w) -> {

@@ -15,7 +15,6 @@ import androidx.appcompat.app.AlertDialog;
 import com.deepseekharness.app.BackupManager;
 import com.deepseekharness.app.R;
 import com.deepseekharness.app.core.HarnessController;
-import com.deepseekharness.app.ui.DshaDialogBuilder;
 import com.deepseekharness.app.util.BackupScope;
 
 public class WorkspacePresenter implements WorkspaceActions {
@@ -74,7 +73,7 @@ public class WorkspacePresenter implements WorkspaceActions {
             choices[i] = BackupScope.label(BackupScope.ALL[i]) + "\n" + BackupScope.describe(BackupScope.ALL[i]);
         }
         final int[] selected = {0};
-        new DshaDialogBuilder(activity)
+        new AlertDialog.Builder(activity)
                 .setTitle("选择备份范围")
                 .setSingleChoiceItems(choices, 0, (d, which) -> selected[0] = which)
                 .setPositiveButton("下一步", (d, which) -> confirmBackup(BackupScope.ALL[selected[0]]))
@@ -114,7 +113,7 @@ public class WorkspacePresenter implements WorkspaceActions {
         cbApiKey.setLayoutParams(lp);
         layout.addView(cbApiKey);
 
-        new DshaDialogBuilder(activity)
+        new AlertDialog.Builder(activity)
                 .setTitle("确认备份")
                 .setView(layout)
                 .setPositiveButton("开始备份", (d, w) -> doBackup(scope, cbApiKey.isChecked()))
@@ -124,7 +123,7 @@ public class WorkspacePresenter implements WorkspaceActions {
 
     private void doBackup(final int scope, final boolean includeApiKey) {
         Toast.makeText(context, "开始备份…", Toast.LENGTH_SHORT).show();
-        AlertDialog progress = new DshaDialogBuilder(activity)
+        AlertDialog progress = new AlertDialog.Builder(activity)
                 .setTitle("备份中")
                 .setMessage("正在打包所选数据…")
                 .setCancelable(false)
@@ -135,13 +134,13 @@ public class WorkspacePresenter implements WorkspaceActions {
             mainHandler.post(() -> {
                 progress.dismiss();
                 if (path == null) {
-                    new DshaDialogBuilder(activity)
+                    new AlertDialog.Builder(activity)
                             .setTitle("备份失败")
                             .setMessage(BackupManager.lastError())
                             .setPositiveButton("关闭", null)
                             .show();
                 } else {
-                    new DshaDialogBuilder(activity)
+                    new AlertDialog.Builder(activity)
                             .setTitle("备份成功（已校验）")
                             .setMessage("已备份 " + BackupScope.label(scope)
                                     + (includeApiKey ? "（已包含 API Key）" : "（未包含 API Key）")
@@ -164,7 +163,7 @@ public class WorkspacePresenter implements WorkspaceActions {
     }
 
     private void confirmRestore() {
-        new DshaDialogBuilder(activity)
+        new AlertDialog.Builder(activity)
                 .setTitle("恢复备份")
                 .setMessage("选择要恢复的备份文件（Download/DSHA/ 下的 .tar.gz）。\n\n"
                         + "会覆盖当前配置/对话（恢复前会自动把现有 .dsh 挪到 .dsh.pre-restore-* 保留）。\n确定？")
@@ -177,7 +176,7 @@ public class WorkspacePresenter implements WorkspaceActions {
     public void onRestoreSelected(Uri uri) {
         if (uri == null) return;
         Toast.makeText(context, "开始恢复…", Toast.LENGTH_SHORT).show();
-        AlertDialog progress = new DshaDialogBuilder(activity)
+        AlertDialog progress = new AlertDialog.Builder(activity)
                 .setTitle("恢复中")
                 .setMessage("正在解压覆盖并合并数据…")
                 .setCancelable(false)
@@ -186,34 +185,27 @@ public class WorkspacePresenter implements WorkspaceActions {
         new Thread(() -> {
             try {
                 controller.stopWeb();
-                String err = BackupManager.restoreFromBackup(context, controller, uri);
+                String report = BackupManager.restoreFromBackup(context, controller, uri);
                 mainHandler.post(() -> {
                     progress.dismiss();
-                    if (err != null) {
-                        new DshaDialogBuilder(activity)
-                                .setTitle("恢复失败")
-                                .setMessage(err)
-                                .setPositiveButton("关闭", null)
-                                .show();
-                    } else {
-                        init();
-                        new DshaDialogBuilder(activity)
-                                .setTitle("恢复完成")
-                                .setMessage("备份已恢复（原配置已安全备份保留在 .dsh.pre-restore-*）。\n重启 Web 生效。")
-                                .setPositiveButton("立即重启 Web", (d, w) -> {
-                                    controller.stopWeb();
-                                    controller.startWeb(status -> {});
-                                })
-                                .setNegativeButton("稍后手动重启", null)
-                                .show();
-                    }
+                    init();
+                    new AlertDialog.Builder(activity)
+                            .setTitle("恢复完成（已校验）")
+                            .setMessage(report + "\n\n建议立即重启服务以加载恢复的数据。")
+                            .setPositiveButton("立即重启", (d, w) -> {
+                                controller.stopWeb();
+                                controller.startWeb(status -> {});
+                                Toast.makeText(context, "正在重启服务…", Toast.LENGTH_SHORT).show();
+                            })
+                            .setNegativeButton("稍后手动启动", null)
+                            .show();
                 });
             } catch (Throwable t) {
                 mainHandler.post(() -> {
                     progress.dismiss();
-                    new DshaDialogBuilder(activity)
-                            .setTitle("恢复异常")
-                            .setMessage(t.getMessage())
+                    new AlertDialog.Builder(activity)
+                            .setTitle("恢复失败")
+                            .setMessage(t.getMessage() != null ? t.getMessage() : t.toString())
                             .setPositiveButton("关闭", null)
                             .show();
                 });
