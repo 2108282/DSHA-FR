@@ -2,10 +2,12 @@ package com.deepseekharness.app.ui;
 
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ProgressBar;
+import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -38,12 +40,32 @@ public final class UpdateActivity extends AppCompatActivity implements UpdateAct
     private View installBtn;
     private View cancelBtn;
     private RadioGroup channelsGroup;
+    private RadioButton stableRadio;
+    private RadioButton previewRadio;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         ThemeController.apply(this);
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_update);
+
+        // 极光漫射效果 (Android 12+)
+        View auroraView = findViewById(R.id.global_aurora);
+        if (auroraView != null && Build.VERSION.SDK_INT >= 31) {
+            float blurPx = 80f * getResources().getDisplayMetrics().density;
+            try {
+                auroraView.setRenderEffect(android.graphics.RenderEffect.createBlurEffect(
+                        blurPx, blurPx, android.graphics.Shader.TileMode.CLAMP));
+            } catch (Throwable ignored) { }
+        }
+
+        // 顶栏日夜间切换
+        TextView themeBtn = findViewById(R.id.btn_theme);
+        if (themeBtn != null) {
+            boolean dark = ThemeController.isDark(this);
+            themeBtn.setText(dark ? "☀ 白天" : "☾ 黑夜");
+            themeBtn.setOnClickListener(v -> ThemeController.toggle(this));
+        }
 
         repository = new ViewModelProvider(this).get(UpdateRepository.class);
 
@@ -59,9 +81,18 @@ public final class UpdateActivity extends AppCompatActivity implements UpdateAct
         installBtn = findViewById(R.id.update_install);
         cancelBtn = findViewById(R.id.update_cancel);
         channelsGroup = findViewById(R.id.update_channels);
+        stableRadio = findViewById(R.id.update_stable);
+        previewRadio = findViewById(R.id.update_preview);
 
-        channelsGroup.check(UpdatePolicy.PREVIEW.equals(repository.channel()) ? R.id.update_preview : R.id.update_stable);
-        channelsGroup.setOnCheckedChangeListener((g, id) -> actions.onChannelSelect(id == R.id.update_preview));
+        boolean isPreview = UpdatePolicy.PREVIEW.equals(repository.channel());
+        channelsGroup.check(isPreview ? R.id.update_preview : R.id.update_stable);
+        updateRadioStyles(isPreview);
+
+        channelsGroup.setOnCheckedChangeListener((g, id) -> {
+            boolean prev = (id == R.id.update_preview);
+            updateRadioStyles(prev);
+            actions.onChannelSelect(prev);
+        });
 
         findViewById(R.id.update_back).setOnClickListener(v -> actions.onBackClick());
         checkBtn.setOnClickListener(v -> actions.onCheckClick());
@@ -93,6 +124,15 @@ public final class UpdateActivity extends AppCompatActivity implements UpdateAct
         if (savedInstanceState == null) repository.check();
     }
 
+    private void updateRadioStyles(boolean isPreview) {
+        if (stableRadio != null && previewRadio != null) {
+            stableRadio.setBackgroundResource(!isPreview ? R.drawable.bg_tab_on : R.drawable.bg_tab);
+            stableRadio.setTextColor(getColor(!isPreview ? R.color.primary : R.color.text_secondary));
+            previewRadio.setBackgroundResource(isPreview ? R.drawable.bg_tab_on : R.drawable.bg_tab);
+            previewRadio.setTextColor(getColor(isPreview ? R.color.primary : R.color.text_secondary));
+        }
+    }
+
     private void render(UpdateUiState state) {
         if (statusView != null) statusView.setText(state.statusMessage);
         if (notesView != null) notesView.setText(state.notesText);
@@ -101,16 +141,14 @@ public final class UpdateActivity extends AppCompatActivity implements UpdateAct
             progressBar.setIndeterminate(state.isIndeterminate);
             if (!state.isIndeterminate) progressBar.setProgress(state.progressPercent);
         }
-        if (bytesView != null) bytesView.setText(state.bytesText);
-        if (checkBtn != null) checkBtn.setEnabled(state.isCheckEnabled);
-        if (downloadBtn != null) downloadBtn.setEnabled(state.isDownloadEnabled);
-        if (installBtn != null) installBtn.setEnabled(state.isInstallEnabled);
-        if (cancelBtn != null) cancelBtn.setVisibility(state.isBusy ? View.VISIBLE : View.GONE);
-        if (channelsGroup != null) {
-            for (int i = 0; i < channelsGroup.getChildCount(); i++) {
-                channelsGroup.getChildAt(i).setEnabled(!state.isBusy);
-            }
+        if (bytesView != null) {
+            bytesView.setVisibility(state.bytesText.isEmpty() ? View.GONE : View.VISIBLE);
+            bytesView.setText(state.bytesText);
         }
+        if (checkBtn != null) checkBtn.setVisibility(state.isCheckVisible ? View.VISIBLE : View.GONE);
+        if (downloadBtn != null) downloadBtn.setVisibility(state.isDownloadVisible ? View.VISIBLE : View.GONE);
+        if (installBtn != null) installBtn.setVisibility(state.isInstallVisible ? View.VISIBLE : View.GONE);
+        if (cancelBtn != null) cancelBtn.setVisibility(state.isBusy ? View.VISIBLE : View.GONE);
     }
 
     @Override
@@ -119,52 +157,57 @@ public final class UpdateActivity extends AppCompatActivity implements UpdateAct
     }
 
     @Override
+    public void onChannelSelect(boolean isPreview) {
+        repository.setChannel(isPreview ? UpdatePolicy.PREVIEW : UpdatePolicy.STABLE);
+        repository.check();
+    }
+
+    @Override
     public void onCheckClick() {
-        if (repository != null) repository.check();
+        repository.check();
     }
 
     @Override
     public void onDownloadClick() {
-        if (repository != null) repository.download();
+        repository.download();
     }
 
     @Override
     public void onCancelClick() {
-        if (repository != null) repository.cancel();
+        repository.cancel();
     }
 
     @Override
     public void onInstallClick() {
-        install();
+        java.io.File apk = repository.state().getValue() != null ? repository.state().getValue().apk : null;
+        if (apk == null || !apk.isFile()) {
+            Toast.makeText(this, "未找到下载完成的安装包，请重新下载", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            if (!getPackageManager().canRequestPackageInstalls()) {
+                resumeInstall = true;
+                startActivity(new Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:" + getPackageName())));
+                Toast.makeText(this, "请先允许“安装未知应用”权限", Toast.LENGTH_LONG).show();
+                return;
+            }
+        }
+
+        Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", apk);
+        Intent intent = new Intent(Intent.ACTION_VIEW);
+        intent.setDataAndType(uri, "application/vnd.android.package-archive");
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+        startActivity(intent);
     }
 
     @Override
     public void onOpenBrowserClick() {
-        UpdateRepository.State state = repository.state().getValue();
-        AboutDialog.openBrowser(this, state != null && state.release != null ? state.release.pageUrl
-                : AboutDialog.GITHUB_ROOT_URL + "/releases");
-    }
-
-    @Override
-    public void onChannelSelect(boolean isPreview) {
-        if (repository != null) {
-            repository.setChannel(isPreview ? UpdatePolicy.PREVIEW : UpdatePolicy.STABLE);
-        }
-    }
-
-    private void install() {
         try {
-            if (android.os.Build.VERSION.SDK_INT >= 26 && !getPackageManager().canRequestPackageInstalls()) {
-                resumeInstall = true;
-                startActivity(new Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                        Uri.parse("package:" + getPackageName())));
-                return;
-            }
-            Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".updates", repository.installableApk());
-            startActivity(new Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")
-                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION));
-        } catch (Exception error) {
-            Toast.makeText(this, "无法安装：" + error.getMessage(), Toast.LENGTH_LONG).show();
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(AboutDialog.GITHUB_ROOT_URL + "/releases")));
+        } catch (Throwable t) {
+            Toast.makeText(this, "打开浏览器失败: " + t.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -173,11 +216,7 @@ public final class UpdateActivity extends AppCompatActivity implements UpdateAct
         super.onResume();
         if (resumeInstall) {
             resumeInstall = false;
-            if (android.os.Build.VERSION.SDK_INT < 26 || getPackageManager().canRequestPackageInstalls()) {
-                install();
-            } else {
-                Toast.makeText(this, "未允许安装更新，可稍后重试", Toast.LENGTH_SHORT).show();
-            }
+            onInstallClick();
         }
     }
 }

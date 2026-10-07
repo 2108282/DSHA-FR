@@ -1,6 +1,7 @@
 package com.deepseekharness.app.ui;
 
 import android.content.Intent;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.TextView;
@@ -28,6 +29,24 @@ public final class DiagnosticActivity extends AppCompatActivity implements Diagn
         ThemeController.apply(this);
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_diagnostics);
+
+        // 极光漫射效果 (Android 12+)
+        View auroraView = findViewById(R.id.global_aurora);
+        if (auroraView != null && Build.VERSION.SDK_INT >= 31) {
+            float blurPx = 80f * getResources().getDisplayMetrics().density;
+            try {
+                auroraView.setRenderEffect(android.graphics.RenderEffect.createBlurEffect(
+                        blurPx, blurPx, android.graphics.Shader.TileMode.CLAMP));
+            } catch (Throwable ignored) { }
+        }
+
+        // 顶栏日夜间切换
+        TextView themeBtn = findViewById(R.id.btn_theme);
+        if (themeBtn != null) {
+            boolean dark = ThemeController.isDark(this);
+            themeBtn.setText(dark ? "☀ 白天" : "☾ 黑夜");
+            themeBtn.setOnClickListener(v -> ThemeController.toggle(this));
+        }
 
         repository = new ViewModelProvider(this).get(DiagnosticRepository.class);
 

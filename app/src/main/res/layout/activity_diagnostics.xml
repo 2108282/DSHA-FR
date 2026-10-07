@@ -1,80 +1,204 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/surface"
-    android:fillViewport="true">
+    android:background="@color/surface">
+
+    <!-- 全局固定极光漫射图层 (1:1 对齐 HTML .aurora-1) -->
+    <View
+        android:id="@+id/global_aurora"
+        android:layout_width="320dp"
+        android:layout_height="320dp"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="-110dp"
+        android:layout_marginEnd="-80dp"
+        android:background="@drawable/bg_aurora_top_right"
+        android:importantForAccessibility="no" />
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="@dimen/page_pad">
+        android:layout_height="match_parent"
+        android:orientation="vertical">
 
-        <Button
-            android:id="@+id/diagnostic_back"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:background="@drawable/m3_btn_tonal_expressive"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp"
-            android:text="‹ 返回"
-            android:textAllCaps="false"
-            android:textColor="@color/text"
-            android:textSize="@dimen/text_body" />
-
-        <TextView
-            style="@style/DshaText.Display"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="系统环境诊断与修复" />
-
-        <TextView
-            android:id="@+id/diagnostic_status"
-            style="@style/DshaText.Label"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:textColor="@color/text_secondary" />
-
-        <Button
-            android:id="@+id/diagnostic_repair"
-            android:layout_width="match_parent"
-            android:layout_height="@dimen/btn_height"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/m3_btn_primary_expressive"
-            android:text="修复证书与网络环境"
-            android:textAllCaps="false"
-            android:textColor="@color/m3_btn_primary_text"
-            android:textStyle="bold" />
-
-        <Button
-            android:id="@+id/diagnostic_plugins"
-            android:layout_width="match_parent"
-            android:layout_height="@dimen/btn_height"
-            android:layout_marginTop="10dp"
-            android:background="@drawable/m3_btn_tonal_expressive"
-            android:text="前往插件管理页"
-            android:textAllCaps="false"
-            android:textColor="@color/m3_btn_tonal_text" />
-
+        <!-- 顶部标题栏 (52dp, 半透卡片白 card_glass, 细分割线) -->
         <LinearLayout
-            style="@style/DshaCard.Expressive"
+            android:id="@+id/app_bar"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp">
+            android:layout_height="52dp"
+            android:background="@color/card_glass"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="16dp">
+
+            <ImageView
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_check_circle"
+                app:tint="@color/primary" />
 
             <TextView
-                android:id="@+id/diagnostic_report"
-                style="@style/DshaText.Body"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="10dp"
+                android:layout_weight="1"
+                android:text="诊断修复"
+                android:textColor="@color/text"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/btn_theme"
+                android:layout_width="wrap_content"
+                android:layout_height="34dp"
+                android:background="@drawable/bg_chip_clickable"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:paddingHorizontal="12dp"
+                android:stateListAnimator="@animator/chip_press_scale"
+                android:text="日间"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/line_soft" />
+
+        <!-- 滚动内容区 -->
+        <androidx.core.widget.NestedScrollView
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:fillViewport="true"
+            android:overScrollMode="never"
+            android:scrollbars="none">
+
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:fontFamily="monospace"
-                android:lineSpacingExtra="3dp"
-                android:textColor="@color/text"
-                android:textIsSelectable="true"
-                android:textSize="13sp" />
-        </LinearLayout>
+                android:clipChildren="false"
+                android:clipToPadding="false"
+                android:orientation="vertical"
+                android:paddingHorizontal="16dp"
+                android:paddingTop="14dp"
+                android:paddingBottom="48dp">
+
+                <!-- 返回胶囊按钮 (.back-btn) -->
+                <LinearLayout
+                    android:id="@+id/diagnostic_back"
+                    android:layout_width="wrap_content"
+                    android:layout_height="34dp"
+                    android:background="@drawable/bg_back_chip"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="12dp"
+                    android:stateListAnimator="@animator/chip_press_scale">
+
+                    <ImageView
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:contentDescription="@null"
+                        android:src="@drawable/ic_nav_back"
+                        app:tint="@color/text_secondary" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4dp"
+                        android:text="返回"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <!-- 大标题与说明文案 -->
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="系统环境诊断与修复"
+                    android:textColor="@color/text"
+                    android:textSize="22sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/diagnostic_status"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="13sp" />
+
+                <!-- 修复按钮 -->
+                <Button
+                    android:id="@+id/diagnostic_repair"
+                    android:layout_width="match_parent"
+                    android:layout_height="46dp"
+                    android:layout_marginTop="16dp"
+                    android:background="@drawable/m3_btn_primary_expressive"
+                    android:elevation="3dp"
+                    android:outlineAmbientShadowColor="#00000000"
+                    android:outlineSpotShadowColor="#3847699F"
+                    android:stateListAnimator="@animator/btn_press_scale"
+                    android:text="修复证书与网络环境"
+                    android:textAllCaps="false"
+                    android:textColor="@color/accent_on"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+
+                <!-- 前往插件管理页按钮 -->
+                <Button
+                    android:id="@+id/diagnostic_plugins"
+                    android:layout_width="match_parent"
+                    android:layout_height="46dp"
+                    android:layout_marginTop="10dp"
+                    android:background="@drawable/m3_btn_tonal_expressive"
+                    android:stateListAnimator="@animator/btn_press_scale"
+                    android:text="前往插件管理页"
+                    android:textAllCaps="false"
+                    android:textColor="@color/primary"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <!-- 诊断报告卡片 (.gcard: ModernCardView) -->
+                <com.deepseekharness.app.ui.ModernCardView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:orientation="vertical"
+                    android:padding="18dp"
+                    app:cardRadius="18dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="诊断报告"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/diagnostic_report"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:fontFamily="monospace"
+                        android:lineSpacingMultiplier="1.5"
+                        android:textColor="@color/text"
+                        android:textIsSelectable="true"
+                        android:textSize="12sp" />
+                </com.deepseekharness.app.ui.ModernCardView>
+
+            </LinearLayout>
+        </androidx.core.widget.NestedScrollView>
     </LinearLayout>
-</ScrollView>
+</FrameLayout>

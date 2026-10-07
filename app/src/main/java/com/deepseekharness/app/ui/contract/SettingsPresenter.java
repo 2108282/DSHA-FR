@@ -127,7 +127,7 @@ public class SettingsPresenter implements SettingsActions {
 
     @Override
     public void onAboutClick() {
-        AboutDialog.show(activity);
+        activity.startActivity(new Intent(context, com.deepseekharness.app.ui.AboutActivity.class));
     }
 
     @Override
