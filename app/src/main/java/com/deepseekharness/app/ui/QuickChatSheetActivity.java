@@ -1252,6 +1252,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         headerTitle.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
         headerTitle.setGravity(Gravity.CENTER);
         titleBox.addView(headerTitle);
+        updateHeaderTitleText();
 
         headerSubTitle = new TextView(this);
         headerSubTitle.setTextColor(Color.parseColor("#888888"));
@@ -1810,6 +1811,24 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         if (btnRefresh != null) {
             btnRefresh.setContentDescription(sIsRemoteActive ? "重新连接远端DSH" : "重新获取Token并刷新进入DSH");
         }
+        updateHeaderTitleText();
+    }
+
+    private void updateHeaderTitleText() {
+        if (headerTitle == null) return;
+        if (fileViewerContainer != null && fileViewerContainer.getVisibility() == View.VISIBLE && currentViewingFile != null) {
+            return;
+        }
+        if (sIsRemoteActive) {
+            ConfigStore cfg = ConfigStore.get(this);
+            com.deepseekharness.app.core.ConfigStore.RemoteDshEntry entry = cfg.getActiveRemoteDshEntry();
+            String name = (entry != null && entry.name != null && !entry.name.trim().isEmpty())
+                    ? entry.name.trim() : "远端";
+            headerTitle.setText(name + " 对话");
+        } else {
+            headerTitle.setText("DSHA 对话");
+        }
+        headerTitle.setTextSize(17);
     }
 
     private void toggleDshConnectionTarget() {
@@ -4077,8 +4096,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         currentViewingFile = null;
 
         // 恢复顶栏为对话模式
-        headerTitle.setText("DSHA 对话");
-        headerTitle.setTextSize(17);
+        updateHeaderTitleText();
         if (headerSubTitle != null) headerSubTitle.setVisibility(View.GONE);
         btnClose.setIconType(ICON_CLOSE);
         btnSettings.setVisibility(View.VISIBLE);
