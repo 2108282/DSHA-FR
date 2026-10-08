@@ -596,10 +596,6 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         isMonetInvert = monetInvert;
         updateCardTheme();
 
-        // 核心用户体验保证：每次重新唤起呼出抽屉时，始终默认展示本机端
-        sIsRemoteActive = false;
-        updateWebViewSlotVisibility();
-
         if (com.deepseekharness.app.HttpShellService.isApprovalWaiting && com.deepseekharness.app.HttpShellService.sCurrentApprovalInfo != null) {
             displayApprovalBanner(com.deepseekharness.app.HttpShellService.sCurrentApprovalInfo, com.deepseekharness.app.HttpShellService.sCurrentApprovalEpoch);
         } else {
@@ -2652,9 +2648,6 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                             if (sCachedWebView != null) {
                                 sCachedWebView.onPause();
                             }
-                            // 退出后重置为本机模式，确保下次重新呼出抽屉时始终默认展示本机端
-                            sIsRemoteActive = false;
-                            updateWebViewSlotVisibility();
                             moveTaskToBack(true);
                             overridePendingTransition(0, 0);
                             isDismissing = false;
@@ -2665,8 +2658,6 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             if (sCachedWebView != null) {
                 sCachedWebView.onPause();
             }
-            sIsRemoteActive = false;
-            updateWebViewSlotVisibility();
             moveTaskToBack(true);
             overridePendingTransition(0, 0);
             isDismissing = false;

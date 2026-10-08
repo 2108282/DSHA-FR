@@ -149,14 +149,14 @@ public class CredentialsActivity extends AppCompatActivity {
             // 空状态卡片
             ModernCardView emptyCard = new ModernCardView(this);
             emptyCard.setOrientation(LinearLayout.VERTICAL);
-            emptyCard.setPadding(dpToPx(18), dpToPx(20), dpToPx(18), dpToPx(20));
-            emptyCard.setCardRadius(dpToPx(16));
+            emptyCard.setPadding(dpToPx(18), dpToPx(18), dpToPx(18), dpToPx(18));
+            emptyCard.setCardRadius(18f);
             LinearLayout.LayoutParams elp = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             emptyCard.setLayoutParams(elp);
 
             TextView tvEmpty = new TextView(this);
-            tvEmpty.setText("暂无远端连接配置，点击右上角「➕ 添加远端」即可新增。");
+            tvEmpty.setText("暂无远端连接配置，点击右上角「添加远端」即可新增。");
             tvEmpty.setTextColor(getColor(R.color.text_muted));
             tvEmpty.setTextSize(13);
             tvEmpty.setGravity(android.view.Gravity.CENTER);
@@ -176,7 +176,7 @@ public class CredentialsActivity extends AppCompatActivity {
             ModernCardView card = new ModernCardView(this);
             card.setOrientation(LinearLayout.VERTICAL);
             card.setPadding(dpToPx(18), dpToPx(18), dpToPx(18), dpToPx(18));
-            card.setCardRadius(dpToPx(18));
+            card.setCardRadius(18f);
             LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             if (i > 0) clp.topMargin = dpToPx(12);
@@ -340,14 +340,14 @@ public class CredentialsActivity extends AppCompatActivity {
 
     private void confirmDeleteRemoteEntry(com.deepseekharness.app.core.ConfigStore.RemoteDshEntry entry, String titleName) {
         FrameLayout root = new FrameLayout(this);
-        root.setPadding(dpToPx(20), dpToPx(20), dpToPx(20), dpToPx(20));
+        root.setPadding(dpToPx(18), dpToPx(18), dpToPx(18), dpToPx(18));
         root.setClipChildren(false);
         root.setClipToPadding(false);
 
         ModernCardView card = new ModernCardView(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dpToPx(20), dpToPx(20), dpToPx(20), dpToPx(20));
-        card.setCardRadius(dpToPx(20));
+        card.setPadding(dpToPx(18), dpToPx(18), dpToPx(18), dpToPx(18));
+        card.setCardRadius(18f);
         FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         card.setLayoutParams(clp);
