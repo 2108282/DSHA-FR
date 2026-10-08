@@ -106,15 +106,31 @@ public class QuickChatSheetActivity extends AppCompatActivity {
     public static final int ICON_BACK = 6;
     public static final int ICON_REFRESH = 7;
 
-    // 全局静态保活单例，彻底解决再次进入重新转圈加载问题
+    // 全局静态保活双槽位，彻底解决再次进入重新转圈加载问题，并支持本机与远端 0 秒瞬间热切换
     @SuppressLint("StaticFieldLeak")
     private static WebView sCachedWebView = null;
+    @SuppressLint("StaticFieldLeak")
+    private static WebView sLocalWebView = null;
+    @SuppressLint("StaticFieldLeak")
+    private static WebView sRemoteWebView = null;
+    public static boolean sIsRemoteActive = false;
+
     private static boolean sWebLoaded = false;
+    private static boolean sLocalWebLoaded = false;
+    private static boolean sRemoteWebLoaded = false;
     private static long sLoadedGeneration = -1;
     private static int sLoadedPort = 0;
+    private static String sLoadedRemoteUrl = "";
     /** + 号触发：token 失效重载后自动补发新建对话动作 */
     private static volatile boolean sPendingNewChat = false;
     public static volatile String sPendingApprovalDecision = null;
+
+    public static WebView getActiveWebView() {
+        if (sIsRemoteActive && sRemoteWebView != null) {
+            return sRemoteWebView;
+        }
+        return sLocalWebView != null ? sLocalWebView : sCachedWebView;
+    }
 
     /**
      * 构建点击通知唤起抽屉的标准 Intent。
@@ -1038,17 +1054,14 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         });
         leftGroup.addView(btnClose);
 
-        // [② >_ 容器终端按钮]
-        btnSettings = createHeaderIconButton(ICON_SETTINGS, textColor, "进入终端控制台");
+        // [② >_ 终端按钮（保持原有图标与样式不变，点击在 本机3095桥 和 远端连接 之间无缝互换）]
+        btnSettings = createHeaderIconButton(ICON_SETTINGS, textColor, "切换本机/远端 DSH 连接");
         LinearLayout.LayoutParams settingsLp = (LinearLayout.LayoutParams) btnSettings.getLayoutParams();
         settingsLp.setMarginStart(dpToPx(4));
         btnSettings.setLayoutParams(settingsLp);
         btnSettings.setOnClickListener(v -> {
-            Intent intent = new Intent(this, MainActivity.class);
-            intent.putExtra("open_terminal", true);
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-            startActivity(intent);
-            dismissSheet();
+            v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+            toggleDshConnectionTarget();
         });
         leftGroup.addView(btnSettings);
 
@@ -1082,7 +1095,20 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             if (fileViewerContainer != null && fileViewerContainer.getVisibility() == View.VISIBLE) {
                 closeFileViewer();
             }
-            forceReloadWithLatestToken();
+            if (sIsRemoteActive) {
+                if (sRemoteWebView != null) {
+                    if (progressBar != null) progressBar.setVisibility(View.VISIBLE);
+                    ConfigStore cfg = new ConfigStore(this);
+                    String rUrl = cfg.getRemoteDshUrl();
+                    if (rUrl != null && !rUrl.isEmpty()) {
+                        sRemoteWebView.loadUrl(rUrl);
+                    } else {
+                        sRemoteWebView.reload();
+                    }
+                }
+            } else {
+                forceReloadWithLatestToken();
+            }
         });
         rightGroup.addView(btnRefresh);
 
@@ -1092,19 +1118,22 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         newChatLp.setMarginStart(dpToPx(4));
         btnNewChat.setLayoutParams(newChatLp);
         btnNewChat.setOnClickListener(v -> {
-            if (sCachedWebView == null) return;
+            WebView activeWeb = getActiveWebView();
+            if (activeWeb == null) return;
 
-            long currentGen = controller != null ? controller.getWebGeneration() : -1;
-            boolean serviceRestarted = sLoadedGeneration > 0 && currentGen > 0 && sLoadedGeneration != currentGen;
-            int port = controller != null ? controller.getPort() : 3080;
-            String curUrl = sCachedWebView.getUrl();
-            boolean detached = curUrl == null || (!curUrl.startsWith("http://127.0.0.1:" + port) && !curUrl.startsWith("http://localhost:" + port));
+            if (!sIsRemoteActive) {
+                long currentGen = controller != null ? controller.getWebGeneration() : -1;
+                boolean serviceRestarted = sLoadedGeneration > 0 && currentGen > 0 && sLoadedGeneration != currentGen;
+                int port = controller != null ? controller.getPort() : 3080;
+                String curUrl = activeWeb.getUrl();
+                boolean detached = curUrl == null || (!curUrl.startsWith("http://127.0.0.1:" + port) && !curUrl.startsWith("http://localhost:" + port));
 
-            if (serviceRestarted || detached || !sWebLoaded || sLoadedPort != port) {
-                sLoadedPort = port;
-                sPendingNewChat = true;
-                forceReloadWithLatestToken();
-                return;
+                if (serviceRestarted || detached || !sLocalWebLoaded || sLoadedPort != port) {
+                    sLoadedPort = port;
+                    sPendingNewChat = true;
+                    forceReloadWithLatestToken();
+                    return;
+                }
             }
 
             String js = "(function() {" +
@@ -1116,7 +1145,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                     "    window.location.href = '/';" +
                     "  }" +
                     "})();";
-            sCachedWebView.evaluateJavascript(js, null);
+            activeWeb.evaluateJavascript(js, null);
         });
         rightGroup.addView(btnNewChat);
 
@@ -1655,152 +1684,245 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         }
     }
 
-    /** 挂载常驻单例 WebView，实现 100% 零转圈秒开、1:1 原生字体与透明毛玻璃透光 */
-    private void attachChatWeb() {
-        if (sCachedWebView == null) {
-            sCachedWebView = new DshaWebView(getApplicationContext());
-            WebSettings ws = sCachedWebView.getSettings();
-            ws.setJavaScriptEnabled(true);
-            ws.setDomStorageEnabled(true);
-            ws.setDatabaseEnabled(true);
-            ws.setSupportMultipleWindows(false);
-            ws.setUseWideViewPort(true);
-            // 移除 setLoadWithOverviewMode(true)，设置 100% 原始字体比例
-            ws.setLoadWithOverviewMode(false);
-            ws.setTextZoom(100);
-            ws.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
-            ws.setAllowFileAccess(false);
-            // 网页只能获取用户选择后复制到专属 FileProvider 的 URI。
-            ws.setAllowContentAccess(true);
-            ws.setCacheMode(WebSettings.LOAD_DEFAULT);
+    /** 创建并配置标准参数的 DshaWebView 实例（本机与远端槽位共用） */
+    private WebView createConfiguredWebView() {
+        DshaWebView web = new DshaWebView(getApplicationContext());
+        WebSettings ws = web.getSettings();
+        ws.setJavaScriptEnabled(true);
+        ws.setDomStorageEnabled(true);
+        ws.setDatabaseEnabled(true);
+        ws.setSupportMultipleWindows(false);
+        ws.setUseWideViewPort(true);
+        ws.setLoadWithOverviewMode(false);
+        ws.setTextZoom(100);
+        ws.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
+        ws.setAllowFileAccess(false);
+        ws.setAllowContentAccess(true);
+        ws.setCacheMode(WebSettings.LOAD_DEFAULT);
 
-            // 模式状态由「抽屉反色开关」独立控制，同时禁用系统自动算法反色
-            boolean initDark = new ConfigStore(getApplicationContext()).isSheetInvertColor();
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                try {
-                    ws.setForceDark(initDark ? WebSettings.FORCE_DARK_ON : WebSettings.FORCE_DARK_OFF);
-                } catch (Throwable ignored) {}
-            }
-            if (Build.VERSION.SDK_INT >= 33) {
-                try {
-                    ws.setAlgorithmicDarkeningAllowed(false);
-                } catch (Throwable ignored) {}
-            }
-
-            sCachedWebView.setBackgroundColor(Color.TRANSPARENT);
-
-            boolean desktop = getSharedPreferences("deepseekharness", Context.MODE_PRIVATE)
-                    .getBoolean("desktop_mode", false);
-            if (desktop) {
-                ws.setUserAgentString("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                        + "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36");
-            }
-
-            sCachedWebView.setWebViewClient(createSheetWebViewClient());
-            sCachedWebView.setWebChromeClient(new SheetChromeClient());
-
-            // 注入原生文件操作通道，打通网页文件树与附件的原生查看拦截及长按三合一操作菜单
-            sCachedWebView.addJavascriptInterface(new NativeBridgeInterface(), "DshaNativeBridge");
-            sCachedWebView.setDownloadListener((url, userAgent, contentDisposition, mimetype, contentLength) -> {
-                try {
-                    android.app.DownloadManager.Request request = new android.app.DownloadManager.Request(Uri.parse(url));
-                    request.setMimeType(mimetype);
-                    String cks = android.webkit.CookieManager.getInstance().getCookie(url);
-                    if (cks != null && !cks.isEmpty()) request.addRequestHeader("cookie", cks);
-                    request.addRequestHeader("User-Agent", userAgent);
-                    String fileName = android.webkit.URLUtil.guessFileName(url, contentDisposition, mimetype);
-                    request.setDescription("正在下载文件 " + fileName);
-                    request.setTitle(fileName);
-                    request.setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-                    request.setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, "DSHA/" + fileName);
-                    android.app.DownloadManager dm = (android.app.DownloadManager) getSystemService(DOWNLOAD_SERVICE);
-                    if (dm != null) {
-                        dm.enqueue(request);
-                        Toast.makeText(this, "开始下载：" + fileName + "（保存在 Download/DSHA/）", Toast.LENGTH_LONG).show();
-                    }
-                } catch (Throwable t) {
-                    try {
-                        startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
-                    } catch (Throwable ignored) {}
-                }
-            });
-
-            android.webkit.CookieManager cookies = android.webkit.CookieManager.getInstance();
-            cookies.setAcceptCookie(true);
-            cookies.setAcceptThirdPartyCookies(sCachedWebView, true);
-
-            int port = controller != null ? controller.getPort() : 3080;
-            String base = "http://127.0.0.1:" + port + "/";
-            sLoadedPort = port;
-
-            // 预埋鉴权凭证 Cookie，确保 Web Worker 发起二进制文件上传(/api/session/uploadFileBinary)时带完整认证
-            new Thread(() -> {
-                try {
-                    String authCookie = controller != null ? controller.exchangeDshAuthCookie() : null;
-                    if (authCookie != null && !authCookie.isEmpty()) {
-                        String cookieVal = authCookie.contains(";") ? authCookie : (authCookie + "; Path=/; HttpOnly; SameSite=Lax");
-                        cookies.setCookie(base, cookieVal);
-                        cookies.setCookie("http://127.0.0.1/", cookieVal);
-                    }
-                    String bt = com.deepseekharness.app.HttpShellService.ensureToken();
-                    if (bt != null && !bt.isEmpty()) {
-                        String dshaCookie = "dsha_t=" + bt + "; Path=/; SameSite=Lax; Max-Age=31536000";
-                        cookies.setCookie(base, dshaCookie);
-                        cookies.setCookie("http://127.0.0.1/", dshaCookie);
-                    }
-                    cookies.flush();
-                } catch (Throwable ignored) {}
-            }, "sheet-cookie-init").start();
-
-            String authUrl = controller != null ? controller.getWebAuthUrl() : "";
-            // 直接加载容器启动成功后固定不变的 LaunchToken 原生地址，彻底消除子线程换 Cookie 引起的超时白屏
-            if (authUrl != null && !authUrl.isEmpty()) {
-                if (controller != null) {
-                    sLoadedGeneration = controller.getWebGeneration();
-                }
-                sCachedWebView.loadUrl(authUrl);
-            } else {
-                if (progressBar != null) progressBar.setVisibility(View.VISIBLE);
-                if (controller != null) controller.tryRecoverRunningUrl();
-                // 若启动初期 Token 尚未打印就绪，后台轮询等待有效凭证，绝不拿裸地址触发 401
-                new Thread(() -> {
-                    for (int step = 0; step < 30; step++) {
-                        try {
-                            Thread.sleep(300);
-                        } catch (InterruptedException ignored) {
-                            break;
-                        }
-                        String readyUrl = controller != null ? controller.getWebAuthUrl() : "";
-                        if (readyUrl != null && !readyUrl.isEmpty()) {
-                            if (controller != null) {
-                                sLoadedGeneration = controller.getWebGeneration();
-                            }
-                            runOnUiThread(() -> {
-                                if (sCachedWebView != null && !isFinishing() && !isDestroyed()) {
-                                    sCachedWebView.loadUrl(readyUrl);
-                                }
-                            });
-                            break;
-                        }
-                    }
-                }, "sheet-wait-auth").start();
-            }
-        } else {
-            if (sCachedWebView.getParent() instanceof ViewGroup) {
-                ((ViewGroup) sCachedWebView.getParent()).removeView(sCachedWebView);
-            }
-            sCachedWebView.getSettings().setAllowContentAccess(true);
-            sCachedWebView.setWebViewClient(createSheetWebViewClient());
-            sCachedWebView.setWebChromeClient(new SheetChromeClient());
-            sCachedWebView.addJavascriptInterface(new NativeBridgeInterface(), "DshaNativeBridge");
-            if (progressBar != null) {
-                progressBar.setVisibility(sWebLoaded ? View.GONE : View.VISIBLE);
-            }
-            injectTransparentBackground(sCachedWebView);
+        boolean initDark = new ConfigStore(getApplicationContext()).isSheetInvertColor();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
+                ws.setForceDark(initDark ? WebSettings.FORCE_DARK_ON : WebSettings.FORCE_DARK_OFF);
+            } catch (Throwable ignored) {}
+        }
+        if (Build.VERSION.SDK_INT >= 33) {
+            try {
+                ws.setAlgorithmicDarkeningAllowed(false);
+            } catch (Throwable ignored) {}
         }
 
-        webContainer.addView(sCachedWebView, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        web.setBackgroundColor(Color.TRANSPARENT);
+
+        boolean desktop = getSharedPreferences("deepseekharness", Context.MODE_PRIVATE)
+                .getBoolean("desktop_mode", false);
+        if (desktop) {
+            ws.setUserAgentString("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                    + "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36");
+        }
+
+        web.setWebViewClient(createSheetWebViewClient());
+        web.setWebChromeClient(new SheetChromeClient());
+        web.addJavascriptInterface(new NativeBridgeInterface(), "DshaNativeBridge");
+
+        web.setDownloadListener((url, userAgent, contentDisposition, mimetype, contentLength) -> {
+            try {
+                android.app.DownloadManager.Request request = new android.app.DownloadManager.Request(Uri.parse(url));
+                request.setMimeType(mimetype);
+                String cks = android.webkit.CookieManager.getInstance().getCookie(url);
+                if (cks != null && !cks.isEmpty()) request.addRequestHeader("cookie", cks);
+                request.addRequestHeader("User-Agent", userAgent);
+                String fileName = android.webkit.URLUtil.guessFileName(url, contentDisposition, mimetype);
+                request.setDescription("正在下载文件 " + fileName);
+                request.setTitle(fileName);
+                request.setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                request.setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, "DSHA/" + fileName);
+                android.app.DownloadManager dm = (android.app.DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+                if (dm != null) {
+                    dm.enqueue(request);
+                    Toast.makeText(this, "开始下载：" + fileName + "（保存在 Download/DSHA/）", Toast.LENGTH_LONG).show();
+                }
+            } catch (Throwable t) {
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+                } catch (Throwable ignored) {}
+            }
+        });
+
+        android.webkit.CookieManager cookies = android.webkit.CookieManager.getInstance();
+        cookies.setAcceptCookie(true);
+        cookies.setAcceptThirdPartyCookies(web, true);
+
+        return web;
+    }
+
+    private void ensureWebViewParentClean(WebView wv) {
+        if (wv != null && wv.getParent() instanceof ViewGroup) {
+            ((ViewGroup) wv.getParent()).removeView(wv);
+        }
+    }
+
+    private void mountWebViewToContainer(WebView wv) {
+        if (wv == null || webContainer == null) return;
+        if (wv.getParent() != webContainer) {
+            ensureWebViewParentClean(wv);
+            webContainer.addView(wv, new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        }
+    }
+
+    private void updateWebViewSlotVisibility() {
+        if (sLocalWebView != null) {
+            sLocalWebView.setVisibility(sIsRemoteActive ? View.GONE : View.VISIBLE);
+        }
+        if (sRemoteWebView != null) {
+            sRemoteWebView.setVisibility(sIsRemoteActive ? View.VISIBLE : View.GONE);
+        }
+        sCachedWebView = getActiveWebView();
+        if (sCachedWebView != null) {
+            sCachedWebView.bringToFront();
+            injectTransparentBackground(sCachedWebView);
+        }
+        if (progressBar != null) {
+            boolean loaded = sIsRemoteActive ? sRemoteWebLoaded : sLocalWebLoaded;
+            progressBar.setVisibility(loaded ? View.GONE : View.VISIBLE);
+        }
+    }
+
+    private void toggleDshConnectionTarget() {
+        ConfigStore cfg = new ConfigStore(this);
+        String remoteUrl = cfg.getRemoteDshUrl();
+
+        if (!sIsRemoteActive) {
+            // 当前为本机模式，切换到远端模式
+            if (remoteUrl == null || remoteUrl.isEmpty()) {
+                Toast.makeText(this, "未配置远端 DSH 地址，请在「访问地址与凭据」中设置", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            sIsRemoteActive = true;
+            cfg.setRemoteDshEnabled(true);
+            ensureRemoteWebViewLoaded(remoteUrl);
+            mountWebViewToContainer(sRemoteWebView);
+            updateWebViewSlotVisibility();
+            Toast.makeText(this, "已切换至远端 DSH", Toast.LENGTH_SHORT).show();
+        } else {
+            // 当前为远端模式，切换回本机模式
+            sIsRemoteActive = false;
+            cfg.setRemoteDshEnabled(false);
+            if (sLocalWebView == null) {
+                sLocalWebView = createConfiguredWebView();
+                loadInitialLocalWeb();
+            }
+            mountWebViewToContainer(sLocalWebView);
+            updateWebViewSlotVisibility();
+            if (!sLocalWebLoaded) {
+                forceReloadWithLatestToken();
+            }
+            Toast.makeText(this, "已切换至本机 DSH", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void ensureRemoteWebViewLoaded(String remoteUrl) {
+        if (sRemoteWebView == null) {
+            sRemoteWebView = createConfiguredWebView();
+        }
+        if (remoteUrl != null && (!remoteUrl.equals(sLoadedRemoteUrl) || !sRemoteWebLoaded)) {
+            sLoadedRemoteUrl = remoteUrl;
+            sRemoteWebLoaded = false;
+            if (progressBar != null) progressBar.setVisibility(View.VISIBLE);
+            sRemoteWebView.loadUrl(remoteUrl);
+        }
+    }
+
+    private void loadInitialLocalWeb() {
+        if (sLocalWebView == null) return;
+        android.webkit.CookieManager cookies = android.webkit.CookieManager.getInstance();
+        int port = controller != null ? controller.getPort() : 3080;
+        String base = "http://127.0.0.1:" + port + "/";
+        sLoadedPort = port;
+
+        new Thread(() -> {
+            try {
+                String authCookie = controller != null ? controller.exchangeDshAuthCookie() : null;
+                if (authCookie != null && !authCookie.isEmpty()) {
+                    String cookieVal = authCookie.contains(";") ? authCookie : (authCookie + "; Path=/; HttpOnly; SameSite=Lax");
+                    cookies.setCookie(base, cookieVal);
+                    cookies.setCookie("http://127.0.0.1/", cookieVal);
+                }
+                String bt = com.deepseekharness.app.HttpShellService.ensureToken();
+                if (bt != null && !bt.isEmpty()) {
+                    String dshaCookie = "dsha_t=" + bt + "; Path=/; SameSite=Lax; Max-Age=31536000";
+                    cookies.setCookie(base, dshaCookie);
+                    cookies.setCookie("http://127.0.0.1/", dshaCookie);
+                }
+                cookies.flush();
+            } catch (Throwable ignored) {}
+        }, "sheet-cookie-init").start();
+
+        String authUrl = controller != null ? controller.getWebAuthUrl() : "";
+        if (authUrl != null && !authUrl.isEmpty()) {
+            if (controller != null) {
+                sLoadedGeneration = controller.getWebGeneration();
+            }
+            sLocalWebView.loadUrl(authUrl);
+        } else {
+            if (progressBar != null && !sIsRemoteActive) progressBar.setVisibility(View.VISIBLE);
+            if (controller != null) controller.tryRecoverRunningUrl();
+            new Thread(() -> {
+                for (int step = 0; step < 30; step++) {
+                    try {
+                        Thread.sleep(300);
+                    } catch (InterruptedException ignored) {
+                        break;
+                    }
+                    String readyUrl = controller != null ? controller.getWebAuthUrl() : "";
+                    if (readyUrl != null && !readyUrl.isEmpty()) {
+                        if (controller != null) {
+                            sLoadedGeneration = controller.getWebGeneration();
+                        }
+                        runOnUiThread(() -> {
+                            if (sLocalWebView != null && !isFinishing() && !isDestroyed()) {
+                                sLocalWebView.loadUrl(readyUrl);
+                            }
+                        });
+                        break;
+                    }
+                }
+            }, "sheet-wait-auth").start();
+        }
+    }
+
+    /** 挂载常驻双槽位 WebView，实现本机与远端 100% 零转圈秒开、瞬间热切换 */
+    private void attachChatWeb() {
+        ConfigStore cfg = new ConfigStore(getApplicationContext());
+        boolean remoteEnabled = cfg.isRemoteDshEnabled();
+        String remoteUrl = cfg.getRemoteDshUrl();
+
+        if (remoteEnabled && remoteUrl != null && !remoteUrl.isEmpty()) {
+            sIsRemoteActive = true;
+        }
+
+        // 1. 本机槽位
+        if (sLocalWebView == null) {
+            sLocalWebView = createConfiguredWebView();
+            loadInitialLocalWeb();
+        } else {
+            ensureWebViewParentClean(sLocalWebView);
+        }
+
+        // 2. 远端槽位
+        if (sIsRemoteActive && remoteUrl != null && !remoteUrl.isEmpty()) {
+            ensureRemoteWebViewLoaded(remoteUrl);
+        }
+
+        // 3. 挂载到容器
+        mountWebViewToContainer(sLocalWebView);
+        if (sRemoteWebView != null) {
+            mountWebViewToContainer(sRemoteWebView);
+        }
+
+        // 4. 更新槽位可见性与当前活跃 WebView
+        updateWebViewSlotVisibility();
     }
 
     private static void dispatchNativeBridgeFileAction(String rawPath, int action, float touchX, float touchY) {
@@ -1829,6 +1951,10 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         act.runOnUiThread(() -> {
             QuickChatSheetActivity currentAct = sCurrentInstance;
             if (currentAct == null || currentAct.isFinishing() || currentAct.isDestroyed()) return;
+            if (sIsRemoteActive && action == 0) {
+                // 远端模式下短按放行给 Web 原生查看，不强行尝试从本地磁盘打开
+                return;
+            }
             File f = new File(finalPath);
             if (action == 2) {
                 currentAct.showWorkspaceFileActionMenu(f, touchX, touchY);
@@ -2322,6 +2448,9 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                         + "      /* 2. 文件树列表内部节点：短按文件保留原地查看器（Office 文档放行，由 DSH 内置查看器承载） */\n"
                         + "      var treeEntry = e.target && e.target.closest ? e.target.closest('li[data-files-entry=\"file\"]') : null;\n"
                         + "      if (treeEntry) {\n"
+                        + "        if (window.__dsha_is_remote__) {\n"
+                        + "          return;\n"
+                        + "        }\n"
                         + "        var treePath = treeEntry.getAttribute('data-files-path');\n"
                         + "        if (treePath) {\n"
                         + "          var cleanPath = treePath.split('?')[0].split('#')[0];\n"
@@ -2365,6 +2494,10 @@ public class QuickChatSheetActivity extends AppCompatActivity {
     }
 
     private void injectTransparentBackground(WebView view) {
+        if (view != null) {
+            boolean isRemote = (view == sRemoteWebView) || (sIsRemoteActive && view == sCachedWebView);
+            view.evaluateJavascript("window.__dsha_is_remote__ = " + (isRemote ? "true" : "false") + ";", null);
+        }
         refreshImmersiveTheme(this);
     }
 
@@ -2530,6 +2663,24 @@ public class QuickChatSheetActivity extends AppCompatActivity {
 
     private WebViewClient createSheetWebViewClient() {
         return new WebViewClient() {
+            private boolean isInternalDshUrl(String url) {
+                if (url == null) return false;
+                if (url.startsWith("http://127.0.0.1:") || url.startsWith("http://localhost:")) {
+                    return true;
+                }
+                String remoteUrl = new ConfigStore(getApplicationContext()).getRemoteDshUrl();
+                if (remoteUrl != null && !remoteUrl.isEmpty()) {
+                    try {
+                        Uri rUri = Uri.parse(remoteUrl);
+                        Uri curUri = Uri.parse(url);
+                        if (rUri.getHost() != null && rUri.getHost().equalsIgnoreCase(curUri.getHost())) {
+                            return true;
+                        }
+                    } catch (Throwable ignored) {}
+                }
+                return false;
+            }
+
             @Override
             public void onPageStarted(WebView view, String url, Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
@@ -2540,6 +2691,11 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             public void onPageCommitVisible(WebView view, String url) {
                 super.onPageCommitVisible(view, url);
                 injectTransparentBackground(view);
+                if (view == sRemoteWebView) {
+                    sRemoteWebLoaded = true;
+                } else {
+                    sLocalWebLoaded = true;
+                }
                 sWebLoaded = true;
                 if (progressBar != null) progressBar.setVisibility(View.GONE);
             }
@@ -2547,7 +2703,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
                 if (tryInterceptLocalFile(url)) return true;
-                if (url != null && (url.startsWith("http://127.0.0.1:") || url.startsWith("http://localhost:"))) {
+                if (isInternalDshUrl(url)) {
                     return false;
                 }
                 openExternal(url);
@@ -2560,7 +2716,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 String url = request.getUrl().toString();
                 if (tryInterceptLocalFile(url)) return true;
                 if (!request.isForMainFrame()) return false;
-                if (url.startsWith("http://127.0.0.1:") || url.startsWith("http://localhost:")) {
+                if (isInternalDshUrl(url)) {
                     return false;
                 }
                 openExternal(url);
@@ -2570,6 +2726,11 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
+                if (view == sRemoteWebView) {
+                    sRemoteWebLoaded = true;
+                } else {
+                    sLocalWebLoaded = true;
+                }
                 sWebLoaded = true;
                 authRetried = false;
                 if (progressBar != null) progressBar.setVisibility(View.GONE);
@@ -2587,7 +2748,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 if (request != null && request.isForMainFrame() && errorHint != null) {
                     if (progressBar != null) progressBar.setVisibility(View.GONE);
                     errorHint.setVisibility(View.VISIBLE);
-                    errorHint.setText("DSHA 服务未就绪，请先在控制台启动");
+                    errorHint.setText(view == sRemoteWebView ? "远端 DSH 服务未就绪或网络不可达" : "DSHA 服务未就绪，请先在控制台启动");
                 }
             }
 
@@ -2598,9 +2759,15 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                     int code = errorResponse != null ? errorResponse.getStatusCode() : 0;
                     if (code == 401 || code == 403) {
                         authRetried = true;
-                        String retryUrl = controller != null ? controller.getWebAuthUrl() : "";
-                        if (retryUrl != null && !retryUrl.isEmpty()) {
-                            view.post(() -> view.loadUrl(retryUrl));
+                        if (view == sRemoteWebView) {
+                            runOnUiThread(() -> {
+                                Toast.makeText(QuickChatSheetActivity.this, "远端 DSH 鉴权失败 (HTTP " + code + ")，请检查 Token", Toast.LENGTH_SHORT).show();
+                            });
+                        } else {
+                            String retryUrl = controller != null ? controller.getWebAuthUrl() : "";
+                            if (retryUrl != null && !retryUrl.isEmpty()) {
+                                view.post(() -> view.loadUrl(retryUrl));
+                            }
                         }
                     }
                 }
@@ -2839,16 +3006,25 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             }, 350);
 
             // 2. 检查底层服务是否发生过重启（generation 改变）
-            long currentGen = controller != null ? controller.getWebGeneration() : -1;
-            boolean serviceRestarted = sLoadedGeneration > 0 && currentGen > 0 && sLoadedGeneration != currentGen;
+            if (sIsRemoteActive) {
+                if (!sRemoteWebLoaded && sRemoteWebView != null) {
+                    ConfigStore cfg = new ConfigStore(this);
+                    String rUrl = cfg.getRemoteDshUrl();
+                    if (rUrl != null && !rUrl.isEmpty()) {
+                        ensureRemoteWebViewLoaded(rUrl);
+                    }
+                }
+            } else {
+                long currentGen = controller != null ? controller.getWebGeneration() : -1;
+                boolean serviceRestarted = sLoadedGeneration > 0 && currentGen > 0 && sLoadedGeneration != currentGen;
+                String curUrl = sLocalWebView != null ? sLocalWebView.getUrl() : null;
+                boolean isLocalDsh = curUrl != null && (curUrl.contains("://127.0.0.1:") || curUrl.contains("://localhost:"));
 
-            String curUrl = sCachedWebView.getUrl();
-            boolean isLocalDsh = curUrl != null && (curUrl.contains("://127.0.0.1:") || curUrl.contains("://localhost:"));
-
-            // 核心重加载防卡死：仅当服务真正重启、完全脱离本地服务或此前未成功载入时才触发重载；
-            // 只要 WebView 已在正常显示本地网页，绝对不重新刷新，彻底消除白屏与卡顿！
-            if (!sWebLoaded || serviceRestarted || !isLocalDsh) {
-                forceReloadWithLatestToken();
+                // 核心重加载防卡死：仅当服务真正重启、完全脱离本地服务或此前未成功载入时才触发重载；
+                // 只要 WebView 已在正常显示本地网页，绝对不重新刷新，彻底消除白屏与卡顿！
+                if (!sLocalWebLoaded || serviceRestarted || !isLocalDsh) {
+                    forceReloadWithLatestToken();
+                }
             }
         }
     }
@@ -2927,7 +3103,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
 
     // ---------------- 手势位置跟随的悬浮气泡微菜单（100% 继承抽屉毛玻璃与莫奈主题） ----------------
     private void showWorkspaceFileActionMenu(final File file, float touchX, float touchY) {
-        if (file == null || !file.exists() || rootOverlay == null) {
+        if (file == null || (!sIsRemoteActive && !file.exists()) || rootOverlay == null) {
             Toast.makeText(this, "目标不存在", Toast.LENGTH_SHORT).show();
             return;
         }
@@ -3048,17 +3224,19 @@ public class QuickChatSheetActivity extends AppCompatActivity {
 
         mask.setOnClickListener(v -> dismissActiveDialog());
 
-        // 1. 外部打开
-        menuCard.addView(createMenuItem("↗   调用系统打开方式", palette.textColor, v -> {
-            dismissActiveDialog();
-            com.deepseekharness.app.viewer.FileOpenHelper.openWithSystem(QuickChatSheetActivity.this, file);
-        }));
+        if (!sIsRemoteActive) {
+            // 1. 外部打开
+            menuCard.addView(createMenuItem("↗   调用系统打开方式", palette.textColor, v -> {
+                dismissActiveDialog();
+                com.deepseekharness.app.viewer.FileOpenHelper.openWithSystem(QuickChatSheetActivity.this, file);
+            }));
 
-        // 2. 重命名
-        menuCard.addView(createMenuItem("✏️   重命名", palette.textColor, v -> {
-            dismissActiveDialog();
-            promptRenameFileCustom(file, palette);
-        }));
+            // 2. 重命名
+            menuCard.addView(createMenuItem("✏️   重命名", palette.textColor, v -> {
+                dismissActiveDialog();
+                promptRenameFileCustom(file, palette);
+            }));
+        }
 
         // 3. 复制文件名
         menuCard.addView(createMenuItem("📋   复制文件名", palette.textColor, v -> {
@@ -3072,11 +3250,23 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             copyToClipboard(file.getAbsolutePath(), "✓ 已复制路径：" + file.getAbsolutePath());
         }));
 
-        // 5. 删除（警示红）
-        menuCard.addView(createMenuItem("🗑️   删除" + (isDir ? "文件夹" : ""), Color.parseColor("#FF5252"), v -> {
-            dismissActiveDialog();
-            confirmDeleteFileCustom(file, palette);
-        }));
+        if (!sIsRemoteActive) {
+            // 5. 下载到 Download 目录
+            menuCard.addView(createMenuItem("📥   下载到 Download 目录", palette.textColor, v -> {
+                dismissActiveDialog();
+                if (isDir) {
+                    Toast.makeText(this, "暂不支持直接下载整个文件夹", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                confirmDownloadFileCustom(file, palette);
+            }));
+
+            // 6. 删除（警示红）
+            menuCard.addView(createMenuItem("🗑️   删除" + (isDir ? "文件夹" : ""), Color.parseColor("#FF5252"), v -> {
+                dismissActiveDialog();
+                confirmDeleteFileCustom(file, palette);
+            }));
+        }
 
         mask.addView(menuCard);
         showDialogLayer(mask);
@@ -3329,6 +3519,157 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             }
         }
         return dir.delete();
+    }
+
+    // ---------------- 抽屉同款毛玻璃 UI 下载确认弹窗 ----------------
+    private void confirmDownloadFileCustom(final File file, final MonetThemeHelper.Palette palette) {
+        final FrameLayout mask = new FrameLayout(this);
+        mask.setLayoutParams(new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        mask.setBackgroundColor(Color.parseColor("#33000000"));
+        mask.setClickable(true);
+        mask.setFocusable(true);
+
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+                dpToPx(290), ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.gravity = Gravity.CENTER;
+        card.setLayoutParams(lp);
+
+        GradientDrawable bg = new GradientDrawable();
+        bg.setShape(GradientDrawable.RECTANGLE);
+        bg.setCornerRadius(dpToPx(16));
+        int dialogBgColor;
+        if (isDarkMode) {
+            dialogBgColor = Color.argb(0xFA, 0x1A, 0x22, 0x30);
+        } else {
+            int raw = palette.cardBgColor;
+            dialogBgColor = Color.argb(0xF8, Color.red(raw), Color.green(raw), Color.blue(raw));
+        }
+        bg.setColor(dialogBgColor);
+        bg.setStroke(dpToPx(1), palette.borderColor);
+        card.setBackground(bg);
+        card.setPadding(dpToPx(20), dpToPx(18), dpToPx(20), dpToPx(16));
+
+        TextView tvTitle = new TextView(this);
+        tvTitle.setText("下载确认");
+        tvTitle.setTextColor(palette.textColor);
+        tvTitle.setTextSize(16);
+        tvTitle.setTypeface(Typeface.DEFAULT_BOLD);
+        card.addView(tvTitle);
+
+        TextView tvMsg = new TextView(this);
+        tvMsg.setText("确定将文件「" + file.getName() + "」保存至客户端的 Download 目录吗？");
+        tvMsg.setTextColor(palette.textColor);
+        tvMsg.setTextSize(13);
+        LinearLayout.LayoutParams msgLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        msgLp.setMargins(0, dpToPx(12), 0, dpToPx(18));
+        tvMsg.setLayoutParams(msgLp);
+        card.addView(tvMsg);
+
+        LinearLayout btnBar = new LinearLayout(this);
+        btnBar.setOrientation(LinearLayout.HORIZONTAL);
+        btnBar.setGravity(Gravity.END);
+
+        Runnable dismiss = () -> dismissActiveDialog();
+        mask.setOnClickListener(v -> dismiss.run());
+
+        TextView btnCancel = new TextView(this);
+        btnCancel.setText("取消");
+        btnCancel.setTextColor(palette.textSecondaryColor);
+        btnCancel.setTextSize(14);
+        btnCancel.setPadding(dpToPx(14), dpToPx(8), dpToPx(14), dpToPx(8));
+        btnCancel.setOnClickListener(v -> dismiss.run());
+        btnBar.addView(btnCancel);
+
+        TextView btnDownload = new TextView(this);
+        btnDownload.setText("下载");
+        btnDownload.setTextColor(Color.parseColor("#4C8DFF"));
+        btnDownload.setTextSize(14);
+        btnDownload.setTypeface(Typeface.DEFAULT_BOLD);
+        btnDownload.setPadding(dpToPx(14), dpToPx(8), dpToPx(14), dpToPx(8));
+        btnDownload.setOnClickListener(v -> {
+            dismiss.run();
+            performDownloadFileToDownloads(file);
+        });
+        btnBar.addView(btnDownload);
+
+        card.addView(btnBar);
+        mask.addView(card);
+        showDialogLayer(mask);
+    }
+
+    private void performDownloadFileToDownloads(final File srcFile) {
+        if (srcFile == null || !srcFile.exists() || !srcFile.isFile()) {
+            Toast.makeText(this, "文件不可读或不存在", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        Toast.makeText(this, "正在保存至 Download 目录...", Toast.LENGTH_SHORT).show();
+        new Thread(() -> {
+            try {
+                File downloadDir = android.os.Environment.getExternalStoragePublicDirectory(
+                        android.os.Environment.DIRECTORY_DOWNLOADS);
+                if (downloadDir != null && !downloadDir.exists()) {
+                    downloadDir.mkdirs();
+                }
+                if (downloadDir == null || !downloadDir.canWrite()) {
+                    downloadDir = new File("/sdcard/Download");
+                }
+
+                String baseName = srcFile.getName();
+                String namePart = baseName;
+                String extPart = "";
+                int dot = baseName.lastIndexOf('.');
+                if (dot > 0) {
+                    namePart = baseName.substring(0, dot);
+                    extPart = baseName.substring(dot);
+                }
+
+                File dest = new File(downloadDir, baseName);
+                int count = 1;
+                while (dest.exists()) {
+                    dest = new File(downloadDir, namePart + " (" + count + ")" + extPart);
+                    count++;
+                }
+
+                try (java.io.FileInputStream in = new java.io.FileInputStream(srcFile);
+                     java.io.FileOutputStream out = new java.io.FileOutputStream(dest)) {
+                    byte[] buffer = new byte[64 * 1024];
+                    int len;
+                    while ((len = in.read(buffer)) != -1) {
+                        out.write(buffer, 0, len);
+                    }
+                    out.flush();
+                }
+
+                final File finalDest = dest;
+                try {
+                    android.media.MediaScannerConnection.scanFile(
+                            getApplicationContext(),
+                            new String[]{finalDest.getAbsolutePath()},
+                            null,
+                            null
+                    );
+                } catch (Throwable ignored) {}
+
+                runOnUiThread(() -> {
+                    if (rootOverlay != null) {
+                        try {
+                            rootOverlay.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK);
+                        } catch (Throwable ignored) {}
+                    }
+                    Toast.makeText(this, "✓ 已下载至 Download/" + finalDest.getName(), Toast.LENGTH_LONG).show();
+                });
+            } catch (Exception e) {
+                final String err = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "下载失败: " + err, Toast.LENGTH_LONG).show();
+                });
+            }
+        }, "dsha-file-download").start();
     }
 
     // ---------------- 抽屉内置万能查看器核心引擎（异步化多线程加载架构） ----------------

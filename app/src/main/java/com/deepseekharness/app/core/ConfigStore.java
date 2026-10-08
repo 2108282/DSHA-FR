@@ -286,6 +286,24 @@ public class ConfigStore {
         prefs.edit().putBoolean(Constants.KEY_SHEET_AUTO_RESTORE_DEFAULT, enabled).apply();
     }
 
+    // ================= 远端 DSH 连接 =================
+
+    public boolean isRemoteDshEnabled() {
+        return prefs.getBoolean(Constants.KEY_REMOTE_DSH_ENABLED, false);
+    }
+
+    public void setRemoteDshEnabled(boolean enabled) {
+        prefs.edit().putBoolean(Constants.KEY_REMOTE_DSH_ENABLED, enabled).apply();
+    }
+
+    public String getRemoteDshUrl() {
+        return prefs.getString(Constants.KEY_REMOTE_DSH_URL, "");
+    }
+
+    public void setRemoteDshUrl(String url) {
+        prefs.edit().putString(Constants.KEY_REMOTE_DSH_URL, url != null ? url.trim() : "").apply();
+    }
+
     // ================= 圈定即搜重定向 =================
 
     /**

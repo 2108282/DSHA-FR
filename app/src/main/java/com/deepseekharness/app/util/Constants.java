@@ -86,6 +86,10 @@ public final class Constants {
     public static final String KEY_BACKUP_KEY = "backup_key";
     /** 局域网访问开关。 */
     public static final String KEY_LAN_MODE = "lan_mode";
+    /** 远端 DSH 连接开关。 */
+    public static final String KEY_REMOTE_DSH_ENABLED = "remote_dsh_enabled";
+    /** 远端 DSH 目标地址。 */
+    public static final String KEY_REMOTE_DSH_URL = "remote_dsh_url";
     /** 局域网桥凭据（256-bit，等长比对，v2 键名）。 */
     public static final String KEY_LAN_TOKEN_V2 = "lan_token_v2";
     /** 容器运行时类型键名。 */
