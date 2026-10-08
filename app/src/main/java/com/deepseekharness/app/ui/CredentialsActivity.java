@@ -278,42 +278,54 @@ public class CredentialsActivity extends AppCompatActivity {
             });
             card.addView(input);
 
-            // 3. 底部操作栏：[🗑️ 删除] + [连接测试]
+            // 3. 底部操作栏：右下角操作组 [连接测试] + [删除]
             LinearLayout bottomBar = new LinearLayout(this);
             LinearLayout.LayoutParams botLp = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             botLp.topMargin = dpToPx(12);
             bottomBar.setLayoutParams(botLp);
             bottomBar.setOrientation(LinearLayout.HORIZONTAL);
-            bottomBar.setGravity(android.view.Gravity.CENTER_VERTICAL);
+            bottomBar.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
 
-            TextView btnDelete = new TextView(this);
-            LinearLayout.LayoutParams delLp = new LinearLayout.LayoutParams(
-                    0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
-            btnDelete.setLayoutParams(delLp);
-            btnDelete.setText("🗑️ 删除此远端");
-            btnDelete.setTextColor(android.graphics.Color.parseColor("#FF5252"));
-            btnDelete.setTextSize(13);
-            btnDelete.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-            btnDelete.setClickable(true);
-            btnDelete.setFocusable(true);
-            btnDelete.setOnClickListener(v -> confirmDeleteRemoteEntry(entry, titleName));
-            bottomBar.addView(btnDelete);
-
+            // 连接测试（左）
             Button btnTest = new Button(this);
-            btnTest.setLayoutParams(new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT, dpToPx(38)));
+            LinearLayout.LayoutParams testLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, dpToPx(38));
+            btnTest.setLayoutParams(testLp);
             btnTest.setBackgroundResource(R.drawable.m3_btn_primary_expressive);
             btnTest.setText("连接测试");
+            btnTest.setAllCaps(false);
             btnTest.setTextColor(getColor(R.color.accent_on));
             btnTest.setTextSize(13);
-            btnTest.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            btnTest.setTypeface(Typeface.DEFAULT_BOLD);
             btnTest.setPadding(dpToPx(16), 0, dpToPx(16), 0);
+            try {
+                btnTest.setStateListAnimator(android.animation.AnimatorInflater.loadStateListAnimator(this, R.animator.btn_press_scale));
+            } catch (Throwable ignored) {}
             btnTest.setOnClickListener(v -> {
                 String testUrl = input.getText() != null ? input.getText().toString().trim() : "";
                 testSingleRemoteConnection(testUrl, btnTest);
             });
             bottomBar.addView(btnTest);
+
+            // 删除（右下角）
+            Button btnDelete = new Button(this);
+            LinearLayout.LayoutParams delLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, dpToPx(38));
+            delLp.setMarginStart(dpToPx(10));
+            btnDelete.setLayoutParams(delLp);
+            btnDelete.setBackgroundResource(R.drawable.m3_btn_danger_soft);
+            btnDelete.setText("删除");
+            btnDelete.setAllCaps(false);
+            btnDelete.setTextColor(getColor(R.color.err));
+            btnDelete.setTextSize(13);
+            btnDelete.setTypeface(Typeface.DEFAULT_BOLD);
+            btnDelete.setPadding(dpToPx(16), 0, dpToPx(16), 0);
+            try {
+                btnDelete.setStateListAnimator(android.animation.AnimatorInflater.loadStateListAnimator(this, R.animator.btn_press_scale));
+            } catch (Throwable ignored) {}
+            btnDelete.setOnClickListener(v -> confirmDeleteRemoteEntry(entry, titleName));
+            bottomBar.addView(btnDelete);
 
             card.addView(bottomBar);
             remoteListContainer.addView(card);
