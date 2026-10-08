@@ -249,14 +249,16 @@ public final class MonetThemeHelper {
     public static Palette resolve(Context ctx, boolean isDarkMode, boolean isMonet, int opacityPercent) {
         String style = "tonal_spot";
         String spec = "spec_2025";
+        boolean invert = false;
         if (ctx != null) {
             try {
                 com.deepseekharness.app.core.ConfigStore cfg = new com.deepseekharness.app.core.ConfigStore(ctx);
                 style = cfg.getSheetPaletteStyle();
                 spec = cfg.getSheetColorSpec();
+                invert = cfg.isSheetMonetInvert();
             } catch (Throwable ignored) {}
         }
-        return resolve(ctx, isDarkMode, isMonet, opacityPercent, style, spec);
+        return resolve(ctx, isDarkMode, isMonet, opacityPercent, style, spec, invert);
     }
 
     /**
@@ -265,6 +267,17 @@ public final class MonetThemeHelper {
      */
     public static Palette resolve(Context ctx, boolean isDarkMode, boolean isMonet, int opacityPercent,
                                   String paletteStyle, String colorSpec) {
+        boolean invert = false;
+        if (ctx != null) {
+            try {
+                invert = new com.deepseekharness.app.core.ConfigStore(ctx).isSheetMonetInvert();
+            } catch (Throwable ignored) {}
+        }
+        return resolve(ctx, isDarkMode, isMonet, opacityPercent, paletteStyle, colorSpec, invert);
+    }
+
+    public static Palette resolve(Context ctx, boolean isDarkMode, boolean isMonet, int opacityPercent,
+                                  String paletteStyle, String colorSpec, boolean invertMonet) {
         int opacity = opacityPercent;
         if (opacity < 30 || opacity > 100) {
             opacity = isDarkMode ? 80 : 88;
@@ -458,37 +471,58 @@ public final class MonetThemeHelper {
             brandSat = Math.min(1.0f, brandSat * 1.05f);
         }
 
-        // 卡片底色：高明度柔彩，通透呈现壁纸专属调性！
-        int lightCardRgb = ColorUtils.HSLToColor(new float[]{h, cardSat, cardLum});
+        int brand;
+        int handle;
+        int border;
+        int line;
+        int lightCardRgb;
+        int inputInner;
+        int inputBorderColor;
+        int menuInner;
+        int text;
+        int textSecondary;
+
+        if (invertMonet) {
+            int[] preview = SheetSettingsFragment.getStylePreviewColors(style, seed, true);
+            int primary = (preview != null && preview.length > 0) ? preview[0] : ColorUtils.HSLToColor(new float[]{h, brandSat, brandLum});
+            int container = (preview != null && preview.length > 1) ? preview[1] : ColorUtils.HSLToColor(new float[]{h, cardSat, cardLum});
+
+            // 取反后：三色倒转，倒序首位（清新明亮的高亮点缀色）跃升为拖拽条与品牌核心主强调色
+            brand = primary;
+            handle = primary;
+
+            // 抽屉四周描边与内部分割线：采用倒序主色半透微光，视觉辨识度极高
+            border = Color.argb(0x55, Color.red(primary), Color.green(primary), Color.blue(primary));
+            line = Color.argb(0x35, Color.red(primary), Color.green(primary), Color.blue(primary));
+
+            // 卡片底色微混通透容器色
+            lightCardRgb = ColorUtils.blendARGB(0xFFF6F8FB, container, 0.20f);
+
+            // 前端输入框与菜单底板同步融入容器过渡色，描边高光匹配主色
+            inputInner = ColorUtils.blendARGB(0xFFFFFFFF, container, 0.14f);
+            inputBorderColor = ColorUtils.setAlphaComponent(primary, 0x45);
+            menuInner = ColorUtils.blendARGB(0xFFFFFFFF, container, 0.18f);
+
+            text = ColorUtils.blendARGB(0xFF1A2230, primary, 0.18f);
+            textSecondary = ColorUtils.blendARGB(0xFF64748B, primary, 0.22f);
+        } else {
+            // 未取反时：100% 保持经典原版算法
+            lightCardRgb = ColorUtils.HSLToColor(new float[]{h, cardSat, cardLum});
+            text = ColorUtils.HSLToColor(new float[]{h, textSat, textLum});
+            textSecondary = ColorUtils.HSLToColor(new float[]{h, textSubSat, textSubLum});
+            brand = ColorUtils.HSLToColor(new float[]{h, brandSat, brandLum});
+            handle = ColorUtils.HSLToColor(new float[]{h, handleSat, 0.72f});
+
+            int borderRaw = ColorUtils.HSLToColor(new float[]{h, borderSat, 0.82f});
+            line = Color.argb(0x40, Color.red(borderRaw), Color.green(borderRaw), Color.blue(borderRaw));
+            border = Color.argb(0x45, Color.red(borderRaw), Color.green(borderRaw), Color.blue(borderRaw));
+
+            inputInner = ColorUtils.HSLToColor(new float[]{h, Math.max(0f, cardSat - 0.06f), 0.98f});
+            inputBorderColor = ColorUtils.HSLToColor(new float[]{h, borderSat, 0.80f});
+            menuInner = ColorUtils.HSLToColor(new float[]{h, Math.max(0f, cardSat - 0.02f), 0.97f});
+        }
+
         int cardBg = Color.argb(alpha, Color.red(lightCardRgb), Color.green(lightCardRgb), Color.blue(lightCardRgb));
-
-        // 主文字与按钮：壁纸浓郁对比色，保证无障碍顶级对比度
-        int text = ColorUtils.HSLToColor(new float[]{h, textSat, textLum});
-        // 次级提示文字
-        int textSecondary = ColorUtils.HSLToColor(new float[]{h, textSubSat, textSubLum});
-        // 品牌强调色 (若开启取反，使用倒序后的主色)
-        int brand = ColorUtils.HSLToColor(new float[]{h, brandSat, brandLum});
-        try {
-            boolean inverted = new com.deepseekharness.app.core.ConfigStore(ctx).isSheetMonetInvert();
-            if (inverted) {
-                int[] preview = SheetSettingsFragment.getStylePreviewColors(style, seed, true);
-                if (preview != null && preview.length >= 3) {
-                    brand = preview[0];
-                }
-            }
-        } catch (Throwable ignored) {}
-
-        // 拖拽横条
-        int handle = ColorUtils.HSLToColor(new float[]{h, handleSat, 0.72f});
-        // 分割线与细边框
-        int borderRaw = ColorUtils.HSLToColor(new float[]{h, borderSat, 0.82f});
-        int line = Color.argb(0x40, Color.red(borderRaw), Color.green(borderRaw), Color.blue(borderRaw));
-        int border = Color.argb(0x45, Color.red(borderRaw), Color.green(borderRaw), Color.blue(borderRaw));
-
-        // WebView 控件同系质感颜色
-        int inputInner = ColorUtils.HSLToColor(new float[]{h, Math.max(0f, cardSat - 0.06f), 0.98f});
-        int inputBorderColor = ColorUtils.HSLToColor(new float[]{h, borderSat, 0.80f});
-        int menuInner = ColorUtils.HSLToColor(new float[]{h, Math.max(0f, cardSat - 0.02f), 0.97f});
 
         return new Palette(
                 cardBg, text, textSecondary, line, handle, border,
