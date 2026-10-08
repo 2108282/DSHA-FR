@@ -198,7 +198,9 @@ public class CredentialsActivity extends AppCompatActivity {
             ivLp.gravity = android.view.Gravity.CENTER;
             ivIcon.setLayoutParams(ivLp);
             ivIcon.setImageResource(R.drawable.ic_globe);
-            ivIcon.setColorFilter(getColor(R.color.primary));
+            MonetEngine.PaletteInfo currentPalette = MonetEngine.resolveCurrentPalette(this);
+            int primaryColor = currentPalette.isMonetActive ? currentPalette.primaryColor : getColor(R.color.primary);
+            androidx.core.widget.ImageViewCompat.setImageTintList(ivIcon, android.content.res.ColorStateList.valueOf(primaryColor));
             iconBox.addView(ivIcon);
             headerRow.addView(iconBox);
 
@@ -337,18 +339,154 @@ public class CredentialsActivity extends AppCompatActivity {
     }
 
     private void confirmDeleteRemoteEntry(com.deepseekharness.app.core.ConfigStore.RemoteDshEntry entry, String titleName) {
-        new androidx.appcompat.app.AlertDialog.Builder(this)
-                .setTitle("删除远端配置")
-                .setMessage("确定删除「" + titleName + "」的连接配置吗？")
-                .setNegativeButton("取消", null)
-                .setPositiveButton("删除", (d, which) -> {
-                    com.deepseekharness.app.core.ConfigStore cfg = com.deepseekharness.app.core.ConfigStore.get(this);
-                    remoteList.remove(entry);
-                    cfg.saveRemoteDshList(remoteList);
-                    renderRemoteCards();
-                    Toast.makeText(this, "已删除「" + titleName + "」", Toast.LENGTH_SHORT).show();
-                })
-                .show();
+        FrameLayout root = new FrameLayout(this);
+        root.setPadding(dpToPx(20), dpToPx(20), dpToPx(20), dpToPx(20));
+        root.setClipChildren(false);
+        root.setClipToPadding(false);
+
+        ModernCardView card = new ModernCardView(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dpToPx(20), dpToPx(20), dpToPx(20), dpToPx(20));
+        card.setCardRadius(dpToPx(20));
+        FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        card.setLayoutParams(clp);
+
+        // 1. 顶部标题行: 40dp 图标框 + 标题
+        LinearLayout titleRow = new LinearLayout(this);
+        titleRow.setLayoutParams(new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        titleRow.setOrientation(LinearLayout.HORIZONTAL);
+        titleRow.setGravity(Gravity.CENTER_VERTICAL);
+
+        FrameLayout iconBox = new FrameLayout(this);
+        iconBox.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(40), dpToPx(40)));
+        iconBox.setBackgroundResource(R.drawable.m3_btn_tonal_expressive);
+
+        ImageView iv = new ImageView(this);
+        FrameLayout.LayoutParams ivLp = new FrameLayout.LayoutParams(dpToPx(22), dpToPx(22));
+        ivLp.gravity = Gravity.CENTER;
+        iv.setLayoutParams(ivLp);
+        iv.setImageResource(R.drawable.ic_globe);
+        iv.setColorFilter(getColor(R.color.primary));
+        iconBox.addView(iv);
+        titleRow.addView(iconBox);
+
+        TextView tvTitle = new TextView(this);
+        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        tlp.setMarginStart(dpToPx(12));
+        tvTitle.setLayoutParams(tlp);
+        tvTitle.setText("删除远端配置");
+        tvTitle.setTextColor(getColor(R.color.text));
+        tvTitle.setTextSize(18);
+        tvTitle.setTypeface(Typeface.DEFAULT_BOLD);
+        titleRow.addView(tvTitle);
+        card.addView(titleRow);
+
+        // 2. 远端名称
+        TextView tvName = new TextView(this);
+        LinearLayout.LayoutParams nlp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        nlp.topMargin = dpToPx(16);
+        tvName.setLayoutParams(nlp);
+        tvName.setText(titleName);
+        tvName.setTextColor(getColor(R.color.text));
+        tvName.setTextSize(16);
+        tvName.setTypeface(Typeface.DEFAULT_BOLD);
+        card.addView(tvName);
+
+        // 3. 内嵌说明面板 (bg_input 样式半透玻璃槽)
+        LinearLayout infoBox = new LinearLayout(this);
+        LinearLayout.LayoutParams ibLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        ibLp.topMargin = dpToPx(12);
+        infoBox.setLayoutParams(ibLp);
+        infoBox.setBackgroundResource(R.drawable.bg_input);
+        infoBox.setOrientation(LinearLayout.VERTICAL);
+        infoBox.setPadding(dpToPx(14), dpToPx(12), dpToPx(14), dpToPx(12));
+
+        TextView tvUrl = new TextView(this);
+        tvUrl.setText((entry.url != null && !entry.url.isEmpty()) ? entry.url : "（尚未填写目标地址）");
+        tvUrl.setTextColor(getColor(R.color.text_secondary));
+        tvUrl.setTextSize(13);
+        tvUrl.setTypeface(Typeface.MONOSPACE);
+        infoBox.addView(tvUrl);
+
+        TextView tvTip = new TextView(this);
+        LinearLayout.LayoutParams tipLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        tipLp.topMargin = dpToPx(6);
+        tvTip.setLayoutParams(tipLp);
+        tvTip.setText("确定删除此远端配置吗？删除后此条目将被移除，可随时重新添加。");
+        tvTip.setTextColor(getColor(R.color.text_muted));
+        tvTip.setTextSize(12);
+        infoBox.addView(tvTip);
+        card.addView(infoBox);
+
+        // 4. 底部操作按钮行 (高度 44dp, 取消 weight=1, 确认删除 weight=1.2)
+        LinearLayout btnRow = new LinearLayout(this);
+        LinearLayout.LayoutParams brLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        brLp.topMargin = dpToPx(18);
+        btnRow.setLayoutParams(brLp);
+        btnRow.setOrientation(LinearLayout.HORIZONTAL);
+
+        Button btnCancel = new Button(this);
+        LinearLayout.LayoutParams cLp = new LinearLayout.LayoutParams(0, dpToPx(44), 1.0f);
+        btnCancel.setLayoutParams(cLp);
+        btnCancel.setBackgroundResource(R.drawable.m3_btn_tonal_expressive);
+        btnCancel.setText("取消");
+        btnCancel.setAllCaps(false);
+        btnCancel.setTextColor(getColor(R.color.primary));
+        btnCancel.setTextSize(15);
+        btnCancel.setTypeface(Typeface.DEFAULT_BOLD);
+        try {
+            btnCancel.setStateListAnimator(android.animation.AnimatorInflater.loadStateListAnimator(this, R.animator.btn_press_scale));
+        } catch (Throwable ignored) {}
+        btnRow.addView(btnCancel);
+
+        Button btnConfirm = new Button(this);
+        LinearLayout.LayoutParams cfLp = new LinearLayout.LayoutParams(0, dpToPx(44), 1.2f);
+        cfLp.setMarginStart(dpToPx(10));
+        btnConfirm.setLayoutParams(cfLp);
+        btnConfirm.setBackgroundResource(R.drawable.m3_btn_primary_expressive);
+        btnConfirm.setText("确认删除");
+        btnConfirm.setAllCaps(false);
+        btnConfirm.setTextColor(getColor(R.color.accent_on));
+        btnConfirm.setTextSize(15);
+        btnConfirm.setTypeface(Typeface.DEFAULT_BOLD);
+        try {
+            btnConfirm.setStateListAnimator(android.animation.AnimatorInflater.loadStateListAnimator(this, R.animator.btn_press_scale));
+        } catch (Throwable ignored) {}
+        btnRow.addView(btnConfirm);
+        card.addView(btnRow);
+        root.addView(card);
+
+        // 莫奈主题注入
+        try {
+            MonetEngine.applyToViewTree(card, MonetEngine.resolveCurrentPalette(this));
+        } catch (Throwable ignored) {}
+
+        androidx.appcompat.app.AlertDialog dialog = new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setView(root)
+                .create();
+
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        }
+
+        btnCancel.setOnClickListener(v -> dialog.dismiss());
+        btnConfirm.setOnClickListener(v -> {
+            dialog.dismiss();
+            com.deepseekharness.app.core.ConfigStore cfg = com.deepseekharness.app.core.ConfigStore.get(this);
+            remoteList.remove(entry);
+            cfg.saveRemoteDshList(remoteList);
+            renderRemoteCards();
+            Toast.makeText(this, "已删除「" + titleName + "」", Toast.LENGTH_SHORT).show();
+        });
+
+        dialog.show();
     }
 
     private void testSingleRemoteConnection(String rawUrl, Button testBtn) {

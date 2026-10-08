@@ -1096,16 +1096,21 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 closeFileViewer();
             }
             if (sIsRemoteActive) {
+                // 远端模式刷新：刷新当前激活的远端地址
+                String activeUrl = ConfigStore.get(this).getActiveRemoteDshUrl();
+                if (activeUrl == null || activeUrl.isEmpty()) {
+                    Toast.makeText(this, "未开启任何远端连接", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                if (progressBar != null) progressBar.setVisibility(View.VISIBLE);
+                Toast.makeText(this, "正在重新连接远端 DSH...", Toast.LENGTH_SHORT).show();
+                ensureRemoteWebViewLoaded(activeUrl);
                 if (sRemoteWebView != null) {
-                    if (progressBar != null) progressBar.setVisibility(View.VISIBLE);
-                    String rUrl = ConfigStore.get(this).getRemoteDshUrl();
-                    if (rUrl != null && !rUrl.isEmpty()) {
-                        sRemoteWebView.loadUrl(rUrl);
-                    } else {
-                        sRemoteWebView.reload();
-                    }
+                    sRemoteWebView.loadUrl(activeUrl);
                 }
             } else {
+                // 本地模式刷新：重新获取Token并刷新
+                Toast.makeText(this, "正在重新获取凭据并刷新本机 DSH...", Toast.LENGTH_SHORT).show();
                 forceReloadWithLatestToken();
             }
         });
@@ -1773,18 +1778,37 @@ public class QuickChatSheetActivity extends AppCompatActivity {
     private void updateWebViewSlotVisibility() {
         if (sLocalWebView != null) {
             sLocalWebView.setVisibility(sIsRemoteActive ? View.GONE : View.VISIBLE);
+            if (!sIsRemoteActive) {
+                sLocalWebView.onResume();
+                sLocalWebView.resumeTimers();
+            } else {
+                sLocalWebView.onPause();
+            }
         }
         if (sRemoteWebView != null) {
             sRemoteWebView.setVisibility(sIsRemoteActive ? View.VISIBLE : View.GONE);
+            if (sIsRemoteActive) {
+                sRemoteWebView.onResume();
+                sRemoteWebView.resumeTimers();
+            } else {
+                sRemoteWebView.onPause();
+            }
         }
         sCachedWebView = getActiveWebView();
         if (sCachedWebView != null) {
+            mountWebViewToContainer(sCachedWebView);
             sCachedWebView.bringToFront();
             injectTransparentBackground(sCachedWebView);
         }
         if (progressBar != null) {
+            progressBar.bringToFront();
             boolean loaded = sIsRemoteActive ? sRemoteWebLoaded : sLocalWebLoaded;
-            progressBar.setVisibility(loaded ? View.GONE : View.VISIBLE);
+            String curUrl = sCachedWebView != null ? sCachedWebView.getUrl() : null;
+            boolean hasValidContent = curUrl != null && !curUrl.isEmpty() && !"about:blank".equals(curUrl);
+            progressBar.setVisibility((loaded || hasValidContent) ? View.GONE : View.VISIBLE);
+        }
+        if (btnRefresh != null) {
+            btnRefresh.setContentDescription(sIsRemoteActive ? "重新连接远端DSH" : "重新获取Token并刷新进入DSH");
         }
     }
 
@@ -1815,8 +1839,15 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             }
             mountWebViewToContainer(sLocalWebView);
             updateWebViewSlotVisibility();
-            if (!sLocalWebLoaded) {
+
+            // 智能判定：如果本地已经载入过正常内容，直接呈现，杜绝重复转圈与白屏
+            String localUrl = sLocalWebView != null ? sLocalWebView.getUrl() : null;
+            boolean hasValidUrl = localUrl != null && !localUrl.isEmpty() && !"about:blank".equals(localUrl);
+            if (!hasValidUrl) {
                 forceReloadWithLatestToken();
+            } else {
+                sLocalWebLoaded = true;
+                if (progressBar != null) progressBar.setVisibility(View.GONE);
             }
             Toast.makeText(this, "已切换至本机 DSH", Toast.LENGTH_SHORT).show();
         }
