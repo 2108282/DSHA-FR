@@ -233,6 +233,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
     private boolean isDismissing = false;
     private boolean isDarkMode = false;
     private boolean isMonetColor = false;
+    private boolean isMonetInvert = false;
     private static volatile QuickChatSheetActivity sCurrentInstance;
 
     private float initialTouchY = 0f;
@@ -370,6 +371,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         controller = HarnessController.get(this);
         isDarkMode = new ConfigStore(this).isSheetInvertColor();
         isMonetColor = new ConfigStore(this).isSheetMonetColor();
+        isMonetInvert = new ConfigStore(this).isSheetMonetInvert();
 
         calculateDimensions();
         setContentView(buildUi());
@@ -572,8 +574,10 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         sCurrentInstance = this;
         boolean dark = new ConfigStore(this).isSheetInvertColor();
         boolean monet = new ConfigStore(this).isSheetMonetColor();
+        boolean monetInvert = new ConfigStore(this).isSheetMonetInvert();
         isDarkMode = dark;
         isMonetColor = monet;
+        isMonetInvert = monetInvert;
         updateCardTheme();
         if (com.deepseekharness.app.HttpShellService.isApprovalWaiting && com.deepseekharness.app.HttpShellService.sCurrentApprovalInfo != null) {
             displayApprovalBanner(com.deepseekharness.app.HttpShellService.sCurrentApprovalInfo, com.deepseekharness.app.HttpShellService.sCurrentApprovalEpoch);
@@ -1874,11 +1878,13 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         MonetThemeHelper.clearCache(context);
         boolean invert = new ConfigStore(context).isSheetInvertColor();
         boolean monet = new ConfigStore(context).isSheetMonetColor();
+        boolean monetInvert = new ConfigStore(context).isSheetMonetInvert();
         QuickChatSheetActivity act = sCurrentInstance;
         if (act != null && !act.isFinishing() && !act.isDestroyed()) {
             act.runOnUiThread(() -> {
                 act.isDarkMode = invert;
                 act.isMonetColor = monet;
+                act.isMonetInvert = monetInvert;
                 act.updateCardTheme();
             });
         }
@@ -2803,9 +2809,11 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         }
         boolean dark = new ConfigStore(this).isSheetInvertColor();
         boolean monet = new ConfigStore(this).isSheetMonetColor();
-        if (dark != isDarkMode || monet != isMonetColor) {
+        boolean monetInvert = new ConfigStore(this).isSheetMonetInvert();
+        if (dark != isDarkMode || monet != isMonetColor || monetInvert != isMonetInvert) {
             isDarkMode = dark;
             isMonetColor = monet;
+            isMonetInvert = monetInvert;
             updateCardTheme();
         }
         if (com.deepseekharness.app.HttpShellService.isApprovalWaiting && com.deepseekharness.app.HttpShellService.sCurrentApprovalInfo != null) {
