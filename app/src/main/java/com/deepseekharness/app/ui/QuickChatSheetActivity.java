@@ -1849,6 +1849,11 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             } else if (action == 2) {
                 currentAct.showWorkspaceFileActionMenu(f, touchX, touchY);
             } else if (action == 1) {
+                if (currentAct.rootOverlay != null) {
+                    try {
+                        currentAct.rootOverlay.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+                    } catch (Throwable ignored) {}
+                }
                 com.deepseekharness.app.viewer.FileOpenHelper.openWithSystem(currentAct, f);
             } else {
                 currentAct.openFileInSheet(finalPath);
@@ -2258,7 +2263,9 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                         + "              window.DshaNativeBridge.showFileActionMenu(p);\n"
                         + "            }\n"
                         + "          } else {\n"
-                        + "            if (window.DshaNativeBridge.locateOrOpenExternalFile) {\n"
+                        + "            if (window.DshaNativeBridge.openExternalFile) {\n"
+                        + "              window.DshaNativeBridge.openExternalFile(p);\n"
+                        + "            } else if (window.DshaNativeBridge.locateOrOpenExternalFile) {\n"
                         + "              window.DshaNativeBridge.locateOrOpenExternalFile(p);\n"
                         + "            }\n"
                         + "          }\n"
@@ -2322,8 +2329,12 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                         + "          e.stopPropagation();\n"
                         + "          if (e.stopImmediatePropagation) e.stopImmediatePropagation();\n"
                         + "          var cardPath = extractFilePath(card);\n"
-                        + "          if (cardPath && window.DshaNativeBridge && window.DshaNativeBridge.locateOrOpenExternalFile) {\n"
-                        + "            window.DshaNativeBridge.locateOrOpenExternalFile(cardPath);\n"
+                        + "          if (cardPath && window.DshaNativeBridge) {\n"
+                        + "            if (window.DshaNativeBridge.openExternalFile) {\n"
+                        + "              window.DshaNativeBridge.openExternalFile(cardPath);\n"
+                        + "            } else if (window.DshaNativeBridge.locateOrOpenExternalFile) {\n"
+                        + "              window.DshaNativeBridge.locateOrOpenExternalFile(cardPath);\n"
+                        + "            }\n"
                         + "          }\n"
                         + "          return;\n"
                         + "        }\n"
@@ -2862,18 +2873,16 @@ public class QuickChatSheetActivity extends AppCompatActivity {
 
     public void handleLocateOrOpenExternal(String path) {
         if (path == null || path.isEmpty()) return;
-        boolean isInside = path.startsWith("/sdcard/Download/DSHA/工作区/");
-        if (!isInside) {
-            File f = new File(path);
-            if (f.exists()) {
-                Toast.makeText(this, "文件位于工作区外部，已调用外部应用打开", Toast.LENGTH_SHORT).show();
-                com.deepseekharness.app.viewer.FileOpenHelper.openWithSystem(this, f);
-            } else {
-                Toast.makeText(this, "文件不存在：" + f.getName(), Toast.LENGTH_SHORT).show();
+        File f = new File(path);
+        if (f.exists()) {
+            if (rootOverlay != null) {
+                try {
+                    rootOverlay.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+                } catch (Throwable ignored) {}
             }
+            com.deepseekharness.app.viewer.FileOpenHelper.openWithSystem(this, f);
         } else {
-            String rel = path.substring("/sdcard/Download/DSHA/工作区/".length());
-            locateWorkspaceFile(rel);
+            Toast.makeText(this, "文件不存在：" + f.getName(), Toast.LENGTH_SHORT).show();
         }
     }
 
