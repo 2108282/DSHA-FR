@@ -471,58 +471,40 @@ public final class MonetThemeHelper {
             brandSat = Math.min(1.0f, brandSat * 1.05f);
         }
 
-        int brand;
-        int handle;
-        int border;
-        int line;
-        int lightCardRgb;
-        int inputInner;
-        int inputBorderColor;
-        int menuInner;
-        int text;
-        int textSecondary;
-
-        if (invertMonet) {
-            int[] preview = SheetSettingsFragment.getStylePreviewColors(style, seed, true);
-            int primary = (preview != null && preview.length > 0) ? preview[0] : ColorUtils.HSLToColor(new float[]{h, brandSat, brandLum});
-            int container = (preview != null && preview.length > 1) ? preview[1] : ColorUtils.HSLToColor(new float[]{h, cardSat, cardLum});
-
-            // 取反后：三色倒转，倒序首位（清新明亮的高亮点缀色）跃升为拖拽条与品牌核心主强调色
-            brand = primary;
-            handle = primary;
-
-            // 抽屉四周描边与内部分割线：采用倒序主色半透微光，视觉辨识度极高
-            border = Color.argb(0x55, Color.red(primary), Color.green(primary), Color.blue(primary));
-            line = Color.argb(0x35, Color.red(primary), Color.green(primary), Color.blue(primary));
-
-            // 卡片底色微混通透容器色
-            lightCardRgb = ColorUtils.blendARGB(0xFFF6F8FB, container, 0.20f);
-
-            // 前端输入框与菜单底板同步融入容器过渡色，描边高光匹配主色
-            inputInner = ColorUtils.blendARGB(0xFFFFFFFF, container, 0.14f);
-            inputBorderColor = ColorUtils.setAlphaComponent(primary, 0x45);
-            menuInner = ColorUtils.blendARGB(0xFFFFFFFF, container, 0.18f);
-
-            text = ColorUtils.blendARGB(0xFF1A2230, primary, 0.18f);
-            textSecondary = ColorUtils.blendARGB(0xFF64748B, primary, 0.22f);
-        } else {
-            // 未取反时：100% 保持经典原版算法
-            lightCardRgb = ColorUtils.HSLToColor(new float[]{h, cardSat, cardLum});
-            text = ColorUtils.HSLToColor(new float[]{h, textSat, textLum});
-            textSecondary = ColorUtils.HSLToColor(new float[]{h, textSubSat, textSubLum});
-            brand = ColorUtils.HSLToColor(new float[]{h, brandSat, brandLum});
-            handle = ColorUtils.HSLToColor(new float[]{h, handleSat, 0.72f});
-
-            int borderRaw = ColorUtils.HSLToColor(new float[]{h, borderSat, 0.82f});
-            line = Color.argb(0x40, Color.red(borderRaw), Color.green(borderRaw), Color.blue(borderRaw));
-            border = Color.argb(0x45, Color.red(borderRaw), Color.green(borderRaw), Color.blue(borderRaw));
-
-            inputInner = ColorUtils.HSLToColor(new float[]{h, Math.max(0f, cardSat - 0.06f), 0.98f});
-            inputBorderColor = ColorUtils.HSLToColor(new float[]{h, borderSat, 0.80f});
-            menuInner = ColorUtils.HSLToColor(new float[]{h, Math.max(0f, cardSat - 0.02f), 0.97f});
+        // 统一提取三色体系（取反时仅将三色顺序倒转：Color 2 变首位主色，Color 0 变末位辅助色）
+        int[] preview = SheetSettingsFragment.getStylePreviewColors(style, seed, invertMonet);
+        if (invertMonet && preview != null && preview.length > 0) {
+            float[] mainHsl = new float[3];
+            ColorUtils.colorToHSL(preview[0], mainHsl);
+            h = mainHsl[0]; // 将整套抽屉的莫奈基准色相切换为倒序后的首位主色相
         }
 
+        // 统一完整的 12 处作用对象计算体系（取反与正常状态 100% 规则对齐）：
+        // 1. 卡片底色：高明度柔彩，通透呈现壁纸专属调性！
+        int lightCardRgb = ColorUtils.HSLToColor(new float[]{h, cardSat, cardLum});
         int cardBg = Color.argb(alpha, Color.red(lightCardRgb), Color.green(lightCardRgb), Color.blue(lightCardRgb));
+
+        // 2. 主文字与次文字
+        int text = ColorUtils.HSLToColor(new float[]{h, textSat, textLum});
+        int textSecondary = ColorUtils.HSLToColor(new float[]{h, textSubSat, textSubLum});
+
+        // 3. 品牌强调色：直接绑定当前主色
+        int brand = (preview != null && preview.length > 0)
+                ? preview[0]
+                : ColorUtils.HSLToColor(new float[]{h, brandSat, brandLum});
+
+        // 4. 拖拽横条
+        int handle = ColorUtils.HSLToColor(new float[]{h, handleSat, 0.72f});
+
+        // 5. 分割线与细边框
+        int borderRaw = ColorUtils.HSLToColor(new float[]{h, borderSat, 0.82f});
+        int line = Color.argb(0x40, Color.red(borderRaw), Color.green(borderRaw), Color.blue(borderRaw));
+        int border = Color.argb(0x45, Color.red(borderRaw), Color.green(borderRaw), Color.blue(borderRaw));
+
+        // 6. 前端 WebView 控件底色与边框
+        int inputInner = ColorUtils.HSLToColor(new float[]{h, Math.max(0f, cardSat - 0.06f), 0.98f});
+        int inputBorderColor = ColorUtils.HSLToColor(new float[]{h, borderSat, 0.80f});
+        int menuInner = ColorUtils.HSLToColor(new float[]{h, Math.max(0f, cardSat - 0.02f), 0.97f});
 
         return new Palette(
                 cardBg, text, textSecondary, line, handle, border,
