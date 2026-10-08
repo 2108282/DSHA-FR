@@ -1099,7 +1099,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             if (serviceRestarted || detached || !sWebLoaded || sLoadedPort != port) {
                 sLoadedPort = port;
                 sPendingNewChat = true;
-                reloadWithLatestToken();
+                forceReloadWithLatestToken();
                 return;
             }
 
@@ -2784,6 +2784,10 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             }
         } catch (Throwable ignored) {}
         return null;
+    }
+
+    private void reloadWithLatestToken() {
+        forceReloadWithLatestToken();
     }
 
     @Override

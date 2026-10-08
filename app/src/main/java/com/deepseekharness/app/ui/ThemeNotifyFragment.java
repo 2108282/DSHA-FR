@@ -81,17 +81,17 @@ public final class ThemeNotifyFragment extends Fragment {
 
         // ==================== 2. 莫奈取色开关 (只做开关，不做功能) ====================
         DshaToggle monetToggle = v.findViewById(R.id.theme_notify_toggle_monet);
-        View monetInvertCard = v.findViewById(R.id.theme_notify_monet_invert_card);
-        View monetInvertLabel = v.findViewById(R.id.theme_notify_monet_invert_label);
+        View monetInvertRow = v.findViewById(R.id.theme_notify_row_monet_invert);
+        View monetInvertDivider = v.findViewById(R.id.theme_notify_monet_invert_divider);
         DshaToggle monetInvertToggle = v.findViewById(R.id.theme_notify_toggle_monet_invert);
 
         boolean monetEnabled = requireContext().getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE)
                 .getBoolean(PREF_KEY_MONET, true);
-        if (monetInvertCard != null) {
-            monetInvertCard.setVisibility(monetEnabled ? View.VISIBLE : View.GONE);
+        if (monetInvertRow != null) {
+            monetInvertRow.setVisibility(monetEnabled ? View.VISIBLE : View.GONE);
         }
-        if (monetInvertLabel != null) {
-            monetInvertLabel.setVisibility(monetEnabled ? View.VISIBLE : View.GONE);
+        if (monetInvertDivider != null) {
+            monetInvertDivider.setVisibility(monetEnabled ? View.VISIBLE : View.GONE);
         }
 
         if (monetToggle != null) {
@@ -99,11 +99,11 @@ public final class ThemeNotifyFragment extends Fragment {
             monetToggle.setOnCheckedChangeListener((btn, isChecked) -> {
                 requireContext().getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE).edit()
                         .putBoolean(PREF_KEY_MONET, isChecked).apply();
-                if (monetInvertCard != null) {
-                    monetInvertCard.setVisibility(isChecked ? View.VISIBLE : View.GONE);
+                if (monetInvertRow != null) {
+                    monetInvertRow.setVisibility(isChecked ? View.VISIBLE : View.GONE);
                 }
-                if (monetInvertLabel != null) {
-                    monetInvertLabel.setVisibility(isChecked ? View.VISIBLE : View.GONE);
+                if (monetInvertDivider != null) {
+                    monetInvertDivider.setVisibility(isChecked ? View.VISIBLE : View.GONE);
                 }
                 Toast.makeText(requireContext(),
                         isChecked ? "已启用莫奈动态取色" : "已停用莫奈动态取色",

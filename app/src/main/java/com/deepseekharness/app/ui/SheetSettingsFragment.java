@@ -69,8 +69,8 @@ public class SheetSettingsFragment extends Fragment {
         DshaToggle monetToggle = v.findViewById(R.id.sheet_settings_monet_toggle);
         View monetOptionsContainer = v.findViewById(R.id.sheet_settings_monet_options_container);
         View monetOptionsLabel = v.findViewById(R.id.sheet_settings_monet_options_label);
-        View monetInvertCard = v.findViewById(R.id.sheet_settings_monet_invert_card);
-        View monetInvertLabel = v.findViewById(R.id.sheet_settings_monet_invert_label);
+        View monetInvertRow = v.findViewById(R.id.sheet_settings_monet_invert_row);
+        View monetInvertDivider = v.findViewById(R.id.sheet_settings_monet_invert_divider);
         DshaToggle monetInvertToggle = v.findViewById(R.id.sheet_settings_monet_invert_toggle);
         styleValue = v.findViewById(R.id.sheet_settings_palette_style_value);
         styleDots = v.findViewById(R.id.sheet_settings_palette_style_dots);
@@ -83,11 +83,11 @@ public class SheetSettingsFragment extends Fragment {
         if (monetOptionsLabel != null) {
             monetOptionsLabel.setVisibility(monetEnabled ? View.VISIBLE : View.GONE);
         }
-        if (monetInvertCard != null) {
-            monetInvertCard.setVisibility(monetEnabled ? View.VISIBLE : View.GONE);
+        if (monetInvertRow != null) {
+            monetInvertRow.setVisibility(monetEnabled ? View.VISIBLE : View.GONE);
         }
-        if (monetInvertLabel != null) {
-            monetInvertLabel.setVisibility(monetEnabled ? View.VISIBLE : View.GONE);
+        if (monetInvertDivider != null) {
+            monetInvertDivider.setVisibility(monetEnabled ? View.VISIBLE : View.GONE);
         }
 
         int seedColor = MonetThemeHelper.getWallpaperSeedColor(requireContext());
@@ -112,11 +112,11 @@ public class SheetSettingsFragment extends Fragment {
                 if (monetOptionsLabel != null) {
                     monetOptionsLabel.setVisibility(isChecked ? View.VISIBLE : View.GONE);
                 }
-                if (monetInvertCard != null) {
-                    monetInvertCard.setVisibility(isChecked ? View.VISIBLE : View.GONE);
+                if (monetInvertRow != null) {
+                    monetInvertRow.setVisibility(isChecked ? View.VISIBLE : View.GONE);
                 }
-                if (monetInvertLabel != null) {
-                    monetInvertLabel.setVisibility(isChecked ? View.VISIBLE : View.GONE);
+                if (monetInvertDivider != null) {
+                    monetInvertDivider.setVisibility(isChecked ? View.VISIBLE : View.GONE);
                 }
                 MonetThemeHelper.clearCache(requireContext());
                 QuickChatSheetActivity.refreshThemeFromConfig(requireContext());

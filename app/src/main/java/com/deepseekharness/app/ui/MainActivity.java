@@ -129,34 +129,7 @@ public class MainActivity extends AppCompatActivity {
             if (getSupportFragmentManager().getBackStackEntryCount() > 0) {
                 getSupportFragmentManager().popBackStackImmediate(null, FragmentManager.POP_BACK_STACK_INCLUSIVE);
             }
-
-            Fragment f;
-            int id = item.getItemId();
-            if (id == R.id.nav_launch) {
-                f = new LaunchFragment();
-                title.setText(R.string.nav_launch);
-            } else if (id == R.id.nav_plugins) {
-                f = new PluginFragment();
-                if (getIntent().getBooleanExtra("open_plugins", false)) {
-                    Bundle args = new Bundle(); args.putBoolean("show_installed", true); f.setArguments(args);
-                    getIntent().removeExtra("open_plugins");
-                }
-                title.setText(R.string.nav_plugins);
-            } else if (id == R.id.nav_settings) {
-                f = new SettingsFragment();
-                title.setText(R.string.nav_settings);
-            } else {
-                // 终端：默认挂真 PTY 页（vim/htop/tmux 能跑），可在 PTY 页切回简易版
-                f = PtyTerminalFragment.preferred(this)
-                        ? new PtyTerminalFragment() : new TerminalFragment();
-                title.setText(R.string.nav_terminal);
-            }
-            getSupportFragmentManager().beginTransaction()
-                    .setCustomAnimations(
-                            R.anim.fragment_enter, R.anim.fragment_exit,
-                            R.anim.fragment_pop_enter, R.anim.fragment_pop_exit)
-                    .replace(R.id.fragment_container, f)
-                    .commit();
+            switchTab(item.getItemId());
             return true;
         });
 
@@ -194,12 +167,16 @@ public class MainActivity extends AppCompatActivity {
         });
 
         if (savedInstanceState == null) {
+            int targetId = R.id.nav_launch;
             if (getIntent().getBooleanExtra("open_terminal", false)) {
-                nav.setSelectedItemId(R.id.nav_terminal);
+                targetId = R.id.nav_terminal;
             } else if (getIntent().getBooleanExtra("open_plugins", false)) {
-                nav.setSelectedItemId(R.id.nav_plugins);
-            } else {
-                nav.setSelectedItemId(R.id.nav_launch);
+                targetId = R.id.nav_plugins;
+            }
+            nav.setSelectedItemId(targetId);
+            // 核心修复：显式确保冷启动时初始 Fragment 立即加载挂载，杜绝 setSelectedItemId 同 ID 未触发监听导致的白板
+            if (getSupportFragmentManager().findFragmentById(R.id.fragment_container) == null) {
+                switchTab(targetId);
             }
         } else {
             // 重建时（如切换主题），根据当前恢复的 tab 状态同步更新标题，避免错乱停留在“启动”
@@ -214,6 +191,36 @@ public class MainActivity extends AppCompatActivity {
                 title.setText(R.string.nav_launch);
             }
         }
+    }
+
+    private void switchTab(int id) {
+        TextView title = findViewById(R.id.app_title);
+        Fragment f;
+        if (id == R.id.nav_launch) {
+            f = new LaunchFragment();
+            if (title != null) title.setText(R.string.nav_launch);
+        } else if (id == R.id.nav_plugins) {
+            f = new PluginFragment();
+            if (getIntent().getBooleanExtra("open_plugins", false)) {
+                Bundle args = new Bundle(); args.putBoolean("show_installed", true); f.setArguments(args);
+                getIntent().removeExtra("open_plugins");
+            }
+            if (title != null) title.setText(R.string.nav_plugins);
+        } else if (id == R.id.nav_settings) {
+            f = new SettingsFragment();
+            if (title != null) title.setText(R.string.nav_settings);
+        } else {
+            // 终端：默认挂真 PTY 页（vim/htop/tmux 能跑），可在 PTY 页切回简易版
+            f = PtyTerminalFragment.preferred(this)
+                    ? new PtyTerminalFragment() : new TerminalFragment();
+            if (title != null) title.setText(R.string.nav_terminal);
+        }
+        getSupportFragmentManager().beginTransaction()
+                .setCustomAnimations(
+                        R.anim.fragment_enter, R.anim.fragment_exit,
+                        R.anim.fragment_pop_enter, R.anim.fragment_pop_exit)
+                .replace(R.id.fragment_container, f)
+                .commit();
     }
 
     @Override protected void onNewIntent(Intent intent) {
