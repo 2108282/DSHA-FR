@@ -243,6 +243,88 @@
                 </LinearLayout>
             </com.deepseekharness.app.ui.ModernCardView>
 
+            <!-- 莫奈取反独立卡片 (当莫奈取色开启时显示) -->
+            <TextView
+                android:id="@+id/theme_notify_monet_invert_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:layout_marginTop="18dp"
+                android:layout_marginBottom="4dp"
+                android:letterSpacing="0.09"
+                android:text="取反"
+                android:textAllCaps="true"
+                android:textColor="@color/text_muted"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <com.deepseekharness.app.ui.ModernCardView
+                android:id="@+id/theme_notify_monet_invert_card"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:clipToOutline="true"
+                android:orientation="vertical"
+                android:padding="0dp"
+                app:cardRadius="18dp">
+
+                <LinearLayout
+                    android:id="@+id/theme_notify_row_monet_invert"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="15dp">
+
+                    <FrameLayout
+                        android:layout_width="38dp"
+                        android:layout_height="38dp"
+                        android:background="@drawable/bg_settings_icon_box">
+
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:layout_gravity="center"
+                            android:contentDescription="取反"
+                            android:src="@drawable/ic_refresh"
+                            app:tint="@color/primary" />
+                    </FrameLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="取反"
+                            android:textColor="@color/text"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="1dp"
+                            android:text="将莫奈三色顺序倒转（末位主色优先）"
+                            android:textColor="@color/text_muted"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+
+                    <com.deepseekharness.app.ui.DshaToggle
+                        android:id="@+id/theme_notify_toggle_monet_invert"
+                        android:layout_width="44dp"
+                        android:layout_height="26dp"
+                        android:layout_marginStart="8dp" />
+                </LinearLayout>
+            </com.deepseekharness.app.ui.ModernCardView>
+
             <!-- ==================== 3. 分组：流式悬浮栏 ==================== -->
             <TextView
                 android:layout_width="wrap_content"

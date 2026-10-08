@@ -227,6 +227,14 @@ public class ConfigStore {
         prefs.edit().putBoolean(Constants.KEY_SHEET_MONET_COLOR, enabled).apply();
     }
 
+    public boolean isSheetMonetInvert() {
+        return prefs.getBoolean(Constants.KEY_SHEET_MONET_INVERT, false);
+    }
+
+    public void setSheetMonetInvert(boolean enabled) {
+        prefs.edit().putBoolean(Constants.KEY_SHEET_MONET_INVERT, enabled).apply();
+    }
+
     public String getSheetPaletteStyle() {
         return prefs.getString(Constants.KEY_SHEET_PALETTE_STYLE, "tonal_spot");
     }

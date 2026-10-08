@@ -466,8 +466,17 @@ public final class MonetThemeHelper {
         int text = ColorUtils.HSLToColor(new float[]{h, textSat, textLum});
         // 次级提示文字
         int textSecondary = ColorUtils.HSLToColor(new float[]{h, textSubSat, textSubLum});
-        // 品牌强调色
+        // 品牌强调色 (若开启取反，使用倒序后的主色)
         int brand = ColorUtils.HSLToColor(new float[]{h, brandSat, brandLum});
+        try {
+            boolean inverted = new com.deepseekharness.app.core.ConfigStore(ctx).isSheetMonetInvert();
+            if (inverted) {
+                int[] preview = SheetSettingsFragment.getStylePreviewColors(style, seed, true);
+                if (preview != null && preview.length >= 3) {
+                    brand = preview[0];
+                }
+            }
+        } catch (Throwable ignored) {}
 
         // 拖拽横条
         int handle = ColorUtils.HSLToColor(new float[]{h, handleSat, 0.72f});

@@ -34,6 +34,7 @@ import java.util.Map;
 public final class ThemeNotifyFragment extends Fragment {
 
     private static final String PREF_KEY_MONET = "theme_monet_extracted";
+    private static final String PREF_KEY_MONET_INVERT = "theme_monet_inverted";
     private static final String PREF_KEY_PALETTE_STYLE = "theme_palette_style_selected";
 
     private TextView paletteStyleValueText;
@@ -80,13 +81,30 @@ public final class ThemeNotifyFragment extends Fragment {
 
         // ==================== 2. 莫奈取色开关 (只做开关，不做功能) ====================
         DshaToggle monetToggle = v.findViewById(R.id.theme_notify_toggle_monet);
+        View monetInvertCard = v.findViewById(R.id.theme_notify_monet_invert_card);
+        View monetInvertLabel = v.findViewById(R.id.theme_notify_monet_invert_label);
+        DshaToggle monetInvertToggle = v.findViewById(R.id.theme_notify_toggle_monet_invert);
+
+        boolean monetEnabled = requireContext().getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE)
+                .getBoolean(PREF_KEY_MONET, true);
+        if (monetInvertCard != null) {
+            monetInvertCard.setVisibility(monetEnabled ? View.VISIBLE : View.GONE);
+        }
+        if (monetInvertLabel != null) {
+            monetInvertLabel.setVisibility(monetEnabled ? View.VISIBLE : View.GONE);
+        }
+
         if (monetToggle != null) {
-            boolean monetEnabled = requireContext().getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE)
-                    .getBoolean(PREF_KEY_MONET, true);
             monetToggle.setChecked(monetEnabled, false, false);
             monetToggle.setOnCheckedChangeListener((btn, isChecked) -> {
                 requireContext().getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE).edit()
                         .putBoolean(PREF_KEY_MONET, isChecked).apply();
+                if (monetInvertCard != null) {
+                    monetInvertCard.setVisibility(isChecked ? View.VISIBLE : View.GONE);
+                }
+                if (monetInvertLabel != null) {
+                    monetInvertLabel.setVisibility(isChecked ? View.VISIBLE : View.GONE);
+                }
                 Toast.makeText(requireContext(),
                         isChecked ? "已启用莫奈动态取色" : "已停用莫奈动态取色",
                         Toast.LENGTH_SHORT).show();
@@ -97,6 +115,31 @@ public final class ThemeNotifyFragment extends Fragment {
             View monetRow = v.findViewById(R.id.theme_notify_row_monet);
             if (monetRow != null) {
                 monetRow.setOnClickListener(x -> monetToggle.toggle());
+            }
+        }
+
+        // ==================== 2.5 莫奈取反独立卡片开关 ====================
+        if (monetInvertToggle != null) {
+            boolean inverted = requireContext().getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE)
+                    .getBoolean(PREF_KEY_MONET_INVERT, false);
+            monetInvertToggle.setChecked(inverted, false, false);
+            monetInvertToggle.setOnCheckedChangeListener((btn, isChecked) -> {
+                requireContext().getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE).edit()
+                        .putBoolean(PREF_KEY_MONET_INVERT, isChecked).apply();
+                String saved = requireContext().getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE)
+                        .getString(PREF_KEY_PALETTE_STYLE, "tonal_spot");
+                int seed = MonetThemeHelper.getWallpaperSeedColor(requireContext());
+                updateDots(paletteStyleDotsContainer, saved, seed);
+                Toast.makeText(requireContext(),
+                        isChecked ? "已启用莫奈三色倒序" : "已恢复莫奈三色正常顺序",
+                        Toast.LENGTH_SHORT).show();
+                if (getActivity() != null) {
+                    MonetEngine.applyToActivity(requireActivity());
+                }
+            });
+            View monetInvertRow = v.findViewById(R.id.theme_notify_row_monet_invert);
+            if (monetInvertRow != null) {
+                monetInvertRow.setOnClickListener(x -> monetInvertToggle.toggle());
             }
         }
 
@@ -147,7 +190,8 @@ public final class ThemeNotifyFragment extends Fragment {
     private void updateDots(LinearLayout container, String style, int seedColor) {
         if (container == null || getContext() == null) return;
         container.removeAllViews();
-        int[] colors = SheetSettingsFragment.getStylePreviewColors(style, seedColor);
+        boolean inverted = ThemeController.isMonetInverted(requireContext());
+        int[] colors = SheetSettingsFragment.getStylePreviewColors(style, seedColor, inverted);
         container.addView(createDotsView(requireContext(), colors));
     }
 
@@ -261,8 +305,9 @@ public final class ThemeNotifyFragment extends Fragment {
             if (isSelected) {
                 tv.setTypeface(null, android.graphics.Typeface.BOLD);
             }
-            // ★ 核心功能：3 个主色小圆圈放在最左侧！
-            int[] previewColors = SheetSettingsFragment.getStylePreviewColors(key, seedColor);
+            // ★ 核心功能：3 个主色小圆圈放在最左侧（支持取反倒序）！
+            boolean inverted = ThemeController.isMonetInverted(context);
+            int[] previewColors = SheetSettingsFragment.getStylePreviewColors(key, seedColor, inverted);
             View dotsView = createDotsView(context, previewColors);
             LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);

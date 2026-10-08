@@ -48,8 +48,14 @@ public final class ThemeController {
                 .getString("theme_palette_style_selected", "tonal_spot");
     }
 
+    public static boolean isMonetInverted(Context context) {
+        if (context == null) return false;
+        return context.getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE)
+                .getBoolean("theme_monet_inverted", false);
+    }
+
     /**
-     * 仅在白天模式且开启莫奈时计算动态取色；黑夜模式坚决维持冷靛蓝灰黑不变。
+     * 仅在白天模式且开启莫奈时计算动态取色（支持三色取反倒序）；黑夜模式坚决维持冷靛蓝灰黑不变。
      */
     public static int getMonetPrimaryColor(Context context) {
         if (context == null || isDark(context) || !isMonetEnabled(context)) {
@@ -58,7 +64,8 @@ public final class ThemeController {
         try {
             int seedColor = MonetThemeHelper.getWallpaperSeedColor(context);
             String style = getMonetPaletteStyle(context);
-            int[] preview = SheetSettingsFragment.getStylePreviewColors(style, seedColor);
+            boolean inverted = isMonetInverted(context);
+            int[] preview = SheetSettingsFragment.getStylePreviewColors(style, seedColor, inverted);
             return preview != null && preview.length > 0 ? preview[0] : 0xFF47699F;
         } catch (Throwable t) {
             return 0xFF47699F;

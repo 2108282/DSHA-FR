@@ -69,10 +69,11 @@ public final class MonetEngine {
             return new PaletteInfo(false, DEFAULT_PRIMARY_DAY, DEFAULT_CONTAINER_DAY, DEFAULT_TERTIARY_DAY, DEFAULT_SURFACE_DAY);
         }
 
-        // 白天且开启莫奈: 动态提取壁纸种子色并按所选风格匹配完整的 3 个代表色
+        // 白天且开启莫奈: 动态提取壁纸种子色并按所选风格匹配完整的 3 个代表色（支持取反倒序）
         int seedColor = MonetThemeHelper.getWallpaperSeedColor(context);
         String style = ThemeController.getMonetPaletteStyle(context);
-        int[] preview = SheetSettingsFragment.getStylePreviewColors(style, seedColor);
+        boolean inverted = ThemeController.isMonetInverted(context);
+        int[] preview = SheetSettingsFragment.getStylePreviewColors(style, seedColor, inverted);
 
         int primary = (preview != null && preview.length > 0) ? preview[0] : DEFAULT_PRIMARY_DAY;
         int container = (preview != null && preview.length > 1) ? preview[1] : ColorUtils.blendARGB(0xFFFFFFFF, primary, 0.14f);
@@ -172,9 +173,10 @@ public final class MonetEngine {
 
             if (!isDanger) {
                 if (isPrimaryButton(btn)) {
-                    // 深色主按钮: 背景色彩 1 (Primary)，文字纯白高对比度
+                    // 主按钮: 背景色彩 1 (Primary)，文字根据亮度自适应纯白或深黑高对比度
                     btn.setBackground(createSolidPillDrawable(context, targetPrimary, dp(context, 14)));
-                    btn.setTextColor(Color.WHITE);
+                    boolean isLightPrimary = ColorUtils.calculateLuminance(targetPrimary) > 0.5f;
+                    btn.setTextColor(isLightPrimary ? 0xFF10141B : Color.WHITE);
                 } else if (isTonalButton(btn)) {
                     // 浅色胶囊按钮: 背景色彩 2 (Container)，文字色彩 1 (Primary)
                     btn.setBackground(createSolidPillDrawable(context, targetContainer, dp(context, 14)));

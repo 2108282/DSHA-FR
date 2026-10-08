@@ -96,6 +96,8 @@ public final class Constants {
     public static final String KEY_SHEET_INVERT_COLOR = "sheet_invert_color";
     /** 快捷抽屉莫奈取色开关（提取系统壁纸 Material You 调色板）。 */
     public static final String KEY_SHEET_MONET_COLOR = "sheet_monet_color";
+    /** 快捷抽屉莫奈色彩取反开关（三色倒序）。 */
+    public static final String KEY_SHEET_MONET_INVERT = "sheet_monet_invert";
     /** 快捷抽屉莫奈色彩风格（tonal_spot, neutral, vibrant, expressive, rainbow, fruit_salad, monochrome, fidelity）。 */
     public static final String KEY_SHEET_PALETTE_STYLE = "sheet_palette_style";
     /** 快捷抽屉莫奈色彩标准（spec_2021, spec_2025）。 */

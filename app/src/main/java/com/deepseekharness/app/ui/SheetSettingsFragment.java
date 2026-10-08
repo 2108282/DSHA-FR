@@ -69,6 +69,9 @@ public class SheetSettingsFragment extends Fragment {
         DshaToggle monetToggle = v.findViewById(R.id.sheet_settings_monet_toggle);
         View monetOptionsContainer = v.findViewById(R.id.sheet_settings_monet_options_container);
         View monetOptionsLabel = v.findViewById(R.id.sheet_settings_monet_options_label);
+        View monetInvertCard = v.findViewById(R.id.sheet_settings_monet_invert_card);
+        View monetInvertLabel = v.findViewById(R.id.sheet_settings_monet_invert_label);
+        DshaToggle monetInvertToggle = v.findViewById(R.id.sheet_settings_monet_invert_toggle);
         styleValue = v.findViewById(R.id.sheet_settings_palette_style_value);
         styleDots = v.findViewById(R.id.sheet_settings_palette_style_dots);
         specValue = v.findViewById(R.id.sheet_settings_color_spec_value);
@@ -79,6 +82,12 @@ public class SheetSettingsFragment extends Fragment {
         }
         if (monetOptionsLabel != null) {
             monetOptionsLabel.setVisibility(monetEnabled ? View.VISIBLE : View.GONE);
+        }
+        if (monetInvertCard != null) {
+            monetInvertCard.setVisibility(monetEnabled ? View.VISIBLE : View.GONE);
+        }
+        if (monetInvertLabel != null) {
+            monetInvertLabel.setVisibility(monetEnabled ? View.VISIBLE : View.GONE);
         }
 
         int seedColor = MonetThemeHelper.getWallpaperSeedColor(requireContext());
@@ -103,6 +112,12 @@ public class SheetSettingsFragment extends Fragment {
                 if (monetOptionsLabel != null) {
                     monetOptionsLabel.setVisibility(isChecked ? View.VISIBLE : View.GONE);
                 }
+                if (monetInvertCard != null) {
+                    monetInvertCard.setVisibility(isChecked ? View.VISIBLE : View.GONE);
+                }
+                if (monetInvertLabel != null) {
+                    monetInvertLabel.setVisibility(isChecked ? View.VISIBLE : View.GONE);
+                }
                 MonetThemeHelper.clearCache(requireContext());
                 QuickChatSheetActivity.refreshThemeFromConfig(requireContext());
                 Toast.makeText(requireContext(),
@@ -112,6 +127,26 @@ public class SheetSettingsFragment extends Fragment {
             View monetRow = v.findViewById(R.id.sheet_settings_monet_row);
             if (monetRow != null) {
                 monetRow.setOnClickListener(x -> monetToggle.toggle());
+            }
+        }
+
+        // 2.0 莫奈取反独立卡片开关
+        if (monetInvertToggle != null) {
+            monetInvertToggle.setChecked(cfg.isSheetMonetInvert(), false, false);
+            monetInvertToggle.setOnCheckedChangeListener((toggle, isChecked) -> {
+                cfg.setSheetMonetInvert(isChecked);
+                if (styleDots != null) {
+                    updatePaletteStyleDots(styleDots, cfg.getSheetPaletteStyle(), seedColor);
+                }
+                MonetThemeHelper.clearCache(requireContext());
+                QuickChatSheetActivity.refreshThemeFromConfig(requireContext());
+                Toast.makeText(requireContext(),
+                        isChecked ? "已启用莫奈三色倒序" : "已恢复莫奈三色正常顺序",
+                        Toast.LENGTH_SHORT).show();
+            });
+            View monetInvertRow = v.findViewById(R.id.sheet_settings_monet_invert_row);
+            if (monetInvertRow != null) {
+                monetInvertRow.setOnClickListener(x -> monetInvertToggle.toggle());
             }
         }
 
@@ -384,7 +419,8 @@ public class SheetSettingsFragment extends Fragment {
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
             label.setLayoutParams(lp);
             if (showPaletteDots) {
-                int[] previewColors = getStylePreviewColors(key, seedColor);
+                boolean invert = ConfigStore.get(context).isSheetMonetInvert();
+                int[] previewColors = getStylePreviewColors(key, seedColor, invert);
                 View dotsView = createPaletteDotsView(context, previewColors);
                 LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -461,69 +497,89 @@ public class SheetSettingsFragment extends Fragment {
     }
 
     public static int[] getStylePreviewColors(String style, int seedColor) {
+        return getStylePreviewColors(style, seedColor, false);
+    }
+
+    public static int[] getStylePreviewColors(String style, int seedColor, boolean invertColors) {
         float[] hsl = new float[3];
         ColorUtils.colorToHSL(seedColor, hsl);
         float h = hsl[0];
         String s = style != null ? style.toLowerCase() : "tonal_spot";
+        int[] result;
         switch (s) {
             case "neutral":
-                return new int[]{
+                result = new int[]{
                         ColorUtils.HSLToColor(new float[]{h, 0.12f, 0.45f}),
                         ColorUtils.HSLToColor(new float[]{h, 0.08f, 0.72f}),
                         ColorUtils.HSLToColor(new float[]{(h + 15f) % 360f, 0.18f, 0.85f})
                 };
+                break;
             case "vibrant":
-                return new int[]{
+                result = new int[]{
                         ColorUtils.HSLToColor(new float[]{h, 0.95f, 0.48f}),
                         ColorUtils.HSLToColor(new float[]{h, 0.65f, 0.72f}),
                         ColorUtils.HSLToColor(new float[]{(h + 50f) % 360f, 0.75f, 0.85f})
                 };
+                break;
             case "expressive":
                 float eh = (h + 120f) % 360f;
-                return new int[]{
+                result = new int[]{
                         ColorUtils.HSLToColor(new float[]{eh, 0.85f, 0.42f}),
                         ColorUtils.HSLToColor(new float[]{eh, 0.45f, 0.72f}),
                         ColorUtils.HSLToColor(new float[]{(eh + 120f) % 360f, 0.55f, 0.85f})
                 };
+                break;
             case "rainbow":
-                return new int[]{
+                result = new int[]{
                         ColorUtils.HSLToColor(new float[]{h, 0.85f, 0.45f}),
                         ColorUtils.HSLToColor(new float[]{(h + 30f) % 360f, 0.35f, 0.72f}),
                         ColorUtils.HSLToColor(new float[]{(h + 300f) % 360f, 0.65f, 0.85f})
                 };
+                break;
             case "fruit_salad":
                 float fh = (h - 50f + 360f) % 360f;
-                return new int[]{
+                result = new int[]{
                         ColorUtils.HSLToColor(new float[]{fh, 0.85f, 0.40f}),
                         ColorUtils.HSLToColor(new float[]{fh, 0.45f, 0.72f}),
                         ColorUtils.HSLToColor(new float[]{(fh + 70f) % 360f, 0.55f, 0.85f})
                 };
+                break;
             case "monochrome":
-                return new int[]{
+                result = new int[]{
                         Color.parseColor("#1E293B"),
                         Color.parseColor("#64748B"),
                         Color.parseColor("#94A3B8")
                 };
+                break;
             case "fidelity":
-                return new int[]{
+                result = new int[]{
                         ColorUtils.HSLToColor(new float[]{h, 0.85f, 0.45f}),
                         ColorUtils.HSLToColor(new float[]{h, 0.45f, 0.72f}),
                         ColorUtils.HSLToColor(new float[]{(h + 180f) % 360f, 0.65f, 0.48f})
                 };
+                break;
             case "content":
-                return new int[]{
+                result = new int[]{
                         ColorUtils.HSLToColor(new float[]{h, Math.min(1.0f, hsl[1] * 1.1f), 0.46f}),
                         ColorUtils.HSLToColor(new float[]{h, Math.min(1.0f, hsl[1] * 0.7f), 0.72f}),
                         ColorUtils.HSLToColor(new float[]{(h + 30f) % 360f, Math.min(1.0f, hsl[1] * 0.8f), 0.85f})
                 };
+                break;
             case "tonal_spot":
             default:
-                return new int[]{
+                result = new int[]{
                         ColorUtils.HSLToColor(new float[]{h, 0.75f, 0.45f}),
                         ColorUtils.HSLToColor(new float[]{h, 0.35f, 0.72f}),
                         ColorUtils.HSLToColor(new float[]{(h + 60f) % 360f, 0.45f, 0.85f})
                 };
+                break;
         }
+
+        // 打开莫奈取反时，将 3 个主色的顺序彻底倒过来 (Color 2 与 Color 0 互换)
+        if (invertColors && result != null && result.length == 3) {
+            return new int[]{result[2], result[1], result[0]};
+        }
+        return result;
     }
 
     private static View createPaletteDotsView(Context context, int[] colors) {
@@ -549,7 +605,8 @@ public class SheetSettingsFragment extends Fragment {
     private void updatePaletteStyleDots(LinearLayout dotsContainer, String style, int seedColor) {
         if (dotsContainer == null || getContext() == null) return;
         dotsContainer.removeAllViews();
-        int[] colors = getStylePreviewColors(style, seedColor);
+        boolean invert = ConfigStore.get(getContext()).isSheetMonetInvert();
+        int[] colors = getStylePreviewColors(style, seedColor, invert);
         dotsContainer.addView(createPaletteDotsView(getContext(), colors));
     }
 }
