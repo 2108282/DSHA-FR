@@ -595,6 +595,11 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         isMonetColor = monet;
         isMonetInvert = monetInvert;
         updateCardTheme();
+
+        // 核心用户体验保证：每次重新唤起呼出抽屉时，始终默认展示本机端
+        sIsRemoteActive = false;
+        updateWebViewSlotVisibility();
+
         if (com.deepseekharness.app.HttpShellService.isApprovalWaiting && com.deepseekharness.app.HttpShellService.sCurrentApprovalInfo != null) {
             displayApprovalBanner(com.deepseekharness.app.HttpShellService.sCurrentApprovalInfo, com.deepseekharness.app.HttpShellService.sCurrentApprovalEpoch);
         } else {
@@ -1948,8 +1953,9 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         String activeRemoteUrl = cfg.getActiveRemoteDshUrl();
         boolean hasActiveRemote = cfg.isAnyRemoteDshActive() && activeRemoteUrl != null && !activeRemoteUrl.isEmpty();
 
-        // 严格遵循开关：只有当前明确有生效的远端时，抽屉才允许默认拉起远端
-        sIsRemoteActive = hasActiveRemote;
+        // 核心规范：无论远端是否配置生效，打开 Quick 抽屉时始终默认进入本机端！
+        // 远端连接完全由用户在抽屉内主动点击顶栏切换按钮时按需切入
+        sIsRemoteActive = false;
 
         // 1. 本机槽位
         if (sLocalWebView == null) {
@@ -2646,6 +2652,9 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                             if (sCachedWebView != null) {
                                 sCachedWebView.onPause();
                             }
+                            // 退出后重置为本机模式，确保下次重新呼出抽屉时始终默认展示本机端
+                            sIsRemoteActive = false;
+                            updateWebViewSlotVisibility();
                             moveTaskToBack(true);
                             overridePendingTransition(0, 0);
                             isDismissing = false;
@@ -2656,6 +2665,8 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             if (sCachedWebView != null) {
                 sCachedWebView.onPause();
             }
+            sIsRemoteActive = false;
+            updateWebViewSlotVisibility();
             moveTaskToBack(true);
             overridePendingTransition(0, 0);
             isDismissing = false;
