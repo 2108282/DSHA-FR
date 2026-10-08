@@ -144,7 +144,6 @@ public class SheetSettingsFragment extends Fragment {
                         isChecked ? "已启用莫奈三色倒序" : "已恢复莫奈三色正常顺序",
                         Toast.LENGTH_SHORT).show();
             });
-            View monetInvertRow = v.findViewById(R.id.sheet_settings_monet_invert_row);
             if (monetInvertRow != null) {
                 monetInvertRow.setOnClickListener(x -> monetInvertToggle.toggle());
             }

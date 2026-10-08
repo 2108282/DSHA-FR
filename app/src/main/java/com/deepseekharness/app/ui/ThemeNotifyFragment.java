@@ -137,7 +137,6 @@ public final class ThemeNotifyFragment extends Fragment {
                     MonetEngine.applyToActivity(requireActivity());
                 }
             });
-            View monetInvertRow = v.findViewById(R.id.theme_notify_row_monet_invert);
             if (monetInvertRow != null) {
                 monetInvertRow.setOnClickListener(x -> monetInvertToggle.toggle());
             }
