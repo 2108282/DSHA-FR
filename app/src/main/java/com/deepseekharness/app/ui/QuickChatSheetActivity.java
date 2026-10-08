@@ -1098,8 +1098,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             if (sIsRemoteActive) {
                 if (sRemoteWebView != null) {
                     if (progressBar != null) progressBar.setVisibility(View.VISIBLE);
-                    ConfigStore cfg = new ConfigStore(this);
-                    String rUrl = cfg.getRemoteDshUrl();
+                    String rUrl = ConfigStore.get(this).getRemoteDshUrl();
                     if (rUrl != null && !rUrl.isEmpty()) {
                         sRemoteWebView.loadUrl(rUrl);
                     } else {
