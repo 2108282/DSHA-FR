@@ -8,9 +8,11 @@ import android.view.View;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentManager;
 
 import com.deepseekharness.app.R;
 import com.deepseekharness.app.core.ConfigStore;
@@ -123,6 +125,11 @@ public class MainActivity extends AppCompatActivity {
 
         BottomNavigationView nav = findViewById(R.id.bottom_nav);
         nav.setOnItemSelectedListener(item -> {
+            // 关键安全守卫：切换顶层 Tab 时，坚决清空 FragmentManager 所有二级页面返回栈，彻底杜绝跨 Tab 返回泄漏与幽灵 Fragment 叠加
+            if (getSupportFragmentManager().getBackStackEntryCount() > 0) {
+                getSupportFragmentManager().popBackStackImmediate(null, FragmentManager.POP_BACK_STACK_INCLUSIVE);
+            }
+
             Fragment f;
             int id = item.getItemId();
             if (id == R.id.nav_launch) {
@@ -151,6 +158,39 @@ public class MainActivity extends AppCompatActivity {
                     .replace(R.id.fragment_container, f)
                     .commit();
             return true;
+        });
+
+        // 重选当前 Tab 监听：如果在设置二级页面重复点击设置 Tab，立即回滚返回栈回到设置首页
+        nav.setOnItemReselectedListener(item -> {
+            if (getSupportFragmentManager().getBackStackEntryCount() > 0) {
+                getSupportFragmentManager().popBackStackImmediate(null, FragmentManager.POP_BACK_STACK_INCLUSIVE);
+                if (item.getItemId() == R.id.nav_settings) {
+                    title.setText(R.string.nav_settings);
+                }
+            }
+        });
+
+        // 统一全局系统侧滑返回手势拦截：
+        // 1. 若当前在二级子页面（设置子页等），正常退回设置页
+        // 2. 若当前在顶层非首页 Tab（插件、设置首页、终端），侧滑返回平滑导航回【启动】首页
+        // 3. 若已在【启动】首页，侧滑返回退出应用
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                FragmentManager fm = getSupportFragmentManager();
+                if (fm.getBackStackEntryCount() > 0) {
+                    // 若有二级页面在栈中，安全回退
+                    fm.popBackStack();
+                    return;
+                }
+                int currentTab = nav.getSelectedItemId();
+                if (currentTab != R.id.nav_launch) {
+                    nav.setSelectedItemId(R.id.nav_launch);
+                } else {
+                    setEnabled(false);
+                    getOnBackPressedDispatcher().onBackPressed();
+                }
+            }
         });
 
         if (savedInstanceState == null) {
