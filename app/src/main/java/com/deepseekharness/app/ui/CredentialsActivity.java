@@ -308,16 +308,16 @@ public class CredentialsActivity extends AppCompatActivity {
             });
             bottomBar.addView(btnTest);
 
-            // 删除（右下角）
+            // 删除（右下角，跟随莫奈取色与次级胶囊规范，默认蓝色）
             Button btnDelete = new Button(this);
             LinearLayout.LayoutParams delLp = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT, dpToPx(38));
             delLp.setMarginStart(dpToPx(10));
             btnDelete.setLayoutParams(delLp);
-            btnDelete.setBackgroundResource(R.drawable.m3_btn_danger_soft);
+            btnDelete.setBackgroundResource(R.drawable.m3_btn_tonal_expressive);
             btnDelete.setText("删除");
             btnDelete.setAllCaps(false);
-            btnDelete.setTextColor(getColor(R.color.err));
+            btnDelete.setTextColor(getColor(R.color.primary));
             btnDelete.setTextSize(13);
             btnDelete.setTypeface(Typeface.DEFAULT_BOLD);
             btnDelete.setPadding(dpToPx(16), 0, dpToPx(16), 0);
@@ -328,6 +328,10 @@ public class CredentialsActivity extends AppCompatActivity {
             bottomBar.addView(btnDelete);
 
             card.addView(bottomBar);
+            // 动态注入全局莫奈调色板，确保深色/浅色胶囊即时演色
+            try {
+                MonetEngine.applyToViewTree(card, MonetEngine.resolveCurrentPalette(this));
+            } catch (Throwable ignored) {}
             remoteListContainer.addView(card);
         }
     }
