@@ -1931,7 +1931,9 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             path = java.net.URLDecoder.decode(rawPath, "UTF-8");
         } catch (Exception ignored) {}
 
-        if (path.contains("dsh-resource://file/session/")) {
+        if (sIsRemoteActive) {
+            // 远端模式保留真实路径或工作区相对路径
+        } else if (path.contains("dsh-resource://file/session/")) {
             int idx = path.indexOf("/session/");
             if (idx >= 0) {
                 String sub = path.substring(idx + 9);
@@ -1945,6 +1947,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         }
 
         final String finalPath = path;
+        final String origRawPath = rawPath;
         QuickChatSheetActivity act = sCurrentInstance;
         if (act == null || act.isFinishing() || act.isDestroyed()) return;
         act.runOnUiThread(() -> {
@@ -1956,7 +1959,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             }
             File f = new File(finalPath);
             if (action == 2) {
-                currentAct.showWorkspaceFileActionMenu(f, touchX, touchY);
+                currentAct.showWorkspaceFileActionMenu(f, origRawPath, touchX, touchY);
             } else if (action == 1 || action == 3) {
                 if (currentAct.rootOverlay != null) {
                     try {
@@ -3101,7 +3104,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
     }
 
     // ---------------- 手势位置跟随的悬浮气泡微菜单（100% 继承抽屉毛玻璃与莫奈主题） ----------------
-    private void showWorkspaceFileActionMenu(final File file, float touchX, float touchY) {
+    private void showWorkspaceFileActionMenu(final File file, final String rawPath, float touchX, float touchY) {
         if (file == null || (!sIsRemoteActive && !file.exists()) || rootOverlay == null) {
             Toast.makeText(this, "目标不存在", Toast.LENGTH_SHORT).show();
             return;
@@ -3142,7 +3145,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
 
         float posX;
         float posY;
-        int estimatedCardH = dpToPx(245);
+        int estimatedCardH = dpToPx(290);
 
         if (touchX >= 0 && touchY >= 0 && sCachedWebView != null) {
             // 计算 WebView 相对 rootOverlay 的实际物理像素偏移
@@ -3207,8 +3210,15 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         menuCard.setPadding(dpToPx(4), dpToPx(6), dpToPx(4), dpToPx(6));
 
         // 标题条（紧凑展示选中的文件名）
+        String displayName = file.getName();
+        int lastPathSep = Math.max(displayName.lastIndexOf('/'), displayName.lastIndexOf('\\'));
+        if (lastPathSep >= 0) {
+            displayName = displayName.substring(lastPathSep + 1);
+        }
+        final String finalFileName = displayName;
+
         TextView titleTv = new TextView(this);
-        titleTv.setText((isDir ? "📁 " : "📄 ") + file.getName());
+        titleTv.setText((isDir ? "📁 " : "📄 ") + finalFileName);
         titleTv.setTextColor(palette.textSecondaryColor);
         titleTv.setTextSize(11);
         titleTv.setSingleLine(true);
@@ -3223,49 +3233,64 @@ public class QuickChatSheetActivity extends AppCompatActivity {
 
         mask.setOnClickListener(v -> dismissActiveDialog());
 
-        if (!sIsRemoteActive) {
-            // 1. 外部打开
-            menuCard.addView(createMenuItem("↗   调用系统打开方式", palette.textColor, v -> {
-                dismissActiveDialog();
+        // 1. 外部打开
+        menuCard.addView(createMenuItem("↗   调用系统打开方式", palette.textColor, v -> {
+            dismissActiveDialog();
+            if (sIsRemoteActive) {
+                // 远端文件：先下载到手机本地 Download 目录，再调起系统打开
+                Toast.makeText(this, "正在下载远端文件后调用系统打开...", Toast.LENGTH_SHORT).show();
+                performDownloadFileToDownloads(file, rawPath, destFile -> {
+                    if (destFile != null && destFile.exists()) {
+                        com.deepseekharness.app.viewer.FileOpenHelper.openWithSystem(QuickChatSheetActivity.this, destFile);
+                    }
+                });
+            } else {
                 com.deepseekharness.app.viewer.FileOpenHelper.openWithSystem(QuickChatSheetActivity.this, file);
-            }));
+            }
+        }));
 
-            // 2. 重命名
-            menuCard.addView(createMenuItem("✏️   重命名", palette.textColor, v -> {
-                dismissActiveDialog();
+        // 2. 重命名
+        menuCard.addView(createMenuItem("✏️   重命名", palette.textColor, v -> {
+            dismissActiveDialog();
+            if (sIsRemoteActive) {
+                Toast.makeText(this, "远端文件请在网页中直接重命名", Toast.LENGTH_SHORT).show();
+            } else {
                 promptRenameFileCustom(file, palette);
-            }));
-        }
+            }
+        }));
 
         // 3. 复制文件名
         menuCard.addView(createMenuItem("📋   复制文件名", palette.textColor, v -> {
             dismissActiveDialog();
-            copyToClipboard(file.getName(), "✓ 已复制文件名：" + file.getName());
+            copyToClipboard(finalFileName, "✓ 已复制文件名：" + finalFileName);
         }));
 
         // 4. 复制文件路径
         menuCard.addView(createMenuItem("📍   复制文件路径", palette.textColor, v -> {
             dismissActiveDialog();
-            copyToClipboard(file.getAbsolutePath(), "✓ 已复制路径：" + file.getAbsolutePath());
+            String showPath = (rawPath != null && !rawPath.isEmpty()) ? rawPath : file.getAbsolutePath();
+            copyToClipboard(showPath, "✓ 已复制路径：" + showPath);
         }));
 
-        if (!sIsRemoteActive) {
-            // 5. 下载到 Download 目录
-            menuCard.addView(createMenuItem("📥   下载到 Download 目录", palette.textColor, v -> {
-                dismissActiveDialog();
-                if (isDir) {
-                    Toast.makeText(this, "暂不支持直接下载整个文件夹", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                confirmDownloadFileCustom(file, palette);
-            }));
+        // 5. 下载到 Download 目录（全环境支持）
+        menuCard.addView(createMenuItem("📥   下载到 Download 目录", palette.textColor, v -> {
+            dismissActiveDialog();
+            if (isDir) {
+                Toast.makeText(this, "暂不支持直接下载整个文件夹", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            confirmDownloadFileCustom(file, palette, rawPath);
+        }));
 
-            // 6. 删除（警示红）
-            menuCard.addView(createMenuItem("🗑️   删除" + (isDir ? "文件夹" : ""), Color.parseColor("#FF5252"), v -> {
-                dismissActiveDialog();
+        // 6. 删除（警示红）
+        menuCard.addView(createMenuItem("🗑️   删除" + (isDir ? "文件夹" : ""), Color.parseColor("#FF5252"), v -> {
+            dismissActiveDialog();
+            if (sIsRemoteActive) {
+                Toast.makeText(this, "远端文件请在网页中直接删除", Toast.LENGTH_SHORT).show();
+            } else {
                 confirmDeleteFileCustom(file, palette);
-            }));
-        }
+            }
+        }));
 
         mask.addView(menuCard);
         showDialogLayer(mask);
@@ -3521,7 +3546,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
     }
 
     // ---------------- 抽屉同款毛玻璃 UI 下载确认弹窗 ----------------
-    private void confirmDownloadFileCustom(final File file, final MonetThemeHelper.Palette palette) {
+    private void confirmDownloadFileCustom(final File file, final MonetThemeHelper.Palette palette, final String rawPath) {
         final FrameLayout mask = new FrameLayout(this);
         mask.setLayoutParams(new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -3591,7 +3616,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         btnDownload.setPadding(dpToPx(14), dpToPx(8), dpToPx(14), dpToPx(8));
         btnDownload.setOnClickListener(v -> {
             dismiss.run();
-            performDownloadFileToDownloads(file);
+            performDownloadFileToDownloads(file, rawPath, null);
         });
         btnBar.addView(btnDownload);
 
@@ -3600,75 +3625,190 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         showDialogLayer(mask);
     }
 
-    private void performDownloadFileToDownloads(final File srcFile) {
-        if (srcFile == null || !srcFile.exists() || !srcFile.isFile()) {
-            Toast.makeText(this, "文件不可读或不存在", Toast.LENGTH_SHORT).show();
-            return;
-        }
+    private interface OnFileDownloadedCallback {
+        void onDownloaded(File destFile);
+    }
 
-        Toast.makeText(this, "正在保存至 Download 目录...", Toast.LENGTH_SHORT).show();
-        new Thread(() -> {
-            try {
-                File downloadDir = android.os.Environment.getExternalStoragePublicDirectory(
-                        android.os.Environment.DIRECTORY_DOWNLOADS);
-                if (downloadDir != null && !downloadDir.exists()) {
-                    downloadDir.mkdirs();
-                }
-                if (downloadDir == null || !downloadDir.canWrite()) {
-                    downloadDir = new File("/sdcard/Download");
-                }
-
-                String baseName = srcFile.getName();
-                String namePart = baseName;
-                String extPart = "";
-                int dot = baseName.lastIndexOf('.');
-                if (dot > 0) {
-                    namePart = baseName.substring(0, dot);
-                    extPart = baseName.substring(dot);
-                }
-
-                File dest = new File(downloadDir, baseName);
-                int count = 1;
-                while (dest.exists()) {
-                    dest = new File(downloadDir, namePart + " (" + count + ")" + extPart);
-                    count++;
-                }
-
-                try (java.io.FileInputStream in = new java.io.FileInputStream(srcFile);
-                     java.io.FileOutputStream out = new java.io.FileOutputStream(dest)) {
-                    byte[] buffer = new byte[64 * 1024];
-                    int len;
-                    while ((len = in.read(buffer)) != -1) {
-                        out.write(buffer, 0, len);
-                    }
-                    out.flush();
-                }
-
-                final File finalDest = dest;
-                try {
-                    android.media.MediaScannerConnection.scanFile(
-                            getApplicationContext(),
-                            new String[]{finalDest.getAbsolutePath()},
-                            null,
-                            null
-                    );
-                } catch (Throwable ignored) {}
-
-                runOnUiThread(() -> {
-                    if (rootOverlay != null) {
-                        try {
-                            rootOverlay.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK);
-                        } catch (Throwable ignored) {}
-                    }
-                    Toast.makeText(this, "✓ 已下载至 Download/" + finalDest.getName(), Toast.LENGTH_LONG).show();
-                });
-            } catch (Exception e) {
-                final String err = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-                runOnUiThread(() -> {
-                    Toast.makeText(this, "下载失败: " + err, Toast.LENGTH_LONG).show();
-                });
+    private void performDownloadFileToDownloads(final File srcFile, final String rawPath, final OnFileDownloadedCallback callback) {
+        if (!sIsRemoteActive) {
+            if (srcFile == null || !srcFile.exists() || !srcFile.isFile()) {
+                Toast.makeText(this, "文件不可读或不存在", Toast.LENGTH_SHORT).show();
+                return;
             }
-        }, "dsha-file-download").start();
+
+            Toast.makeText(this, "正在保存至 Download 目录...", Toast.LENGTH_SHORT).show();
+            new Thread(() -> {
+                try {
+                    File downloadDir = android.os.Environment.getExternalStoragePublicDirectory(
+                            android.os.Environment.DIRECTORY_DOWNLOADS);
+                    if (downloadDir != null && !downloadDir.exists()) {
+                        downloadDir.mkdirs();
+                    }
+                    if (downloadDir == null || !downloadDir.canWrite()) {
+                        downloadDir = new File("/sdcard/Download");
+                    }
+
+                    String baseName = srcFile.getName();
+                    String namePart = baseName;
+                    String extPart = "";
+                    int dot = baseName.lastIndexOf('.');
+                    if (dot > 0) {
+                        namePart = baseName.substring(0, dot);
+                        extPart = baseName.substring(dot);
+                    }
+
+                    File dest = new File(downloadDir, baseName);
+                    int count = 1;
+                    while (dest.exists()) {
+                        dest = new File(downloadDir, namePart + " (" + count + ")" + extPart);
+                        count++;
+                    }
+
+                    try (java.io.FileInputStream in = new java.io.FileInputStream(srcFile);
+                         java.io.FileOutputStream out = new java.io.FileOutputStream(dest)) {
+                        byte[] buffer = new byte[64 * 1024];
+                        int len;
+                        while ((len = in.read(buffer)) != -1) {
+                            out.write(buffer, 0, len);
+                        }
+                        out.flush();
+                    }
+
+                    final File finalDest = dest;
+                    try {
+                        android.media.MediaScannerConnection.scanFile(
+                                getApplicationContext(),
+                                new String[]{finalDest.getAbsolutePath()},
+                                null,
+                                null
+                        );
+                    } catch (Throwable ignored) {}
+
+                    runOnUiThread(() -> {
+                        if (rootOverlay != null) {
+                            try {
+                                rootOverlay.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK);
+                            } catch (Throwable ignored) {}
+                        }
+                        Toast.makeText(this, "✓ 已下载至 Download/" + finalDest.getName(), Toast.LENGTH_LONG).show();
+                        if (callback != null) callback.onDownloaded(finalDest);
+                    });
+                } catch (Exception e) {
+                    final String err = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                    runOnUiThread(() -> {
+                        Toast.makeText(this, "下载失败: " + err, Toast.LENGTH_LONG).show();
+                    });
+                }
+            }, "dsha-file-download").start();
+        } else {
+            // 远端文件流式下载
+            Toast.makeText(this, "正在从远端下载至手机 Download 目录...", Toast.LENGTH_SHORT).show();
+            new Thread(() -> {
+                try {
+                    ConfigStore cfg = new ConfigStore(this);
+                    String remoteUrl = cfg.getRemoteDshUrl();
+                    if (remoteUrl == null || remoteUrl.isEmpty()) {
+                        runOnUiThread(() -> Toast.makeText(this, "未配置远端 DSH 地址", Toast.LENGTH_SHORT).show());
+                        return;
+                    }
+
+                    Uri rUri = Uri.parse(remoteUrl);
+                    String baseUrl = rUri.getScheme() + "://" + rUri.getHost() + (rUri.getPort() != -1 ? ":" + rUri.getPort() : "");
+                    String token = rUri.getQueryParameter("token");
+
+                    String targetPath = rawPath != null ? rawPath : srcFile.getName();
+                    String downloadApi = baseUrl + "/api/file?path=" + java.net.URLEncoder.encode(targetPath, "UTF-8");
+                    if (token != null && !token.isEmpty()) {
+                        downloadApi += "&token=" + java.net.URLEncoder.encode(token, "UTF-8");
+                    }
+
+                    File downloadDir = android.os.Environment.getExternalStoragePublicDirectory(
+                            android.os.Environment.DIRECTORY_DOWNLOADS);
+                    if (downloadDir != null && !downloadDir.exists()) {
+                        downloadDir.mkdirs();
+                    }
+                    if (downloadDir == null || !downloadDir.canWrite()) {
+                        downloadDir = new File("/sdcard/Download");
+                    }
+
+                    String fileName = srcFile.getName();
+                    int lastSep = Math.max(fileName.lastIndexOf('/'), fileName.lastIndexOf('\\'));
+                    if (lastSep >= 0) {
+                        fileName = fileName.substring(lastSep + 1);
+                    }
+                    if (fileName.isEmpty()) {
+                        fileName = "downloaded_file";
+                    }
+
+                    String namePart = fileName;
+                    String extPart = "";
+                    int dot = fileName.lastIndexOf('.');
+                    if (dot > 0) {
+                        namePart = fileName.substring(0, dot);
+                        extPart = fileName.substring(dot);
+                    }
+
+                    File dest = new File(downloadDir, fileName);
+                    int count = 1;
+                    while (dest.exists()) {
+                        dest = new File(downloadDir, namePart + " (" + count + ")" + extPart);
+                        count++;
+                    }
+
+                    java.net.URL url = new java.net.URL(downloadApi);
+                    java.net.HttpURLConnection conn = (java.net.HttpURLConnection) url.openConnection();
+                    conn.setRequestMethod("GET");
+                    conn.setConnectTimeout(8000);
+                    conn.setReadTimeout(15000);
+
+                    String cks = android.webkit.CookieManager.getInstance().getCookie(remoteUrl);
+                    if (cks != null && !cks.isEmpty()) {
+                        conn.setRequestProperty("Cookie", cks);
+                    }
+
+                    int code = conn.getResponseCode();
+                    if (code != 200) {
+                        throw new RuntimeException("远端服务器响应错误: HTTP " + code);
+                    }
+
+                    try (java.io.InputStream in = conn.getInputStream();
+                         java.io.FileOutputStream out = new java.io.FileOutputStream(dest)) {
+                        byte[] buffer = new byte[64 * 1024];
+                        int len;
+                        while ((len = in.read(buffer)) != -1) {
+                            out.write(buffer, 0, len);
+                        }
+                        out.flush();
+                    }
+                    conn.disconnect();
+
+                    final File finalDest = dest;
+                    try {
+                        android.media.MediaScannerConnection.scanFile(
+                                getApplicationContext(),
+                                new String[]{finalDest.getAbsolutePath()},
+                                null,
+                                null
+                        );
+                    } catch (Throwable ignored) {}
+
+                    runOnUiThread(() -> {
+                        if (rootOverlay != null) {
+                            try {
+                                rootOverlay.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK);
+                            } catch (Throwable ignored) {}
+                        }
+                        Toast.makeText(this, "✓ 已下载至 Download/" + finalDest.getName(), Toast.LENGTH_LONG).show();
+                        if (callback != null) callback.onDownloaded(finalDest);
+                    });
+                } catch (Exception e) {
+                    final String err = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                    runOnUiThread(() -> {
+                        Toast.makeText(this, "下载失败: " + err, Toast.LENGTH_LONG).show();
+                    });
+                }
+            }, "dsha-remote-download").start();
+        }
     }
 
     // ---------------- 抽屉内置万能查看器核心引擎（异步化多线程加载架构） ----------------
