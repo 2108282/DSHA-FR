@@ -1790,24 +1790,25 @@ public class QuickChatSheetActivity extends AppCompatActivity {
 
     private void toggleDshConnectionTarget() {
         ConfigStore cfg = new ConfigStore(this);
-        String remoteUrl = cfg.getRemoteDshUrl();
+        String activeRemoteUrl = cfg.getActiveRemoteDshUrl();
+        boolean hasActiveRemote = cfg.isAnyRemoteDshActive() && activeRemoteUrl != null && !activeRemoteUrl.isEmpty();
 
         if (!sIsRemoteActive) {
-            // 当前为本机模式，切换到远端模式
-            if (remoteUrl == null || remoteUrl.isEmpty()) {
-                Toast.makeText(this, "未配置远端 DSH 地址，请在「访问地址与凭据」中设置", Toast.LENGTH_SHORT).show();
+            // 当前为本机模式，尝试切换到远端模式
+            if (!hasActiveRemote) {
+                Toast.makeText(this, "未开启任何远端连接，请在「访问地址与凭据」中启用", Toast.LENGTH_SHORT).show();
                 return;
             }
             sIsRemoteActive = true;
-            cfg.setRemoteDshEnabled(true);
-            ensureRemoteWebViewLoaded(remoteUrl);
+            ensureRemoteWebViewLoaded(activeRemoteUrl);
             mountWebViewToContainer(sRemoteWebView);
             updateWebViewSlotVisibility();
-            Toast.makeText(this, "已切换至远端 DSH", Toast.LENGTH_SHORT).show();
+            com.deepseekharness.app.core.ConfigStore.RemoteDshEntry entry = cfg.getActiveRemoteDshEntry();
+            String name = entry != null && entry.name != null && !entry.name.isEmpty() ? entry.name : "远端";
+            Toast.makeText(this, "已切换至「" + name + "」", Toast.LENGTH_SHORT).show();
         } else {
             // 当前为远端模式，切换回本机模式
             sIsRemoteActive = false;
-            cfg.setRemoteDshEnabled(false);
             if (sLocalWebView == null) {
                 sLocalWebView = createConfiguredWebView();
                 loadInitialLocalWeb();
@@ -1894,12 +1895,11 @@ public class QuickChatSheetActivity extends AppCompatActivity {
     /** 挂载常驻双槽位 WebView，实现本机与远端 100% 零转圈秒开、瞬间热切换 */
     private void attachChatWeb() {
         ConfigStore cfg = new ConfigStore(getApplicationContext());
-        boolean remoteEnabled = cfg.isRemoteDshEnabled();
-        String remoteUrl = cfg.getRemoteDshUrl();
+        String activeRemoteUrl = cfg.getActiveRemoteDshUrl();
+        boolean hasActiveRemote = cfg.isAnyRemoteDshActive() && activeRemoteUrl != null && !activeRemoteUrl.isEmpty();
 
-        if (remoteEnabled && remoteUrl != null && !remoteUrl.isEmpty()) {
-            sIsRemoteActive = true;
-        }
+        // 严格遵循开关：只有当前明确有生效的远端时，抽屉才允许默认拉起远端
+        sIsRemoteActive = hasActiveRemote;
 
         // 1. 本机槽位
         if (sLocalWebView == null) {
@@ -1910,13 +1910,18 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         }
 
         // 2. 远端槽位
-        if (sIsRemoteActive && remoteUrl != null && !remoteUrl.isEmpty()) {
-            ensureRemoteWebViewLoaded(remoteUrl);
+        if (sIsRemoteActive) {
+            ensureRemoteWebViewLoaded(activeRemoteUrl);
+        } else if (sRemoteWebView != null) {
+            // 开关已关闭，彻底释放网络连接与心跳
+            sRemoteWebView.stopLoading();
+            sRemoteWebView.loadUrl("about:blank");
+            sRemoteWebView.onPause();
         }
 
         // 3. 挂载到容器
         mountWebViewToContainer(sLocalWebView);
-        if (sRemoteWebView != null) {
+        if (sRemoteWebView != null && sIsRemoteActive) {
             mountWebViewToContainer(sRemoteWebView);
         }
 
@@ -3007,14 +3012,27 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 }
             }, 350);
 
-            // 2. 检查底层服务是否发生过重启（generation 改变）
-            if (sIsRemoteActive) {
-                if (!sRemoteWebLoaded && sRemoteWebView != null) {
-                    ConfigStore cfg = new ConfigStore(this);
-                    String rUrl = cfg.getRemoteDshUrl();
-                    if (rUrl != null && !rUrl.isEmpty()) {
-                        ensureRemoteWebViewLoaded(rUrl);
-                    }
+            // 2. 检查底层服务与远端开关状态
+            ConfigStore cfg = ConfigStore.get(this);
+            String activeRemoteUrl = cfg.getActiveRemoteDshUrl();
+            boolean hasActiveRemote = cfg.isAnyRemoteDshActive() && activeRemoteUrl != null && !activeRemoteUrl.isEmpty();
+
+            if (sIsRemoteActive && !hasActiveRemote) {
+                // 用户在凭据页关闭了远端，立即切回本机并彻底释放远端资源，防止后台偷跑心跳与电量
+                sIsRemoteActive = false;
+                if (sRemoteWebView != null) {
+                    sRemoteWebView.stopLoading();
+                    sRemoteWebView.loadUrl("about:blank");
+                    sRemoteWebView.onPause();
+                }
+                updateWebViewSlotVisibility();
+                if (!sLocalWebLoaded) {
+                    forceReloadWithLatestToken();
+                }
+            } else if (sIsRemoteActive) {
+                if (!activeRemoteUrl.equals(sLoadedRemoteUrl) || (!sRemoteWebLoaded && sRemoteWebView != null)) {
+                    ensureRemoteWebViewLoaded(activeRemoteUrl);
+                    updateWebViewSlotVisibility();
                 }
             } else {
                 long currentGen = controller != null ? controller.getWebGeneration() : -1;

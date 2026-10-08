@@ -30,10 +30,13 @@ public class CredentialsActivity extends AppCompatActivity {
     private TextView lanBadgeText;
     private DshaToggle lanSwitch;
 
-    private TextView remoteBadgeText;
-    private DshaToggle remoteSwitch;
-    private android.widget.EditText remoteUrlInput;
-    private Button remoteTestBtn;
+    private LinearLayout remoteListContainer;
+    private Button addRemoteBtn;
+    private java.util.List<com.deepseekharness.app.core.ConfigStore.RemoteDshEntry> remoteList = new java.util.ArrayList<>();
+
+    private int dpToPx(int dp) {
+        return (int) (dp * getResources().getDisplayMetrics().density + 0.5f);
+    }
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -68,39 +71,11 @@ public class CredentialsActivity extends AppCompatActivity {
             });
         }
 
-        // 远端连接配置
-        remoteBadgeText = findViewById(R.id.cred_remote_badge);
-        remoteSwitch = findViewById(R.id.cred_remote_switch);
-        remoteUrlInput = findViewById(R.id.cred_remote_url_input);
-        remoteTestBtn = findViewById(R.id.cred_remote_test_btn);
-
-        com.deepseekharness.app.core.ConfigStore cfg = com.deepseekharness.app.core.ConfigStore.get(this);
-        if (remoteUrlInput != null) {
-            String savedUrl = cfg.getRemoteDshUrl();
-            if (savedUrl != null && !savedUrl.isEmpty()) {
-                remoteUrlInput.setText(savedUrl);
-            }
-            remoteUrlInput.addTextChangedListener(new android.text.TextWatcher() {
-                @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-                @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
-                @Override public void afterTextChanged(android.text.Editable s) {
-                    cfg.setRemoteDshUrl(s != null ? s.toString().trim() : "");
-                }
-            });
-        }
-
-        if (remoteSwitch != null) {
-            boolean enabled = cfg.isRemoteDshEnabled();
-            remoteSwitch.setChecked(enabled);
-            updateRemoteBadge(enabled);
-            remoteSwitch.setOnCheckedChangeListener((btn, isChecked) -> {
-                cfg.setRemoteDshEnabled(isChecked);
-                updateRemoteBadge(isChecked);
-            });
-        }
-
-        if (remoteTestBtn != null) {
-            remoteTestBtn.setOnClickListener(v -> testRemoteConnection());
+        // 远端连接列表与新增
+        remoteListContainer = findViewById(R.id.cred_remote_list_container);
+        addRemoteBtn = findViewById(R.id.cred_add_remote_btn);
+        if (addRemoteBtn != null) {
+            addRemoteBtn.setOnClickListener(v -> addNewRemoteEntry());
         }
 
         // 复制设备桥令牌
@@ -131,35 +106,240 @@ public class CredentialsActivity extends AppCompatActivity {
             refreshData();
         });
 
+        loadRemoteList();
         refreshData();
         MonetEngine.applyToActivity(this);
     }
 
-    private void updateRemoteBadge(boolean enabled) {
-        if (remoteBadgeText == null) return;
-        if (enabled) {
-            remoteBadgeText.setText("已启用");
-            remoteBadgeText.setTextColor(getColor(R.color.ok));
-        } else {
-            remoteBadgeText.setText("未启用");
-            remoteBadgeText.setTextColor(getColor(R.color.text_muted));
+    private void loadRemoteList() {
+        com.deepseekharness.app.core.ConfigStore cfg = com.deepseekharness.app.core.ConfigStore.get(this);
+        remoteList = cfg.getRemoteDshList();
+        renderRemoteCards();
+    }
+
+    private void addNewRemoteEntry() {
+        com.deepseekharness.app.core.ConfigStore cfg = com.deepseekharness.app.core.ConfigStore.get(this);
+        int nextIdx = remoteList.size() + 1;
+        com.deepseekharness.app.core.ConfigStore.RemoteDshEntry entry =
+                new com.deepseekharness.app.core.ConfigStore.RemoteDshEntry(
+                        java.util.UUID.randomUUID().toString(),
+                        "远端 " + nextIdx,
+                        "",
+                        false
+                );
+        remoteList.add(entry);
+        cfg.saveRemoteDshList(remoteList);
+        renderRemoteCards();
+        Toast.makeText(this, "已添加「远端 " + nextIdx + "」，请填写访问地址", Toast.LENGTH_SHORT).show();
+    }
+
+    private void renderRemoteCards() {
+        if (remoteListContainer == null) return;
+        remoteListContainer.removeAllViews();
+
+        if (remoteList.isEmpty()) {
+            // 空状态卡片
+            ModernCardView emptyCard = new ModernCardView(this);
+            emptyCard.setOrientation(LinearLayout.VERTICAL);
+            emptyCard.setPadding(dpToPx(18), dpToPx(20), dpToPx(18), dpToPx(20));
+            emptyCard.setCardRadius(dpToPx(16));
+            LinearLayout.LayoutParams elp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            emptyCard.setLayoutParams(elp);
+
+            TextView tvEmpty = new TextView(this);
+            tvEmpty.setText("暂无远端连接配置，点击右上角「➕ 添加远端」即可新增。");
+            tvEmpty.setTextColor(getColor(R.color.text_muted));
+            tvEmpty.setTextSize(13);
+            tvEmpty.setGravity(android.view.Gravity.CENTER);
+            emptyCard.addView(tvEmpty);
+            remoteListContainer.addView(emptyCard);
+            return;
+        }
+
+        com.deepseekharness.app.core.ConfigStore cfg = com.deepseekharness.app.core.ConfigStore.get(this);
+
+        for (int i = 0; i < remoteList.size(); i++) {
+            final int index = i;
+            final com.deepseekharness.app.core.ConfigStore.RemoteDshEntry entry = remoteList.get(i);
+            String titleName = (entry.name != null && !entry.name.trim().isEmpty())
+                    ? entry.name.trim() : ("远端 " + (index + 1));
+
+            ModernCardView card = new ModernCardView(this);
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.setPadding(dpToPx(18), dpToPx(18), dpToPx(18), dpToPx(18));
+            card.setCardRadius(dpToPx(18));
+            LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            if (i > 0) clp.topMargin = dpToPx(12);
+            card.setLayoutParams(clp);
+
+            // 1. 顶部操作条：[图标] + [标题] + [徽章] + [互斥开关]
+            LinearLayout headerRow = new LinearLayout(this);
+            headerRow.setLayoutParams(new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            headerRow.setOrientation(LinearLayout.HORIZONTAL);
+            headerRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+
+            android.widget.FrameLayout iconBox = new android.widget.FrameLayout(this);
+            iconBox.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(38), dpToPx(38)));
+            iconBox.setBackgroundResource(R.drawable.bg_settings_icon_box);
+
+            android.widget.ImageView ivIcon = new android.widget.ImageView(this);
+            android.widget.FrameLayout.LayoutParams ivLp = new android.widget.FrameLayout.LayoutParams(dpToPx(20), dpToPx(20));
+            ivLp.gravity = android.view.Gravity.CENTER;
+            ivIcon.setLayoutParams(ivLp);
+            ivIcon.setImageResource(R.drawable.ic_globe);
+            ivIcon.setColorFilter(getColor(R.color.primary));
+            iconBox.addView(ivIcon);
+            headerRow.addView(iconBox);
+
+            TextView tvTitle = new TextView(this);
+            LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
+            tlp.setMarginStart(dpToPx(12));
+            tvTitle.setLayoutParams(tlp);
+            tvTitle.setText(titleName);
+            tvTitle.setTextColor(getColor(R.color.text));
+            tvTitle.setTextSize(15);
+            tvTitle.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            headerRow.addView(tvTitle);
+
+            TextView badgeView = new TextView(this);
+            LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            blp.setMarginEnd(dpToPx(10));
+            badgeView.setLayoutParams(blp);
+            badgeView.setBackgroundResource(R.drawable.bg_chip);
+            badgeView.setPadding(dpToPx(8), dpToPx(3), dpToPx(8), dpToPx(3));
+            badgeView.setTextSize(11);
+            badgeView.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            if (entry.enabled) {
+                badgeView.setText("已生效");
+                badgeView.setTextColor(getColor(R.color.ok));
+            } else {
+                badgeView.setText("未启用");
+                badgeView.setTextColor(getColor(R.color.text_muted));
+            }
+            headerRow.addView(badgeView);
+
+            DshaToggle toggle = new DshaToggle(this);
+            toggle.setLayoutParams(new LinearLayout.LayoutParams(dpToPx(44), dpToPx(26)));
+            toggle.setChecked(entry.enabled);
+            toggle.setOnCheckedChangeListener((btn, isChecked) -> {
+                if (isChecked) {
+                    // 严格互斥：开启当前项，关闭其他所有项
+                    for (com.deepseekharness.app.core.ConfigStore.RemoteDshEntry other : remoteList) {
+                        other.enabled = (other.id != null && other.id.equals(entry.id));
+                    }
+                    cfg.saveRemoteDshList(remoteList);
+                    Toast.makeText(this, "已启用「" + titleName + "」，其他远端已停用", Toast.LENGTH_SHORT).show();
+                } else {
+                    entry.enabled = false;
+                    cfg.saveRemoteDshList(remoteList);
+                    Toast.makeText(this, "已停用「" + titleName + "」，回退本机模式", Toast.LENGTH_SHORT).show();
+                }
+                renderRemoteCards();
+            });
+            headerRow.addView(toggle);
+            card.addView(headerRow);
+
+            // 2. 输入框（远端 DSH URL）
+            android.widget.EditText input = new android.widget.EditText(this);
+            LinearLayout.LayoutParams inLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            inLp.topMargin = dpToPx(12);
+            input.setLayoutParams(inLp);
+            input.setBackgroundResource(R.drawable.bg_input);
+            input.setTypeface(android.graphics.Typeface.MONOSPACE);
+            input.setHint("http://192.168.1.xxx:3081/?token=...");
+            input.setHintTextColor(getColor(R.color.text_muted));
+            input.setTextColor(getColor(R.color.text));
+            input.setTextSize(13);
+            input.setSingleLine(true);
+            input.setPadding(dpToPx(12), dpToPx(12), dpToPx(12), dpToPx(12));
+            if (entry.url != null && !entry.url.isEmpty()) {
+                input.setText(entry.url);
+            }
+            input.addTextChangedListener(new android.text.TextWatcher() {
+                @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+                @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+                @Override public void afterTextChanged(android.text.Editable s) {
+                    entry.url = s != null ? s.toString().trim() : "";
+                    cfg.saveRemoteDshList(remoteList);
+                }
+            });
+            card.addView(input);
+
+            // 3. 底部操作栏：[🗑️ 删除] + [连接测试]
+            LinearLayout bottomBar = new LinearLayout(this);
+            LinearLayout.LayoutParams botLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            botLp.topMargin = dpToPx(12);
+            bottomBar.setLayoutParams(botLp);
+            bottomBar.setOrientation(LinearLayout.HORIZONTAL);
+            bottomBar.setGravity(android.view.Gravity.CENTER_VERTICAL);
+
+            TextView btnDelete = new TextView(this);
+            LinearLayout.LayoutParams delLp = new LinearLayout.LayoutParams(
+                    0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
+            btnDelete.setLayoutParams(delLp);
+            btnDelete.setText("🗑️ 删除此远端");
+            btnDelete.setTextColor(android.graphics.Color.parseColor("#FF5252"));
+            btnDelete.setTextSize(13);
+            btnDelete.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            btnDelete.setClickable(true);
+            btnDelete.setFocusable(true);
+            btnDelete.setOnClickListener(v -> confirmDeleteRemoteEntry(entry, titleName));
+            bottomBar.addView(btnDelete);
+
+            Button btnTest = new Button(this);
+            btnTest.setLayoutParams(new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, dpToPx(38)));
+            btnTest.setBackgroundResource(R.drawable.m3_btn_primary_expressive);
+            btnTest.setText("连接测试");
+            btnTest.setTextColor(getColor(R.color.accent_on));
+            btnTest.setTextSize(13);
+            btnTest.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            btnTest.setPadding(dpToPx(16), 0, dpToPx(16), 0);
+            btnTest.setOnClickListener(v -> {
+                String testUrl = input.getText() != null ? input.getText().toString().trim() : "";
+                testSingleRemoteConnection(testUrl, btnTest);
+            });
+            bottomBar.addView(btnTest);
+
+            card.addView(bottomBar);
+            remoteListContainer.addView(card);
         }
     }
 
-    private void testRemoteConnection() {
-        if (remoteUrlInput == null) return;
-        String raw = remoteUrlInput.getText() != null ? remoteUrlInput.getText().toString().trim() : "";
-        if (raw.isEmpty()) {
+    private void confirmDeleteRemoteEntry(com.deepseekharness.app.core.ConfigStore.RemoteDshEntry entry, String titleName) {
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("删除远端配置")
+                .setMessage("确定删除「" + titleName + "」的连接配置吗？")
+                .setNegativeButton("取消", null)
+                .setPositiveButton("删除", (d, which) -> {
+                    com.deepseekharness.app.core.ConfigStore cfg = com.deepseekharness.app.core.ConfigStore.get(this);
+                    remoteList.remove(entry);
+                    cfg.saveRemoteDshList(remoteList);
+                    renderRemoteCards();
+                    Toast.makeText(this, "已删除「" + titleName + "」", Toast.LENGTH_SHORT).show();
+                })
+                .show();
+    }
+
+    private void testSingleRemoteConnection(String rawUrl, Button testBtn) {
+        if (rawUrl == null || rawUrl.trim().isEmpty()) {
             Toast.makeText(this, "请先输入远端 DSH 地址", Toast.LENGTH_SHORT).show();
             return;
         }
-        if (!raw.startsWith("http://") && !raw.startsWith("https://")) {
-            raw = "http://" + raw;
+        String formatted = rawUrl.trim();
+        if (!formatted.startsWith("http://") && !formatted.startsWith("https://")) {
+            formatted = "http://" + formatted;
         }
-        final String targetUrl = raw;
-        if (remoteTestBtn != null) {
-            remoteTestBtn.setEnabled(false);
-            remoteTestBtn.setText("测试中…");
+        final String targetUrl = formatted;
+        if (testBtn != null) {
+            testBtn.setEnabled(false);
+            testBtn.setText("测试中…");
         }
         Toast.makeText(this, "正在探测远端连接...", Toast.LENGTH_SHORT).show();
 
@@ -191,9 +371,9 @@ public class CredentialsActivity extends AppCompatActivity {
             final String finalErr = errMsg;
             runOnUiThread(() -> {
                 if (isFinishing() || isDestroyed()) return;
-                if (remoteTestBtn != null) {
-                    remoteTestBtn.setEnabled(true);
-                    remoteTestBtn.setText("连接测试");
+                if (testBtn != null) {
+                    testBtn.setEnabled(true);
+                    testBtn.setText("连接测试");
                 }
                 if (finalSuccess) {
                     Toast.makeText(this, "✓ 远端连接成功 (HTTP " + finalCode + ")", Toast.LENGTH_SHORT).show();
@@ -241,12 +421,7 @@ public class CredentialsActivity extends AppCompatActivity {
             lanBadgeText.setTextColor(getColor(R.color.text_muted));
         }
 
-        com.deepseekharness.app.core.ConfigStore cfg = com.deepseekharness.app.core.ConfigStore.get(this);
-        boolean remoteEnabled = cfg.isRemoteDshEnabled();
-        if (remoteSwitch != null && remoteSwitch.isChecked() != remoteEnabled) {
-            remoteSwitch.setChecked(remoteEnabled);
-        }
-        updateRemoteBadge(remoteEnabled);
+        loadRemoteList();
     }
 
     @Override

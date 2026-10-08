@@ -286,7 +286,105 @@ public class ConfigStore {
         prefs.edit().putBoolean(Constants.KEY_SHEET_AUTO_RESTORE_DEFAULT, enabled).apply();
     }
 
-    // ================= 远端 DSH 连接 =================
+    // ================= 远端 DSH 连接（支持多远端动态管理与开关互斥） =================
+
+    public static class RemoteDshEntry {
+        public String id;
+        public String name;
+        public String url;
+        public boolean enabled;
+
+        public RemoteDshEntry() {
+            this.id = java.util.UUID.randomUUID().toString();
+            this.name = "";
+            this.url = "";
+            this.enabled = false;
+        }
+
+        public RemoteDshEntry(String id, String name, String url, boolean enabled) {
+            this.id = (id != null && !id.isEmpty()) ? id : java.util.UUID.randomUUID().toString();
+            this.name = name != null ? name : "";
+            this.url = url != null ? url.trim() : "";
+            this.enabled = enabled;
+        }
+    }
+
+    public java.util.List<RemoteDshEntry> getRemoteDshList() {
+        java.util.List<RemoteDshEntry> list = new java.util.ArrayList<>();
+        String json = prefs.getString(Constants.KEY_REMOTE_DSH_LIST, "");
+        if (json != null && !json.trim().isEmpty()) {
+            try {
+                org.json.JSONArray arr = new org.json.JSONArray(json);
+                for (int i = 0; i < arr.length(); i++) {
+                    org.json.JSONObject obj = arr.getJSONObject(i);
+                    String id = obj.optString("id", java.util.UUID.randomUUID().toString());
+                    String name = obj.optString("name", "");
+                    String url = obj.optString("url", "");
+                    boolean enabled = obj.optBoolean("enabled", false);
+                    list.add(new RemoteDshEntry(id, name, url, enabled));
+                }
+            } catch (Throwable ignored) {}
+        }
+
+        // 历史数据平滑迁移：若多配置列表为空，但存在旧的单一远端配置，自动作为第一项迁移进来
+        if (list.isEmpty()) {
+            String legacyUrl = getRemoteDshUrl();
+            boolean legacyEnabled = isRemoteDshEnabled();
+            if (legacyUrl != null && !legacyUrl.isEmpty()) {
+                list.add(new RemoteDshEntry(java.util.UUID.randomUUID().toString(), "远端 1", legacyUrl, legacyEnabled));
+                saveRemoteDshList(list);
+            }
+        }
+        return list;
+    }
+
+    public void saveRemoteDshList(java.util.List<RemoteDshEntry> list) {
+        if (list == null) list = new java.util.ArrayList<>();
+        org.json.JSONArray arr = new org.json.JSONArray();
+        String activeUrl = "";
+        boolean anyEnabled = false;
+
+        for (RemoteDshEntry e : list) {
+            if (e == null) continue;
+            org.json.JSONObject obj = new org.json.JSONObject();
+            try {
+                obj.put("id", e.id);
+                obj.put("name", e.name);
+                obj.put("url", e.url != null ? e.url.trim() : "");
+                obj.put("enabled", e.enabled);
+                arr.put(obj);
+                if (e.enabled && !anyEnabled && e.url != null && !e.url.trim().isEmpty()) {
+                    activeUrl = e.url.trim();
+                    anyEnabled = true;
+                }
+            } catch (Throwable ignored) {}
+        }
+
+        prefs.edit()
+                .putString(Constants.KEY_REMOTE_DSH_LIST, arr.toString())
+                .putString(Constants.KEY_REMOTE_DSH_URL, activeUrl)
+                .putBoolean(Constants.KEY_REMOTE_DSH_ENABLED, anyEnabled)
+                .apply();
+    }
+
+    public RemoteDshEntry getActiveRemoteDshEntry() {
+        java.util.List<RemoteDshEntry> list = getRemoteDshList();
+        for (RemoteDshEntry e : list) {
+            if (e != null && e.enabled && e.url != null && !e.url.trim().isEmpty()) {
+                return e;
+            }
+        }
+        return null;
+    }
+
+    public String getActiveRemoteDshUrl() {
+        RemoteDshEntry entry = getActiveRemoteDshEntry();
+        return entry != null ? entry.url : "";
+    }
+
+    public boolean isAnyRemoteDshActive() {
+        return getActiveRemoteDshEntry() != null;
+    }
 
     public boolean isRemoteDshEnabled() {
         return prefs.getBoolean(Constants.KEY_REMOTE_DSH_ENABLED, false);
