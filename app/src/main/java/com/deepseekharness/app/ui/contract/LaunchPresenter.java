@@ -120,7 +120,7 @@ public class LaunchPresenter implements LaunchActions {
             title = "DSH 启动中…";
             busy = true;
         } else if (isFrozen && (ready || running)) {
-            title = "DSH 休眠中（0功耗）";
+            title = "DSH 休眠中";
             busy = false;
         } else if (ready) {
             title = "DSH 已就绪，可进入";

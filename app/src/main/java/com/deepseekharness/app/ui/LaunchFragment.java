@@ -249,7 +249,7 @@ public class LaunchFragment extends Fragment implements LaunchPresenter.ViewCall
         if (runDot != null) {
             boolean isRunning = "服务运行中".equals(state.runStateTitle)
                     || "DSH 已就绪，可进入".equals(state.runStateTitle);
-            boolean isFrozen = "DSH 休眠中（0功耗）".equals(state.runStateTitle);
+            boolean isFrozen = "DSH 休眠中".equals(state.runStateTitle);
             boolean isStopped = "DSH 未运行".equals(state.runStateTitle)
                     || "DSH 已停止".equals(state.runStateTitle)
                     || "已停止".equals(state.runStateTitle);
