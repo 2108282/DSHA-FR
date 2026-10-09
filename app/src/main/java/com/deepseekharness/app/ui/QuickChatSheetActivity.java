@@ -2071,48 +2071,21 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                         currentAct.rootOverlay.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
                     } catch (Throwable ignored) {}
                 }
-                // 工作区内部维持原逻辑不变；工作区外部通过 Root 特权直通外部应用打开
+                // 工作区内部维持原逻辑不变；工作区外部通过 Root 预先放开文件读取权限并呼出系统打开方式选择面板
                 boolean isInside = f.getAbsolutePath().startsWith("/sdcard/Download/DSHA/工作区/")
                         || f.getAbsolutePath().startsWith("/storage/emulated/0/Download/DSHA/工作区/");
-                if (isInside) {
-                    com.deepseekharness.app.viewer.FileOpenHelper.openWithSystem(currentAct, f);
-                } else {
-                    openExternalFileWithRoot(currentAct, f);
+                if (!isInside) {
+                    new Thread(() -> {
+                        try {
+                            Runtime.getRuntime().exec(new String[]{"su", "-c", "chmod 666 '" + f.getAbsolutePath() + "'"}).waitFor();
+                        } catch (Throwable ignored) {}
+                    }).start();
                 }
+                com.deepseekharness.app.viewer.FileOpenHelper.openWithSystem(currentAct, f);
             } else {
                 currentAct.openFileInSheet(finalPath);
             }
         });
-    }
-
-    /**
-     * 针对工作区外部的文件，使用 Root 特权安全调起外部应用（如 MT 管理器、系统安装器等）：
-     * 1. 赋予全局只读权限 (chmod 666)，破除普通应用跨目录读取限制；
-     * 2. 以 Root 特权调用 am start 直接携带 file:// 绝对物理路径，确保 MT 管理器和安装器准确识别并定位。
-     */
-    private static void openExternalFileWithRoot(Context context, File f) {
-        if (f == null || !f.exists()) {
-            if (context != null) Toast.makeText(context, "文件不存在", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        new Thread(() -> {
-            try {
-                String abs = f.getAbsolutePath();
-                // 1. Root 赋权 666，确保第三方应用绝对可读
-                Runtime.getRuntime().exec(new String[]{"su", "-c", "chmod 666 '" + abs + "'"}).waitFor();
-                // 2. 以 Root 发起 am start，携带 file:// 绝对物理路径
-                String mime = com.deepseekharness.app.viewer.FileOpenHelper.getMimeType(f.getName());
-                String cmd = "am start -a android.intent.action.VIEW -d 'file://" + abs + "' -t '" + mime + "'";
-                Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
-            } catch (Throwable t) {
-                // 发生异常时回退到原生系统方法
-                if (context != null) {
-                    new Handler(Looper.getMainLooper()).post(() ->
-                            com.deepseekharness.app.viewer.FileOpenHelper.openWithSystem(context, f)
-                    );
-                }
-            }
-        }, "dsha-root-open").start();
     }
 
     public static class NativeBridgeInterface {
