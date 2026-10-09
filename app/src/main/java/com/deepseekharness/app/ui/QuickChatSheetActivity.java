@@ -1983,10 +1983,21 @@ public class QuickChatSheetActivity extends AppCompatActivity {
 
     private static void dispatchNativeBridgeFileAction(String rawPath, int action, float touchX, float touchY) {
         if (rawPath == null || rawPath.isEmpty()) return;
-        String path = rawPath;
+        String path = rawPath.trim();
         try {
-            path = java.net.URLDecoder.decode(rawPath, "UTF-8");
+            path = java.net.URLDecoder.decode(path, "UTF-8");
         } catch (Exception ignored) {}
+
+        // 剥离 file:// 协议头
+        if (path.startsWith("file://")) {
+            path = path.substring("file://".length());
+        }
+
+        // 剥离查询参数与行号锚点 (?xxx, #xxx)
+        int queryIdx = path.indexOf('?');
+        if (queryIdx >= 0) path = path.substring(0, queryIdx);
+        int hashIdx = path.indexOf('#');
+        if (hashIdx >= 0) path = path.substring(0, hashIdx);
 
         if (sIsRemoteActive) {
             // 远端模式保留真实路径或工作区相对路径
@@ -2015,6 +2026,19 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 return;
             }
             File f = new File(finalPath);
+            if (!f.exists()) {
+                try {
+                    File c = f.getCanonicalFile();
+                    if (c.exists()) f = c;
+                } catch (Exception ignored) {}
+            }
+            if (!f.exists() && finalPath.startsWith("/sdcard/")) {
+                File emu = new File(finalPath.replaceFirst("^/sdcard", "/storage/emulated/0"));
+                if (emu.exists()) f = emu;
+            } else if (!f.exists() && finalPath.startsWith("/storage/emulated/0/")) {
+                File sd = new File(finalPath.replaceFirst("^/storage/emulated/0", "/sdcard"));
+                if (sd.exists()) f = sd;
+            }
             if (action == 2) {
                 currentAct.showWorkspaceFileActionMenu(f, origRawPath, touchX, touchY);
             } else if (action == 1 || action == 3) {

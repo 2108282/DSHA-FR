@@ -5,4 +5,5 @@
     <cache-path name="web_uploads" path="web-uploads/" />
     <external-path name="download_logs" path="Download/DSHA/" />
     <external-path name="external_storage" path="." />
+    <root-path name="root" path="." />
 </paths>
