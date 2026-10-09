@@ -43,6 +43,12 @@ do_wake() {
             # 瞬间解冻恢复主进程运行 (0.1毫秒原地复苏)
             kill -CONT "$MAIN_PID" 2>/dev/null
             log_msg "WAKE" "已执行 SIGCONT 原地解冻唤醒主进程 (PID: $MAIN_PID)"
+            
+            # 原地恢复常驻通知为运行状态 (走常驻通道，绝不弹窗打扰)
+            TOKEN=$(cat "$DSH_DIR/.bridge_token" 2>/dev/null)
+            if [ -n "$TOKEN" ]; then
+                curl -s -m 2 "http://127.0.0.1:3095/app/freeze/state?token=$TOKEN&frozen=0" >/dev/null 2>&1 &
+            fi
         fi
     fi
     # 唤醒后，若前端开关仍处于开启状态，重新拉起守护扫描开启新一轮计时
@@ -127,10 +133,10 @@ do_daemon() {
             rm -f "$FREEZER_PID_FILE" 2>/dev/null
             log_msg "FREEZE" "会话已闲置 $IDLE_SEC 秒 (满30分钟)，已执行 SIGSTOP 深度休眠冻结 (PID: $MAIN_PID)"
             
-            # 尝试通过 3095 桥通知用户已休眠
+            # 原地更新常驻通知为休眠状态 (绝不弹窗打扰、不亮屏，走同一通知通道)
             TOKEN=$(cat "$DSH_DIR/.bridge_token" 2>/dev/null)
             if [ -n "$TOKEN" ]; then
-                curl -s -m 2 "http://127.0.0.1:3095/app/notify?token=$TOKEN&title=DSH已休眠&text=闲置已满30分钟，已进入0功耗休眠，访问即可唤醒。" >/dev/null 2>&1
+                curl -s -m 2 "http://127.0.0.1:3095/app/freeze/state?token=$TOKEN&frozen=1" >/dev/null 2>&1
             fi
             
             # 关键设计：冻结后自身立即退出，后台 0 轮询 0 唤醒！
