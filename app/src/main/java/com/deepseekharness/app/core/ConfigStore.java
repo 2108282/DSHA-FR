@@ -134,6 +134,14 @@ public class ConfigStore {
         prefs.edit().putBoolean(Constants.KEY_LAN_MODE, v).apply();
     }
 
+    public boolean isIdleFreezeEnabled() {
+        return prefs.getBoolean(Constants.KEY_IDLE_FREEZE_ENABLED, false);
+    }
+
+    public void setIdleFreezeEnabled(boolean v) {
+        prefs.edit().putBoolean(Constants.KEY_IDLE_FREEZE_ENABLED, v).apply();
+    }
+
     // ================= 其他 =================
 
     public String getPermissionMode() {

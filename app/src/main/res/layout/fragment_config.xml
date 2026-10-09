@@ -102,6 +102,64 @@
                     android:layout_marginStart="8dp" />
             </LinearLayout>
 
+            <!-- 1.2 休眠模式 (30分钟无任务自动冻结) -->
+            <LinearLayout
+                android:id="@+id/config_row_idle_freeze"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="14dp">
+
+                <FrameLayout
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:background="@drawable/bg_settings_icon_box">
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="休眠模式"
+                        android:src="@drawable/ic_moon"
+                        app:tint="@color/primary" />
+                </FrameLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="休眠模式"
+                        android:textColor="@color/text"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="1dp"
+                        android:text="30分钟无任务自动冻结（0功耗），访问时秒级自愈"
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <com.deepseekharness.app.ui.DshaToggle
+                    android:id="@+id/config_toggle_idle_freeze"
+                    android:layout_width="44dp"
+                    android:layout_height="26dp"
+                    android:layout_marginStart="8dp" />
+            </LinearLayout>
+
             <!-- 1.3 允许读传感器、开手电 -->
             <LinearLayout
                 android:id="@+id/config_row_sensors"

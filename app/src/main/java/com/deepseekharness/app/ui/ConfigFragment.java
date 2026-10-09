@@ -33,6 +33,7 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
     private Button tasksetSaveBtn;
 
     private DshaToggle confirmShellToggle;
+    private DshaToggle idleFreezeToggle;
     private DshaToggle sensorsToggle;
     private DshaToggle locationToggle;
 
@@ -85,6 +86,16 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
             });
             View row = view.findViewById(R.id.config_row_confirm_shell);
             if (row != null) row.setOnClickListener(v -> confirmShellToggle.toggle());
+        }
+
+        idleFreezeToggle = view.findViewById(R.id.config_toggle_idle_freeze);
+        if (idleFreezeToggle != null) {
+            idleFreezeToggle.setOnCheckedChangeListener((toggle, isChecked) -> {
+                if (isBinding) return;
+                actions.onToggleIdleFreeze(isChecked);
+            });
+            View row = view.findViewById(R.id.config_row_idle_freeze);
+            if (row != null) row.setOnClickListener(v -> idleFreezeToggle.toggle());
         }
 
         sensorsToggle = view.findViewById(R.id.config_toggle_sensors);
@@ -157,6 +168,7 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         tasksetInput = null;
         tasksetSaveBtn = null;
         confirmShellToggle = null;
+        idleFreezeToggle = null;
         sensorsToggle = null;
         locationToggle = null;
         translateBtn = null;
@@ -191,6 +203,9 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
 
         if (confirmShellToggle != null && confirmShellToggle.isChecked() != state.isConfirmShell) {
             confirmShellToggle.setChecked(state.isConfirmShell, false, false);
+        }
+        if (idleFreezeToggle != null && idleFreezeToggle.isChecked() != state.isIdleFreeze) {
+            idleFreezeToggle.setChecked(state.isIdleFreeze, false, false);
         }
         if (sensorsToggle != null && sensorsToggle.isChecked() != state.isCapSensors) {
             sensorsToggle.setChecked(state.isCapSensors, false, false);

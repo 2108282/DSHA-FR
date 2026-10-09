@@ -85,6 +85,13 @@ public class ModernSegmentedView extends View {
         colorPrimary = ContextCompat.getColor(getContext(), R.color.primary);
         colorSecondary = ContextCompat.getColor(getContext(), R.color.text_secondary);
 
+        // 莫奈取色自适应跟随
+        try {
+            if (!ThemeController.isDark(getContext()) && ThemeController.isMonetEnabled(getContext())) {
+                colorPrimary = MonetEngine.resolveCurrentPalette(getContext()).primaryColor;
+            }
+        } catch (Throwable ignored) {}
+
         bgPaint.setStyle(Paint.Style.FILL);
         bgPaint.setColor(colorRaisedGlass);
 
@@ -197,6 +204,13 @@ public class ModernSegmentedView extends View {
         int colorRight = (int) argbEvaluator.evaluate(progress, colorSecondary, colorPrimary);
         textPaint.setColor(colorRight);
         canvas.drawText(tabs[1], rightCenterX, baseline, textPaint);
+    }
+
+    public void setPrimaryColor(int color) {
+        if (this.colorPrimary != color) {
+            this.colorPrimary = color;
+            invalidate();
+        }
     }
 
     @Override

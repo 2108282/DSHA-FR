@@ -409,7 +409,8 @@ public final class ModelSetupActivity extends AppCompatActivity {
         LinearLayout.LayoutParams ibLp = new LinearLayout.LayoutParams(dp(38), dp(38));
         ImageView iconView = new ImageView(this);
         iconView.setImageResource(R.drawable.ic_ui_link);
-        iconView.setImageTintList(android.content.res.ColorStateList.valueOf(getColor(R.color.primary)));
+        int targetPrimary = MonetEngine.resolveCurrentPalette(this).primaryColor;
+        iconView.setImageTintList(android.content.res.ColorStateList.valueOf(targetPrimary));
         FrameLayout.LayoutParams ivLp = new FrameLayout.LayoutParams(dp(20), dp(20), Gravity.CENTER);
         iconBox.addView(iconView, ivLp);
         row.addView(iconBox, ibLp);

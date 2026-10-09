@@ -669,6 +669,9 @@ public class HarnessController {
                         com.deepseekharness.app.LanProxyService.start(ctx);
                         reportStatus(generation, onStatus, "局域网服务已就绪：同网段设备可访问，启动页可复制地址");
                     }
+                    if (config.isIdleFreezeEnabled()) {
+                        execRootCmd("touch /data/adb/dsha/run/idle_freeze_enabled && sh /data/adb/dsha/scripts/idle-freezer.sh start");
+                    }
                 }
             }
         } catch (Exception ignored) {
@@ -866,6 +869,7 @@ public class HarnessController {
                 try {
                     webProc.stop(); // 仍用原 PID 判据，绝不直接 destroy proot。
                     com.deepseekharness.app.LanProxyService.stop(previous);
+                    execRootCmd("sh /data/adb/dsha/scripts/idle-freezer.sh stop");
                 } finally {
                     synchronized (lifecycle) {
                         lastKnownWebRunning = false;
@@ -929,6 +933,35 @@ public class HarnessController {
      * 优先 WiFi/以太网接口（wlan/eth/radio），避免选到 USB 共享网络等非目标网卡的地址
      * —— 否则复制出去的局域网地址另一台设备永远连不上。
      */
+    public void applyIdleFreeze(boolean enabled) {
+        config.setIdleFreezeEnabled(enabled);
+        new Thread(() -> {
+            try {
+                if (enabled) {
+                    execRootCmd("touch /data/adb/dsha/run/idle_freeze_enabled && sh /data/adb/dsha/scripts/idle-freezer.sh start");
+                } else {
+                    execRootCmd("rm -f /data/adb/dsha/run/idle_freeze_enabled && sh /data/adb/dsha/scripts/idle-freezer.sh stop");
+                }
+            } catch (Throwable ignored) {}
+        }, "dsha-idle-freeze-toggle").start();
+    }
+
+    public void resumeIfFrozen() {
+        if (!config.isIdleFreezeEnabled()) return;
+        new Thread(() -> {
+            try {
+                execRootCmd("sh /data/adb/dsha/scripts/idle-freezer.sh wake");
+            } catch (Throwable ignored) {}
+        }, "dsha-idle-wake").start();
+    }
+
+    private void execRootCmd(String cmd) {
+        try {
+            Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
+            p.waitFor();
+        } catch (Throwable ignored) {}
+    }
+
     public static String getLanAddress() {
         try {
             String fallback = null;

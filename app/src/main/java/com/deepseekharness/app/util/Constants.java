@@ -86,6 +86,8 @@ public final class Constants {
     public static final String KEY_BACKUP_KEY = "backup_key";
     /** 局域网访问开关。 */
     public static final String KEY_LAN_MODE = "lan_mode";
+    /** 闲置休眠模式开关（30分钟无任务自动冻结）。 */
+    public static final String KEY_IDLE_FREEZE_ENABLED = "idle_freeze_enabled";
     /** 远端 DSH 连接开关。 */
     public static final String KEY_REMOTE_DSH_ENABLED = "remote_dsh_enabled";
     /** 远端 DSH 目标地址。 */

@@ -126,6 +126,12 @@ public final class MonetEngine {
             return;
         }
 
+        // 1.5 分段选择器动态着色 (插件市场 / 插件管理)
+        if (view instanceof ModernSegmentedView) {
+            ((ModernSegmentedView) view).setPrimaryColor(targetPrimary);
+            return;
+        }
+
         // 2. 极光漫射背景层动态生成与更新
         if (view.getId() == R.id.global_aurora) {
             updateAuroraGradient(view, targetPrimary, palette.isMonetActive);

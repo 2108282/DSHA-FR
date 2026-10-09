@@ -284,11 +284,19 @@ public class PluginPresenter implements PluginActions {
     @Override
     public void onStatusMessageClick() {
         if (repoState != null && !repoState.message.isEmpty()) {
-            new AlertDialog.Builder(activity)
-                    .setTitle("插件操作结果")
-                    .setMessage(repoState.message)
-                    .setPositiveButton("关闭", null)
-                    .show();
+            android.view.View dialogView = android.view.LayoutInflater.from(activity).inflate(com.deepseekharness.app.R.layout.dialog_plugin_status, null);
+            android.widget.TextView msgView = dialogView.findViewById(com.deepseekharness.app.R.id.dialogStatusMessage);
+            if (msgView != null) msgView.setText(repoState.message);
+            AlertDialog dialog = new AlertDialog.Builder(activity)
+                    .setView(dialogView)
+                    .setCancelable(true)
+                    .create();
+            if (dialog.getWindow() != null) {
+                dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+            }
+            android.view.View btnClose = dialogView.findViewById(com.deepseekharness.app.R.id.btnDialogStatusClose);
+            if (btnClose != null) btnClose.setOnClickListener(v -> dialog.dismiss());
+            dialog.show();
         }
     }
 

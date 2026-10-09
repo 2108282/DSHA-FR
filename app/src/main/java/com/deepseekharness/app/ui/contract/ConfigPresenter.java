@@ -66,6 +66,7 @@ public class ConfigPresenter implements ConfigActions {
         String port = config.getPort();
         String taskset = config.getTaskset();
         boolean confirmShell = config.isConfirmShell();
+        boolean isIdleFreeze = config.isIdleFreezeEnabled();
         boolean overlayStream = sp.getBoolean("overlay_stream", false);
         boolean capSensors = sp.getBoolean("cap_sensors", false);
         boolean capLocation = sp.getBoolean("cap_location", false);
@@ -88,7 +89,7 @@ public class ConfigPresenter implements ConfigActions {
         String asrStatus = checkAsrStatus();
 
         ConfigUiState state = new ConfigUiState(
-                port, taskset, confirmShell, overlayStream, capSensors,
+                port, taskset, confirmShell, isIdleFreeze, overlayStream, capSensors,
                 capLocation, asrContinuous, allFilesStatus, a11yStatus, asrStatus, currentRootStatus
         );
         mainHandler.post(() -> callback.onRender(state));
@@ -123,6 +124,13 @@ public class ConfigPresenter implements ConfigActions {
     public void onToggleConfirmShell(boolean enabled) {
         config.setConfirmShell(enabled);
         toast(enabled ? "已开启危险 Shell 操作拦截确认" : "已关闭危险 Shell 拦截确认");
+        refreshState();
+    }
+
+    @Override
+    public void onToggleIdleFreeze(boolean enabled) {
+        HarnessController.get(context).applyIdleFreeze(enabled);
+        toast(enabled ? "已开启休眠模式（30分钟无任务自动冻结）" : "已关闭休眠模式");
         refreshState();
     }
 
