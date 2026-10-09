@@ -988,6 +988,192 @@ def ensure_workspace_dirs(root):
     return False
 
 
+def _safe_copy_or_link(src, dst):
+    """安全覆盖拷贝或创建软链，遇到已存在的软链原子替换，绝不抛 File exists 异常"""
+    try:
+        if os.path.islink(src):
+            linkto = os.readlink(src)
+            if os.path.lexists(dst):
+                try:
+                    os.unlink(dst)
+                except Exception:
+                    pass
+            os.symlink(linkto, dst)
+        elif os.path.isdir(src):
+            os.makedirs(dst, exist_ok=True)
+            for item in os.listdir(src):
+                _safe_copy_or_link(os.path.join(src, item), os.path.join(dst, item))
+        else:
+            shutil.copy2(src, dst)
+    except Exception:
+        pass
+
+
+def restore_tools(stage, root):
+    """工具、技能与 MCP 独立恢复：
+    在新 RootFS 底座中免联网瞬间还原技能、自定义 CLI 脚本、npm 全局扩展包与 Python 依赖库。
+    严格保护新底座自身的核心运行时（Node/pnpm/dsh 官方底包不被覆盖）。
+    """
+    tools_dir = os.path.join(stage, ".dsha-tools")
+    if not os.path.isdir(tools_dir):
+        tools_dir = stage
+
+    # 1. 恢复技能（Skills）
+    skills_src = os.path.join(tools_dir, "skills")
+    n_skills = 0
+    if os.path.isdir(skills_src):
+        skills_dst = os.path.join(root, ".dsh", "skills")
+        os.makedirs(skills_dst, exist_ok=True)
+        for s in os.listdir(skills_src):
+            sp = os.path.join(skills_src, s)
+            dp = os.path.join(skills_dst, s)
+            if os.path.isdir(sp):
+                _safe_copy_or_link(sp, dp)
+                n_skills += 1
+        say("· 已恢复 %d 个技能实体到 %s" % (n_skills, skills_dst))
+
+    # 2. 恢复自定义脚本与可执行文件到 /usr/local/bin
+    bin_src = os.path.join(tools_dir, "bin")
+    bin_dst = "/usr/local/bin"
+    n_bins = 0
+    if os.path.isdir(bin_src) and os.path.isdir(bin_dst):
+        for b in os.listdir(bin_src):
+            src_f = os.path.join(bin_src, b)
+            dst_f = os.path.join(bin_dst, b)
+            if os.path.isfile(src_f):
+                shutil.copy2(src_f, dst_f)
+                try:
+                    os.chmod(dst_f, 0o755)
+                except Exception:
+                    pass
+                n_bins += 1
+
+    # 重建自定义软链
+    links_file = os.path.join(tools_dir, "bin-links.json")
+    if os.path.isfile(links_file):
+        try:
+            with open(links_file, "r", encoding="utf-8") as f:
+                bin_links = json.load(f)
+            for name, target in bin_links.items():
+                target_bin = os.path.join(bin_dst, name)
+                if not os.path.lexists(target_bin) or os.path.islink(target_bin):
+                    try:
+                        if os.path.lexists(target_bin):
+                            os.unlink(target_bin)
+                        os.symlink(target, target_bin)
+                        n_bins += 1
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+    if n_bins > 0:
+        say("· 已恢复 %d 个工具可执行文件与软链接到 %s" % (n_bins, bin_dst))
+
+    # 3. 恢复后装 npm 扩展模块（保护官方底座）
+    nm_src = os.path.join(tools_dir, "node_modules")
+    nm_dst = "/usr/local/lib/node_modules"
+    n_nm = 0
+    BASE_PROTECTED = {"@deepseek-ai", "npm", "corepack"}
+    if os.path.isdir(nm_src) and os.path.isdir(nm_dst):
+        for item in os.listdir(nm_src):
+            if item in BASE_PROTECTED:
+                continue
+            src_pkg = os.path.join(nm_src, item)
+            dst_pkg = os.path.join(nm_dst, item)
+            if item.startswith("@") and os.path.isdir(src_pkg):
+                os.makedirs(dst_pkg, exist_ok=True)
+                for sub in os.listdir(src_pkg):
+                    s_sub = os.path.join(src_pkg, sub)
+                    d_sub = os.path.join(dst_pkg, sub)
+                    if not (item == "@deepseek-ai" and sub == "dsh"):
+                        _safe_copy_or_link(s_sub, d_sub)
+                        n_nm += 1
+            else:
+                _safe_copy_or_link(src_pkg, dst_pkg)
+                n_nm += 1
+        # 补全 bin 软链（例如 ocr, mcp-remote 等）
+        for item in ["@alibaba-group/open-code-review", "mcp-remote"]:
+            pkg_json = os.path.join(nm_dst, item, "package.json")
+            if os.path.isfile(pkg_json):
+                try:
+                    with open(pkg_json, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    bins = data.get("bin", {})
+                    if isinstance(bins, str):
+                        bins = {data.get("name", item).split("/")[-1]: bins}
+                    if isinstance(bins, dict):
+                        for bname, bentry in bins.items():
+                            link_dst = os.path.join(bin_dst, bname)
+                            target_rel = os.path.normpath(os.path.join("../lib/node_modules", item, bentry))
+                            if not os.path.lexists(link_dst) or os.path.islink(link_dst):
+                                try:
+                                    if os.path.lexists(link_dst):
+                                        os.unlink(link_dst)
+                                    os.symlink(target_rel, link_dst)
+                                    real_entry = os.path.join(nm_dst, item, bentry)
+                                    if os.path.isfile(real_entry):
+                                        os.chmod(real_entry, 0o755)
+                                except Exception:
+                                    pass
+                except Exception:
+                    pass
+        if n_nm > 0:
+            say("· 已恢复 %d 个 npm 工具扩展包，自动修补全局 CLI 链接" % n_nm)
+
+    # 4. 恢复 Python 依赖库实体
+    py_src = os.path.join(tools_dir, "python-packages")
+    if os.path.isdir(py_src):
+        py_targets = [
+            "/usr/local/lib/python3.12/dist-packages",
+            "/usr/local/lib/python3/dist-packages"
+        ]
+        target_found = None
+        for pt in py_targets:
+            if os.path.isdir(pt):
+                target_found = pt
+                break
+        if target_found:
+            _safe_copy_or_link(py_src, target_found)
+            say("· 已恢复 Python 依赖库实体到 %s（免网络 pip 安装）" % target_found)
+
+    # 5. 恢复 MCP 凭据与配置
+    mcp_src = os.path.join(tools_dir, "mcp")
+    if os.path.isdir(mcp_src):
+        for f in os.listdir(mcp_src):
+            src_f = os.path.join(mcp_src, f)
+            if f == ".penpot_token":
+                for target_p in ["/sdcard/Download/DSHA/工作区/.penpot_token", os.path.join(root, ".penpot_token")]:
+                    try:
+                        shutil.copy2(src_f, target_p)
+                    except Exception:
+                        pass
+            elif f == "mcp.json":
+                try:
+                    shutil.copy2(src_f, os.path.join(root, ".dsh", "mcp.json"))
+                except Exception:
+                    pass
+        say("· 已恢复 MCP 相关凭据与配置文件")
+
+    # 6. 环境健康自检
+    health = []
+    if shutil.which("ocr"):
+        health.append("ocr(代码审查)")
+    if shutil.which("trafilatura"):
+        health.append("trafilatura(网页解析)")
+    if shutil.which("pdf2txt.py"):
+        health.append("pdf2txt(PDF解析)")
+    try:
+        import subprocess
+        subprocess.check_call(["python3", "-c", "import pypdf, docx, bs4"], stderr=subprocess.DEVNULL)
+        health.append("Python文档解析库")
+    except Exception:
+        pass
+    if health:
+        say("· 工具自检成功，可用组件：%s" % "、".join(health))
+
+    return True
+
+
 def main():
     global partial, retain_stage, restore_committed
     # 脚本通常每次只运行一次，但测试/嵌入调用可能复用解释器；状态不能跨恢复串线。
@@ -1019,7 +1205,7 @@ def main():
     manifest_scope = (man.get("scope") if man else "")
     if man is not None and manifest_scope is not None:
         manifest_scope = str(manifest_scope).strip()
-        if manifest_scope and manifest_scope not in ("full", "sessions", "settings", "plugins"):
+        if manifest_scope and manifest_scope not in ("full", "sessions", "settings", "plugins", "tools"):
             # A manifest is an explicit claim about the archive.  Never turn an
             # unknown claim into a full restore, because that could overwrite
             # unrelated user data.  Keep the isolated stage for diagnosis.
@@ -1036,7 +1222,10 @@ def main():
     else:
         say("· 老备份（无清单文件），按内容自动识别恢复")
 
-    if scope == "sessions":
+    if scope == "tools":
+        say("· 这是「工具、技能与 MCP」备份：恢复技能实体、自定义脚本、npm 工具与 Python 依赖库")
+        ok_dsh = restore_tools(stage, root)
+    elif scope == "sessions":
         say("· 这是「只对话」备份：只覆盖对话记录、会话索引与图片文件附件，配置与插件保持现状")
         ok_dsh = restore_dsh_subtree(stage, root, ["sessions", "storages", "attachments"], alpha=alpha)
         # 快照后跑：它才是真数据（.dsh/sessions 等在设备上多半只是个软链）

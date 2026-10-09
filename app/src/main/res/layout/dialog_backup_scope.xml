@@ -57,9 +57,9 @@
             android:layout_marginTop="14dp"
             android:orientation="vertical">
 
-            <!-- 选项 1: 全量备份 -->
+            <!-- 选项 1: 仅工具、技能与 MCP -->
             <RadioButton
-                android:id="@+id/radioScopeFull"
+                android:id="@+id/radioScopeTools"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:background="@drawable/bg_input"
@@ -68,7 +68,22 @@
                 android:lineSpacingMultiplier="1.25"
                 android:paddingHorizontal="12dp"
                 android:paddingVertical="10dp"
-                android:text="全量备份（推荐）\n配置、对话、插件与工作区文件"
+                android:text="仅备份工具、技能与 MCP（推荐）\n打包全局工具(npm/pip)、自定义脚本、Skills 与 MCP 配置"
+                android:textColor="@color/text"
+                android:textSize="13sp" />
+
+            <!-- 选项 2: 全量备份 -->
+            <RadioButton
+                android:id="@+id/radioScopeFull"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/bg_input"
+                android:buttonTint="@color/primary"
+                android:lineSpacingMultiplier="1.25"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="10dp"
+                android:text="全量备份\n配置、对话、插件与工作区文件"
                 android:textColor="@color/text"
                 android:textSize="13sp" />
 

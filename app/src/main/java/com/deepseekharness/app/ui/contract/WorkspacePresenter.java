@@ -82,6 +82,7 @@ public class WorkspacePresenter implements WorkspaceActions {
         AlertDialog dialog = new DshaDialogBuilder(activity).setView(dialogView).create();
 
         RadioGroup scopeGroup = dialogView.findViewById(R.id.dialogBackupScopeGroup);
+        RadioButton radioTools = dialogView.findViewById(R.id.radioScopeTools);
         RadioButton radioFull = dialogView.findViewById(R.id.radioScopeFull);
         RadioButton radioSessions = dialogView.findViewById(R.id.radioScopeSessions);
         RadioButton radioSettings = dialogView.findViewById(R.id.radioScopeSettings);
@@ -91,7 +92,7 @@ public class WorkspacePresenter implements WorkspaceActions {
         Button btnCancel = dialogView.findViewById(R.id.btnBackupCancel);
         Button btnConfirm = dialogView.findViewById(R.id.btnBackupConfirm);
 
-        final int[] currentScope = {BackupScope.FULL};
+        final int[] currentScope = {BackupScope.TOOLS};
 
         Runnable updatePathHint = () -> {
             if (tvPathHint != null) {
@@ -103,14 +104,18 @@ public class WorkspacePresenter implements WorkspaceActions {
 
         if (scopeGroup != null) {
             scopeGroup.setOnCheckedChangeListener((group, checkedId) -> {
-                if (checkedId == R.id.radioScopeSessions) {
+                if (checkedId == R.id.radioScopeTools) {
+                    currentScope[0] = BackupScope.TOOLS;
+                } else if (checkedId == R.id.radioScopeFull) {
+                    currentScope[0] = BackupScope.FULL;
+                } else if (checkedId == R.id.radioScopeSessions) {
                     currentScope[0] = BackupScope.SESSIONS;
                 } else if (checkedId == R.id.radioScopeSettings) {
                     currentScope[0] = BackupScope.SETTINGS;
                 } else if (checkedId == R.id.radioScopePlugins) {
                     currentScope[0] = BackupScope.PLUGINS;
                 } else {
-                    currentScope[0] = BackupScope.FULL;
+                    currentScope[0] = BackupScope.TOOLS;
                 }
                 updatePathHint.run();
             });

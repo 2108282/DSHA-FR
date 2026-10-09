@@ -489,8 +489,10 @@ public final class BackupManager {
             }
             trySyncRestoredApiKey(c);
             int sessionCount = countSessions(c);
-            return "恢复完成（" + (committed ? "已完整提交" : "部分恢复") + "）"
-                    + "\n会话条目数：" + sessionCount
+            boolean isTools = out != null && out.contains("「工具、技能与 MCP」");
+            String statusDesc = committed ? "已完整提交" : (isTools ? "工具与技能已落地" : "部分恢复");
+            return "恢复完成（" + statusDesc + "）"
+                    + (!isTools && sessionCount > 0 ? "\n会话条目数：" + sessionCount : "")
                     + "\n\n" + tail(out);
         }
 
@@ -554,8 +556,10 @@ public final class BackupManager {
         trySyncRestoredApiKey(c);
         // 5. 验证 .dsh 里确有内容（不是空壳）
         int sessionCount = countSessions(c);
-        return "恢复完成（" + (committed ? "已提交" : "部分恢复") + "）"
-                + "\n会话目录数：" + sessionCount
+        boolean isTools = out != null && out.contains("「工具、技能与 MCP」");
+        String statusDesc = committed ? "已提交" : (isTools ? "工具与技能已落地" : "部分恢复");
+        return "恢复完成（" + statusDesc + "）"
+                + (!isTools && sessionCount > 0 ? "\n会话目录数：" + sessionCount : "")
                 + "\n\n" + tail(out);
     }
 
