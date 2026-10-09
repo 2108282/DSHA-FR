@@ -2039,6 +2039,11 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 File sd = new File(finalPath.replaceFirst("^/storage/emulated/0", "/sdcard"));
                 if (sd.exists()) f = sd;
             }
+            if (!f.exists() && finalPath.contains("/Download/DSHA/工作区/")) {
+                File dl = new File(finalPath.replace("/Download/DSHA/工作区/", "/Download/"));
+                if (dl.exists()) f = dl;
+            }
+            android.util.Log.i("DSHA_OPEN", "action=" + action + " rawPath=" + origRawPath + " resolved=" + f.getAbsolutePath() + " exists=" + f.exists());
             if (action == 2) {
                 currentAct.showWorkspaceFileActionMenu(f, origRawPath, touchX, touchY);
             } else if (action == 1 || action == 3) {
@@ -2048,7 +2053,6 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                     } catch (Throwable ignored) {}
                 }
                 com.deepseekharness.app.viewer.FileOpenHelper.openWithSystem(currentAct, f);
-                currentAct.dismissSheet();
             } else {
                 currentAct.openFileInSheet(finalPath);
             }
