@@ -2048,6 +2048,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                     } catch (Throwable ignored) {}
                 }
                 com.deepseekharness.app.viewer.FileOpenHelper.openWithSystem(currentAct, f);
+                currentAct.dismissSheet();
             } else {
                 currentAct.openFileInSheet(finalPath);
             }

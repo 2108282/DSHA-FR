@@ -47,6 +47,13 @@ public final class FileOpenHelper {
 
             Intent intent = new Intent(Intent.ACTION_VIEW);
             intent.setDataAndType(uri, mime);
+            intent.addCategory(Intent.CATEGORY_DEFAULT);
+
+            // 若是 APK 安装包，附带安装器关键信任标识
+            if ("application/vnd.android.package-archive".equals(mime)) {
+                intent.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
+                intent.putExtra(Intent.EXTRA_INSTALLER_PACKAGE_NAME, context.getPackageName());
+            }
 
             // 核心修复 1：绑定 ClipData，保障 Android 7.0+ 系统 Chooser 转发时完整继承 URI 临时授权
             intent.setClipData(ClipData.newRawUri("", uri));

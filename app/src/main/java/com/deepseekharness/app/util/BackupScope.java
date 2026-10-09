@@ -23,9 +23,11 @@ public final class BackupScope {
     public static final int PLUGINS = 2;
     /** 只设置：upstream 的 settings.yaml，保持原字节。 */
     public static final int SETTINGS = 3;
+    /** 工具、技能与 MCP：全局工具包 (npm/pip)、自定义脚本、Skill 技能与 MCP 配置。换新底座用这个。 */
+    public static final int TOOLS = 4;
 
-    /** UI 与对话框里展示的顺序（也是选项顺序）。 */
-    public static final int[] ALL = { FULL, SESSIONS, SETTINGS, PLUGINS };
+    /** UI 与对话框里展示的顺序（也是选项顺序，首选为工具、技能与 MCP）。 */
+    public static final int[] ALL = { TOOLS, FULL, SESSIONS, SETTINGS, PLUGINS };
 
     private BackupScope() {
     }
@@ -33,6 +35,7 @@ public final class BackupScope {
     /** 写进备份清单（manifest）的标识。恢复端靠它决定合并范围，所以不能改字面量。 */
     public static String id(int scope) {
         switch (scope) {
+            case TOOLS:    return "tools";
             case SESSIONS: return "sessions";
             case PLUGINS:  return "plugins";
             case SETTINGS: return "settings";
@@ -44,6 +47,7 @@ public final class BackupScope {
     public static int fromId(String id) {
         if (id == null) return FULL;
         String s = id.trim();
+        if (s.equals("tools")) return TOOLS;
         if (s.equals("sessions")) return SESSIONS;
         if (s.equals("plugins")) return PLUGINS;
         if (s.equals("settings")) return SETTINGS;
@@ -53,6 +57,7 @@ public final class BackupScope {
     /** 文件名前缀。部分备份刻意不叫 DSHA-backup-（见类注释）。 */
     public static String fileNamePrefix(int scope) {
         switch (scope) {
+            case TOOLS:    return "DSHA-tools-";
             case SESSIONS: return "DSHA-sessions-";
             case PLUGINS:  return "DSHA-plugins-";
             case SETTINGS: return "DSHA-settings-";
@@ -66,6 +71,7 @@ public final class BackupScope {
         String n = name.trim();
         int slash = Math.max(n.lastIndexOf('/'), n.lastIndexOf('\\'));
         if (slash >= 0 && slash + 1 < n.length()) n = n.substring(slash + 1);
+        if (n.startsWith("DSHA-tools-")) return TOOLS;
         if (n.startsWith("DSHA-sessions-")) return SESSIONS;
         if (n.startsWith("DSHA-plugins-")) return PLUGINS;
         if (n.startsWith("DSHA-settings-")) return SETTINGS;
@@ -80,6 +86,7 @@ public final class BackupScope {
     /** 给用户看的名字。 */
     public static String label(int scope) {
         switch (scope) {
+            case TOOLS:    return "仅备份工具、技能与 MCP";
             case SESSIONS: return "仅备份对话记录";
             case PLUGINS:  return "仅备份插件";
             case SETTINGS: return "仅备份设置";
@@ -90,6 +97,8 @@ public final class BackupScope {
     /** 给用户看的一句话说明。 */
     public static String describe(int scope) {
         switch (scope) {
+            case TOOLS:
+                return "打包全局工具包(npm/pip)、自定义脚本、Skill 技能与 MCP 配置，换新底座用这个";
             case SESSIONS:
                 return "只打包会话、消息与工作区结构，恢复时不动设置与插件";
             case PLUGINS:
@@ -103,16 +112,18 @@ public final class BackupScope {
 
     public static String restoreImpact(int scope) {
         switch (scope) {
+            case TOOLS:    return "只恢复工具包、自定义脚本、技能与 MCP 配置，不触碰聊天记录与设置";
             case SESSIONS: return "只覆盖聊天记录，不改设置和插件";
             case SETTINGS: return "只覆盖 settings.yaml，不改聊天记录和插件";
-            case PLUGINS: return "只覆盖插件 profile，不改聊天记录和设置";
-            default: return "覆盖配置、聊天记录、插件和工作区文件";
+            case PLUGINS:  return "只覆盖插件 profile，不改聊天记录和设置";
+            default:       return "覆盖配置、聊天记录、插件和工作区文件";
         }
     }
 
     /** {@code .dsh} 下要打包的子路径；空数组表示<b>整个 {@code .dsh}</b>。 */
     public static String[] dshPaths(int scope) {
         switch (scope) {
+            case TOOLS:    return new String[] { ".dsh/skills" };
             // 对话记录：会话文件 sessions/、工作区与会话索引 storages/、附件图片 attachments/、图书与知识库 books/library/documents
             case SESSIONS: return new String[] {
                     ".dsh/sessions", ".dsh/storages", ".dsh/attachments",
@@ -130,6 +141,7 @@ public final class BackupScope {
     /** 恢复时要合并的 {@code .dsh} 子目录名；必须与 {@link #dshPaths(int)} 一一对应。 */
     public static String[] mergeSubdirs(int scope) {
         switch (scope) {
+            case TOOLS:    return new String[] { "skills" };
             case SESSIONS: return new String[] {
                     "sessions", "storages", "attachments", "books", "library", "documents", "sessions-index.json"
             };
