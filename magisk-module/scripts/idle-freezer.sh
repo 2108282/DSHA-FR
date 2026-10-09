@@ -3,10 +3,12 @@
 # DSHA 30分钟闲置深度冻结守护程序 (DSHA Idle Freezer Daemon)
 # 特性：
 # 1. 10分钟超低频心跳检测；
-# 2. 真实会话活跃时间戳比对，连续 30 分钟无新对话时冻结；
-# 3. 冻结后守护进程自身立即 exit 0 彻底退出，实现 0 唤醒；
-# 4. 唤醒时解冻主进程并重新拉起守护，无缝循环；
-# 5. 精确记录北京时间操作日志。
+# 2. 宿主与容器自适应路径匹配；
+# 3. 显式检测 session-*.json 与会话缓存最新写入时间戳；
+# 4. 连续 30 分钟无新步骤时执行 kill -STOP 冻结；
+# 5. 冻结后守护进程自身立即 exit 0 彻底退出，实现 0 唤醒；
+# 6. 唤醒时解冻主进程并重新拉起守护，无缝循环；
+# 7. 精确记录北京时间操作日志。
 # ============================================================
 
 RUN_DIR="/data/adb/dsha/run"
@@ -15,6 +17,13 @@ PID_FILE="$RUN_DIR/dsh.pid"
 FREEZER_PID_FILE="$RUN_DIR/idle-freezer.pid"
 FREEZER_LOG="$RUN_DIR/idle-freezer.log"
 STATE_FILE="$RUN_DIR/freezer.state"
+
+# 路径自适应：检测宿主视角 vs 容器视角
+if [ -d "/data/adb/dsha/rootfs/root/.dsh" ]; then
+    DSH_DIR="/data/adb/dsha/rootfs/root/.dsh"
+else
+    DSH_DIR="/root/.dsh"
+fi
 
 IDLE_THRESHOLD=1800 # 30 分钟 (秒)
 CHECK_INTERVAL=600 # 10 分钟检查一次 (秒)
@@ -82,25 +91,29 @@ do_daemon() {
             exit 0 # 已经处于冻结态，守护进程功成身退，彻底退出自身！
         fi
         
-        # 4. 任务避让保护：检查是否有未完成的审批或任务在跑
-        IS_ACTIVE=0
-        if [ -f "/root/.dsh/.approval_status.json" ]; then
-            if grep -q '"active":true' "/root/.dsh/.approval_status.json" 2>/dev/null; then
-                IS_ACTIVE=1
+        # 4. 任务避让保护：检查是否有未完成的审批挂起
+        if [ -f "$DSH_DIR/.approval_status.json" ]; then
+            if grep -q '"active":true' "$DSH_DIR/.approval_status.json" 2>/dev/null; then
+                continue
             fi
         fi
-        [ "$IS_ACTIVE" = "1" ] && continue
         
-        # 5. 精准计算真实会话活跃时间（取 session 缓存或 agy 账本最新写入时间戳）
+        # 5. 精准提取 session-*.json 与会话文件的最新写入时间戳
         NOW=$(date +%s)
         LAST_WRITE=0
-        LATEST_SESSION=$(ls -t /root/.dsh/storages/session_projcache/sessions/*.json 2>/dev/null | head -1)
+        
+        # 显式包含 session-*.json 检索！
+        LATEST_SESSION=$(ls -t "$DSH_DIR/storages/session_projcache/sessions/session-"*.json \
+                               "$DSH_DIR/storages/session_projcache/sessions/"*.json 2>/dev/null | head -1)
         if [ -n "$LATEST_SESSION" ] && [ -f "$LATEST_SESSION" ]; then
             LAST_WRITE=$(stat -c %Y "$LATEST_SESSION" 2>/dev/null || echo 0)
         fi
-        if [ "${LAST_WRITE:-0}" -le 0 ] && [ -f "/root/.dsh/agy/agy-recent.json" ]; then
-            LAST_WRITE=$(stat -c %Y "/root/.dsh/agy/agy-recent.json" 2>/dev/null || echo 0)
+        
+        # 回退检查 agy 调用账本
+        if [ "${LAST_WRITE:-0}" -le 0 ] && [ -f "$DSH_DIR/agy/agy-recent.json" ]; then
+            LAST_WRITE=$(stat -c %Y "$DSH_DIR/agy/agy-recent.json" 2>/dev/null || echo 0)
         fi
+        
         if [ "${LAST_WRITE:-0}" -le 0 ]; then
             LAST_WRITE=$NOW
         fi
@@ -115,7 +128,7 @@ do_daemon() {
             log_msg "FREEZE" "会话已闲置 $IDLE_SEC 秒 (满30分钟)，已执行 SIGSTOP 深度休眠冻结 (PID: $MAIN_PID)"
             
             # 尝试通过 3095 桥通知用户已休眠
-            TOKEN=$(cat /root/.dsh/.bridge_token 2>/dev/null)
+            TOKEN=$(cat "$DSH_DIR/.bridge_token" 2>/dev/null)
             if [ -n "$TOKEN" ]; then
                 curl -s -m 2 "http://127.0.0.1:3095/app/notify?token=$TOKEN&title=DSH已休眠&text=闲置已满30分钟，已进入0功耗休眠，访问即可唤醒。" >/dev/null 2>&1
             fi
