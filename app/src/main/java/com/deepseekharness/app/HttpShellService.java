@@ -682,11 +682,11 @@ public final class HttpShellService {
             if (TaskNotifier.appInForeground) {
                 final String finalTitle = title;
                 final String finalText = text;
-                new Handler(Looper.getMainLooper()).post(() -> {
-                    try {
-                        Toast.makeText(ctx, "✓ " + finalTitle + "：" + (finalText.length() > 30 ? finalText.substring(0, 30) + "…" : finalText), Toast.LENGTH_SHORT).show();
-                    } catch (Throwable ignored) {}
-                });
+                com.deepseekharness.app.util.ToastHelper.show(
+                        ctx,
+                        "✓ " + finalTitle + "：" + (finalText.length() > 30 ? finalText.substring(0, 30) + "…" : finalText),
+                        Toast.LENGTH_SHORT
+                );
             }
 
             return "OK";
@@ -1105,12 +1105,7 @@ public final class HttpShellService {
             final String text = getParam(queryOf(path), "text", "");
             if (text.isEmpty()) return "NO_TEXT";
             final String displayText = safeDisplay(text);
-            new Handler(Looper.getMainLooper()).post(() -> {
-                try {
-                    android.widget.Toast.makeText(ctx, displayText, android.widget.Toast.LENGTH_LONG).show();
-                } catch (Throwable ignored) {
-                }
-            });
+            com.deepseekharness.app.util.ToastHelper.show(ctx, displayText, android.widget.Toast.LENGTH_LONG);
             return "OK";
         } catch (Throwable e) {
             return "ERROR: " + safeError(e);

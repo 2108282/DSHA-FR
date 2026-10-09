@@ -10,6 +10,7 @@ import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
+import com.deepseekharness.app.util.ToastHelper;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -128,7 +129,7 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         asrFixBtn.setOnClickListener(v -> actions.onFixAsrConfig());
 
         translateBtn.setOnClickListener(v ->
-                Toast.makeText(requireContext(), "插件市场翻译组件已内置，后续版本开放自定义模型接口", Toast.LENGTH_SHORT).show());
+                ToastHelper.makeText(requireContext(), "插件市场翻译组件已内置，后续版本开放自定义模型接口", Toast.LENGTH_SHORT).show());
 
         asrContinuousCheck.setOnCheckedChangeListener((btn, checked) -> actions.onToggleAsrContinuous(checked));
 

@@ -23,6 +23,7 @@ import android.widget.FrameLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
+import com.deepseekharness.app.util.ToastHelper;
 
 import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
@@ -120,7 +121,7 @@ public class WebPreviewActivity extends AppCompatActivity implements WebFullscre
                         WebUploads.clean(copied);
                         new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
                             callback.onReceiveValue(null);
-                            Toast.makeText(app, "上传失败：" + error.getMessage(), Toast.LENGTH_LONG).show();
+                            ToastHelper.makeText(app, "上传失败：" + error.getMessage(), Toast.LENGTH_LONG).show();
                         });
                     }
                 }, "web-file-import").start();
@@ -330,7 +331,7 @@ public class WebPreviewActivity extends AppCompatActivity implements WebFullscre
                     filePicker.launch(WebUploads.fallback(primary));
                 } catch (RuntimeException ignored) {
                     cancelFileSelection();
-                    Toast.makeText(WebPreviewActivity.this, "无法打开系统文件选择器", Toast.LENGTH_SHORT).show();
+                    ToastHelper.makeText(WebPreviewActivity.this, "无法打开系统文件选择器", Toast.LENGTH_SHORT).show();
                 }
             }
             return true;
@@ -353,7 +354,7 @@ public class WebPreviewActivity extends AppCompatActivity implements WebFullscre
         try {
             startActivity(new Intent(Intent.ACTION_VIEW, uri).addCategory(Intent.CATEGORY_BROWSABLE));
         } catch (RuntimeException e) {
-            Toast.makeText(this, "未找到可用的系统浏览器", Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(this, "未找到可用的系统浏览器", Toast.LENGTH_SHORT).show();
         }
     }
 

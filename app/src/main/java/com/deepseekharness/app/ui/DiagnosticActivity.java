@@ -8,6 +8,7 @@ import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
+import com.deepseekharness.app.util.ToastHelper;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.lifecycle.ViewModelProvider;
@@ -159,7 +160,7 @@ public final class DiagnosticActivity extends AppCompatActivity implements Diagn
     private void executeRepairBridge() {
         HarnessController controller = HarnessController.get(this);
         if (controller == null) {
-            Toast.makeText(this, "未初始化核心控制器", Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(this, "未初始化核心控制器", Toast.LENGTH_SHORT).show();
             return;
         }
         AlertDialog progress = new AlertDialog.Builder(this)
@@ -189,7 +190,7 @@ public final class DiagnosticActivity extends AppCompatActivity implements Diagn
             runOnUiThread(() -> {
                 if (!isFinishing()) {
                     progress.dismiss();
-                    Toast.makeText(this, "网桥与存储直通已完成自愈", Toast.LENGTH_SHORT).show();
+                    ToastHelper.makeText(this, "网桥与存储直通已完成自愈", Toast.LENGTH_SHORT).show();
                     if (repository != null) repository.generate();
                 }
             });
@@ -209,7 +210,7 @@ public final class DiagnosticActivity extends AppCompatActivity implements Diagn
     private void executeRepairPlugins() {
         HarnessController controller = HarnessController.get(this);
         if (controller == null) {
-            Toast.makeText(this, "未初始化核心控制器", Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(this, "未初始化核心控制器", Toast.LENGTH_SHORT).show();
             return;
         }
         AlertDialog progress = new AlertDialog.Builder(this)
@@ -277,7 +278,7 @@ public final class DiagnosticActivity extends AppCompatActivity implements Diagn
             runOnUiThread(() -> {
                 if (!isFinishing()) {
                     progress.dismiss();
-                    Toast.makeText(this, "插件丢失自愈执行完成", Toast.LENGTH_SHORT).show();
+                    ToastHelper.makeText(this, "插件丢失自愈执行完成", Toast.LENGTH_SHORT).show();
                     if (repository != null) repository.generate();
                 }
             });

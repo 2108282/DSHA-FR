@@ -17,6 +17,7 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+import com.deepseekharness.app.util.ToastHelper;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
@@ -110,7 +111,7 @@ public class CredentialsActivity extends AppCompatActivity {
         // 重新生成局域网 Token
         findViewById(R.id.cred_regenerate_token).setOnClickListener(v -> {
             LanProxyService.regenerateLanToken(this);
-            Toast.makeText(this, "已重新生成 Token 并更新地址", Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(this, "已重新生成 Token 并更新地址", Toast.LENGTH_SHORT).show();
             refreshData();
         });
 
@@ -138,7 +139,7 @@ public class CredentialsActivity extends AppCompatActivity {
         remoteList.add(entry);
         cfg.saveRemoteDshList(remoteList);
         renderRemoteCards();
-        Toast.makeText(this, "已添加「远端 " + nextIdx + "」，请填写访问地址", Toast.LENGTH_SHORT).show();
+        ToastHelper.makeText(this, "已添加「远端 " + nextIdx + "」，请填写访问地址", Toast.LENGTH_SHORT).show();
     }
 
     private void renderRemoteCards() {
@@ -242,11 +243,11 @@ public class CredentialsActivity extends AppCompatActivity {
                         other.enabled = (other.id != null && other.id.equals(entry.id));
                     }
                     cfg.saveRemoteDshList(remoteList);
-                    Toast.makeText(this, "已启用「" + titleName + "」，其他远端已停用", Toast.LENGTH_SHORT).show();
+                    ToastHelper.makeText(this, "已启用「" + titleName + "」，其他远端已停用", Toast.LENGTH_SHORT).show();
                 } else {
                     entry.enabled = false;
                     cfg.saveRemoteDshList(remoteList);
-                    Toast.makeText(this, "已停用「" + titleName + "」，回退本机模式", Toast.LENGTH_SHORT).show();
+                    ToastHelper.makeText(this, "已停用「" + titleName + "」，回退本机模式", Toast.LENGTH_SHORT).show();
                 }
                 renderRemoteCards();
             });
@@ -483,7 +484,7 @@ public class CredentialsActivity extends AppCompatActivity {
             remoteList.remove(entry);
             cfg.saveRemoteDshList(remoteList);
             renderRemoteCards();
-            Toast.makeText(this, "已删除「" + titleName + "」", Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(this, "已删除「" + titleName + "」", Toast.LENGTH_SHORT).show();
         });
 
         dialog.show();
@@ -491,7 +492,7 @@ public class CredentialsActivity extends AppCompatActivity {
 
     private void testSingleRemoteConnection(String rawUrl, Button testBtn) {
         if (rawUrl == null || rawUrl.trim().isEmpty()) {
-            Toast.makeText(this, "请先输入远端 DSH 地址", Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(this, "请先输入远端 DSH 地址", Toast.LENGTH_SHORT).show();
             return;
         }
         String formatted = rawUrl.trim();
@@ -503,7 +504,7 @@ public class CredentialsActivity extends AppCompatActivity {
             testBtn.setEnabled(false);
             testBtn.setText("测试中…");
         }
-        Toast.makeText(this, "正在探测远端连接...", Toast.LENGTH_SHORT).show();
+        ToastHelper.makeText(this, "正在探测远端连接...", Toast.LENGTH_SHORT).show();
 
         new Thread(() -> {
             boolean success = false;
@@ -538,9 +539,9 @@ public class CredentialsActivity extends AppCompatActivity {
                     testBtn.setText("连接测试");
                 }
                 if (finalSuccess) {
-                    Toast.makeText(this, "✓ 远端连接成功 (HTTP " + finalCode + ")", Toast.LENGTH_SHORT).show();
+                    ToastHelper.makeText(this, "✓ 远端连接成功 (HTTP " + finalCode + ")", Toast.LENGTH_SHORT).show();
                 } else {
-                    Toast.makeText(this, "✗ 连接失败: " + finalErr, Toast.LENGTH_LONG).show();
+                    ToastHelper.makeText(this, "✗ 连接失败: " + finalErr, Toast.LENGTH_LONG).show();
                 }
             });
         }, "dsha-remote-test").start();
@@ -597,7 +598,7 @@ public class CredentialsActivity extends AppCompatActivity {
         if (controller == null) return;
         String authUrl = controller.getWebAuthUrl();
         if (authUrl.isEmpty()) {
-            Toast.makeText(this, "先点「启动」，等服务就绪后再进入", Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(this, "先点「启动」，等服务就绪后再进入", Toast.LENGTH_SHORT).show();
             return;
         }
         new Thread(() -> {
@@ -611,17 +612,17 @@ public class CredentialsActivity extends AppCompatActivity {
 
     private void copyToClipboard(String label, String text) {
         if (text.startsWith("（") && text.endsWith("）")) {
-            Toast.makeText(this, "当前内容无效，无需复制", Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(this, "当前内容无效，无需复制", Toast.LENGTH_SHORT).show();
             return;
         }
         try {
             ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
             if (cm != null) {
                 cm.setPrimaryClip(ClipData.newPlainText(label, text));
-                Toast.makeText(this, label + " 已复制", Toast.LENGTH_SHORT).show();
+                ToastHelper.makeText(this, label + " 已复制", Toast.LENGTH_SHORT).show();
             }
         } catch (Throwable t) {
-            Toast.makeText(this, "复制失败：" + t.getMessage(), Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(this, "复制失败：" + t.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
 }

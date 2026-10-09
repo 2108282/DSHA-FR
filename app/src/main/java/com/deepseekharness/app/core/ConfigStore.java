@@ -209,6 +209,17 @@ public class ConfigStore {
         prefs.edit().putBoolean(Constants.KEY_PERSISTENT_NOTIFICATION, enabled).apply();
     }
 
+    // ================= Toast 弹窗通知 =================
+
+    public boolean isToastNotificationEnabled() {
+        return prefs.getBoolean(Constants.KEY_TOAST_NOTIFICATION, true);
+    }
+
+    public void setToastNotificationEnabled(boolean enabled) {
+        prefs.edit().putBoolean(Constants.KEY_TOAST_NOTIFICATION, enabled).apply();
+        com.deepseekharness.app.util.ToastHelper.syncEnabled(enabled);
+    }
+
     // ================= 快捷抽屉反色与莫奈取色开关 =================
 
     public boolean isSheetInvertColor() {

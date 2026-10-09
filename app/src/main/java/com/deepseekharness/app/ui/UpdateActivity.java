@@ -15,6 +15,7 @@ import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
+import com.deepseekharness.app.util.ToastHelper;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -113,24 +114,24 @@ public final class UpdateActivity extends AppCompatActivity {
         if (copyCmdBtn != null) {
             copyCmdBtn.setOnClickListener(v -> {
                 if (latestCoreVersion.isEmpty()) {
-                    Toast.makeText(this, "正在拉取核心版本号，请稍候…", Toast.LENGTH_SHORT).show();
+                    ToastHelper.makeText(this, "正在拉取核心版本号，请稍候…", Toast.LENGTH_SHORT).show();
                     return;
                 }
                 String cmd = "npm install -g @deepseek-ai/dsh@" + latestCoreVersion;
                 copyToClipboard("官方更新命令", cmd);
-                Toast.makeText(this, "已复制官方更新命令：\n" + cmd, Toast.LENGTH_SHORT).show();
+                ToastHelper.makeText(this, "已复制官方更新命令：\n" + cmd, Toast.LENGTH_SHORT).show();
             });
         }
 
         if (copyMirrorCmdBtn != null) {
             copyMirrorCmdBtn.setOnClickListener(v -> {
                 if (latestCoreVersion.isEmpty()) {
-                    Toast.makeText(this, "正在拉取核心版本号，请稍候…", Toast.LENGTH_SHORT).show();
+                    ToastHelper.makeText(this, "正在拉取核心版本号，请稍候…", Toast.LENGTH_SHORT).show();
                     return;
                 }
                 String cmd = "npm install -g @deepseek-ai/dsh@" + latestCoreVersion + " --registry=https://registry.npmmirror.com";
                 copyToClipboard("国内源更新命令", cmd);
-                Toast.makeText(this, "已复制国内源更新命令：\n" + cmd, Toast.LENGTH_SHORT).show();
+                ToastHelper.makeText(this, "已复制国内源更新命令：\n" + cmd, Toast.LENGTH_SHORT).show();
             });
         }
 
@@ -266,7 +267,7 @@ public final class UpdateActivity extends AppCompatActivity {
             Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
             startActivity(intent);
         } catch (Throwable t) {
-            Toast.makeText(this, "无法调用系统浏览器: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(this, "无法调用系统浏览器: " + t.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
 

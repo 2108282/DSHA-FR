@@ -233,7 +233,7 @@ public class LaunchPresenter implements LaunchActions {
             return;
         }
         if (running && !hasUrl) {
-            Toast.makeText(context, "正在同步鉴权凭据，请稍候…", Toast.LENGTH_SHORT).show();
+            com.deepseekharness.app.util.ToastHelper.show(context, "正在同步鉴权凭据，请稍候…");
             controller.tryRecoverRunningUrl();
             return;
         }
@@ -324,7 +324,7 @@ public class LaunchPresenter implements LaunchActions {
             Intent intent = QuickChatSheetActivity.createLaunchIntent(context);
             activity.startActivity(intent);
         } catch (Throwable t) {
-            Toast.makeText(context, "无法打开快捷对话抽屉：" + t.getMessage(), Toast.LENGTH_SHORT).show();
+            com.deepseekharness.app.util.ToastHelper.show(context, "无法打开快捷对话抽屉：" + t.getMessage());
         }
     }
 
@@ -357,7 +357,7 @@ public class LaunchPresenter implements LaunchActions {
             Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
             activity.startActivity(intent);
         } catch (Throwable t) {
-            Toast.makeText(context, "无法打开浏览器：" + t.getMessage(), Toast.LENGTH_SHORT).show();
+            com.deepseekharness.app.util.ToastHelper.show(context, "无法打开浏览器：" + t.getMessage());
         }
     }
 }

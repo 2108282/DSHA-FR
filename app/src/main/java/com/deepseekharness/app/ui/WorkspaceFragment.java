@@ -7,6 +7,7 @@ import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
+import com.deepseekharness.app.util.ToastHelper;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -52,7 +53,7 @@ public class WorkspaceFragment extends Fragment implements WorkspacePresenter.Vi
         v.findViewById(R.id.workspace_backup).setOnClickListener(x -> actions.onBackupClick());
         v.findViewById(R.id.workspace_restore).setOnClickListener(x -> actions.onRestoreClick());
         v.findViewById(R.id.workspace_location).setOnClickListener(x ->
-                Toast.makeText(requireContext(), "备份保存在 Download/DSHA/", Toast.LENGTH_LONG).show());
+                ToastHelper.makeText(requireContext(), "备份保存在 Download/DSHA/", Toast.LENGTH_LONG).show());
 
         if (wsPathInput != null) {
             v.findViewById(R.id.workspace_apply).setOnClickListener(x ->
@@ -116,7 +117,7 @@ public class WorkspaceFragment extends Fragment implements WorkspacePresenter.Vi
         try {
             restorePicker.launch(new String[]{"*/*"});
         } catch (Throwable t) {
-            Toast.makeText(requireContext(), "打开选择器失败：" + t.getMessage(), Toast.LENGTH_LONG).show();
+            ToastHelper.makeText(requireContext(), "打开选择器失败：" + t.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
 

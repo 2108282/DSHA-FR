@@ -55,9 +55,8 @@ public class SheetSettingsFragment extends Fragment {
             invertToggle.setOnCheckedChangeListener((toggle, isChecked) -> {
                 cfg.setSheetInvertColor(isChecked);
                 QuickChatSheetActivity.refreshThemeFromConfig(requireContext());
-                Toast.makeText(requireContext(),
-                        isChecked ? "抽屉反色已开启（深色反色视觉）" : "抽屉反色已关闭（常规浅色视觉）",
-                        Toast.LENGTH_SHORT).show();
+                com.deepseekharness.app.util.ToastHelper.show(requireContext(),
+                        isChecked ? "抽屉反色已开启（深色反色视觉）" : "抽屉反色已关闭（常规浅色视觉）");
             });
             View invertRow = v.findViewById(R.id.sheet_settings_invert_row);
             if (invertRow != null) {
@@ -120,9 +119,8 @@ public class SheetSettingsFragment extends Fragment {
                 }
                 MonetThemeHelper.clearCache(requireContext());
                 QuickChatSheetActivity.refreshThemeFromConfig(requireContext());
-                Toast.makeText(requireContext(),
-                        isChecked ? "莫奈取色已开启（跟随系统壁纸调色，仅浅色生效）" : "莫奈取色已关闭（恢复经典浅色）",
-                        Toast.LENGTH_SHORT).show();
+                com.deepseekharness.app.util.ToastHelper.show(requireContext(),
+                        isChecked ? "莫奈取色已开启（跟随系统壁纸调色，仅浅色生效）" : "莫奈取色已关闭（恢复经典浅色）");
             });
             View monetRow = v.findViewById(R.id.sheet_settings_monet_row);
             if (monetRow != null) {
@@ -140,9 +138,8 @@ public class SheetSettingsFragment extends Fragment {
                 }
                 MonetThemeHelper.clearCache(requireContext());
                 QuickChatSheetActivity.refreshThemeFromConfig(requireContext());
-                Toast.makeText(requireContext(),
-                        isChecked ? "已启用莫奈三色倒序" : "已恢复莫奈三色正常顺序",
-                        Toast.LENGTH_SHORT).show();
+                com.deepseekharness.app.util.ToastHelper.show(requireContext(),
+                        isChecked ? "已启用莫奈三色倒序" : "已恢复莫奈三色正常顺序");
             });
             if (monetInvertRow != null) {
                 monetInvertRow.setOnClickListener(x -> monetInvertToggle.toggle());
@@ -167,9 +164,8 @@ public class SheetSettingsFragment extends Fragment {
             ctsToggle.setChecked(cfg.isCtsRedirectEnabled(), false, false);
             ctsToggle.setOnCheckedChangeListener((toggle, isChecked) -> {
                 cfg.setCtsRedirectEnabled(isChecked);
-                Toast.makeText(requireContext(),
-                        isChecked ? "圈定即搜重定向已开启（手势唤起抽屉）" : "圈定即搜已回退系统默认（Google）",
-                        Toast.LENGTH_SHORT).show();
+                com.deepseekharness.app.util.ToastHelper.show(requireContext(),
+                        isChecked ? "圈定即搜重定向已开启（手势唤起抽屉）" : "圈定即搜已回退系统默认（Google）");
             });
             View ctsRow = v.findViewById(R.id.sheet_settings_cts_redirect_row);
             if (ctsRow != null) {
@@ -183,9 +179,8 @@ public class SheetSettingsFragment extends Fragment {
             autoRestoreToggle.setChecked(cfg.isSheetAutoRestoreDefault(), false, false);
             autoRestoreToggle.setOnCheckedChangeListener((toggle, isChecked) -> {
                 cfg.setSheetAutoRestoreDefault(isChecked);
-                Toast.makeText(requireContext(),
-                        isChecked ? "已开启：抽屉低于 45% 时下次自动回弹至默认高度" : "已关闭：抽屉保持上次停留高度",
-                        Toast.LENGTH_SHORT).show();
+                com.deepseekharness.app.util.ToastHelper.show(requireContext(),
+                        isChecked ? "已开启：抽屉低于 45% 时下次自动回弹至默认高度" : "已关闭：抽屉保持上次停留高度");
             });
             View autoRestoreRow = v.findViewById(R.id.sheet_settings_auto_restore_row);
             if (autoRestoreRow != null) {
@@ -206,11 +201,11 @@ public class SheetSettingsFragment extends Fragment {
                     val = Integer.parseInt(opacityDayInput.getText().toString().trim());
                 } catch (Exception ignored) {}
                 if (val < 30 || val > 100) {
-                    Toast.makeText(requireContext(), "请输入 30 ~ 100 之间的数值", Toast.LENGTH_SHORT).show();
+                    com.deepseekharness.app.util.ToastHelper.show(requireContext(), "请输入 30 ~ 100 之间的数值");
                     return;
                 }
                 cfg.setSheetOpacityDay(val);
-                Toast.makeText(requireContext(), "已保存白天不透明度为 " + val + "%（下次唤起抽屉生效）", Toast.LENGTH_SHORT).show();
+                com.deepseekharness.app.util.ToastHelper.show(requireContext(), "已保存白天不透明度为 " + val + "%（下次唤起抽屉生效）");
             });
         }
 
@@ -227,11 +222,11 @@ public class SheetSettingsFragment extends Fragment {
                     val = Integer.parseInt(opacityNightInput.getText().toString().trim());
                 } catch (Exception ignored) {}
                 if (val < 30 || val > 100) {
-                    Toast.makeText(requireContext(), "请输入 30 ~ 100 之间的数值", Toast.LENGTH_SHORT).show();
+                    com.deepseekharness.app.util.ToastHelper.show(requireContext(), "请输入 30 ~ 100 之间的数值");
                     return;
                 }
                 cfg.setSheetOpacityNight(val);
-                Toast.makeText(requireContext(), "已保存黑夜不透明度为 " + val + "%（下次唤起抽屉生效）", Toast.LENGTH_SHORT).show();
+                com.deepseekharness.app.util.ToastHelper.show(requireContext(), "已保存黑夜不透明度为 " + val + "%（下次唤起抽屉生效）");
             });
         }
 
@@ -248,11 +243,11 @@ public class SheetSettingsFragment extends Fragment {
                     val = Integer.parseInt(heightInput.getText().toString().trim());
                 } catch (Exception ignored) {}
                 if (val < 30 || val > 95) {
-                    Toast.makeText(requireContext(), "请输入 30 ~ 95 之间的百分比", Toast.LENGTH_SHORT).show();
+                    com.deepseekharness.app.util.ToastHelper.show(requireContext(), "请输入 30 ~ 95 之间的百分比");
                     return;
                 }
                 cfg.setSheetHeightPercent(val);
-                Toast.makeText(requireContext(), "已将默认高度与吸附档位设为 " + val + "%", Toast.LENGTH_SHORT).show();
+                com.deepseekharness.app.util.ToastHelper.show(requireContext(), "已将默认高度与吸附档位设为 " + val + "%");
             });
         }
 
@@ -272,12 +267,12 @@ public class SheetSettingsFragment extends Fragment {
                     r = Integer.parseInt(marginRightInput.getText().toString().trim());
                 } catch (Exception ignored) {}
                 if (l < 0 || l > 100 || r < 0 || r > 100) {
-                    Toast.makeText(requireContext(), "边距建议在 0 ~ 100 dp 之间", Toast.LENGTH_SHORT).show();
+                    com.deepseekharness.app.util.ToastHelper.show(requireContext(), "边距建议在 0 ~ 100 dp 之间");
                     return;
                 }
                 cfg.setSheetMarginLeft(l);
                 cfg.setSheetMarginRight(r);
-                Toast.makeText(requireContext(), "边距已保存：左 " + l + "dp，右 " + r + "dp（下次唤起生效）", Toast.LENGTH_SHORT).show();
+                com.deepseekharness.app.util.ToastHelper.show(requireContext(), "边距已保存：左 " + l + "dp，右 " + r + "dp（下次唤起生效）");
             });
         }
 

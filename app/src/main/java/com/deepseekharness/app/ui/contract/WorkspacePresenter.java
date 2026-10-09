@@ -14,6 +14,7 @@ import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
+import com.deepseekharness.app.util.ToastHelper;
 
 import androidx.appcompat.app.AlertDialog;
 
@@ -60,7 +61,7 @@ public class WorkspacePresenter implements WorkspaceActions {
         String p = path != null ? path.trim() : "";
         if (!p.isEmpty()) {
             controller.config().setWorkdir(p);
-            Toast.makeText(context, "工作区目录已更新：" + p, Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(context, "工作区目录已更新：" + p, Toast.LENGTH_SHORT).show();
             init();
         }
     }
@@ -70,7 +71,7 @@ public class WorkspacePresenter implements WorkspaceActions {
         try {
             showBackupScopeDialog();
         } catch (Throwable t) {
-            Toast.makeText(context, "打开备份选项失败: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(context, "打开备份选项失败: " + t.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -138,7 +139,7 @@ public class WorkspacePresenter implements WorkspaceActions {
     }
 
     private void doBackup(final int scope, final boolean includeApiKey) {
-        Toast.makeText(context, "开始备份…", Toast.LENGTH_SHORT).show();
+        ToastHelper.makeText(context, "开始备份…", Toast.LENGTH_SHORT).show();
         AlertDialog progress = showLoadingDialog("备份中", "正在打包所选数据并校验…");
 
         new Thread(() -> {
@@ -179,7 +180,7 @@ public class WorkspacePresenter implements WorkspaceActions {
         try {
             confirmRestore();
         } catch (Throwable t) {
-            Toast.makeText(context, "打开恢复选项失败: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(context, "打开恢复选项失败: " + t.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -203,7 +204,7 @@ public class WorkspacePresenter implements WorkspaceActions {
     @Override
     public void onRestoreSelected(Uri uri) {
         if (uri == null) return;
-        Toast.makeText(context, "开始恢复…", Toast.LENGTH_SHORT).show();
+        ToastHelper.makeText(context, "开始恢复…", Toast.LENGTH_SHORT).show();
         AlertDialog progress = showLoadingDialog("恢复中", "正在解压覆盖并合并数据…");
 
         new Thread(() -> {
@@ -223,7 +224,7 @@ public class WorkspacePresenter implements WorkspaceActions {
                             () -> {
                                 controller.stopWeb();
                                 controller.startWeb(status -> {});
-                                Toast.makeText(context, "正在重启服务…", Toast.LENGTH_SHORT).show();
+                                ToastHelper.makeText(context, "正在重启服务…", Toast.LENGTH_SHORT).show();
                             }
                     );
                 });

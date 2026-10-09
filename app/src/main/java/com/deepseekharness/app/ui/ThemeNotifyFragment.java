@@ -69,13 +69,28 @@ public final class ThemeNotifyFragment extends Fragment {
             persistentToggle.setChecked(cfg.isPersistentNotificationEnabled(), false, false);
             persistentToggle.setOnCheckedChangeListener((btn, isChecked) -> {
                 cfg.setPersistentNotificationEnabled(isChecked);
-                Toast.makeText(requireContext(),
-                        isChecked ? "常驻后台通知已开启" : "常驻后台通知已关闭",
-                        Toast.LENGTH_SHORT).show();
+                com.deepseekharness.app.util.ToastHelper.show(requireContext(),
+                        isChecked ? "常驻后台通知已开启" : "常驻后台通知已关闭");
             });
             View persistentRow = v.findViewById(R.id.theme_notify_row_persistent);
             if (persistentRow != null) {
                 persistentRow.setOnClickListener(x -> persistentToggle.toggle());
+            }
+        }
+
+        // ==================== 1.1 Toast 弹窗通知 ====================
+        DshaToggle toastToggle = v.findViewById(R.id.theme_notify_toggle_toast);
+        if (toastToggle != null) {
+            toastToggle.setChecked(cfg.isToastNotificationEnabled(), false, false);
+            toastToggle.setOnCheckedChangeListener((btn, isChecked) -> {
+                cfg.setToastNotificationEnabled(isChecked);
+                if (isChecked) {
+                    com.deepseekharness.app.util.ToastHelper.show(requireContext(), "Toast 消息通知已开启");
+                }
+            });
+            View toastRow = v.findViewById(R.id.theme_notify_row_toast);
+            if (toastRow != null) {
+                toastRow.setOnClickListener(x -> toastToggle.toggle());
             }
         }
 
@@ -105,9 +120,8 @@ public final class ThemeNotifyFragment extends Fragment {
                 if (monetInvertDivider != null) {
                     monetInvertDivider.setVisibility(isChecked ? View.VISIBLE : View.GONE);
                 }
-                Toast.makeText(requireContext(),
-                        isChecked ? "已启用莫奈动态取色" : "已停用莫奈动态取色",
-                        Toast.LENGTH_SHORT).show();
+                com.deepseekharness.app.util.ToastHelper.show(requireContext(),
+                        isChecked ? "已启用莫奈动态取色" : "已停用莫奈动态取色");
                 if (getActivity() != null) {
                     MonetEngine.applyToActivity(requireActivity());
                 }
@@ -130,9 +144,8 @@ public final class ThemeNotifyFragment extends Fragment {
                         .getString(PREF_KEY_PALETTE_STYLE, "tonal_spot");
                 int seed = MonetThemeHelper.getWallpaperSeedColor(requireContext());
                 updateDots(paletteStyleDotsContainer, saved, seed);
-                Toast.makeText(requireContext(),
-                        isChecked ? "已启用莫奈三色倒序" : "已恢复莫奈三色正常顺序",
-                        Toast.LENGTH_SHORT).show();
+                com.deepseekharness.app.util.ToastHelper.show(requireContext(),
+                        isChecked ? "已启用莫奈三色倒序" : "已恢复莫奈三色正常顺序");
                 if (getActivity() != null) {
                     MonetEngine.applyToActivity(requireActivity());
                 }
@@ -169,9 +182,8 @@ public final class ThemeNotifyFragment extends Fragment {
             floatingToggle.setOnCheckedChangeListener((btn, isChecked) -> {
                 requireContext().getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE).edit()
                         .putBoolean("overlay_stream", isChecked).apply();
-                Toast.makeText(requireContext(),
-                        isChecked ? "屏幕顶部悬浮栏已启用" : "屏幕顶部悬浮栏已关闭",
-                        Toast.LENGTH_SHORT).show();
+                com.deepseekharness.app.util.ToastHelper.show(requireContext(),
+                        isChecked ? "屏幕顶部悬浮栏已启用" : "屏幕顶部悬浮栏已关闭");
             });
             View floatingRow = v.findViewById(R.id.theme_notify_row_floating);
             if (floatingRow != null) {

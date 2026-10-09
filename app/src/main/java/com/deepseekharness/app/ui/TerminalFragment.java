@@ -34,6 +34,7 @@ import android.widget.EditText;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
+import com.deepseekharness.app.util.ToastHelper;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
@@ -118,7 +119,7 @@ extends Fragment {
             this.getParentFragmentManager().beginTransaction().replace(containerId, (Fragment)new PtyTerminalFragment()).commit();
         }
         catch (Throwable e) {
-            Toast.makeText((Context)this.requireContext(), (CharSequence)"\u8bf7\u9000\u51fa\u7ec8\u7aef\u9875\u518d\u8fdb\u6765", (int)0).show();
+            ToastHelper.makeText((Context)this.requireContext(), (CharSequence)"\u8bf7\u9000\u51fa\u7ec8\u7aef\u9875\u518d\u8fdb\u6765", (int)0).show();
         }
     }
 

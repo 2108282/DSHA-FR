@@ -61,6 +61,7 @@ import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+import com.deepseekharness.app.util.ToastHelper;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.activity.OnBackPressedCallback;
@@ -327,7 +328,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                         WebUploads.clean(copied);
                         new Handler(Looper.getMainLooper()).post(() -> {
                             callback.onReceiveValue(null);
-                            Toast.makeText(app, "上传失败：" + error.getMessage(), Toast.LENGTH_LONG).show();
+                            ToastHelper.makeText(app, "上传失败：" + error.getMessage(), Toast.LENGTH_LONG).show();
                         });
                     }
                 }, "sheet-file-import").start();
@@ -1103,18 +1104,18 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 // 远端模式刷新：刷新当前激活的远端地址
                 String activeUrl = ConfigStore.get(this).getActiveRemoteDshUrl();
                 if (activeUrl == null || activeUrl.isEmpty()) {
-                    Toast.makeText(this, "未开启任何远端连接", Toast.LENGTH_SHORT).show();
+                    ToastHelper.makeText(this, "未开启任何远端连接", Toast.LENGTH_SHORT).show();
                     return;
                 }
                 if (progressBar != null) progressBar.setVisibility(View.VISIBLE);
-                Toast.makeText(this, "正在重新连接远端 DSH...", Toast.LENGTH_SHORT).show();
+                ToastHelper.makeText(this, "正在重新连接远端 DSH...", Toast.LENGTH_SHORT).show();
                 ensureRemoteWebViewLoaded(activeUrl);
                 if (sRemoteWebView != null) {
                     sRemoteWebView.loadUrl(activeUrl);
                 }
             } else {
                 // 本地模式刷新：重新获取Token并刷新
-                Toast.makeText(this, "正在重新获取凭据并刷新本机 DSH...", Toast.LENGTH_SHORT).show();
+                ToastHelper.makeText(this, "正在重新获取凭据并刷新本机 DSH...", Toast.LENGTH_SHORT).show();
                 forceReloadWithLatestToken();
             }
         });
@@ -1748,7 +1749,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 android.app.DownloadManager dm = (android.app.DownloadManager) getSystemService(DOWNLOAD_SERVICE);
                 if (dm != null) {
                     dm.enqueue(request);
-                    Toast.makeText(this, "开始下载：" + fileName + "（保存在 Download/DSHA/）", Toast.LENGTH_LONG).show();
+                    ToastHelper.makeText(this, "开始下载：" + fileName + "（保存在 Download/DSHA/）", Toast.LENGTH_LONG).show();
                 }
             } catch (Throwable t) {
                 try {
@@ -1854,7 +1855,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         if (!sIsRemoteActive) {
             // 当前为本机模式，尝试切换到远端模式
             if (!hasActiveRemote) {
-                Toast.makeText(this, "未开启任何远端连接，请在「访问地址与凭据」中启用", Toast.LENGTH_SHORT).show();
+                ToastHelper.makeText(this, "未开启任何远端连接，请在「访问地址与凭据」中启用", Toast.LENGTH_SHORT).show();
                 return;
             }
             sIsRemoteActive = true;
@@ -1863,7 +1864,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             updateWebViewSlotVisibility();
             com.deepseekharness.app.core.ConfigStore.RemoteDshEntry entry = cfg.getActiveRemoteDshEntry();
             String name = entry != null && entry.name != null && !entry.name.isEmpty() ? entry.name : "远端";
-            Toast.makeText(this, "已切换至「" + name + "」", Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(this, "已切换至「" + name + "」", Toast.LENGTH_SHORT).show();
         } else {
             // 当前为远端模式，切换回本机模式
             sIsRemoteActive = false;
@@ -1884,7 +1885,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 if (progressBar != null) progressBar.setVisibility(View.GONE);
                 triggerForegroundWakeup();
             }
-            Toast.makeText(this, "已切换至本机 DSH", Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(this, "已切换至本机 DSH", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -2782,7 +2783,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(intent);
         } catch (RuntimeException e) {
-            Toast.makeText(this, "未找到可用的系统浏览器", Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(this, "未找到可用的系统浏览器", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -2894,7 +2895,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                         authRetried = true;
                         if (view == sRemoteWebView) {
                             runOnUiThread(() -> {
-                                Toast.makeText(QuickChatSheetActivity.this, "远端 DSH 鉴权失败 (HTTP " + code + ")，请检查 Token", Toast.LENGTH_SHORT).show();
+                                ToastHelper.makeText(QuickChatSheetActivity.this, "远端 DSH 鉴权失败 (HTTP " + code + ")，请检查 Token", Toast.LENGTH_SHORT).show();
                             });
                         } else {
                             String retryUrl = controller != null ? controller.getWebAuthUrl() : "";
@@ -2933,7 +2934,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                     filePicker.launch(WebUploads.fallback(primary));
                 } catch (Exception ignored) {
                     cancelFileSelection();
-                    Toast.makeText(QuickChatSheetActivity.this, "无法打开系统文件选择器", Toast.LENGTH_SHORT).show();
+                    ToastHelper.makeText(QuickChatSheetActivity.this, "无法打开系统文件选择器", Toast.LENGTH_SHORT).show();
                 }
             }
             return true;
@@ -3015,9 +3016,9 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     if (progressBar != null) progressBar.setVisibility(View.GONE);
                     if (!running) {
-                        Toast.makeText(this, "DSH 后端服务未运行，请先在主页启动服务", Toast.LENGTH_SHORT).show();
+                        ToastHelper.makeText(this, "DSH 后端服务未运行，请先在主页启动服务", Toast.LENGTH_SHORT).show();
                     } else {
-                        Toast.makeText(this, "未能获取到后端鉴权 Token，请稍后重试", Toast.LENGTH_SHORT).show();
+                        ToastHelper.makeText(this, "未能获取到后端鉴权 Token，请稍后重试", Toast.LENGTH_SHORT).show();
                     }
                 });
                 return;
@@ -3052,7 +3053,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             runOnUiThread(() -> {
                 if (sCachedWebView != null && !isFinishing() && !isDestroyed()) {
                     sCachedWebView.loadUrl(finalUrl);
-                    Toast.makeText(this, "正在重新连接 DSH...", Toast.LENGTH_SHORT).show();
+                    ToastHelper.makeText(this, "正在重新连接 DSH...", Toast.LENGTH_SHORT).show();
                 }
             });
         }, "dsha-force-reload-token").start();
@@ -3240,17 +3241,17 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             if (cm != null) {
                 ClipData clip = ClipData.newPlainText("text", text);
                 cm.setPrimaryClip(clip);
-                Toast.makeText(this, tip, Toast.LENGTH_SHORT).show();
+                ToastHelper.makeText(this, tip, Toast.LENGTH_SHORT).show();
             }
         } catch (Throwable t) {
-            Toast.makeText(this, "复制失败：" + t.getMessage(), Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(this, "复制失败：" + t.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
 
     // ---------------- 手势位置跟随的悬浮气泡微菜单（100% 继承抽屉毛玻璃与莫奈主题） ----------------
     private void showWorkspaceFileActionMenu(final File file, final String rawPath, float touchX, float touchY) {
         if (file == null || (!sIsRemoteActive && !file.exists()) || rootOverlay == null) {
-            Toast.makeText(this, "目标不存在", Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(this, "目标不存在", Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -3382,7 +3383,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             dismissActiveDialog();
             if (sIsRemoteActive) {
                 // 远端文件：先下载到手机本地 Download 目录，再调起系统打开
-                Toast.makeText(this, "正在下载远端文件后调用系统打开...", Toast.LENGTH_SHORT).show();
+                ToastHelper.makeText(this, "正在下载远端文件后调用系统打开...", Toast.LENGTH_SHORT).show();
                 performDownloadFileToDownloads(file, rawPath, destFile -> {
                     if (destFile != null && destFile.exists()) {
                         com.deepseekharness.app.viewer.FileOpenHelper.openWithSystem(QuickChatSheetActivity.this, destFile);
@@ -3397,7 +3398,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         menuCard.addView(createMenuItem("✏️   重命名", palette.textColor, v -> {
             dismissActiveDialog();
             if (sIsRemoteActive) {
-                Toast.makeText(this, "远端文件请在网页中直接重命名", Toast.LENGTH_SHORT).show();
+                ToastHelper.makeText(this, "远端文件请在网页中直接重命名", Toast.LENGTH_SHORT).show();
             } else {
                 promptRenameFileCustom(file, palette);
             }
@@ -3420,7 +3421,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         menuCard.addView(createMenuItem("📥   下载到 Download 目录", palette.textColor, v -> {
             dismissActiveDialog();
             if (isDir) {
-                Toast.makeText(this, "暂不支持直接下载整个文件夹", Toast.LENGTH_SHORT).show();
+                ToastHelper.makeText(this, "暂不支持直接下载整个文件夹", Toast.LENGTH_SHORT).show();
                 return;
             }
             confirmDownloadFileCustom(file, palette, rawPath);
@@ -3430,7 +3431,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         menuCard.addView(createMenuItem("🗑️   删除" + (isDir ? "文件夹" : ""), Color.parseColor("#FF5252"), v -> {
             dismissActiveDialog();
             if (sIsRemoteActive) {
-                Toast.makeText(this, "远端文件请在网页中直接删除", Toast.LENGTH_SHORT).show();
+                ToastHelper.makeText(this, "远端文件请在网页中直接删除", Toast.LENGTH_SHORT).show();
             } else {
                 confirmDeleteFileCustom(file, palette);
             }
@@ -3560,15 +3561,15 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             }
             File target = new File(file.getParentFile(), newName);
             if (target.exists()) {
-                Toast.makeText(this, "同名目标已存在", Toast.LENGTH_SHORT).show();
+                ToastHelper.makeText(this, "同名目标已存在", Toast.LENGTH_SHORT).show();
                 return;
             }
             if (file.renameTo(target)) {
-                Toast.makeText(this, "✓ 重命名成功", Toast.LENGTH_SHORT).show();
+                ToastHelper.makeText(this, "✓ 重命名成功", Toast.LENGTH_SHORT).show();
                 dismiss.run();
                 reloadWorkspaceFileTree();
             } else {
-                Toast.makeText(this, "重命名失败", Toast.LENGTH_SHORT).show();
+                ToastHelper.makeText(this, "重命名失败", Toast.LENGTH_SHORT).show();
             }
         });
         btnBar.addView(btnOk);
@@ -3664,11 +3665,11 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 ok = file.delete();
             }
             if (ok) {
-                Toast.makeText(this, "✓ 已删除", Toast.LENGTH_SHORT).show();
+                ToastHelper.makeText(this, "✓ 已删除", Toast.LENGTH_SHORT).show();
                 dismiss.run();
                 reloadWorkspaceFileTree();
             } else {
-                Toast.makeText(this, "删除失败", Toast.LENGTH_SHORT).show();
+                ToastHelper.makeText(this, "删除失败", Toast.LENGTH_SHORT).show();
             }
         });
         btnBar.addView(btnDelete);
@@ -3776,11 +3777,11 @@ public class QuickChatSheetActivity extends AppCompatActivity {
     private void performDownloadFileToDownloads(final File srcFile, final String rawPath, final OnFileDownloadedCallback callback) {
         if (!sIsRemoteActive) {
             if (srcFile == null || !srcFile.exists() || !srcFile.isFile()) {
-                Toast.makeText(this, "文件不可读或不存在", Toast.LENGTH_SHORT).show();
+                ToastHelper.makeText(this, "文件不可读或不存在", Toast.LENGTH_SHORT).show();
                 return;
             }
 
-            Toast.makeText(this, "正在保存至 Download 目录...", Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(this, "正在保存至 Download 目录...", Toast.LENGTH_SHORT).show();
             new Thread(() -> {
                 try {
                     File downloadDir = android.os.Environment.getExternalStoragePublicDirectory(
@@ -3834,25 +3835,25 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                                 rootOverlay.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK);
                             } catch (Throwable ignored) {}
                         }
-                        Toast.makeText(this, "✓ 已下载至 Download/" + finalDest.getName(), Toast.LENGTH_LONG).show();
+                        ToastHelper.makeText(this, "✓ 已下载至 Download/" + finalDest.getName(), Toast.LENGTH_LONG).show();
                         if (callback != null) callback.onDownloaded(finalDest);
                     });
                 } catch (Exception e) {
                     final String err = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
                     runOnUiThread(() -> {
-                        Toast.makeText(this, "下载失败: " + err, Toast.LENGTH_LONG).show();
+                        ToastHelper.makeText(this, "下载失败: " + err, Toast.LENGTH_LONG).show();
                     });
                 }
             }, "dsha-file-download").start();
         } else {
             // 远端文件流式下载
-            Toast.makeText(this, "正在从远端下载至手机 Download 目录...", Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(this, "正在从远端下载至手机 Download 目录...", Toast.LENGTH_SHORT).show();
             new Thread(() -> {
                 try {
                     ConfigStore cfg = new ConfigStore(this);
                     String remoteUrl = cfg.getRemoteDshUrl();
                     if (remoteUrl == null || remoteUrl.isEmpty()) {
-                        runOnUiThread(() -> Toast.makeText(this, "未配置远端 DSH 地址", Toast.LENGTH_SHORT).show());
+                        runOnUiThread(() -> ToastHelper.makeText(this, "未配置远端 DSH 地址", Toast.LENGTH_SHORT).show());
                         return;
                     }
 
@@ -3942,13 +3943,13 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                                 rootOverlay.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK);
                             } catch (Throwable ignored) {}
                         }
-                        Toast.makeText(this, "✓ 已下载至 Download/" + finalDest.getName(), Toast.LENGTH_LONG).show();
+                        ToastHelper.makeText(this, "✓ 已下载至 Download/" + finalDest.getName(), Toast.LENGTH_LONG).show();
                         if (callback != null) callback.onDownloaded(finalDest);
                     });
                 } catch (Exception e) {
                     final String err = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
                     runOnUiThread(() -> {
-                        Toast.makeText(this, "下载失败: " + err, Toast.LENGTH_LONG).show();
+                        ToastHelper.makeText(this, "下载失败: " + err, Toast.LENGTH_LONG).show();
                     });
                 }
             }, "dsha-remote-download").start();
@@ -3960,7 +3961,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         if (path == null || path.isEmpty()) return;
         File file = new File(path);
         if (!file.exists() || !file.isFile()) {
-            Toast.makeText(this, "文件不存在：" + path, Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(this, "文件不存在：" + path, Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -4044,7 +4045,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                             fileViewerContainer.addView(editor);
                         }
                     } else {
-                        Toast.makeText(this, "Office 结构复杂，已转为十六进制视图", Toast.LENGTH_SHORT).show();
+                        ToastHelper.makeText(this, "Office 结构复杂，已转为十六进制视图", Toast.LENGTH_SHORT).show();
                         loadSheetHexViewer(file);
                     }
                 });
@@ -4213,12 +4214,12 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 fos.flush();
             }
             if (tmp.renameTo(currentViewingFile) || (currentViewingFile.delete() && tmp.renameTo(currentViewingFile))) {
-                Toast.makeText(this, "✓ 已安全保存", Toast.LENGTH_SHORT).show();
+                ToastHelper.makeText(this, "✓ 已安全保存", Toast.LENGTH_SHORT).show();
             } else {
-                Toast.makeText(this, "保存覆盖失败", Toast.LENGTH_SHORT).show();
+                ToastHelper.makeText(this, "保存覆盖失败", Toast.LENGTH_SHORT).show();
             }
         } catch (Exception e) {
-            Toast.makeText(this, "保存出错：" + e.getMessage(), Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(this, "保存出错：" + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -4238,7 +4239,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             listView.setAdapter(currentPdfAdapter);
             fileViewerContainer.addView(listView);
         } catch (Exception e) {
-            Toast.makeText(this, "PDF打开异常，已切为十六进制", Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(this, "PDF打开异常，已切为十六进制", Toast.LENGTH_SHORT).show();
             loadSheetHexViewer(file);
         }
     }
@@ -4292,7 +4293,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                             .setPositiveButton("确定", null)
                             .show();
                 } else {
-                    Toast.makeText(this, "该文件不支持直接预览文本", Toast.LENGTH_SHORT).show();
+                    ToastHelper.makeText(this, "该文件不支持直接预览文本", Toast.LENGTH_SHORT).show();
                 }
             }
         });

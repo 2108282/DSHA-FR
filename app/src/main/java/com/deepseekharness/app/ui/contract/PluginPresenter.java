@@ -9,6 +9,7 @@ import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
 import android.widget.Toast;
+import com.deepseekharness.app.util.ToastHelper;
 
 import androidx.appcompat.app.AlertDialog;
 
@@ -171,7 +172,7 @@ public class PluginPresenter implements PluginActions {
             activity.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://dsha.cc/"))
                     .addCategory(Intent.CATEGORY_BROWSABLE));
         } catch (RuntimeException error) {
-            Toast.makeText(context, "无法打开浏览器，请在浏览器中访问 https://dsha.cc/", Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(context, "无法打开浏览器，请在浏览器中访问 https://dsha.cc/", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -186,7 +187,7 @@ public class PluginPresenter implements PluginActions {
         ClipboardManager clipboard = (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
         ClipData clip = clipboard == null ? null : clipboard.getPrimaryClip();
         if (clip == null || clip.getItemCount() == 0) {
-            Toast.makeText(context, "剪贴板没有链接", Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(context, "剪贴板没有链接", Toast.LENGTH_SHORT).show();
             return;
         }
         CharSequence text = clip.getItemAt(0).coerceToText(context);
@@ -201,14 +202,14 @@ public class PluginPresenter implements PluginActions {
         try {
             repository.install(PluginSource.parse(currentLinkInput));
         } catch (IllegalArgumentException error) {
-            Toast.makeText(context, error.getMessage(), Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(context, error.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
 
     @Override
     public void onImportClick(boolean alternative) {
         if (repository.isBusy()) {
-            Toast.makeText(context, "请等待当前插件操作完成后再导入", Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(context, "请等待当前插件操作完成后再导入", Toast.LENGTH_SHORT).show();
             return;
         }
         repository.selectionMessage("请选择插件压缩包；文件选择器无法返回时，可使用「其他文件选择器」。");
@@ -220,7 +221,7 @@ public class PluginPresenter implements PluginActions {
                 return;
             }
             repository.selectionMessage("未找到可用的文件选择器，请启用系统「文件」应用后重试。");
-            Toast.makeText(context, "没有可用的文件选择器", Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(context, "没有可用的文件选择器", Toast.LENGTH_SHORT).show();
         } catch (RuntimeException error) {
             repository.selectionMessage("无法打开文件选择器，请使用备用入口：" + error.getClass().getSimpleName());
         }
@@ -234,7 +235,7 @@ public class PluginPresenter implements PluginActions {
             if (item.exportable) names.add(item.name);
         }
         if (names.isEmpty()) {
-            Toast.makeText(context, "没有可导出的插件", Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(context, "没有可导出的插件", Toast.LENGTH_SHORT).show();
             return;
         }
         boolean[] checked = new boolean[names.size()];
@@ -364,7 +365,7 @@ public class PluginPresenter implements PluginActions {
         ClipboardManager cm = (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
         if (cm != null) {
             cm.setPrimaryClip(ClipData.newPlainText(label, content));
-            Toast.makeText(context, label + " 已复制", Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(context, label + " 已复制", Toast.LENGTH_SHORT).show();
         }
     }
 }

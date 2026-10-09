@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.widget.Toast;
+import com.deepseekharness.app.util.ToastHelper;
 
 import androidx.appcompat.app.AlertDialog;
 
@@ -40,7 +41,7 @@ public final class AboutDialog {
             ctx.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         } catch (Throwable t) {
-            Toast.makeText(ctx, "无法打开浏览器: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(ctx, "无法打开浏览器: " + t.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
 }

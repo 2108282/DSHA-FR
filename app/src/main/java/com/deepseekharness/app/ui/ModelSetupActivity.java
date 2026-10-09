@@ -164,7 +164,7 @@ public final class ModelSetupActivity extends AppCompatActivity {
         if (rowChooseBuiltin != null) rowChooseBuiltin.setOnClickListener(v -> chooseProvider());
         if (btnReloadConfig != null) btnReloadConfig.setOnClickListener(v -> {
             if (repository != null) {
-                Toast.makeText(this, t("正在重新读取配置…", "Reloading settings..."), Toast.LENGTH_SHORT).show();
+                ToastHelper.makeText(this, t("正在重新读取配置…", "Reloading settings..."), Toast.LENGTH_SHORT).show();
                 repository.load();
             }
         });
@@ -220,7 +220,7 @@ public final class ModelSetupActivity extends AppCompatActivity {
             if (msg != null && !msg.isEmpty()
                     && !msg.equals(t("模型设置已同步", "Model settings synced"))
                     && !msg.equals(t("正在同步…", "Syncing…"))) {
-                Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+                ToastHelper.makeText(this, msg, Toast.LENGTH_SHORT).show();
                 if (msg.contains("无法") || msg.contains("失败") || msg.contains("拒绝")
                         || msg.contains("answered") || msg.contains("401") || msg.contains("403")
                         || msg.contains("Error") || msg.contains("error")) {
@@ -255,7 +255,7 @@ public final class ModelSetupActivity extends AppCompatActivity {
             if (revision > observedSave) {
                 observedSave = revision;
                 draft.clear();
-                Toast.makeText(this, t("已成功保存并同步到 Web UI！", "Saved and synced to Web UI!"), Toast.LENGTH_SHORT).show();
+                ToastHelper.makeText(this, t("已成功保存并同步到 Web UI！", "Saved and synced to Web UI!"), Toast.LENGTH_SHORT).show();
                 showDirectory();
             }
         });
@@ -1017,7 +1017,7 @@ public final class ModelSetupActivity extends AppCompatActivity {
                 ModelConfiguration.validateModels(checked.toString(), true);
                 draft.modelList = checked;
                 renderModels();
-                Toast.makeText(this, t("模型已加入草稿，请点击主页面底部的「保存并同步」生效",
+                ToastHelper.makeText(this, t("模型已加入草稿，请点击主页面底部的「保存并同步」生效",
                         "Model added to draft. Tap Save below to sync."), Toast.LENGTH_SHORT).show();
                 dialog.dismiss();
             } catch (RuntimeException invalid) {
@@ -1062,7 +1062,7 @@ public final class ModelSetupActivity extends AppCompatActivity {
                 }
                 draft.extra = value;
                 dialog.dismiss();
-                Toast.makeText(this, t("已应用高级配置到草稿", "Applied advanced settings to draft"), Toast.LENGTH_SHORT).show();
+                ToastHelper.makeText(this, t("已应用高级配置到草稿", "Applied advanced settings to draft"), Toast.LENGTH_SHORT).show();
             } catch (RuntimeException invalid) {
                 tvError.setVisibility(View.VISIBLE);
                 tvError.setText(t("请输入有效 JSON 对象，连接、请求头、模型和密钥请在主表单修改。",
@@ -1087,7 +1087,7 @@ public final class ModelSetupActivity extends AppCompatActivity {
             if (!draft.key.isEmpty() && !draft.key.matches("[\\x21-\\x7E]+")) {
                 throw new IllegalArgumentException("KEY");
             }
-            Toast.makeText(this, t("正在连接服务商获取可用模型…", "Fetching available models..."), Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(this, t("正在连接服务商获取可用模型…", "Fetching available models..."), Toast.LENGTH_SHORT).show();
             repository.discoverModels(
                     s(draft.entry, "settingsNs"), draft.route, draft.endpoint, draft.protocol, draft.key);
         } catch (RuntimeException invalid) {
@@ -1096,7 +1096,7 @@ public final class ModelSetupActivity extends AppCompatActivity {
                     ? t("API Key 不应包含空格或中文换行。", "API keys must not contain whitespace or invalid characters.")
                     : t("请先填写有效的 HTTP/HTTPS API 地址。", "Enter a valid HTTP/HTTPS endpoint first.");
             updateStatusBanner(msg);
-            Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
+            ToastHelper.makeText(this, msg, Toast.LENGTH_LONG).show();
             new DshaDialogBuilder(this)
                     .setTitle(t("获取模型提示", "Notice"))
                     .setMessage(msg)
@@ -1221,7 +1221,7 @@ public final class ModelSetupActivity extends AppCompatActivity {
                     : t("已将 " + added + " 个模型合并到草稿；请点击下方「保存并同步」生效。",
                     "Added " + added + " models to draft. Tap Save below to sync.");
             updateStatusBanner(banner);
-            Toast.makeText(this, banner, Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(this, banner, Toast.LENGTH_SHORT).show();
             dialog.dismiss();
         });
 
@@ -1267,7 +1267,7 @@ public final class ModelSetupActivity extends AppCompatActivity {
                 throw new IllegalArgumentException("PROTOCOL");
             }
 
-            Toast.makeText(this, t("正在提交并保存配置…", "Saving configuration..."), Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(this, t("正在提交并保存配置…", "Saving configuration..."), Toast.LENGTH_SHORT).show();
             JsonObject next = draft.original.deepCopy();
             if (draft.extra != null) {
                 for (String k : new ArrayList<>(next.keySet())) {
@@ -1334,7 +1334,7 @@ public final class ModelSetupActivity extends AppCompatActivity {
                     ? t("请选择连接协议（如 OpenAI Chat Completions 或 Anthropic）。", "Select a protocol.")
                     : t("请检查模型目录：ID 不能重复，容量必须是正整数。", "Check models: unique IDs and positive integer capacities are required.");
             updateStatusBanner(msg);
-            Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
+            ToastHelper.makeText(this, msg, Toast.LENGTH_LONG).show();
             new DshaDialogBuilder(this)
                     .setTitle(t("保存失败", "Save failed"))
                     .setMessage(msg)

@@ -279,6 +279,6 @@ public class ConfigPresenter implements ConfigActions {
     }
 
     private void toast(String msg) {
-        mainHandler.post(() -> Toast.makeText(context, msg, Toast.LENGTH_SHORT).show());
+        com.deepseekharness.app.util.ToastHelper.show(context, msg);
     }
 }

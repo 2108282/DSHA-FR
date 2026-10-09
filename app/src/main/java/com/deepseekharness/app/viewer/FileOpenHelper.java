@@ -8,6 +8,7 @@ import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.webkit.MimeTypeMap;
 import android.widget.Toast;
+import com.deepseekharness.app.util.ToastHelper;
 
 import androidx.core.content.FileProvider;
 
@@ -24,7 +25,7 @@ public final class FileOpenHelper {
 
     public static void openWithSystem(Context context, File file) {
         if (context == null || file == null || !file.exists()) {
-            if (context != null) Toast.makeText(context, "文件不存在", Toast.LENGTH_SHORT).show();
+            if (context != null) ToastHelper.makeText(context, "文件不存在", Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -94,7 +95,7 @@ public final class FileOpenHelper {
             chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             context.startActivity(chooser);
         } catch (Exception e) {
-            Toast.makeText(context, "未找到支持打开此文件的应用", Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(context, "未找到支持打开此文件的应用", Toast.LENGTH_SHORT).show();
         }
     }
 

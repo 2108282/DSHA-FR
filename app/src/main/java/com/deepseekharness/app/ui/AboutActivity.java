@@ -11,6 +11,7 @@ import android.view.View;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
+import com.deepseekharness.app.util.ToastHelper;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
@@ -64,7 +65,7 @@ public final class AboutActivity extends AppCompatActivity {
         findViewById(R.id.about_row_upstream_repo).setOnClickListener(v -> openUrl(GITHUB_URL));
         findViewById(R.id.about_row_qq_group).setOnClickListener(v -> {
             copyToClipboard("QQ群号", QQ_GROUP);
-            Toast.makeText(this, "QQ 群号已复制：" + QQ_GROUP, Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(this, "QQ 群号已复制：" + QQ_GROUP, Toast.LENGTH_SHORT).show();
         });
     }
 
@@ -79,7 +80,7 @@ public final class AboutActivity extends AppCompatActivity {
             startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url))
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         } catch (Throwable t) {
-            Toast.makeText(this, "无法打开浏览器：" + t.getMessage(), Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(this, "无法打开浏览器：" + t.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
 

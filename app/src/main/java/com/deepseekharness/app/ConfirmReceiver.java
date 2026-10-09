@@ -142,11 +142,7 @@ public class ConfirmReceiver extends BroadcastReceiver {
         showStoppedNotification(ctx);
 
         // 5. 再走 Toast 提示
-        new Handler(Looper.getMainLooper()).post(() -> {
-            try {
-                Toast.makeText(ctx, "⚠️ 智能体任务已被用户紧急终止", Toast.LENGTH_SHORT).show();
-            } catch (Throwable ignored) {}
-        });
+        com.deepseekharness.app.util.ToastHelper.show(ctx, "⚠️ 智能体任务已被用户紧急终止");
     }
 
     private void handleTaskReply(Context ctx, Intent intent) {
@@ -178,11 +174,7 @@ public class ConfirmReceiver extends BroadcastReceiver {
         } catch (Throwable ignored) {}
 
         // 3. Toast 提示收到新指令
-        new Handler(Looper.getMainLooper()).post(() -> {
-            try {
-                Toast.makeText(ctx, "✓ 收到新指令：" + (text.length() > 20 ? text.substring(0, 20) + "…" : text), Toast.LENGTH_SHORT).show();
-            } catch (Throwable ignored) {}
-        });
+        com.deepseekharness.app.util.ToastHelper.show(ctx, "✓ 收到新指令：" + (text.length() > 20 ? text.substring(0, 20) + "…" : text));
 
         // 4. 唤起快捷对话抽屉继续会话
         try {

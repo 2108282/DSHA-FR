@@ -25,6 +25,7 @@ import android.widget.ListView;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+import com.deepseekharness.app.util.ToastHelper;
 
 import androidx.annotation.Nullable;
 
@@ -74,14 +75,14 @@ public class FileViewerActivity extends Activity {
 
         String path = getIntent().getStringExtra(EXTRA_PATH);
         if (path == null || path.isEmpty()) {
-            Toast.makeText(this, "文件路径为空", Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(this, "文件路径为空", Toast.LENGTH_SHORT).show();
             finish();
             return;
         }
 
         currentFile = new File(path);
         if (!currentFile.exists() || !currentFile.isFile()) {
-            Toast.makeText(this, "文件不存在：" + path, Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(this, "文件不存在：" + path, Toast.LENGTH_SHORT).show();
             finish();
             return;
         }
@@ -208,7 +209,7 @@ public class FileViewerActivity extends Activity {
     // ---------------- 1. Sora Editor 代码/文本编辑器 ----------------
     private void loadEditorView() {
         if (currentFile.length() > 5 * 1024 * 1024) {
-            Toast.makeText(this, "文件大于5MB，自动切换为十六进制查看", Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(this, "文件大于5MB，自动切换为十六进制查看", Toast.LENGTH_SHORT).show();
             loadHexView();
             return;
         }
@@ -226,7 +227,7 @@ public class FileViewerActivity extends Activity {
             byte[] bytes = java.nio.file.Files.readAllBytes(currentFile.toPath());
             codeEditor.setText(new String(bytes, StandardCharsets.UTF_8));
         } catch (Exception e) {
-            Toast.makeText(this, "读取文本失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(this, "读取文本失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
 
         contentContainer.addView(codeEditor);
@@ -246,12 +247,12 @@ public class FileViewerActivity extends Activity {
                 fos.flush();
             }
             if (tmp.renameTo(currentFile) || (currentFile.delete() && tmp.renameTo(currentFile))) {
-                Toast.makeText(this, "✓ 已安全保存", Toast.LENGTH_SHORT).show();
+                ToastHelper.makeText(this, "✓ 已安全保存", Toast.LENGTH_SHORT).show();
             } else {
-                Toast.makeText(this, "保存覆盖失败", Toast.LENGTH_SHORT).show();
+                ToastHelper.makeText(this, "保存覆盖失败", Toast.LENGTH_SHORT).show();
             }
         } catch (Exception e) {
-            Toast.makeText(this, "保存出错: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(this, "保存出错: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -267,10 +268,10 @@ public class FileViewerActivity extends Activity {
             if (bitmap != null) {
                 iv.setImageBitmap(bitmap);
             } else {
-                Toast.makeText(this, "无法解码图片", Toast.LENGTH_SHORT).show();
+                ToastHelper.makeText(this, "无法解码图片", Toast.LENGTH_SHORT).show();
             }
         } catch (Throwable t) {
-            Toast.makeText(this, "图片过大无法加载", Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(this, "图片过大无法加载", Toast.LENGTH_SHORT).show();
         }
         contentContainer.addView(iv);
     }
@@ -360,7 +361,7 @@ public class FileViewerActivity extends Activity {
             });
             contentContainer.addView(listView);
         } catch (Exception e) {
-            Toast.makeText(this, "PDF打开失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(this, "PDF打开失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
             loadHexView();
         }
     }
@@ -416,7 +417,7 @@ public class FileViewerActivity extends Activity {
                             .setPositiveButton("确定", null)
                             .show();
                 } else {
-                    Toast.makeText(this, "该文件不支持直接预览文本", Toast.LENGTH_SHORT).show();
+                    ToastHelper.makeText(this, "该文件不支持直接预览文本", Toast.LENGTH_SHORT).show();
                 }
             }
         });

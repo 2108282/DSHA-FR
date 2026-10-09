@@ -21,6 +21,7 @@ import android.widget.ProgressBar;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
+import com.deepseekharness.app.util.ToastHelper;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -406,7 +407,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
             exportPicker.launch(fileName);
         } catch (Exception error) {
             pendingExports.clear();
-            Toast.makeText(requireContext(), "无法打开保存位置选择器", Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(requireContext(), "无法打开保存位置选择器", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -526,10 +527,10 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
                     requireContext().getSystemService(Context.CLIPBOARD_SERVICE);
             if (cm != null) {
                 cm.setPrimaryClip(android.content.ClipData.newPlainText(label, text));
-                Toast.makeText(requireContext(), label + " 已复制", Toast.LENGTH_SHORT).show();
+                ToastHelper.makeText(requireContext(), label + " 已复制", Toast.LENGTH_SHORT).show();
             }
         } catch (Throwable t) {
-            Toast.makeText(requireContext(), "复制失败：" + t.getMessage(), Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(requireContext(), "复制失败：" + t.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -654,7 +655,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
                     } else if (item.builtin || item.official) {
                         copyText("来源网址", "https://dsha.cc/");
                     } else {
-                        Toast.makeText(requireContext(), "该插件为本地包导入，无在线来源网址", Toast.LENGTH_SHORT).show();
+                        ToastHelper.makeText(requireContext(), "该插件为本地包导入，无在线来源网址", Toast.LENGTH_SHORT).show();
                     }
                 });
             }
@@ -671,7 +672,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
             if (holder.btnUninstall != null) {
                 holder.btnUninstall.setOnClickListener(v -> {
                     if (item.builtin) {
-                        Toast.makeText(requireContext(), "DSHA 系统内置核心插件无法卸载", Toast.LENGTH_SHORT).show();
+                        ToastHelper.makeText(requireContext(), "DSHA 系统内置核心插件无法卸载", Toast.LENGTH_SHORT).show();
                     } else if (actions != null) {
                         actions.onItemActionClick(item);
                     }

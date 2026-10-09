@@ -3,6 +3,7 @@ package com.deepseekharness.app.ui;
 import android.content.Intent;
 import android.os.Bundle;
 import android.widget.Toast;
+import com.deepseekharness.app.util.ToastHelper;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
@@ -53,7 +54,7 @@ public final class WebDownloads {
                     } catch (RuntimeException error) {
                         model.pickerOpen = false;
                         model.acknowledge();
-                        Toast.makeText(activity, "无法打开保存位置选择器，请启用系统文件应用后重试", Toast.LENGTH_LONG).show();
+                        ToastHelper.makeText(activity, "无法打开保存位置选择器，请启用系统文件应用后重试", Toast.LENGTH_LONG).show();
                     }
                 } else if ("done".equals(state.phase()) || "error".equals(state.phase())) {
                     if ("error".equals(state.phase()) && model.canRetrySave()) {
@@ -66,7 +67,7 @@ public final class WebDownloads {
                                 .create();
                         dialog.show();
                     } else {
-                        Toast.makeText(activity, state.message(), Toast.LENGTH_LONG).show();
+                        ToastHelper.makeText(activity, state.message(), Toast.LENGTH_LONG).show();
                     }
                 }
             }
@@ -75,7 +76,7 @@ public final class WebDownloads {
 
     public void start(String base, String url, String cookie, String name, long size, InputStream body) {
         if (!model.download(base, url, cookie, name, size, body) && model.isBusy()) {
-            Toast.makeText(activity, "请先完成或取消当前文件下载", Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(activity, "请先完成或取消当前文件下载", Toast.LENGTH_SHORT).show();
         }
     }
 

@@ -16,6 +16,7 @@ import android.view.inputmethod.InputMethodManager;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+import com.deepseekharness.app.util.ToastHelper;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -275,7 +276,7 @@ public final class PtyTerminalFragment extends Fragment
     private void send(String seq) {
         PtySession s = session;
         if (s == null || !s.isRunning()) {
-            Toast.makeText(requireContext(), "会话已结束，切走再回来可重开", Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(requireContext(), "会话已结束，切走再回来可重开", Toast.LENGTH_SHORT).show();
             return;
         }
         s.write(seq);
@@ -334,7 +335,7 @@ public final class PtyTerminalFragment extends Fragment
 
     private void switchToSimple() {
         prefs(requireContext()).edit().putBoolean(KEY_PTY, false).apply();
-        Toast.makeText(requireContext(), "已切到简易终端（PTY 会话仍在后台）", Toast.LENGTH_SHORT).show();
+        ToastHelper.makeText(requireContext(), "已切到简易终端（PTY 会话仍在后台）", Toast.LENGTH_SHORT).show();
         try {
             // 容器 id 动态取，不硬编码 MainActivity 的布局细节
             int containerId = ((ViewGroup) requireView().getParent()).getId();
@@ -342,7 +343,7 @@ public final class PtyTerminalFragment extends Fragment
                     .replace(containerId, new TerminalFragment())
                     .commit();
         } catch (Throwable e) {
-            Toast.makeText(requireContext(), "请退出终端页再进来", Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(requireContext(), "请退出终端页再进来", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -433,7 +434,7 @@ public final class PtyTerminalFragment extends Fragment
                 if (cm != null && text != null) {
                     cm.setPrimaryClip(android.content.ClipData.newPlainText("term",
                             SensitiveData.redact(text)));
-                    Toast.makeText(requireContext(), "已复制", Toast.LENGTH_SHORT).show();
+                    ToastHelper.makeText(requireContext(), "已复制", Toast.LENGTH_SHORT).show();
                 }
             } catch (Throwable ignored) {
             }

@@ -31,9 +31,9 @@ public class MainActivity extends AppCompatActivity {
                     granted -> {
                         requestingLocalNetwork = false;
                         if (granted) com.deepseekharness.app.bridge.LocalNetworkAccess.applyConfiguredFeatures(this);
-                        else android.widget.Toast.makeText(this,
+                        else com.deepseekharness.app.util.ToastHelper.show(this,
                                 "未允许局域网访问；本机对话仍可使用，LAN / 无线 ADB 需在系统权限设置中开启",
-                                android.widget.Toast.LENGTH_LONG).show();
+                                android.widget.Toast.LENGTH_LONG);
                     });
 
     public void requestLocalNetwork() {

@@ -13,6 +13,7 @@ import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
+import com.deepseekharness.app.util.ToastHelper;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.core.graphics.ColorUtils;
@@ -257,12 +258,12 @@ public final class OverlayStyleDialog {
                 .setPositiveButton("保存", (d, w) -> {
                     saveRunnable.run();
                     OverlayController.applyStyleNow(app);
-                    Toast.makeText(context, "已保存（下一条输出即生效）", Toast.LENGTH_SHORT).show();
+                    ToastHelper.makeText(context, "已保存（下一条输出即生效）", Toast.LENGTH_SHORT).show();
                 })
                 .setNeutralButton("预览", (d, w) -> {
                     saveRunnable.run();
                     if (!OverlayController.permitted(context)) {
-                        Toast.makeText(context, "未开启悬浮窗权限，请先在系统设置中允许", Toast.LENGTH_LONG).show();
+                        ToastHelper.makeText(context, "未开启悬浮窗权限，请先在系统设置中允许", Toast.LENGTH_LONG).show();
                         return;
                     }
                     OverlayController.applyStyleNow(app);

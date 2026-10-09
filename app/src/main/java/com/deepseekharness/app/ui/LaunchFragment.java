@@ -143,7 +143,7 @@ public class LaunchFragment extends Fragment implements LaunchPresenter.ViewCall
         boolean lan = requireContext().getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE)
                 .getBoolean(Constants.KEY_LAN_MODE, false);
         if (!lan) {
-            Toast.makeText(requireContext(), "局域网访问未授权，请单击进入设置开启", Toast.LENGTH_SHORT).show();
+            com.deepseekharness.app.util.ToastHelper.show(requireContext(), "局域网访问未授权，请单击进入设置开启");
             return;
         }
         String ip = HarnessController.getLanAddress();
@@ -152,7 +152,7 @@ public class LaunchFragment extends Fragment implements LaunchPresenter.ViewCall
                     + LanProxyService.getLanToken(requireContext());
             copyAddr("局域网地址", addr);
         } else {
-            Toast.makeText(requireContext(), "未检测到有效局域网 IP（请确认已连接 WiFi）", Toast.LENGTH_SHORT).show();
+            com.deepseekharness.app.util.ToastHelper.show(requireContext(), "未检测到有效局域网 IP（请确认已连接 WiFi）");
         }
     }
 
@@ -344,10 +344,10 @@ public class LaunchFragment extends Fragment implements LaunchPresenter.ViewCall
                     requireContext().getSystemService(Context.CLIPBOARD_SERVICE);
             if (cm != null) {
                 cm.setPrimaryClip(android.content.ClipData.newPlainText(label, addr));
-                Toast.makeText(requireContext(), label + " 已复制", Toast.LENGTH_SHORT).show();
+                com.deepseekharness.app.util.ToastHelper.show(requireContext(), label + " 已复制");
             }
         } catch (Throwable t) {
-            Toast.makeText(requireContext(), "复制失败：" + t.getMessage(), Toast.LENGTH_SHORT).show();
+            com.deepseekharness.app.util.ToastHelper.show(requireContext(), "复制失败：" + t.getMessage());
         }
     }
 }

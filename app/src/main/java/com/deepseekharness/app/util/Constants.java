@@ -98,6 +98,8 @@ public final class Constants {
     public static final String KEY_CONTAINER_RUNTIME = "container_runtime";
     /** 常驻后台服务通知（检测核心运转）。 */
     public static final String KEY_PERSISTENT_NOTIFICATION = "persistent_notification";
+    /** Toast 弹窗通知开关。 */
+    public static final String KEY_TOAST_NOTIFICATION = "toast_notification";
     /** 快捷抽屉反色开关（独立深色反色，与主应用黑夜白天按钮完全分离）。 */
     public static final String KEY_SHEET_INVERT_COLOR = "sheet_invert_color";
     /** 快捷抽屉莫奈取色开关（提取系统壁纸 Material You 调色板）。 */
