@@ -139,7 +139,66 @@ public final class BackupManager {
               .append("printf 'DEEPSEEK_API_KEY=%s\\n' ").append(ShellQuote.arg(apiKey.trim())).append(" > /root/.dsh/.env\n");
         }
 
-        if (paths.length == 0 || scope == BackupScope.FULL) {
+        if (scope == BackupScope.TOOLS) {
+            // 工具、技能与 MCP 独立打包：收集技能、自定义/后装 bin、npm 扩展、python 库与 mcp 凭据到 /root/.dsha-tools
+            sb.append("python3 -c '\n")
+              .append("import os, sys, shutil, json, subprocess\n")
+              .append("stage = \"/root/.dsha-tools\"\n")
+              .append("shutil.rmtree(stage, ignore_errors=True)\n")
+              .append("os.makedirs(stage, exist_ok=True)\n")
+              .append("if os.path.isdir(\"/root/.dsh/skills\"):\n")
+              .append("    shutil.copytree(\"/root/.dsh/skills\", os.path.join(stage, \"skills\"), dirs_exist_ok=True)\n")
+              .append("bin_stage = os.path.join(stage, \"bin\")\n")
+              .append("os.makedirs(bin_stage, exist_ok=True)\n")
+              .append("SYSTEM_BINS = {\"node\", \"pnpm\", \"npm\", \"npx\", \"corepack\", \"dsh\", \"pip\", \"pip3\", \"pip3.12\"}\n")
+              .append("bin_links = {}\n")
+              .append("if os.path.isdir(\"/usr/local/bin\"):\n")
+              .append("    for name in os.listdir(\"/usr/local/bin\"):\n")
+              .append("        if name in SYSTEM_BINS or name.startswith(\".\"):\n")
+              .append("            continue\n")
+              .append("        p = os.path.join(\"/usr/local/bin\", name)\n")
+              .append("        if os.path.islink(p):\n")
+              .append("            bin_links[name] = os.readlink(p)\n")
+              .append("        elif os.path.isfile(p):\n")
+              .append("            shutil.copy2(p, os.path.join(bin_stage, name))\n")
+              .append("with open(os.path.join(stage, \"bin-links.json\"), \"w\", encoding=\"utf-8\") as f:\n")
+              .append("    json.dump(bin_links, f, ensure_ascii=False, indent=2)\n")
+              .append("nm_stage = os.path.join(stage, \"node_modules\")\n")
+              .append("os.makedirs(nm_stage, exist_ok=True)\n")
+              .append("BASE_MODULES = {\"@deepseek-ai\", \"npm\", \"corepack\"}\n")
+              .append("if os.path.isdir(\"/usr/local/lib/node_modules\"):\n")
+              .append("    for item in os.listdir(\"/usr/local/lib/node_modules\"):\n")
+              .append("        if item in BASE_MODULES:\n")
+              .append("            continue\n")
+              .append("        src_p = os.path.join(\"/usr/local/lib/node_modules\", item)\n")
+              .append("        dst_p = os.path.join(nm_stage, item)\n")
+              .append("        if os.path.islink(src_p):\n")
+              .append("            os.symlink(os.readlink(src_p), dst_p)\n")
+              .append("        elif os.path.isdir(src_p):\n")
+              .append("            ign = lambda d, files: {f for f in files if f in (\"__pycache__\", \".git\", \".cache\")}\n")
+              .append("            shutil.copytree(src_p, dst_p, symlinks=True, ignore=ign, dirs_exist_ok=True)\n")
+              .append("py_stage = os.path.join(stage, \"python-packages\")\n")
+              .append("os.makedirs(py_stage, exist_ok=True)\n")
+              .append("for dist_dir in [\"/usr/local/lib/python3.12/dist-packages\", \"/usr/local/lib/python3/dist-packages\"]:\n")
+              .append("    if os.path.isdir(dist_dir):\n")
+              .append("        ign = lambda d, files: {f for f in files if f in (\"__pycache__\",)}\n")
+              .append("        shutil.copytree(dist_dir, py_stage, symlinks=True, ignore=ign, dirs_exist_ok=True)\n")
+              .append("        break\n")
+              .append("try:\n")
+              .append("    reqs = subprocess.check_output([\"pip\", \"freeze\"], text=True, stderr=subprocess.DEVNULL)\n")
+              .append("    with open(os.path.join(stage, \"requirements.txt\"), \"w\", encoding=\"utf-8\") as f:\n")
+              .append("        f.write(reqs)\n")
+              .append("except Exception:\n")
+              .append("    pass\n")
+              .append("mcp_stage = os.path.join(stage, \"mcp\")\n")
+              .append("os.makedirs(mcp_stage, exist_ok=True)\n")
+              .append("for p in [\"/sdcard/Download/DSHA/工作区/.penpot_token\", \"/root/.penpot_token\", \"/root/.dsh/mcp.json\"]:\n")
+              .append("    if os.path.isfile(p):\n")
+              .append("        shutil.copy2(p, os.path.join(mcp_stage, os.path.basename(p)))\n")
+              .append("' 2>/dev/null || true\n");
+            sb.append("set --\n")
+              .append("[ -d .dsha-tools ] && set -- \"$@\" .dsha-tools\n");
+        } else if (paths.length == 0 || scope == BackupScope.FULL) {
             // 全量备份：动态扫描 workspace.json 以及默认工作区，把用户工作区项目文件收集进 .dsha-workspaces 一同归档
             sb.append("python3 -c '\n")
               .append("import json, os, shutil\n")
@@ -201,7 +260,7 @@ public final class BackupManager {
         } else {
             sb.append("tar -czf .dsha-backup.tar.gz --exclude='.env' --exclude='*/.env' --exclude='*.env' --ignore-failed-read \"$@\" || { echo TAR_FAIL; exit 1; }\n");
         }
-        sb.append("rm -rf .dsha-workspaces .dsha-backup-manifest.json\n")
+        sb.append("rm -rf .dsha-workspaces .dsha-tools .dsha-backup-manifest.json\n")
           .append("test -s .dsha-backup.tar.gz || { echo EMPTY; exit 1; }\n")
           .append("CNT=$(tar -tzf .dsha-backup.tar.gz 2>/dev/null | wc -l)\n")
           .append("echo \"VERIFY_ENTRIES=$CNT\"\n")

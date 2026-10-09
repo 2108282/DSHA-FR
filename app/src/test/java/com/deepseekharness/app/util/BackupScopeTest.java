@@ -12,6 +12,7 @@ public class BackupScopeTest {
 
     @Test
     public void onlyFullBackupUsesLegacyPrefix() {
+        assertEquals("DSHA-tools-", BackupScope.fileNamePrefix(BackupScope.TOOLS));
         assertEquals("DSHA-backup-", BackupScope.fileNamePrefix(BackupScope.FULL));
         assertEquals("DSHA-sessions-", BackupScope.fileNamePrefix(BackupScope.SESSIONS));
         assertEquals("DSHA-plugins-", BackupScope.fileNamePrefix(BackupScope.PLUGINS));
@@ -21,6 +22,7 @@ public class BackupScopeTest {
     @Test
     public void onlyFullIsVisibleToLegacyScan() {
         assertTrue(BackupScope.visibleToLegacyScan(BackupScope.FULL));
+        assertFalse(BackupScope.visibleToLegacyScan(BackupScope.TOOLS));
         assertFalse(BackupScope.visibleToLegacyScan(BackupScope.SESSIONS));
         assertFalse(BackupScope.visibleToLegacyScan(BackupScope.PLUGINS));
         assertFalse(BackupScope.visibleToLegacyScan(BackupScope.SETTINGS));
@@ -28,6 +30,8 @@ public class BackupScopeTest {
 
     @Test
     public void fromFileNameMatchesPrefix() {
+        assertEquals(BackupScope.TOOLS,
+                BackupScope.fromFileName("/some/dir/DSHA-tools-2026-01-01.tar.gz"));
         assertEquals(BackupScope.SESSIONS,
                 BackupScope.fromFileName("/some/dir/DSHA-sessions-2026-01-01.tar.gz"));
         assertEquals(BackupScope.PLUGINS,
