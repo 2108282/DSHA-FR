@@ -948,6 +948,11 @@ public class HarnessController {
 
     public void resumeIfFrozen() {
         if (!config.isIdleFreezeEnabled()) return;
+        // 关键门禁：只有底层明确处于 FROZEN 状态时才执行解冻唤醒，彻底杜绝无谓的重复唤醒与日志刷屏
+        File stateFile = new File("/data/adb/dsha/run/freezer.state");
+        if (!stateFile.exists()) {
+            return;
+        }
         new Thread(() -> {
             try {
                 execRootCmd("sh /data/adb/dsha/scripts/idle-freezer.sh wake");

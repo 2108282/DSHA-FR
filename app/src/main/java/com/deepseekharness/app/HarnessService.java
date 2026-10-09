@@ -343,14 +343,14 @@ public class HarnessService extends Service {
     }
 
     private Notification buildNotification(String title, String text) {
+        return buildNotification(title, text, false);
+    }
+
+    private Notification buildNotification(String title, String text, boolean isFrozen) {
         Intent sheetIntent = new Intent(this, com.deepseekharness.app.ui.QuickChatSheetActivity.class)
                 .setAction("com.deepseekharness.app.OPEN_SHEET")
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS);
         PendingIntent sheetPi = PendingIntent.getActivity(this, 1, sheetIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-
-        Intent stop = new Intent(this, HarnessService.class).setAction(ACTION_STOP);
-        PendingIntent stopPi = PendingIntent.getService(this, 2, stop,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         NotificationCompat.Builder b = new NotificationCompat.Builder(this, CHANNEL_ID)
@@ -358,9 +358,7 @@ public class HarnessService extends Service {
                 .setContentTitle(title)
                 .setContentText(text)
                 .setContentIntent(sheetPi)
-                .setOngoing(true)
-                .addAction(0, "💬 打开抽屉", sheetPi)
-                .addAction(0, "🛑 停止", stopPi);
+                .setOngoing(true);
 
         try {
             android.graphics.Bitmap bmp = android.graphics.BitmapFactory.decodeResource(getResources(), R.drawable.ic_whale_logo);
@@ -368,6 +366,23 @@ public class HarnessService extends Service {
         } catch (Throwable ignored) {}
 
         return b.build();
+    }
+
+    public static void updateFreezeState(boolean frozen) {
+        HarnessService s = currentInstance;
+        if (s == null) return;
+        try {
+            ConfigStore cfg = new ConfigStore(s);
+            if (!cfg.isPersistentNotificationEnabled()) return;
+            NotificationManager nm = (NotificationManager) s.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm != null) {
+                if (frozen) {
+                    nm.notify(NOTIF_ID, s.buildNotification("DSHA 已休眠 (0功耗)", "30分钟无任务已挂起，划出抽屉或访问即刻唤醒", true));
+                } else {
+                    nm.notify(NOTIF_ID, s.buildNotification("DSHA 运行中", "大肥鱼核心运行中", false));
+                }
+            }
+        } catch (Throwable ignored) {}
     }
 
     // ================= 核心运转与常驻通知联动管理 =================

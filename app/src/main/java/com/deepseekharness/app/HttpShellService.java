@@ -522,6 +522,10 @@ public final class HttpShellService {
                 result = appTaskRunning(path);
             } else if (path.startsWith("/app/task/cancel")) {
                 result = appTaskCancel();
+            } else if (path.startsWith("/app/freeze/state")) {
+                boolean frozen = "1".equals(getParam(queryOf(path), "frozen", "0"));
+                HarnessService.updateFreezeState(frozen);
+                result = "OK";
             } else if (path.startsWith("/app/notify")) {
                 // agent 通过 App 发通知栏提醒（App 层交互）
                 result = appNotify(path);
