@@ -2007,11 +2007,22 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 String sub = path.substring(idx + 9);
                 int slash = sub.indexOf('/');
                 if (slash >= 0) {
-                    path = "/sdcard/Download/DSHA/工作区/" + sub.substring(slash + 1);
+                    String tail = sub.substring(slash + 1);
+                    if (tail.startsWith("/")) {
+                        path = tail;
+                    } else if (tail.startsWith("sdcard/") || tail.startsWith("storage/")) {
+                        path = "/" + tail;
+                    } else {
+                        path = "/sdcard/Download/DSHA/工作区/" + tail;
+                    }
                 }
             }
         } else if (!path.startsWith("/")) {
-            path = "/sdcard/Download/DSHA/工作区/" + path;
+            if (path.startsWith("sdcard/") || path.startsWith("storage/")) {
+                path = "/" + path;
+            } else {
+                path = "/sdcard/Download/DSHA/工作区/" + path;
+            }
         }
 
         final String finalPath = path;
@@ -2043,6 +2054,14 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 File dl = new File(finalPath.replace("/Download/DSHA/工作区/", "/Download/"));
                 if (dl.exists()) f = dl;
             }
+
+            // Root 特权保障：赋予所有人可读权限，确保 MT 管理器和安装器畅通读取物理文件
+            if (f.exists()) {
+                try {
+                    f.setReadable(true, false);
+                } catch (Throwable ignored) {}
+            }
+
             android.util.Log.i("DSHA_OPEN", "action=" + action + " rawPath=" + origRawPath + " resolved=" + f.getAbsolutePath() + " exists=" + f.exists());
             if (action == 2) {
                 currentAct.showWorkspaceFileActionMenu(f, origRawPath, touchX, touchY);
@@ -2052,11 +2071,48 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                         currentAct.rootOverlay.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
                     } catch (Throwable ignored) {}
                 }
-                com.deepseekharness.app.viewer.FileOpenHelper.openWithSystem(currentAct, f);
+                // 工作区内部维持原逻辑不变；工作区外部通过 Root 特权直通外部应用打开
+                boolean isInside = f.getAbsolutePath().startsWith("/sdcard/Download/DSHA/工作区/")
+                        || f.getAbsolutePath().startsWith("/storage/emulated/0/Download/DSHA/工作区/");
+                if (isInside) {
+                    com.deepseekharness.app.viewer.FileOpenHelper.openWithSystem(currentAct, f);
+                } else {
+                    openExternalFileWithRoot(currentAct, f);
+                }
             } else {
                 currentAct.openFileInSheet(finalPath);
             }
         });
+    }
+
+    /**
+     * 针对工作区外部的文件，使用 Root 特权安全调起外部应用（如 MT 管理器、系统安装器等）：
+     * 1. 赋予全局只读权限 (chmod 666)，破除普通应用跨目录读取限制；
+     * 2. 以 Root 特权调用 am start 直接携带 file:// 绝对物理路径，确保 MT 管理器和安装器准确识别并定位。
+     */
+    private static void openExternalFileWithRoot(Context context, File f) {
+        if (f == null || !f.exists()) {
+            if (context != null) Toast.makeText(context, "文件不存在", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        new Thread(() -> {
+            try {
+                String abs = f.getAbsolutePath();
+                // 1. Root 赋权 666，确保第三方应用绝对可读
+                Runtime.getRuntime().exec(new String[]{"su", "-c", "chmod 666 '" + abs + "'"}).waitFor();
+                // 2. 以 Root 发起 am start，携带 file:// 绝对物理路径
+                String mime = com.deepseekharness.app.viewer.FileOpenHelper.getMimeType(f.getName());
+                String cmd = "am start -a android.intent.action.VIEW -d 'file://" + abs + "' -t '" + mime + "'";
+                Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
+            } catch (Throwable t) {
+                // 发生异常时回退到原生系统方法
+                if (context != null && context instanceof Activity) {
+                    ((Activity) context).runOnUiThread(() ->
+                            com.deepseekharness.app.viewer.FileOpenHelper.openWithSystem(context, f)
+                    );
+                }
+            }
+        }, "dsha-root-open").start();
     }
 
     public static class NativeBridgeInterface {
