@@ -59,12 +59,6 @@ public final class FileOpenHelper {
             intent.setDataAndType(fileUri, mime);
             intent.addCategory(Intent.CATEGORY_DEFAULT);
 
-            // 若是 APK 安装包，附带安装器关键信任标识
-            if ("application/vnd.android.package-archive".equals(mime)) {
-                intent.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
-                intent.putExtra(Intent.EXTRA_INSTALLER_PACKAGE_NAME, context.getPackageName());
-            }
-
             intent.setClipData(ClipData.newRawUri("", contentUri));
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
