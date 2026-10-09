@@ -106,7 +106,8 @@ public class LaunchPresenter implements LaunchActions {
             controller.tryRecoverRunningUrl();
         }
 
-        // 2. 状态标题与 Busy 指示
+        // 2. 状态标题与 Busy 指示 (优先纯本地只读文件检查休眠态，零网络零开销，绝对不吵醒核心)
+        boolean isFrozen = new java.io.File("/data/adb/dsha/run/freezer.state").exists();
         String title;
         boolean busy;
         if (stopping) {
@@ -118,6 +119,9 @@ public class LaunchPresenter implements LaunchActions {
         } else if (starting) {
             title = "DSH 启动中…";
             busy = true;
+        } else if (isFrozen && (ready || running)) {
+            title = "DSH 休眠中（0功耗）";
+            busy = false;
         } else if (ready) {
             title = "DSH 已就绪，可进入";
             busy = false;
@@ -187,6 +191,8 @@ public class LaunchPresenter implements LaunchActions {
         String statusDesc;
         if (!customStatusMsg.isEmpty()) {
             statusDesc = customStatusMsg;
+        } else if (isFrozen && (ready || running)) {
+            statusDesc = "闲置满30分钟已挂起省电，点击「进入」即刻秒级唤醒";
         } else if (ready) {
             statusDesc = "环境完整，核心进程运行正常（端口：" + getSavedPort() + "）";
         } else if (running) {
@@ -229,10 +235,12 @@ public class LaunchPresenter implements LaunchActions {
         boolean hasUrl = !controller.getWebAuthUrl().isEmpty();
 
         if (running && hasUrl) {
+            controller.resumeIfFrozen();
             openExternalBrowser();
             return;
         }
         if (running && !hasUrl) {
+            controller.resumeIfFrozen();
             com.deepseekharness.app.util.ToastHelper.show(context, "正在同步鉴权凭据，请稍候…");
             controller.tryRecoverRunningUrl();
             return;
