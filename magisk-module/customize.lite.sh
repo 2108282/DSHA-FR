@@ -122,12 +122,12 @@ else
 fi
 
 # -------------------------------------------------------------
-# 【第 2 步】：是否覆盖五大基础控制脚本？(start/stop/status/term/lan-proxy)
+# 【第 2 步】：是否覆盖六大基础控制脚本？(start/stop/status/term/lan-proxy/idle-freezer)
 # -------------------------------------------------------------
-if choose_step "【第 2 步】：是否覆盖五大基础控制脚本？(start/stop/status/term/lan-proxy)" "覆盖基础脚本" "保留当前已有脚本"; then
-    ui_print "- 正在覆盖五大基础控制脚本至 $SCRIPTS_DIR ..."
+if choose_step "【第 2 步】：是否覆盖六大基础控制脚本？(start/stop/status/term/lan-proxy/idle-freezer)" "覆盖基础脚本" "保留当前已有脚本"; then
+    ui_print "- 正在覆盖六大基础控制脚本至 $SCRIPTS_DIR ..."
     mkdir -p "$SCRIPTS_DIR" "$MODPATH/scripts"
-    for base_script in start.sh stop.sh status.sh term.sh lan-proxy.sh; do
+    for base_script in start.sh stop.sh status.sh term.sh lan-proxy.sh idle-freezer.sh; do
         if [ -f "$TMP_STAGE/scripts/$base_script" ]; then
             cp -f "$TMP_STAGE/scripts/$base_script" "$SCRIPTS_DIR/$base_script"
             cp -f "$TMP_STAGE/scripts/$base_script" "$MODPATH/scripts/$base_script"
@@ -136,7 +136,7 @@ if choose_step "【第 2 步】：是否覆盖五大基础控制脚本？(start/
         fi
     done
 
-    ui_print "✓ 五大基础控制脚本覆盖完毕！"
+    ui_print "✓ 六大基础控制脚本覆盖完毕！"
 else
     ui_print "- 已跳过基础脚本覆盖，当前脚本保持原样。"
 fi

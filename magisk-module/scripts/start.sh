@@ -446,6 +446,13 @@ if [ -f "$RUN_DIR/lan_enabled" ]; then
     [ -f "$RUN_DIR/lan-proxy.pid" ] && kill -0 "$(cat "$RUN_DIR/lan-proxy.pid" 2>/dev/null)" 2>/dev/null && echo "LAN_STATUS:RUNNING PORT:3081"
 fi
 
+# 联动闲置休眠模式守护
+if [ -f "$RUN_DIR/idle_freeze_enabled" ]; then
+    if [ -f "/data/adb/dsha/scripts/idle-freezer.sh" ]; then
+        sh "/data/adb/dsha/scripts/idle-freezer.sh" start >/dev/null 2>&1 || true
+    fi
+fi
+
 # 动态同步 KernelSU / Magisk 模块描述状态
 for p_mod in "/data/adb/modules/dsha_native/module.prop" \
              "/data/adb/modules_update/dsha_native/module.prop"; do

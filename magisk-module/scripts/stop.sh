@@ -23,6 +23,11 @@ else
     rm -f "$RUN_DIR/lan-proxy.pid" 2>/dev/null || true
 fi
 
+# 1.5 终止闲置休眠守护进程（若存在）
+if [ -f "/data/adb/dsha/scripts/idle-freezer.sh" ]; then
+    sh "/data/adb/dsha/scripts/idle-freezer.sh" stop >/dev/null 2>&1 || true
+fi
+
 # 2. 优先按 PID 精准终止主进程与属于该容器的直接子进程（毫秒级完成，杜绝遍历 /proc 的巨大卡死开销）
 if [ -f "$PID_FILE" ]; then
     MAIN_PID=$(cat "$PID_FILE" 2>/dev/null)
