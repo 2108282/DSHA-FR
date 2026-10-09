@@ -377,7 +377,7 @@ public class HarnessService extends Service {
             NotificationManager nm = (NotificationManager) s.getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm != null) {
                 if (frozen) {
-                    nm.notify(NOTIF_ID, s.buildNotification("DSHA 已休眠 (0功耗)", "30分钟无任务已挂起，划出抽屉或访问即刻唤醒", true));
+                    nm.notify(NOTIF_ID, s.buildNotification("DSHA 休眠中", "大肥鱼休眠中", true));
                 } else {
                     nm.notify(NOTIF_ID, s.buildNotification("DSHA 运行中", "大肥鱼核心运行中", false));
                 }
