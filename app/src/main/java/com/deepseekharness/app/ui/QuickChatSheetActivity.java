@@ -2106,8 +2106,8 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
             } catch (Throwable t) {
                 // 发生异常时回退到原生系统方法
-                if (context != null && context instanceof Activity) {
-                    ((Activity) context).runOnUiThread(() ->
+                if (context != null) {
+                    new Handler(Looper.getMainLooper()).post(() ->
                             com.deepseekharness.app.viewer.FileOpenHelper.openWithSystem(context, f)
                     );
                 }
