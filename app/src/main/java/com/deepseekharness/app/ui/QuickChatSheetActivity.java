@@ -2062,9 +2062,10 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 } catch (Throwable ignored) {}
             }
 
-            android.util.Log.i("DSHA_OPEN", "action=" + action + " rawPath=" + origRawPath + " resolved=" + f.getAbsolutePath() + " exists=" + f.exists());
+            final File targetFile = f;
+            android.util.Log.i("DSHA_OPEN", "action=" + action + " rawPath=" + origRawPath + " resolved=" + targetFile.getAbsolutePath() + " exists=" + targetFile.exists());
             if (action == 2) {
-                currentAct.showWorkspaceFileActionMenu(f, origRawPath, touchX, touchY);
+                currentAct.showWorkspaceFileActionMenu(targetFile, origRawPath, touchX, touchY);
             } else if (action == 1 || action == 3) {
                 if (currentAct.rootOverlay != null) {
                     try {
@@ -2072,16 +2073,16 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                     } catch (Throwable ignored) {}
                 }
                 // 工作区内部维持原逻辑不变；工作区外部通过 Root 预先放开文件读取权限并呼出系统打开方式选择面板
-                boolean isInside = f.getAbsolutePath().startsWith("/sdcard/Download/DSHA/工作区/")
-                        || f.getAbsolutePath().startsWith("/storage/emulated/0/Download/DSHA/工作区/");
+                boolean isInside = targetFile.getAbsolutePath().startsWith("/sdcard/Download/DSHA/工作区/")
+                        || targetFile.getAbsolutePath().startsWith("/storage/emulated/0/Download/DSHA/工作区/");
                 if (!isInside) {
                     new Thread(() -> {
                         try {
-                            Runtime.getRuntime().exec(new String[]{"su", "-c", "chmod 666 '" + f.getAbsolutePath() + "'"}).waitFor();
+                            Runtime.getRuntime().exec(new String[]{"su", "-c", "chmod 666 '" + targetFile.getAbsolutePath() + "'"}).waitFor();
                         } catch (Throwable ignored) {}
                     }).start();
                 }
-                com.deepseekharness.app.viewer.FileOpenHelper.openWithSystem(currentAct, f);
+                com.deepseekharness.app.viewer.FileOpenHelper.openWithSystem(currentAct, targetFile);
             } else {
                 currentAct.openFileInSheet(finalPath);
             }
