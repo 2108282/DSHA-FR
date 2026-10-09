@@ -1101,7 +1101,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 errorHint.setVisibility(View.GONE);
             }
             if (sIsRemoteActive) {
-                // 远端模式刷新：刷新当前激活的远端地址
+                // 远端模式刷新：优先执行页面级轻量重连与安全刷新，保留 SPA 会话与鉴权 Cookie
                 String activeUrl = ConfigStore.get(this).getActiveRemoteDshUrl();
                 if (activeUrl == null || activeUrl.isEmpty()) {
                     ToastHelper.makeText(this, "未开启任何远端连接", Toast.LENGTH_SHORT).show();
@@ -1111,7 +1111,17 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 ToastHelper.makeText(this, "正在重新连接远端 DSH...", Toast.LENGTH_SHORT).show();
                 ensureRemoteWebViewLoaded(activeUrl);
                 if (sRemoteWebView != null) {
-                    sRemoteWebView.loadUrl(activeUrl);
+                    String curUrl = sRemoteWebView.getUrl();
+                    boolean hasValidCurUrl = curUrl != null && !curUrl.isEmpty() && !"about:blank".equals(curUrl);
+                    sRemoteWebLoaded = false;
+                    if (hasValidCurUrl) {
+                        // 优先通知前端连接层重连，并执行 WebView 原生页面 reload，消除硬 loadUrl 带初始 Token 导致的鉴权冲突与样式错乱
+                        sRemoteWebView.evaluateJavascript("try { window.dispatchEvent(new Event('online')); } catch(e){}", null);
+                        sRemoteWebView.reload();
+                    } else {
+                        sLoadedRemoteUrl = activeUrl;
+                        sRemoteWebView.loadUrl(activeUrl);
+                    }
                 }
             } else {
                 // 本地模式刷新：重新获取Token并刷新
@@ -1893,7 +1903,9 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         if (sRemoteWebView == null) {
             sRemoteWebView = createConfiguredWebView();
         }
-        if (remoteUrl != null && (!remoteUrl.equals(sLoadedRemoteUrl) || !sRemoteWebLoaded)) {
+        String curUrl = sRemoteWebView.getUrl();
+        boolean isBlank = curUrl == null || curUrl.isEmpty() || "about:blank".equals(curUrl);
+        if (remoteUrl != null && (!remoteUrl.equals(sLoadedRemoteUrl) || !sRemoteWebLoaded || isBlank)) {
             sLoadedRemoteUrl = remoteUrl;
             sRemoteWebLoaded = false;
             if (progressBar != null) progressBar.setVisibility(View.VISIBLE);
@@ -1977,13 +1989,17 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             ensureWebViewParentClean(sLocalWebView);
         }
 
-        // 2. 远端槽位
+        // 2. 远端槽位：保留常驻实例，仅当远端未激活时暂停后台渲染释放GPU，绝不误清空为 about:blank
         if (sIsRemoteActive) {
             ensureRemoteWebViewLoaded(activeRemoteUrl);
-        } else if (sRemoteWebView != null) {
-            // 开关已关闭，彻底释放网络连接与心跳
+        } else if (!hasActiveRemote && sRemoteWebView != null) {
+            // 用户在配置中完全关闭了远端，才彻底释放
             sRemoteWebView.stopLoading();
             sRemoteWebView.loadUrl("about:blank");
+            sRemoteWebView.onPause();
+            sLoadedRemoteUrl = "";
+            sRemoteWebLoaded = false;
+        } else if (sRemoteWebView != null) {
             sRemoteWebView.onPause();
         }
 
@@ -2650,6 +2666,10 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         sCachedWebView.post(() -> {
             if (sCachedWebView == null || isFinishing() || isDestroyed()) return;
             try {
+                // 远端模式防护：绝对禁止派发 offline 事件！
+                // DSH 官方 ConnectionController 收到 offline 会立即 abort 正在运行的物理连接（SSE/WebSocket），
+                // 导致远端跨网/VPN 连接被瞬间掐断并进入指数退避；远端模式只需通知 visibility 与 focus 即可自然唤醒。
+                boolean isRemote = (sCachedWebView == sRemoteWebView) || sIsRemoteActive;
                 String js = "(function() {\n"
                         + "  try {\n"
                         + "    if (document.hidden) {\n"
@@ -2660,8 +2680,11 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                         + "    }\n"
                         + "    document.dispatchEvent(new Event('visibilitychange'));\n"
                         + "    window.dispatchEvent(new Event('focus'));\n"
-                        + "    // 关键安全防线：审批或提问交互中（isInteractiveWaiting）绝对禁止派发 offline，防止冲断后端 WebSocket 与交互链路\n"
-                        + "    if (!" + com.deepseekharness.app.HttpShellService.isInteractiveWaiting() + ") {\n"
+                        + "    if (" + isRemote + ") {\n"
+                        + "      // 远端长连接仅通知网络在线，促发前端重连，绝不派发 offline 掐断链路\n"
+                        + "      window.dispatchEvent(new Event('online'));\n"
+                        + "    } else if (!" + com.deepseekharness.app.HttpShellService.isInteractiveWaiting() + ") {\n"
+                        + "      // 本机模式且非审批交互等待状态下，正常触发跳变重置\n"
                         + "      window.dispatchEvent(new Event('offline'));\n"
                         + "      window.dispatchEvent(new Event('online'));\n"
                         + "    }\n"
@@ -2798,20 +2821,31 @@ public class QuickChatSheetActivity extends AppCompatActivity {
     private WebViewClient createSheetWebViewClient() {
         return new WebViewClient() {
             private boolean isInternalDshUrl(String url) {
-                if (url == null) return false;
+                if (url == null || url.isEmpty()) return false;
                 if (url.startsWith("http://127.0.0.1:") || url.startsWith("http://localhost:")) {
                     return true;
                 }
-                String remoteUrl = new ConfigStore(getApplicationContext()).getRemoteDshUrl();
-                if (remoteUrl != null && !remoteUrl.isEmpty()) {
-                    try {
-                        Uri rUri = Uri.parse(remoteUrl);
-                        Uri curUri = Uri.parse(url);
-                        if (rUri.getHost() != null && rUri.getHost().equalsIgnoreCase(curUri.getHost())) {
+                if (url.startsWith("/") || url.startsWith("#")) {
+                    return true;
+                }
+                ConfigStore cfg = ConfigStore.get(getApplicationContext());
+                String activeRemoteUrl = cfg.getActiveRemoteDshUrl();
+                String legacyRemoteUrl = cfg.getRemoteDshUrl();
+                List<String> checkUrls = new ArrayList<>();
+                if (activeRemoteUrl != null && !activeRemoteUrl.isEmpty()) checkUrls.add(activeRemoteUrl);
+                if (legacyRemoteUrl != null && !legacyRemoteUrl.isEmpty() && !legacyRemoteUrl.equals(activeRemoteUrl)) checkUrls.add(legacyRemoteUrl);
+
+                try {
+                    Uri curUri = Uri.parse(url);
+                    String curHost = curUri.getHost();
+                    if (curHost == null) return false;
+                    for (String ru : checkUrls) {
+                        Uri rUri = Uri.parse(ru);
+                        if (curHost.equalsIgnoreCase(rUri.getHost())) {
                             return true;
                         }
-                    } catch (Throwable ignored) {}
-                }
+                    }
+                } catch (Throwable ignored) {}
                 return false;
             }
 
@@ -3151,13 +3185,17 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                     sRemoteWebView.stopLoading();
                     sRemoteWebView.loadUrl("about:blank");
                     sRemoteWebView.onPause();
+                    sLoadedRemoteUrl = "";
+                    sRemoteWebLoaded = false;
                 }
                 updateWebViewSlotVisibility();
                 if (!sLocalWebLoaded) {
                     forceReloadWithLatestToken();
                 }
             } else if (sIsRemoteActive) {
-                if (!activeRemoteUrl.equals(sLoadedRemoteUrl) || (!sRemoteWebLoaded && sRemoteWebView != null)) {
+                String curRemoteUrl = sRemoteWebView != null ? sRemoteWebView.getUrl() : null;
+                boolean isRemoteBlank = curRemoteUrl == null || curRemoteUrl.isEmpty() || "about:blank".equals(curRemoteUrl);
+                if (!activeRemoteUrl.equals(sLoadedRemoteUrl) || !sRemoteWebLoaded || isRemoteBlank) {
                     ensureRemoteWebViewLoaded(activeRemoteUrl);
                     updateWebViewSlotVisibility();
                 }
