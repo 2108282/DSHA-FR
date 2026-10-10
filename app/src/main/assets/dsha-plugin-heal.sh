@@ -60,6 +60,14 @@ for p in /root/dsha-*; do
   echo "Fixed builtin plugin: $name"
 done
 
+# 2.1 确保核心移动端插件 dsh-web-mobile 标准软链接
+if [ -d "/root/dsh-web-mobile" ]; then
+  ln -sfn "/root/dsh-web-mobile" "/usr/local/lib/node_modules/dsh-web-mobile"
+  mkdir -p "/root/.dsh/profiles/web/node_modules"
+  ln -sfn "/root/dsh-web-mobile" "/root/.dsh/profiles/web/node_modules/dsh-web-mobile"
+  echo "Fixed core plugin: dsh-web-mobile"
+fi
+
 # 3. 自动应用第三方插件兼容增强与设置开关补丁（更新后自愈）
 if [ -f "/root/.dsh/dsha-plugin-compat.sh" ]; then
   /bin/bash /root/.dsh/dsha-plugin-compat.sh

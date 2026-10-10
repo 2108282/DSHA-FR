@@ -30,7 +30,7 @@ public class BuiltinPluginsTest {
     public void entityDir_把dsh前缀换成dsha前缀() {
         assertEquals("/root/dsha-device-shell-guide",
                 BuiltinPlugins.entityDir("dsh-device-shell-guide"));
-        assertEquals("/root/dsha-web-mobile", BuiltinPlugins.entityDir("dsh-web-mobile"));
+        assertEquals("/root/dsh-web-mobile", BuiltinPlugins.entityDir("dsh-web-mobile"));
     }
 
     @Test

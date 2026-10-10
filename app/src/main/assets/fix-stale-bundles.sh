@@ -34,7 +34,7 @@ def resolvable(name):
     # DSHA 内置插件实体（/root/dsha-mobile-nav 等）——不在 @deepseek-ai 全局，
     # 也不是 nm 下实体（是符号链接）。不认这里会把正常内置插件当 stale 清掉。
     for real in ('/root/dsha-device-shell-guide', '/root/dsha-task-notifier',
-                 '/root/dsha-status-overlay', '/root/dsha-web-mobile'):
+                 '/root/dsha-status-overlay', '/root/dsh-web-mobile'):
         if name in ('dsh-device-shell-guide', 'dsh-task-notifier',
                     'dsh-status-overlay', 'dsh-web-mobile') and os.path.isfile(os.path.join(real, 'package.json')):
             return True

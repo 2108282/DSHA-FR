@@ -14,7 +14,7 @@ SRC=/root/patches/builtin
 DEST_GUIDE=/root/dsha-device-shell-guide
 DEST_NOTIFIER=/root/dsha-task-notifier
 DEST_OVERLAY=/root/dsha-status-overlay
-DEST_WEB=/root/dsha-web-mobile
+DEST_WEB=/root/dsh-web-mobile
 PROFILE_DIR=/root/.dsh/profiles/web
 NM="$PROFILE_DIR/node_modules"
 PF="$PROFILE_DIR/package.json"
@@ -117,7 +117,7 @@ d.setdefault('dependencies', {})
 d['dependencies']['dsh-device-shell-guide'] = 'link:/root/dsha-device-shell-guide'
 d['dependencies']['dsh-task-notifier'] = 'link:/root/dsha-task-notifier'
 d['dependencies']['dsh-status-overlay'] = 'link:/root/dsha-status-overlay'
-d['dependencies']['dsh-web-mobile'] = 'link:/root/dsha-web-mobile'
+d['dependencies']['dsh-web-mobile'] = 'link:/root/dsh-web-mobile'
 dsh = d.setdefault('dsh', {})
 prof = dsh.setdefault('profile', {})
 bundles = prof.setdefault('bundles', [])
@@ -136,7 +136,7 @@ else
     "dsh-device-shell-guide": "link:/root/dsha-device-shell-guide",
     "dsh-task-notifier": "link:/root/dsha-task-notifier",
     "dsh-status-overlay": "link:/root/dsha-status-overlay",
-    "dsh-web-mobile": "link:/root/dsha-web-mobile"
+    "dsh-web-mobile": "link:/root/dsh-web-mobile"
   },
   "dsh": {
     "profile": {
@@ -160,7 +160,7 @@ fi
 ln -sfn /root/dsha-device-shell-guide "$NM/dsh-device-shell-guide"
 ln -sfn /root/dsha-task-notifier "$NM/dsh-task-notifier"
 ln -sfn /root/dsha-status-overlay "$NM/dsh-status-overlay"
-ln -sfn /root/dsha-web-mobile "$NM/dsh-web-mobile"
+ln -sfn /root/dsh-web-mobile "$NM/dsh-web-mobile"
 echo "  ✓ node_modules 符号链接已建"
 
 # Cordis loader imports entries from its own global module location rather than
@@ -172,7 +172,7 @@ GLOBAL_NM=/usr/local/lib/node_modules
 ln -sfn /root/dsha-device-shell-guide "$GLOBAL_NM/dsh-device-shell-guide"
 ln -sfn /root/dsha-task-notifier "$GLOBAL_NM/dsh-task-notifier"
 ln -sfn /root/dsha-status-overlay "$GLOBAL_NM/dsh-status-overlay"
-ln -sfn /root/dsha-web-mobile "$GLOBAL_NM/dsh-web-mobile"
+ln -sfn /root/dsh-web-mobile "$GLOBAL_NM/dsh-web-mobile"
 echo "  ✓ global node_modules 符号链接已建"
 
 # ---------- 4) home 级 cordis.patch.yml：官方极简模式 bash 描述注入 ----------

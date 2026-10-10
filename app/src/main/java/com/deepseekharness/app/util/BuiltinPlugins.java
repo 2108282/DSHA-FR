@@ -46,6 +46,9 @@ public final class BuiltinPlugins {
     /** 插件名 → 其实体目录（/root/dsha-<name>，兼容 dsh- 前缀命名）。 */
     public static String entityDir(String pluginName) {
         if (pluginName == null) return "";
+        if ("dsh-web-mobile".equals(pluginName)) {
+            return "/root/dsh-web-mobile";
+        }
         if (pluginName.startsWith("dsh-")) {
             return "/root/dsha-" + pluginName.substring(4);
         }
