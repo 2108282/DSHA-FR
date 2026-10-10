@@ -54,37 +54,72 @@ const activeSockets = new Set();
 let lastKnownToken = null;
 
 // 自动检测与瞬间解冻唤醒后端
-const FREEZER_LOG = '/data/adb/dsha/run/idle-freezer.log';
+const PID_FILES = [
+  '/root/.dsh/dsh.pid',
+  '/data/adb/dsha/run/dsh.pid',
+  '/data/adb/dsha/rootfs/root/.dsh/dsh.pid'
+];
+
+const FREEZER_LOG_FILES = [
+  '/data/adb/dsha/run/idle-freezer.log',
+  '/root/.dsh/idle-freezer.log',
+  '/data/adb/dsha/rootfs/root/.dsh/idle-freezer.log'
+];
+
 function logFreezer(action, msg) {
   try {
     const time = new Date().toISOString().replace('T', ' ').slice(0, 19);
-    fs.appendFileSync(FREEZER_LOG, `[${time}] [${action}] ${msg}\n`, { mode: 0o666 });
+    const line = `[${time}] [${action}] ${msg}\n`;
+    for (const logPath of FREEZER_LOG_FILES) {
+      try {
+        fs.appendFileSync(logPath, line, { mode: 0o666 });
+        break;
+      } catch (e) {}
+    }
   } catch (e) {}
+}
+
+function getBackendPid() {
+  for (const p of PID_FILES) {
+    try {
+      if (fs.existsSync(p)) {
+        const pidStr = fs.readFileSync(p, 'utf8').trim();
+        const pid = parseInt(pidStr, 10);
+        if (pid && !isNaN(pid)) return pid;
+      }
+    } catch (e) {}
+  }
+  return null;
 }
 
 function ensureBackendAwake(trigger) {
   try {
-    const pidPath = '/data/adb/dsha/run/dsh.pid';
-    if (!fs.existsSync(pidPath)) return;
-    const pidStr = fs.readFileSync(pidPath, 'utf8').trim();
-    const pid = parseInt(pidStr, 10);
-    if (!pid || isNaN(pid)) return;
+    const pid = getBackendPid();
+    if (!pid) return;
 
     const statPath = `/proc/${pid}/stat`;
     if (!fs.existsSync(statPath)) return;
     const statContent = fs.readFileSync(statPath, 'utf8');
     const parts = statContent.split(' ');
-    const state = parts[2]; // 状态代码
+    const state = parts[2]; // 进程状态代码 (T 为 SIGSTOP 冻结挂起)
 
-    // 若进程被 SIGSTOP 冻结 (T 状态)，立即派发 SIGCONT 原地唤醒并通知看门狗同步！
     if (state === 'T') {
       try {
         process.kill(pid, 'SIGCONT');
       } catch (e) {}
+
+      // 原地清理休眠标记文件
+      try { fs.unlinkSync('/root/.dsh/freezer.state'); } catch (e) {}
+      try { fs.unlinkSync('/data/adb/dsha/run/freezer.state'); } catch (e) {}
+
       const cleanTrigger = (trigger || 'LAN访问').toString().replace(/["'`\n\r]/g, ' ');
-      try {
-        require('child_process').exec(`sh /data/adb/dsha/scripts/idle-freezer.sh wake "局域网: ${cleanTrigger}" >/dev/null 2>&1`);
-      } catch (e) {}
+      logFreezer('WAKE', `主进程已原地解冻恢复 (PID: ${pid}) | 唤醒源: [局域网: ${cleanTrigger}]`);
+
+      // 原地通知设备桥把常驻通知刷回运行中
+      const token = getBridgeToken();
+      if (token) {
+        http.get(`http://127.0.0.1:3095/app/freeze/state?token=${token}&frozen=0`, () => {}).on('error', () => {});
+      }
     }
   } catch (e) {}
 }

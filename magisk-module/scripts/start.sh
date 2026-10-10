@@ -398,6 +398,7 @@ chroot "$ROOTFS" /usr/bin/setsid /usr/bin/env -i \
 
 NEW_PID=$!
 echo "$NEW_PID" > "$PID_FILE"
+echo "$NEW_PID" > "$ROOTFS/root/.dsh/dsh.pid" 2>/dev/null || true
 echo -800 > "/proc/$NEW_PID/oom_score_adj" 2>/dev/null || true
 
 # 纳入系统后台 cpuctl 组（仅限制频率上限与能耗调度，绝对不覆盖/干预核心亲和性）

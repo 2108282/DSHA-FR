@@ -380,8 +380,9 @@ if [ -f "$PKG_JSON" ] && ! grep -q "@deepseek-ai/dsh-web-app" "$PKG_JSON" 2>/dev
     sed -i 's|"bundles": \[\s*|"bundles": \[\n        "@deepseek-ai/dsh-base",\n        "@deepseek-ai/dsh-web-app",\n|' "$PKG_JSON" 2>/dev/null || true
 fi
 
-# 6. 原生拉起 Node.js DSH Web 服务
-chroot "$ROOTFS" /usr/bin/env -i \
+# 6. 原生拉起 Node.js DSH Web 服务 (独立 Session 隔离 + SIGHUP 免疫，彻底根除孤儿进程组误杀)
+trap '' HUP 2>/dev/null || true
+chroot "$ROOTFS" /usr/bin/setsid /usr/bin/env -i \
     HOME=/root \
     USER=root \
     LOGNAME=root \
@@ -397,6 +398,7 @@ chroot "$ROOTFS" /usr/bin/env -i \
 
 NEW_PID=$!
 echo "$NEW_PID" > "$PID_FILE"
+echo "$NEW_PID" > "$ROOTFS/root/.dsh/dsh.pid" 2>/dev/null || true
 echo -800 > "/proc/$NEW_PID/oom_score_adj" 2>/dev/null || true
 
 # 纳入系统后台 cpuctl 组（仅限制频率上限与能耗调度，绝对不覆盖/干预核心亲和性）
@@ -444,6 +446,13 @@ if [ -f "$RUN_DIR/lan_enabled" ]; then
         sh "/data/adb/dsha/scripts/lan-proxy.sh" start >/dev/null 2>&1 || true
     fi
     [ -f "$RUN_DIR/lan-proxy.pid" ] && kill -0 "$(cat "$RUN_DIR/lan-proxy.pid" 2>/dev/null)" 2>/dev/null && echo "LAN_STATUS:RUNNING PORT:3081"
+fi
+
+# 联动闲置休眠模式守护
+if [ -f "$RUN_DIR/idle_freeze_enabled" ]; then
+    if [ -f "/data/adb/dsha/scripts/idle-freezer.sh" ]; then
+        sh "/data/adb/dsha/scripts/idle-freezer.sh" start >/dev/null 2>&1 || true
+    fi
 fi
 
 # 动态同步 KernelSU / Magisk 模块描述状态

@@ -37,7 +37,7 @@ log_msg() {
 
 do_wake() {
     TRIGGER="${1:-手动执行或未指定来源}"
-    rm -f "$STATE_FILE" 2>/dev/null
+    rm -f "$STATE_FILE" "$DSH_DIR/freezer.state" 2>/dev/null
     if [ -f "$PID_FILE" ]; then
         MAIN_PID=$(cat "$PID_FILE" 2>/dev/null)
         if [ -n "$MAIN_PID" ] && kill -0 "$MAIN_PID" 2>/dev/null; then
@@ -142,6 +142,7 @@ do_daemon() {
         if [ $IDLE_SEC -ge $IDLE_THRESHOLD ]; then
             kill -STOP "$MAIN_PID" 2>/dev/null
             echo "FROZEN" > "$STATE_FILE"
+            echo "FROZEN" > "$DSH_DIR/freezer.state" 2>/dev/null || true
             rm -f "$FREEZER_PID_FILE" 2>/dev/null
             log_msg "FREEZE" "会话已闲置 $IDLE_SEC 秒 (满30分钟)，已执行 SIGSTOP 深度休眠冻结 (PID: $MAIN_PID)"
             
@@ -170,6 +171,7 @@ do_freeze_now() {
     fi
     kill -STOP "$MAIN_PID" 2>/dev/null
     echo "FROZEN" > "$STATE_FILE"
+    echo "FROZEN" > "$DSH_DIR/freezer.state" 2>/dev/null || true
     log_msg "FREEZE_TEST" "主进程已执行 SIGSTOP 冻结 (PID: $MAIN_PID) | 触发源: [$TRIGGER]"
 
     TOKEN=$(cat "$DSH_DIR/.bridge_token" 2>/dev/null)
