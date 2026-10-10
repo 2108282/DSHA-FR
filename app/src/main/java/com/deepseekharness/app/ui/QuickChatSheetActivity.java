@@ -1101,7 +1101,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 errorHint.setVisibility(View.GONE);
             }
             if (sIsRemoteActive) {
-                // 远端模式刷新：优先执行页面级轻量重连与安全刷新，保留 SPA 会话与鉴权 Cookie
+                // 远端模式刷新：直接使用配置中带完整 Token 的权威 URL 重新载入，如同浏览器重新打开书签，彻底根除 401 登录卡片与死锁
                 String activeUrl = ConfigStore.get(this).getActiveRemoteDshUrl();
                 if (activeUrl == null || activeUrl.isEmpty()) {
                     ToastHelper.makeText(this, "未开启任何远端连接", Toast.LENGTH_SHORT).show();
@@ -1111,17 +1111,9 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 ToastHelper.makeText(this, "正在重新连接远端 DSH...", Toast.LENGTH_SHORT).show();
                 ensureRemoteWebViewLoaded(activeUrl);
                 if (sRemoteWebView != null) {
-                    String curUrl = sRemoteWebView.getUrl();
-                    boolean hasValidCurUrl = curUrl != null && !curUrl.isEmpty() && !"about:blank".equals(curUrl);
+                    sLoadedRemoteUrl = activeUrl;
                     sRemoteWebLoaded = false;
-                    if (hasValidCurUrl) {
-                        // 优先通知前端连接层重连，并执行 WebView 原生页面 reload，消除硬 loadUrl 带初始 Token 导致的鉴权冲突与样式错乱
-                        sRemoteWebView.evaluateJavascript("try { window.dispatchEvent(new Event('online')); } catch(e){}", null);
-                        sRemoteWebView.reload();
-                    } else {
-                        sLoadedRemoteUrl = activeUrl;
-                        sRemoteWebView.loadUrl(activeUrl);
-                    }
+                    sRemoteWebView.loadUrl(activeUrl);
                 }
             } else {
                 // 本地模式刷新：重新获取Token并刷新
@@ -2931,9 +2923,16 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                     if (code == 401 || code == 403) {
                         authRetried = true;
                         if (view == sRemoteWebView) {
-                            runOnUiThread(() -> {
-                                ToastHelper.makeText(QuickChatSheetActivity.this, "远端 DSH 鉴权失败 (HTTP " + code + ")，请检查 Token", Toast.LENGTH_SHORT).show();
-                            });
+                            String activeUrl = ConfigStore.get(QuickChatSheetActivity.this).getActiveRemoteDshUrl();
+                            if (activeUrl != null && !activeUrl.isEmpty()) {
+                                sLoadedRemoteUrl = activeUrl;
+                                sRemoteWebLoaded = false;
+                                view.post(() -> view.loadUrl(activeUrl));
+                            } else {
+                                runOnUiThread(() -> {
+                                    ToastHelper.makeText(QuickChatSheetActivity.this, "远端 DSH 鉴权失败 (HTTP " + code + ")，请检查 Token", Toast.LENGTH_SHORT).show();
+                                });
+                            }
                         } else {
                             String retryUrl = controller != null ? controller.getWebAuthUrl() : "";
                             if (retryUrl != null && !retryUrl.isEmpty()) {
