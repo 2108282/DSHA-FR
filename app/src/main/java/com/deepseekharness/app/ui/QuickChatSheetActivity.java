@@ -1979,6 +1979,11 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             loadInitialLocalWeb();
         } else {
             ensureWebViewParentClean(sLocalWebView);
+            // 核心修复：复用已保活的静态 WebView 时，必须重新绑定当前存活 Activity 的 Clients，
+            // 确保 onShowFileChooser 等生命周期回调能够正确调用当前 Activity 的 ActivityResultLauncher
+            sLocalWebView.setWebViewClient(createSheetWebViewClient());
+            sLocalWebView.setWebChromeClient(new SheetChromeClient());
+            sLocalWebView.addJavascriptInterface(new NativeBridgeInterface(), "DshaNativeBridge");
         }
 
         // 2. 远端槽位：保留常驻实例，仅当远端未激活时暂停后台渲染释放GPU，绝不误清空为 about:blank
@@ -1993,6 +1998,10 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             sRemoteWebLoaded = false;
         } else if (sRemoteWebView != null) {
             sRemoteWebView.onPause();
+            // 远端槽位复用时也同样重新绑定当前存活 Activity 的 Clients
+            sRemoteWebView.setWebViewClient(createSheetWebViewClient());
+            sRemoteWebView.setWebChromeClient(new SheetChromeClient());
+            sRemoteWebView.addJavascriptInterface(new NativeBridgeInterface(), "DshaNativeBridge");
         }
 
         // 3. 挂载到容器
@@ -2959,7 +2968,8 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             Intent primary = null;
             try {
                 primary = params.createIntent();
-                filePicker.launch(primary);
+                Intent chooser = Intent.createChooser(primary, "选择要上传的附件");
+                filePicker.launch(chooser);
             } catch (Exception e) {
                 try {
                     if (primary == null) {
@@ -2967,9 +2977,11 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                                 .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, params.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE)
                                 .putExtra(Intent.EXTRA_MIME_TYPES, params.getAcceptTypes());
                     }
-                    filePicker.launch(WebUploads.fallback(primary));
-                } catch (Exception ignored) {
+                    Intent fallbackChooser = Intent.createChooser(WebUploads.fallback(primary), "选择要上传的附件");
+                    filePicker.launch(fallbackChooser);
+                } catch (Exception err) {
                     cancelFileSelection();
+                    android.util.Log.e("DSHA_SHEET", "打开文件选择器失败", err);
                     ToastHelper.makeText(QuickChatSheetActivity.this, "无法打开系统文件选择器", Toast.LENGTH_SHORT).show();
                 }
             }
