@@ -5,10 +5,38 @@ PID_FILE="$RUN_DIR/dsh.pid"
 PORT_FILE="$RUN_DIR/port"
 LOG_FILE="$RUN_DIR/dsh-web.log"
 
-PORT="${1:-3088}"
-TASKSET_CPUS="${2:-}"
+PORT="3080"
+TASKSET_CPUS=""
+EXTRA_ARGS=""
+
+# 兼容传统位置参数与标准 CLI 选项
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --port)
+            PORT="$2"
+            shift 2
+            ;;
+        --taskset)
+            TASKSET_CPUS="$2"
+            shift 2
+            ;;
+        [0-9]*)
+            PORT="$1"
+            shift
+            if [ $# -gt 0 ] && [ -z "$TASKSET_CPUS" ] && case "$1" in [0-9,-]*) true ;; *) false ;; esac; then
+                TASKSET_CPUS="$1"
+                shift
+            fi
+            ;;
+        *)
+            EXTRA_ARGS="$EXTRA_ARGS $1"
+            shift
+            ;;
+    esac
+done
+
 case "$PORT" in
-    ''|*[!0-9]*) PORT=3088 ;;
+    ''|*[!0-9]*) PORT=3080 ;;
 esac
 
 mkdir -p "$RUN_DIR"
@@ -22,6 +50,10 @@ if [ -f "$PID_FILE" ]; then
         echo "STATUS:ALREADY_RUNNING PID:$OLD_PID PORT:$PORT"
         TOKEN_FILE="$ROOTFS/root/.dsh/.bridge_token"
         [ -s "$TOKEN_FILE" ] && echo "BRIDGE_TOKEN:$(cat "$TOKEN_FILE" 2>/dev/null)"
+        if [ -f "$RUN_DIR/lan_enabled" ]; then
+            [ -f "/data/adb/dsha/scripts/lan-proxy.sh" ] && sh "/data/adb/dsha/scripts/lan-proxy.sh" start >/dev/null 2>&1 || true
+            [ -f "$RUN_DIR/lan-proxy.pid" ] && kill -0 "$(cat "$RUN_DIR/lan-proxy.pid" 2>/dev/null)" 2>/dev/null && echo "LAN_STATUS:RUNNING PORT:3081"
+        fi
         grep -o "http://127\.0\.0\.1:[0-9]*/?token=[^ ]*" "$LOG_FILE" 2>/dev/null | tail -n 1
         exit 0
     fi
@@ -30,6 +62,11 @@ fi
 
 # 2. 解除 Android 12+ 幽灵进程限制
 /system/bin/device_config put activity_manager max_phantom_processes 2147483647 2>/dev/null
+
+# 2.3 深度破除残留死锁：清理上次异常退出遗留的 stale .lock 文件，防止 atomic-write 写入超时卡死
+rm -f "$ROOTFS/root/.dsh/"*.lock 2>/dev/null || true
+rm -f "$ROOTFS/root/.dsh/."*.lock 2>/dev/null || true
+rm -f "$ROOTFS/root/.dsh/.credentials.yaml.lock" 2>/dev/null || true
 
 # 2.5 自动补齐 CA 根证书与前端首帧防闪白样式
 mkdir -p "$ROOTFS/etc/ssl/certs" "$ROOTFS/usr/lib/ssl" 2>/dev/null || true
@@ -60,25 +97,46 @@ mount_if_needed() {
     if ! is_mounted "$target"; then
         mkdir -p "$target" 2>/dev/null
         mount "$@" "$target"
+        # 严禁对 FUSE 文件系统（/sdcard、/storage）或虚拟设备（/dev）追加 remount，否则会导致 Android vold abort FUSE 连接引发热重启
+        case "$target" in
+            */sdcard*|*/storage*|*/dev*)
+                ;;
+            *)
+                case "$*" in
+                    *bind*)
+                        mount -o remount,bind,noatime,nodiratime "$target" 2>/dev/null || true
+                        ;;
+                esac
+                ;;
+        esac
     fi
 }
+
+# 优化 rootfs 宿主挂载参数，消除访问时间写回损耗
+mount -o remount,noatime,nodiratime "$ROOTFS" 2>/dev/null || true
 
 mount_if_needed "$ROOTFS/dev" -o bind /dev
 mount_if_needed "$ROOTFS/dev/pts" -o bind /dev/pts
 mkdir -p "$ROOTFS/dev/shm"
-mount_if_needed "$ROOTFS/dev/shm" -t tmpfs tmpfs -o mode=1777
+mount_if_needed "$ROOTFS/dev/shm" -t tmpfs tmpfs -o mode=1777,noatime,nodiratime
 # 屏蔽物理块设备：只读且mode 000空tmpfs，从内核层彻底杜绝误写分区物理变砖
 mkdir -p "$ROOTFS/dev/block"
 mount_if_needed "$ROOTFS/dev/block" -t tmpfs tmpfs -o ro,mode=000
 mount_if_needed "$ROOTFS/proc" -t proc proc
 mount_if_needed "$ROOTFS/sys" -t sysfs sysfs
 
-# 挂载存储卡
+# 挂载存储卡 (启用 noatime,nodiratime)
 if [ -d "/storage/emulated/0" ]; then
     mount_if_needed "$ROOTFS/sdcard" -o bind /storage/emulated/0
     mount_if_needed "$ROOTFS/storage/emulated/0" -o bind /storage/emulated/0
 elif [ -d "/sdcard" ]; then
     mount_if_needed "$ROOTFS/sdcard" -o bind /sdcard
+fi
+
+# 挂载宿主字体目录至容器内，供给 DSH LibreOfficeKit WASM 引擎完整系统字库
+if [ -d "/system/fonts" ]; then
+    mkdir -p "$ROOTFS/usr/share/fonts/android" 2>/dev/null || true
+    mount_if_needed "$ROOTFS/usr/share/fonts/android" -o bind /system/fonts
 fi
 
 # 确保手机 Download/DSHA/工作区 存在，并在容器 root 下建立「内部存储」软链接直通
@@ -283,60 +341,48 @@ HCMD_EOF
 chmod 755 "$DSH_BIN/$HCMD"
 done
 
-# 宿主文件/URL 打开直通包装器（模拟 Linux 桌面 xdg-open）
-if [ ! -f "$DSH_BIN/xdg-open" ]; then
-cat << 'XDG_EOF' > "$DSH_BIN/xdg-open"
-#!/bin/bash
-TARGET="$1"
-[ -z "$TARGET" ] && exit 0
-if [[ "$TARGET" =~ ^[a-zA-Z][a-zA-Z0-9+.-]*:// ]]; then
-    exec /usr/bin/nsenter -t 1 -m /system/bin/am start -a android.intent.action.VIEW -d "$TARGET"
-fi
-if [[ "$TARGET" != /* ]]; then
-    TARGET="$(pwd)/$TARGET"
-fi
-[ ! -e "$TARGET" ] && exit 1
-MIME="*/*"
-EXT="${TARGET##*.}"
-EXT_LOWER=$(echo "$EXT" | tr '[:upper:]' '[:lower:]')
-if [ -d "$TARGET" ]; then
-    MIME="resource/folder"
-else
-    case "$EXT_LOWER" in
-        html|htm) MIME="text/html" ;;
-        txt|log|md|sh|py|js|ts|json|yml|yaml|java|c|cpp) MIME="text/plain" ;;
-        png) MIME="image/png" ;;
-        jpg|jpeg) MIME="image/jpeg" ;;
-        webp) MIME="image/webp" ;;
-        gif) MIME="image/gif" ;;
-        pdf) MIME="application/pdf" ;;
-        apk) MIME="application/vnd.android.package-archive" ;;
-        zip) MIME="application/zip" ;;
-        xlsx) MIME="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ;;
-        xls) MIME="application/vnd.ms-excel" ;;
-        docx) MIME="application/vnd.openxmlformats-officedocument.wordprocessingml.document" ;;
-        doc) MIME="application/msword" ;;
-        pptx) MIME="application/vnd.openxmlformats-officedocument.presentationml.presentation" ;;
-        ppt) MIME="application/vnd.ms-powerpoint" ;;
-    esac
-fi
-exec /usr/bin/nsenter -t 1 -m /system/bin/am start -a android.intent.action.VIEW -d "file://$TARGET" -t "$MIME"
-XDG_EOF
-chmod 755 "$DSH_BIN/xdg-open"
-fi
-
 # 清空旧日志
 > "$LOG_FILE"
 mkdir -p "$ROOTFS/root"
 ln -sf "$LOG_FILE" "$ROOTFS/root/dsh-web.log" 2>/dev/null || true
+
+# 确保本机极速低功耗心跳与轮询补丁就绪（彻底抑制 client-hmr 500ms 磁盘轮询与 skill-filesystem 轮询）
+mkdir -p "$ROOTFS/root/.dsh" 2>/dev/null || true
+mkdir -p "$ROOTFS/root/.agents/skills" 2>/dev/null || true
+cat << 'HB_EOF' > "$ROOTFS/root/.dsh/heartbeat-patch.yml"
+- id: typert-gateway
+  config:
+    websocketHeartbeatIntervalMs: 2147483647
+- id: client-hmr
+  config:
+    pollIntervalMs: 2147483647
+- id: skill-filesystem
+  config:
+    watch: false
+    watchPollIntervalMs: 2147483647
+HB_EOF
+chmod 600 "$ROOTFS/root/.dsh/heartbeat-patch.yml" 2>/dev/null || true
 
 PATCH_ARG=""
 if [ -f "$ROOTFS/root/.dsh/heartbeat-patch.yml" ]; then
     PATCH_ARG="--patch /root/.dsh/heartbeat-patch.yml"
 fi
 
-# 6. 原生拉起 Node.js DSH Web 服务
-chroot "$ROOTFS" /usr/bin/env -i \
+# 内存防碎片治理：自适应检测 jemalloc，存在则定向注入 Node 主进程压制长时间挂机内存碎片
+PRELOAD_OPT=""
+if [ -f "$ROOTFS/usr/lib/aarch64-linux-gnu/libjemalloc.so.2" ]; then
+    PRELOAD_OPT="LD_PRELOAD=/usr/lib/aarch64-linux-gnu/libjemalloc.so.2"
+fi
+
+# 5.9 核心 Bundle 完整性自愈锁：杜绝因误操作导致 @deepseek-ai/dsh-web-app 丢失而使启动器报未知参数
+PKG_JSON="$ROOTFS/root/.dsh/profiles/web/package.json"
+if [ -f "$PKG_JSON" ] && ! grep -q "@deepseek-ai/dsh-web-app" "$PKG_JSON" 2>/dev/null; then
+    sed -i 's|"bundles": \[\s*|"bundles": \[\n        "@deepseek-ai/dsh-base",\n        "@deepseek-ai/dsh-web-app",\n|' "$PKG_JSON" 2>/dev/null || true
+fi
+
+# 6. 原生拉起 Node.js DSH Web 服务 (独立 Session 隔离 + SIGHUP 免疫，彻底根除孤儿进程组误杀)
+trap '' HUP 2>/dev/null || true
+chroot "$ROOTFS" /usr/bin/setsid /usr/bin/env -i \
     HOME=/root \
     USER=root \
     LOGNAME=root \
@@ -345,9 +391,10 @@ chroot "$ROOTFS" /usr/bin/env -i \
     TERM=xterm-256color \
     LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
-    DISPLAY=:0 \
     DSH_CONFIRM=1 \
-    nice -n 10 /usr/local/bin/node --v8-pool-size=2 /usr/local/lib/node_modules/@deepseek-ai/dsh/lib/bin.js web $PATCH_ARG --no-open --port "$PORT" --host 127.0.0.1 > "$LOG_FILE" 2>&1 &
+    NODE_PATH=/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules \
+    $PRELOAD_OPT \
+    nice -n 10 /usr/local/bin/node --v8-pool-size=2 /usr/local/lib/node_modules/@deepseek-ai/dsh/lib/bin.js web $PATCH_ARG --no-open --port "$PORT" --host 127.0.0.1 $EXTRA_ARGS > "$LOG_FILE" 2>&1 &
 
 NEW_PID=$!
 echo "$NEW_PID" > "$PID_FILE"
@@ -375,14 +422,12 @@ if [ -n "$TASKSET_CPUS" ]; then
     chroot "$ROOTFS" /usr/bin/taskset -a -p -c "$TASKSET_CPUS" "$NEW_PID" >/dev/null 2>&1 || true
 fi
 
-# 7. 等待服务启动并提取鉴权 Token 链接（150ms 浮点微步轮询，就绪即刻返回）
+# 7. 等待服务启动并提取鉴权 Token 链接（0.2s 极速轮询 300 次，就绪即刻返回，消除 1s 量子化延迟）
 AUTH_URL=""
-for i in $(seq 1 15); do
+for i in $(seq 1 300); do
     AUTH_URL=$(grep -o "http://127\.0\.0\.1:${PORT}/?token=[^ ]*" "$LOG_FILE" 2>/dev/null | tail -n 1)
     [ -z "$AUTH_URL" ] && AUTH_URL=$(grep -o 'http://127\.0\.0\.1:[0-9]*/?token=[^ ]*' "$LOG_FILE" 2>/dev/null | tail -n 1)
     if [ -n "$AUTH_URL" ]; then
-        LAUNCH_TOK=$(echo "$AUTH_URL" | sed -n 's/.*token=\([A-Za-z0-9_-]\{43\}\).*/\1/p')
-        [ -n "$LAUNCH_TOK" ] && echo -n "$LAUNCH_TOK" > "$ROOTFS/root/.dsh/.launch_token" 2>/dev/null || true
         break
     fi
     if ! kill -0 "$NEW_PID" 2>/dev/null; then
@@ -390,21 +435,39 @@ for i in $(seq 1 15); do
         cat "$LOG_FILE"
         exit 1
     fi
-    sleep 0.15 2>/dev/null || sleep 1
+    sleep 0.2
 done
 
 echo "STATUS:STARTED PID:$NEW_PID PORT:$PORT"
 [ -n "$CURRENT_TOKEN" ] && echo "BRIDGE_TOKEN:$CURRENT_TOKEN"
+if [ -f "$RUN_DIR/lan_enabled" ]; then
+    if [ -f "/data/adb/dsha/scripts/lan-proxy.sh" ]; then
+        sh "/data/adb/dsha/scripts/lan-proxy.sh" start >/dev/null 2>&1 || true
+    fi
+    [ -f "$RUN_DIR/lan-proxy.pid" ] && kill -0 "$(cat "$RUN_DIR/lan-proxy.pid" 2>/dev/null)" 2>/dev/null && echo "LAN_STATUS:RUNNING PORT:3081"
+fi
+
+# 联动闲置休眠模式守护
+if [ -f "$RUN_DIR/idle_freeze_enabled" ]; then
+    if [ -f "/data/adb/dsha/scripts/idle-freezer.sh" ]; then
+        sh "/data/adb/dsha/scripts/idle-freezer.sh" start >/dev/null 2>&1 || true
+    fi
+fi
 
 # 动态同步 KernelSU / Magisk 模块描述状态
 for p_mod in "/data/adb/modules/dsha_native/module.prop" \
              "/data/adb/modules_update/dsha_native/module.prop"; do
     if [ -f "$p_mod" ]; then
-        sed -i "s|^description=.*|description=[🟢 运行中 :${PORT}] DSHA 原生 Linux chroot 极速运行时，按需启停，0 虚拟化损耗，0 待机偷跑。|" "$p_mod" 2>/dev/null || true
+        sed -i "s|^description=.*|description=[🟢 运行中 :${PORT}] DSHA 原生 Linux chroot 极速运行时，按需启停。|" "$p_mod" 2>/dev/null || true
     fi
 done
 
 if [ -n "$AUTH_URL" ]; then
+    LAUNCH_TOKEN=$(echo "$AUTH_URL" | sed -n 's/.*token=\([^ &]*\).*/\1/p')
+    if [ -n "$LAUNCH_TOKEN" ]; then
+        echo -n "$LAUNCH_TOKEN" > "$ROOTFS/root/.dsh/.launch_token" 2>/dev/null || true
+        chmod 600 "$ROOTFS/root/.dsh/.launch_token" 2>/dev/null || true
+    fi
     echo "=========================================================="
     echo "进入 Web 鉴权链接 (直接在手机浏览器打开):"
     echo "$AUTH_URL"

@@ -18,7 +18,7 @@ mount_if_needed() {
 # 确保必要的挂载点存在
 mount_if_needed "$ROOTFS/dev" -o bind /dev
 
-# 确保 $ROOTFS/dev/pts 与宿主 /dev/pts 共享一致的 bind 挂载，消除独立 devpts 导致的 ioctl 报错
+# 确保 $ROOTFS/dev/pts 与宿主 /dev/pts 共享一致的 bind 挂载
 if grep -q " $ROOTFS/dev/pts devpts " /proc/mounts 2>/dev/null; then
     umount -l "$ROOTFS/dev/pts" 2>/dev/null || true
 fi
