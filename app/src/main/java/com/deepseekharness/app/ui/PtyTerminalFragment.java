@@ -375,7 +375,22 @@ public final class PtyTerminalFragment extends Fragment
             String selected = null;
             if (s != null && s.session() != null && s.session().getEmulator() != null) {
                 try {
-                    selected = s.session().getEmulator().getSelectedText();
+                    Object controller = view.getTextSelectionCursorController();
+                    if (controller != null) {
+                        java.lang.reflect.Field fX1 = controller.getClass().getDeclaredField("mSelX1");
+                        java.lang.reflect.Field fY1 = controller.getClass().getDeclaredField("mSelY1");
+                        java.lang.reflect.Field fX2 = controller.getClass().getDeclaredField("mSelX2");
+                        java.lang.reflect.Field fY2 = controller.getClass().getDeclaredField("mSelY2");
+                        fX1.setAccessible(true);
+                        fY1.setAccessible(true);
+                        fX2.setAccessible(true);
+                        fY2.setAccessible(true);
+                        int x1 = fX1.getInt(controller);
+                        int y1 = fY1.getInt(controller);
+                        int x2 = fX2.getInt(controller);
+                        int y2 = fY2.getInt(controller);
+                        selected = s.session().getEmulator().getSelectedText(x1, y1, x2, y2);
+                    }
                 } catch (Throwable ignored) {
                 }
             }
@@ -387,7 +402,15 @@ public final class PtyTerminalFragment extends Fragment
                 ToastHelper.makeText(requireContext(), "已退出选择模式", Toast.LENGTH_SHORT).show();
             }
         } else {
-            view.startTextSelectionMode();
+            long now = android.os.SystemClock.uptimeMillis();
+            float x = view.getWidth() > 0 ? view.getWidth() / 2.0f : 100f;
+            float y = view.getHeight() > 0 ? view.getHeight() / 2.0f : 100f;
+            MotionEvent ev = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, x, y, 0);
+            try {
+                view.startTextSelectionMode(ev);
+            } finally {
+                ev.recycle();
+            }
             ToastHelper.makeText(requireContext(), "已开启自由选择，滑动游标选区后再点复制", Toast.LENGTH_SHORT).show();
         }
     }
@@ -609,7 +632,7 @@ public final class PtyTerminalFragment extends Fragment
     @Override
     public boolean onLongPress(MotionEvent e) {
         if (view != null && !view.isSelectingText()) {
-            view.startTextSelectionMode();
+            view.startTextSelectionMode(e);
             return true;
         }
         return false;
