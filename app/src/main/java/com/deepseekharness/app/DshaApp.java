@@ -12,9 +12,16 @@ import com.deepseekharness.app.util.Constants;
  */
 public class DshaApp extends Application {
 
+    private static volatile DshaApp sInstance;
+
+    public static DshaApp get() {
+        return sInstance;
+    }
+
     @Override
     public void onCreate() {
         super.onCreate();
+        sInstance = this;
         com.deepseekharness.app.ui.ThemeController.apply(this);
         // 保证 3090 桥独立常驻（免 ADB / 免 Shizuku 原生通用通道），不依赖 ADB 开关
         HttpShellService.ensureStarted(this);

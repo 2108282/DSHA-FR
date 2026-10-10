@@ -523,7 +523,7 @@ public final class HttpShellService {
             } else if (path.startsWith("/app/task/cancel")) {
                 result = appTaskCancel();
             } else if (path.startsWith("/app/freeze/state")) {
-                java.util.Map<String, String> q = queryOf(path);
+                String q = queryOf(path);
                 boolean dead = "1".equals(getParam(q, "dead", "0"));
                 boolean frozen = "1".equals(getParam(q, "frozen", "0"));
                 HarnessService.updateFreezeState(ctx, frozen, dead);
