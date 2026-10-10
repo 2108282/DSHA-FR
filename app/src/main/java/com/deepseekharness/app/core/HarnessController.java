@@ -1010,14 +1010,6 @@ public class HarnessController {
             });
         }, "dsha-test-wake").start();
     }
-                success = (p.waitFor() == 0);
-            } catch (Throwable ignored) {}
-            final boolean finalSuccess = success;
-            uiHandler.post(() -> {
-                if (callback != null) callback.accept(finalSuccess);
-            });
-        }, "dsha-test-wake").start();
-    }
 
     private void execRootCmd(String cmd) {
         try {
