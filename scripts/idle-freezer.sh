@@ -116,17 +116,24 @@ do_stop() {
         [ -n "$FPID" ] && kill -9 "$FPID" 2>/dev/null
         rm -f "$FREEZER_PID_FILE" 2>/dev/null
     fi
-    # 清理所有 daemon 实例
-    for p in $(ls -d /proc/[0-9]* 2>/dev/null); do
-        pid=$(basename "$p")
+    # 高性能清理所有 daemon 实例（毫秒级内核匹配，杜绝逐个进程扫描卡顿）
+    for pid in $(pgrep -f "idle-freezer.sh daemon" 2>/dev/null); do
         if [ "$pid" != "$$" ] && [ "$pid" != "$PPID" ]; then
-            if grep -q "idle-freezer.sh daemon" "$p/cmdline" 2>/dev/null; then
-                kill -9 "$pid" 2>/dev/null || true
-            fi
+            kill -9 "$pid" 2>/dev/null || true
         fi
     done
     rm -rf "$START_LOCK" "$WAKE_LOCK" 2>/dev/null
-    do_wake
+    # 若主进程当前处于休眠挂起态，安全解冻恢复，绝不重新拉起守护（杜绝死循环复活）
+    if [ -f "$PID_FILE" ]; then
+        MAIN_PID=$(cat "$PID_FILE" 2>/dev/null)
+        if [ -n "$MAIN_PID" ] && kill -0 "$MAIN_PID" 2>/dev/null; then
+            PROC_STAT=$(awk '{print $3}' "/proc/$MAIN_PID/stat" 2>/dev/null)
+            if [ "$PROC_STAT" = "T" ]; then
+                kill -CONT "$MAIN_PID" 2>/dev/null
+            fi
+        fi
+    fi
+    rm -f "$STATE_FILE" "$DSH_DIR/freezer.state" 2>/dev/null
 }
 
 do_daemon() {
@@ -261,13 +268,10 @@ case "$1" in
             exit 0
         fi
 
-        # 清理可能残留的死锁或历史孤儿 daemon
-        for p in $(ls -d /proc/[0-9]* 2>/dev/null); do
-            pid=$(basename "$p")
+        # 清理可能残留的死锁或历史孤儿 daemon（毫秒级内核匹配）
+        for pid in $(pgrep -f "idle-freezer.sh daemon" 2>/dev/null); do
             if [ "$pid" != "$$" ] && [ "$pid" != "$PPID" ]; then
-                if grep -q "idle-freezer.sh daemon" "$p/cmdline" 2>/dev/null; then
-                    kill -9 "$pid" 2>/dev/null || true
-                fi
+                kill -9 "$pid" 2>/dev/null || true
             fi
         done
 
