@@ -8,7 +8,8 @@
 # 4. 连续 30 分钟无新步骤时执行 kill -STOP 冻结；
 # 5. 冻结后守护进程自身立即 exit 0 彻底退出，实现 0 唤醒；
 # 6. 唤醒时解冻主进程并重新拉起守护，无缝循环；
-# 7. 精确记录北京时间操作日志。
+# 7. 精确记录北京时间操作日志；
+# 8. POSIX 原子排他锁 (mkdir) 杜绝并发穿透，精准进程单例保障。
 # ============================================================
 
 RUN_DIR="/data/adb/dsha/run"
@@ -17,6 +18,8 @@ PID_FILE="$RUN_DIR/dsh.pid"
 FREEZER_PID_FILE="$RUN_DIR/idle-freezer.pid"
 FREEZER_LOG="$RUN_DIR/idle-freezer.log"
 STATE_FILE="$RUN_DIR/freezer.state"
+START_LOCK="$RUN_DIR/freezer_start.lock"
+WAKE_LOCK="$RUN_DIR/freezer_wake.lock"
 
 # 路径自适应：检测宿主视角 vs 容器视角
 if [ -d "/data/adb/dsha/rootfs/root/.dsh" ]; then
@@ -35,43 +38,76 @@ log_msg() {
     echo "[$NOW_STR] [$ACTION] $MSG" >> "$FREEZER_LOG" 2>/dev/null
 }
 
-do_wake() {
-    TRIGGER="${1:-手动执行或未指定来源}"
-    if [ -f "$PID_FILE" ]; then
-        MAIN_PID=$(cat "$PID_FILE" 2>/dev/null)
-        if [ -n "$MAIN_PID" ] && kill -0 "$MAIN_PID" 2>/dev/null; then
-            PROC_STAT=$(awk '{print $3}' "/proc/$MAIN_PID/stat" 2>/dev/null)
-            # 严格判据：只有此前确实已被冻结（进程为 T 挂起态，或存在冻结标记）时才解冻并记录日志
-            if [ "$PROC_STAT" = "T" ] || [ -f "$STATE_FILE" ] || [ -f "$DSH_DIR/freezer.state" ]; then
-                kill -CONT "$MAIN_PID" 2>/dev/null
-                rm -f "$STATE_FILE" "$DSH_DIR/freezer.state" 2>/dev/null
-                log_msg "WAKE" "主进程已原地解冻恢复 (PID: $MAIN_PID) | 唤醒源: [$TRIGGER]"
-                
-                # 原地恢复常驻通知为运行状态 (走常驻通道，绝不弹窗打扰)
-                TOKEN=$(cat "$DSH_DIR/.bridge_token" 2>/dev/null)
-                if [ -n "$TOKEN" ]; then
-                    curl -s -m 2 "http://127.0.0.1:3095/app/freeze/state?token=$TOKEN&frozen=0" >/dev/null 2>&1 &
-                fi
-                
-                # 唤醒后，若前端开关仍处于开启状态，重新拉起守护扫描开启新一轮计时
-                if [ -f "$ENABLED_FILE" ]; then
-                    sh "/data/adb/dsha/scripts/idle-freezer.sh" start >/dev/null 2>&1 &
-                fi
-            fi
-            # 进程原本就在正常运行（未冻结），静默忽略，绝不重复打印解冻日志！
-            return 0
-        else
-            # 进程已死亡
-            if [ -f "$STATE_FILE" ] || [ -f "$DSH_DIR/freezer.state" ]; then
-                rm -f "$STATE_FILE" "$DSH_DIR/freezer.state" 2>/dev/null
-                log_msg "DEAD" "唤醒失败：主进程 (PID: $MAIN_PID) 已不存在/死亡 | 唤醒源: [$TRIGGER]"
-                TOKEN=$(cat "$DSH_DIR/.bridge_token" 2>/dev/null)
-                if [ -n "$TOKEN" ]; then
-                    curl -s -m 2 "http://127.0.0.1:3095/app/freeze/state?token=$TOKEN&dead=1" >/dev/null 2>&1 &
-                fi
+# 严格检测是否有存活的有效 daemon
+is_daemon_alive() {
+    if [ -f "$FREEZER_PID_FILE" ]; then
+        FPID=$(cat "$FREEZER_PID_FILE" 2>/dev/null)
+        if [ -n "$FPID" ] && kill -0 "$FPID" 2>/dev/null; then
+            if grep -q "idle-freezer" "/proc/$FPID/cmdline" 2>/dev/null; then
+                return 0
             fi
         fi
     fi
+    return 1
+}
+
+do_wake() {
+    TRIGGER="${1:-手动执行或未指定来源}"
+    if [ ! -f "$PID_FILE" ]; then return 0; fi
+    MAIN_PID=$(cat "$PID_FILE" 2>/dev/null)
+    if [ -z "$MAIN_PID" ] || ! kill -0 "$MAIN_PID" 2>/dev/null; then
+        # 进程已死亡
+        if [ -f "$STATE_FILE" ] || [ -f "$DSH_DIR/freezer.state" ]; then
+            rm -f "$STATE_FILE" "$DSH_DIR/freezer.state" 2>/dev/null
+            log_msg "DEAD" "唤醒失败：主进程 (PID: $MAIN_PID) 已不存在/死亡 | 唤醒源: [$TRIGGER]"
+            TOKEN=$(cat "$DSH_DIR/.bridge_token" 2>/dev/null)
+            if [ -n "$TOKEN" ]; then
+                curl -s -m 2 "http://127.0.0.1:3095/app/freeze/state?token=$TOKEN&dead=1" >/dev/null 2>&1 &
+            fi
+        fi
+        return 0
+    fi
+
+    PROC_STAT=$(awk '{print $3}' "/proc/$MAIN_PID/stat" 2>/dev/null)
+    # 严格判据：只有此前确实已被冻结（进程为 T 挂起态，或存在冻结标记）时才解冻并记录日志
+    if [ "$PROC_STAT" = "T" ] || [ -f "$STATE_FILE" ] || [ -f "$DSH_DIR/freezer.state" ]; then
+        # 原子排他抢占唤醒锁：防止并发 wake 瞬间重入
+        if ! mkdir "$WAKE_LOCK" 2>/dev/null; then
+            W_AGE=$(( $(date +%s) - $(stat -c %Y "$WAKE_LOCK" 2>/dev/null || echo 0) ))
+            if [ "$W_AGE" -gt 3 ]; then
+                rm -rf "$WAKE_LOCK" 2>/dev/null
+                mkdir "$WAKE_LOCK" 2>/dev/null || return 0
+            else
+                return 0
+            fi
+        fi
+
+        # 抢到锁后二次复核状态，避免并发先到者已解冻完成后重复操作
+        PROC_STAT_NOW=$(awk '{print $3}' "/proc/$MAIN_PID/stat" 2>/dev/null)
+        if [ "$PROC_STAT_NOW" != "T" ] && [ ! -f "$STATE_FILE" ] && [ ! -f "$DSH_DIR/freezer.state" ]; then
+            rm -rf "$WAKE_LOCK" 2>/dev/null
+            return 0
+        fi
+
+        kill -CONT "$MAIN_PID" 2>/dev/null
+        rm -f "$STATE_FILE" "$DSH_DIR/freezer.state" 2>/dev/null
+        log_msg "WAKE" "主进程已原地解冻恢复 (PID: $MAIN_PID) | 唤醒源: [$TRIGGER]"
+        
+        # 原地恢复常驻通知为运行状态 (走常驻通道，绝不弹窗打扰)
+        TOKEN=$(cat "$DSH_DIR/.bridge_token" 2>/dev/null)
+        if [ -n "$TOKEN" ]; then
+            curl -s -m 2 "http://127.0.0.1:3095/app/freeze/state?token=$TOKEN&frozen=0" >/dev/null 2>&1 &
+        fi
+        
+        # 唤醒后，若前端开关仍处于开启状态，重新拉起守护扫描开启新一轮计时
+        if [ -f "$ENABLED_FILE" ]; then
+            sh "/data/adb/dsha/scripts/idle-freezer.sh" start >/dev/null 2>&1 &
+        fi
+
+        rm -rf "$WAKE_LOCK" 2>/dev/null
+    fi
+    # 进程原本就在正常运行（未冻结），静默忽略，绝不重复打印解冻日志！
+    return 0
 }
 
 do_stop() {
@@ -80,12 +116,23 @@ do_stop() {
         [ -n "$FPID" ] && kill -9 "$FPID" 2>/dev/null
         rm -f "$FREEZER_PID_FILE" 2>/dev/null
     fi
-    pkill -9 -f "idle-freezer.sh daemon" 2>/dev/null || true
+    # 清理所有 daemon 实例
+    for p in $(ls -d /proc/[0-9]* 2>/dev/null); do
+        pid=$(basename "$p")
+        if [ "$pid" != "$$" ] && [ "$pid" != "$PPID" ]; then
+            if grep -q "idle-freezer.sh daemon" "$p/cmdline" 2>/dev/null; then
+                kill -9 "$pid" 2>/dev/null || true
+            fi
+        fi
+    done
+    rm -rf "$START_LOCK" "$WAKE_LOCK" 2>/dev/null
     do_wake
 }
 
 do_daemon() {
+    # 守护进程自身保持 PID 文件一致
     echo "$$" > "$FREEZER_PID_FILE"
+
     while true; do
         sleep $CHECK_INTERVAL # 10 分钟极简低频休眠
         
@@ -196,12 +243,40 @@ do_freeze_now() {
 case "$1" in
     start)
         if [ ! -f "$ENABLED_FILE" ]; then exit 0; fi
-        if [ -f "$FREEZER_PID_FILE" ]; then
-            FPID=$(cat "$FREEZER_PID_FILE" 2>/dev/null)
-            if [ -n "$FPID" ] && kill -0 "$FPID" 2>/dev/null; then exit 0; fi
+
+        # 原子排他抢占锁：杜绝并发 start 穿透
+        if ! mkdir "$START_LOCK" 2>/dev/null; then
+            L_AGE=$(( $(date +%s) - $(stat -c %Y "$START_LOCK" 2>/dev/null || echo 0) ))
+            if [ "$L_AGE" -gt 3 ]; then
+                rm -rf "$START_LOCK" 2>/dev/null
+                mkdir "$START_LOCK" 2>/dev/null || exit 0
+            else
+                exit 0
+            fi
         fi
+
+        # 检查是否已有存活的有效 daemon
+        if is_daemon_alive; then
+            rm -rf "$START_LOCK" 2>/dev/null
+            exit 0
+        fi
+
+        # 清理可能残留的死锁或历史孤儿 daemon
+        for p in $(ls -d /proc/[0-9]* 2>/dev/null); do
+            pid=$(basename "$p")
+            if [ "$pid" != "$$" ] && [ "$pid" != "$PPID" ]; then
+                if grep -q "idle-freezer.sh daemon" "$p/cmdline" 2>/dev/null; then
+                    kill -9 "$pid" 2>/dev/null || true
+                fi
+            fi
+        done
+
         log_msg "START" "闲置冻结守护已拉起 (检测周期: 10分钟, 闲置阈值: 30分钟)"
         sh "/data/adb/dsha/scripts/idle-freezer.sh" daemon >/dev/null 2>&1 &
+        # 立即把新后台进程的 PID 写入，消除任何时间窗
+        echo "$!" > "$FREEZER_PID_FILE"
+
+        rm -rf "$START_LOCK" 2>/dev/null
         ;;
     stop)
         do_stop

@@ -66,9 +66,15 @@ const FREEZER_LOG_FILES = [
   '/data/adb/dsha/rootfs/root/.dsh/idle-freezer.log'
 ];
 
+function getLocalTimeString() {
+  const d = new Date();
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60 * 1000);
+  return local.toISOString().replace('T', ' ').slice(0, 19);
+}
+
 function logFreezer(action, msg) {
   try {
-    const time = new Date().toISOString().replace('T', ' ').slice(0, 19);
+    const time = getLocalTimeString();
     const line = `[${time}] [${action}] ${msg}\n`;
     for (const logPath of FREEZER_LOG_FILES) {
       try {
