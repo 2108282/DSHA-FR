@@ -52,6 +52,20 @@ public class HarnessController {
      */
     private static volatile String webAuthUrl = "";
 
+    /** 核心休眠冻结状态（内存态，由 3095 桥通知与手动测试直接驱动，零开销无权限陷阱）。 */
+    private static volatile boolean isFrozen = false;
+
+    public boolean isFrozen() {
+        return isFrozen;
+    }
+
+    public void setFrozenState(boolean frozen) {
+        if (isFrozen != frozen) {
+            isFrozen = frozen;
+            uiHandler.post(this::notifyStatusChanged);
+        }
+    }
+
     public HarnessController(Context ctx) {
         this.ctx = ctx.getApplicationContext();
         this.config = new ConfigStore(this.ctx);
@@ -137,6 +151,15 @@ public class HarnessController {
         if (now - lastStatusCheckMs < 1200L) return;
         lastStatusCheckMs = now;
         io.execute(() -> {
+            // 处于休眠冻结挂起中：核心必须视为运行态，绝不执行可能超时的 Socket 探活，绝不清空 webAuthUrl！
+            if (isFrozen) {
+                if (!lastKnownWebRunning) {
+                    lastKnownWebRunning = true;
+                    notifyStatusChanged();
+                }
+                return;
+            }
+
             boolean running = false;
             String foundUrl = null;
             int currentPort = getPort();
@@ -204,6 +227,11 @@ public class HarnessController {
     /** Web 是否在运行（针对 ksu_chroot 严禁在主线程执行网络 Socket 或 su，子线程毫秒级探活）。 */
     public boolean isWebRunning() {
         if ("ksu_chroot".equals(proot.runtime().id())) {
+            // 0. 休眠冻结判定：若处于休眠中，主进程只是被 SIGSTOP 挂起，绝对视为运行态
+            if (isFrozen) {
+                return true;
+            }
+
             // 1. 主线程调用：绝不能执行网络或同步 su，返回已知状态并异步触发刷新
             if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
                 asyncRefreshStatus();
@@ -951,16 +979,12 @@ public class HarnessController {
     }
 
     public void resumeIfFrozen(String trigger) {
-        if (!config.isIdleFreezeEnabled()) return;
-        // 关键门禁：只有底层明确处于 FROZEN 状态时才执行解冻唤醒，彻底杜绝无谓的重复唤醒与日志刷屏
-        File stateFile = new File("/data/adb/dsha/run/freezer.state");
-        if (!stateFile.exists()) {
-            return;
-        }
         String safeTrigger = (trigger != null && !trigger.isEmpty()) ? trigger.replace("\"", "") : "App交互";
         new Thread(() -> {
             try {
                 execRootCmd("sh /data/adb/dsha/scripts/idle-freezer.sh wake \"" + safeTrigger + "\"");
+                isFrozen = false;
+                uiHandler.post(this::notifyStatusChanged);
             } catch (Throwable ignored) {}
         }, "dsha-idle-wake").start();
     }
@@ -972,7 +996,7 @@ public class HarnessController {
      * -1: 核心未运行
      */
     public int getFreezeState() {
-        if (new File("/data/adb/dsha/run/freezer.state").exists()) {
+        if (isFrozen) {
             return 1;
         }
         if (isWebRunning()) {
@@ -989,8 +1013,12 @@ public class HarnessController {
                 Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "sh /data/adb/dsha/scripts/idle-freezer.sh freeze-now \"详细配置页测试休眠按钮\""});
                 success = (p.waitFor() == 0);
             } catch (Throwable ignored) {}
+            if (success) {
+                isFrozen = true;
+            }
             final boolean finalSuccess = success;
             uiHandler.post(() -> {
+                notifyStatusChanged();
                 if (callback != null) callback.accept(finalSuccess);
             });
         }, "dsha-test-freeze").start();
@@ -1004,8 +1032,12 @@ public class HarnessController {
                 Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "sh /data/adb/dsha/scripts/idle-freezer.sh wake \"详细配置页测试解冻按钮\""});
                 success = (p.waitFor() == 0);
             } catch (Throwable ignored) {}
+            if (success) {
+                isFrozen = false;
+            }
             final boolean finalSuccess = success;
             uiHandler.post(() -> {
+                notifyStatusChanged();
                 if (callback != null) callback.accept(finalSuccess);
             });
         }, "dsha-test-wake").start();

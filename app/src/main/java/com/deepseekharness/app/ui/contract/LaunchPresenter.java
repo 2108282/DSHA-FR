@@ -106,8 +106,8 @@ public class LaunchPresenter implements LaunchActions {
             controller.tryRecoverRunningUrl();
         }
 
-        // 2. 状态标题与 Busy 指示 (优先纯本地只读文件检查休眠态，零网络零开销，绝对不吵醒核心)
-        boolean isFrozen = new java.io.File("/data/adb/dsha/run/freezer.state").exists();
+        // 2. 状态标题与 Busy 指示 (纯内存感知休眠态，零网络零开销，无应用沙箱权限问题)
+        boolean isFrozen = controller.isFrozen();
         String title;
         boolean busy;
         if (stopping) {
@@ -119,7 +119,7 @@ public class LaunchPresenter implements LaunchActions {
         } else if (starting) {
             title = "DSH 启动中…";
             busy = true;
-        } else if (isFrozen && (ready || running)) {
+        } else if (isFrozen) {
             title = "DSH 休眠中";
             busy = false;
         } else if (ready) {
@@ -148,7 +148,7 @@ public class LaunchPresenter implements LaunchActions {
         } else if (starting) {
             primaryText = "启动中…";
             primaryEnabled = false;
-        } else if (ready || running) {
+        } else if (isFrozen || ready || running) {
             primaryText = "进入";
             primaryEnabled = true;
         } else {
@@ -191,7 +191,7 @@ public class LaunchPresenter implements LaunchActions {
         String statusDesc;
         if (!customStatusMsg.isEmpty()) {
             statusDesc = customStatusMsg;
-        } else if (isFrozen && (ready || running)) {
+        } else if (isFrozen) {
             statusDesc = "闲置满30分钟已挂起省电，点击「进入」即刻秒级唤醒";
         } else if (ready) {
             statusDesc = "环境完整，核心进程运行正常（端口：" + getSavedPort() + "）";
@@ -231,16 +231,21 @@ public class LaunchPresenter implements LaunchActions {
 
     @Override
     public void onPrimaryActionClick() {
-        boolean running = controller.isWebRunning();
-        boolean hasUrl = !controller.getWebAuthUrl().isEmpty();
-
-        if (running && hasUrl) {
+        boolean isFrozen = controller.isFrozen();
+        if (isFrozen) {
             controller.resumeIfFrozen("启动页主按钮点击");
             openExternalBrowser();
             return;
         }
+
+        boolean running = controller.isWebRunning();
+        boolean hasUrl = !controller.getWebAuthUrl().isEmpty();
+
+        if (running && hasUrl) {
+            openExternalBrowser();
+            return;
+        }
         if (running && !hasUrl) {
-            controller.resumeIfFrozen("启动页主按钮点击");
             com.deepseekharness.app.util.ToastHelper.show(context, "正在同步鉴权凭据，请稍候…");
             controller.tryRecoverRunningUrl();
             return;
