@@ -39,8 +39,8 @@ do_wake() {
     rm -f "$STATE_FILE" 2>/dev/null
     if [ -f "$PID_FILE" ]; then
         MAIN_PID=$(cat "$PID_FILE" 2>/dev/null)
-        if [ -n "$MAIN_PID" ]; then
-            # 瞬间解冻恢复主进程运行 (0.1毫秒原地复苏)
+        if [ -n "$MAIN_PID" ] && kill -0 "$MAIN_PID" 2>/dev/null; then
+            # 进程健在：瞬间解冻恢复主进程运行 (0.1毫秒原地复苏)
             kill -CONT "$MAIN_PID" 2>/dev/null
             log_msg "WAKE" "已执行 SIGCONT 原地解冻唤醒主进程 (PID: $MAIN_PID)"
             
@@ -49,6 +49,9 @@ do_wake() {
             if [ -n "$TOKEN" ]; then
                 curl -s -m 2 "http://127.0.0.1:3095/app/freeze/state?token=$TOKEN&frozen=0" >/dev/null 2>&1 &
             fi
+        else
+            # 进程已死亡：严格保留现场，绝不自动拉起，方便排查！
+            log_msg "DEAD" "唤醒失败：检测到主进程 (PID: $MAIN_PID) 已不存在/已死亡，已保留案发现场（不自动拉起）"
         fi
     fi
     # 唤醒后，若前端开关仍处于开启状态，重新拉起守护扫描开启新一轮计时

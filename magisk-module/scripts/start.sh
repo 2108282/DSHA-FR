@@ -380,8 +380,9 @@ if [ -f "$PKG_JSON" ] && ! grep -q "@deepseek-ai/dsh-web-app" "$PKG_JSON" 2>/dev
     sed -i 's|"bundles": \[\s*|"bundles": \[\n        "@deepseek-ai/dsh-base",\n        "@deepseek-ai/dsh-web-app",\n|' "$PKG_JSON" 2>/dev/null || true
 fi
 
-# 6. 原生拉起 Node.js DSH Web 服务
-chroot "$ROOTFS" /usr/bin/env -i \
+# 6. 原生拉起 Node.js DSH Web 服务 (独立 Session 隔离 + SIGHUP 免疫，彻底根除孤儿进程组误杀)
+trap '' HUP 2>/dev/null || true
+chroot "$ROOTFS" /usr/bin/setsid /usr/bin/env -i \
     HOME=/root \
     USER=root \
     LOGNAME=root \
