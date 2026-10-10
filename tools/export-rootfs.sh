@@ -243,7 +243,6 @@ EOF_PKG
         "--exclude=./root/.dsh/restore-report.txt"
         "--exclude=./root/.dsh/plugin-export*"
         "--exclude=./root/dsha-repo"
-        "--exclude=./root/dsh-web-mobile"
         "--exclude=./root/.opencodereview"
         "--exclude=./root/root*"
         "--exclude=./normify-*"
@@ -267,7 +266,11 @@ EOF_PKG
     STAGE_GLOBAL_NM="$STAGE_DIR/usr/local/lib/node_modules"
     mkdir -p "$STAGE_PROFILE_NM" "$STAGE_GLOBAL_NM"
     for p in dsh-device-shell-guide dsh-task-notifier dsh-status-overlay dsh-web-mobile; do
-        tgt="/root/dsha-${p#dsh-}"
+        if [ "$p" = "dsh-web-mobile" ]; then
+            tgt="/root/dsh-web-mobile"
+        else
+            tgt="/root/dsha-${p#dsh-}"
+        fi
         ln -sfn "$tgt" "$STAGE_PROFILE_NM/$p"
         ln -sfn "$tgt" "$STAGE_GLOBAL_NM/$p"
     done
