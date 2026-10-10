@@ -49,10 +49,11 @@ public class LaunchPresenter implements LaunchActions {
         @Override
         public void run() {
             if (isDestroyed) return;
+            controller.asyncRefreshStatus();
             recalculateState();
             boolean running = controller.isWebRunning();
             boolean hasUrl = !controller.getWebAuthUrl().isEmpty();
-            long delay = (running && hasUrl) ? 2500L : 1000L;
+            long delay = (running && hasUrl) ? 2000L : 1000L;
             uiHandler.postDelayed(this, delay);
         }
     };

@@ -143,57 +143,37 @@ public class HarnessController {
         });
     }
 
-    /** 异步执行 status.sh / Socket 探测并刷新后台状态与鉴权链接。 */
+    /** 异步执行 status.sh 并刷新后台状态、休眠状态与鉴权链接（纯正主动扫描 Pull 模型）。 */
     public void asyncRefreshStatus() {
         if (!"ksu_chroot".equals(proot.runtime().id())) return;
         long now = android.os.SystemClock.elapsedRealtime();
         if (isStarting() || isStopping()) return;
-        if (now - lastStatusCheckMs < 1200L) return;
+        if (now - lastStatusCheckMs < 800L) return;
         lastStatusCheckMs = now;
         io.execute(() -> {
-            // 处于休眠冻结挂起中：核心必须视为运行态，绝不执行可能超时的 Socket 探活，绝不清空 webAuthUrl！
-            if (isFrozen) {
-                if (!lastKnownWebRunning) {
-                    lastKnownWebRunning = true;
-                    notifyStatusChanged();
-                }
-                return;
-            }
-
             boolean running = false;
+            boolean frozen = false;
             String foundUrl = null;
-            int currentPort = getPort();
 
-            // 1. 先用 Socket 极速尝试探活 (150ms 超时)
-            boolean socketAlive = false;
-            try (java.net.Socket s = new java.net.Socket()) {
-                s.connect(new java.net.InetSocketAddress("127.0.0.1", currentPort), 150);
-                socketAlive = true;
+            try {
+                Process p = Runtime.getRuntime().exec(new String[]{"su", "-mm", "-c", "/data/adb/dsha/scripts/status.sh"});
+                String out = new String(Compat.readAllBytes(p.getInputStream()), StandardCharsets.UTF_8).trim();
+                if (out.contains("STATUS:FROZEN")) {
+                    running = true;
+                    frozen = true;
+                    foundUrl = extractAuthUrl(out);
+                } else if (out.contains("STATUS:RUNNING")) {
+                    running = true;
+                    frozen = false;
+                    foundUrl = extractAuthUrl(out);
+                }
             } catch (Throwable ignored) {}
 
-            if (socketAlive) {
-                running = true;
-                if (webAuthUrl.isEmpty()) {
-                    // 若 Socket 存活但内存中无鉴权链接，调 status.sh 或查日志补齐
-                    try {
-                        Process p = Runtime.getRuntime().exec(new String[]{"su", "-mm", "-c", "/data/adb/dsha/scripts/status.sh"});
-                        String out = new String(Compat.readAllBytes(p.getInputStream()), StandardCharsets.UTF_8).trim();
-                        foundUrl = extractAuthUrl(out);
-                    } catch (Throwable ignored) {}
-                }
-            } else {
-                // Socket 未连上，调 status.sh 最终核验（防止进程刚起未监听）
-                try {
-                    Process p = Runtime.getRuntime().exec(new String[]{"su", "-mm", "-c", "/data/adb/dsha/scripts/status.sh"});
-                    String out = new String(Compat.readAllBytes(p.getInputStream()), StandardCharsets.UTF_8).trim();
-                    if (p.waitFor() == 0 || out.contains("STATUS:RUNNING")) {
-                        running = true;
-                        foundUrl = extractAuthUrl(out);
-                    }
-                } catch (Throwable ignored) {}
-            }
-
             boolean changed = false;
+            if (isFrozen != frozen) {
+                isFrozen = frozen;
+                changed = true;
+            }
             if (lastKnownWebRunning != running) {
                 lastKnownWebRunning = running;
                 changed = true;

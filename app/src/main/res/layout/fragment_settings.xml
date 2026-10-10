@@ -528,7 +528,7 @@
             android:layout_marginTop="10dp"
             android:fontFamily="monospace"
             android:gravity="center"
-            android:text="DSHA-FR v0.2.1-alpha.1-u8"
+            android:text="DSHA-FR v0.2.1-alpha.1-u9"
             android:textColor="@color/text_muted"
             android:textSize="12sp" />
 
