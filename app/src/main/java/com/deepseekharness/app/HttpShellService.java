@@ -526,6 +526,18 @@ public final class HttpShellService {
                 String q = queryOf(path);
                 boolean dead = "1".equals(getParam(q, "dead", "0"));
                 boolean frozen = "1".equals(getParam(q, "frozen", "0"));
+                try {
+                    HarnessController hc = HarnessController.get(ctx);
+                    if (hc != null) {
+                        if (dead) {
+                            hc.setFrozenState(false);
+                        } else if (frozen) {
+                            hc.setFrozenState(true);
+                        } else {
+                            hc.resumeIfFrozen("局域网代理唤醒");
+                        }
+                    }
+                } catch (Throwable ignored) {}
                 HarnessService.updateFreezeState(ctx, frozen, dead);
                 result = "OK";
             } else if (path.startsWith("/app/notify")) {
