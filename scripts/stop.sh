@@ -42,6 +42,7 @@ if [ -f "$PID_FILE" ]; then
         kill -9 "$MAIN_PID" 2>/dev/null || true
     fi
     rm -f "$PID_FILE" 2>/dev/null || true
+    rm -f "$ROOTFS/root/.dsh/dsh.pid" 2>/dev/null || true
 fi
 rm -f "$RUN_DIR/port" 2>/dev/null || true
 
