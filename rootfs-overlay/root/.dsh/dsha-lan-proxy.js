@@ -76,8 +76,11 @@ function ensureBackendAwake(trigger) {
     const parts = statContent.split(' ');
     const state = parts[2]; // 状态代码
 
-    // 若进程被 SIGSTOP 冻结 (T 状态)，立即调脚本原地唤醒并记录来源！
+    // 若进程被 SIGSTOP 冻结 (T 状态)，立即派发 SIGCONT 原地唤醒并通知看门狗同步！
     if (state === 'T') {
+      try {
+        process.kill(pid, 'SIGCONT');
+      } catch (e) {}
       const cleanTrigger = (trigger || 'LAN访问').toString().replace(/["'`\n\r]/g, ' ');
       try {
         require('child_process').exec(`sh /data/adb/dsha/scripts/idle-freezer.sh wake "局域网: ${cleanTrigger}" >/dev/null 2>&1`);
