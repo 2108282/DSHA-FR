@@ -947,17 +947,76 @@ public class HarnessController {
     }
 
     public void resumeIfFrozen() {
+        resumeIfFrozen("App界面交互唤醒");
+    }
+
+    public void resumeIfFrozen(String trigger) {
         if (!config.isIdleFreezeEnabled()) return;
         // 关键门禁：只有底层明确处于 FROZEN 状态时才执行解冻唤醒，彻底杜绝无谓的重复唤醒与日志刷屏
         File stateFile = new File("/data/adb/dsha/run/freezer.state");
         if (!stateFile.exists()) {
             return;
         }
+        String safeTrigger = (trigger != null && !trigger.isEmpty()) ? trigger.replace("\"", "") : "App交互";
         new Thread(() -> {
             try {
-                execRootCmd("sh /data/adb/dsha/scripts/idle-freezer.sh wake");
+                execRootCmd("sh /data/adb/dsha/scripts/idle-freezer.sh wake \"" + safeTrigger + "\"");
             } catch (Throwable ignored) {}
         }, "dsha-idle-wake").start();
+    }
+
+    /**
+     * 获取当前休眠冻结状态：
+     * 1: 休眠冻结中 (SIGSTOP 挂起)
+     * 0: 正常运行中
+     * -1: 核心未运行
+     */
+    public int getFreezeState() {
+        if (new File("/data/adb/dsha/run/freezer.state").exists()) {
+            return 1;
+        }
+        if (isWebRunning()) {
+            return 0;
+        }
+        return -1;
+    }
+
+    /** 手动触发休眠测试 (执行 freeze-now) */
+    public void testFreeze(java.util.function.Consumer<Boolean> callback) {
+        new Thread(() -> {
+            boolean success = false;
+            try {
+                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "sh /data/adb/dsha/scripts/idle-freezer.sh freeze-now \"详细配置页测试休眠按钮\""});
+                success = (p.waitFor() == 0);
+            } catch (Throwable ignored) {}
+            final boolean finalSuccess = success;
+            uiHandler.post(() -> {
+                if (callback != null) callback.accept(finalSuccess);
+            });
+        }, "dsha-test-freeze").start();
+    }
+
+    /** 手动触发解冻测试 (执行 wake) */
+    public void testWake(java.util.function.Consumer<Boolean> callback) {
+        new Thread(() -> {
+            boolean success = false;
+            try {
+                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "sh /data/adb/dsha/scripts/idle-freezer.sh wake \"详细配置页测试解冻按钮\""});
+                success = (p.waitFor() == 0);
+            } catch (Throwable ignored) {}
+            final boolean finalSuccess = success;
+            uiHandler.post(() -> {
+                if (callback != null) callback.accept(finalSuccess);
+            });
+        }, "dsha-test-wake").start();
+    }
+                success = (p.waitFor() == 0);
+            } catch (Throwable ignored) {}
+            final boolean finalSuccess = success;
+            uiHandler.post(() -> {
+                if (callback != null) callback.accept(finalSuccess);
+            });
+        }, "dsha-test-wake").start();
     }
 
     private void execRootCmd(String cmd) {

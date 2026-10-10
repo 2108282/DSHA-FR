@@ -43,29 +43,6 @@ public class HarnessService extends Service {
     private android.net.wifi.WifiManager.WifiLock wifiLock;
     private static volatile long sLastTaskActiveTime = 0L;
 
-    private final android.os.Handler heartBeatHandler = new android.os.Handler(android.os.Looper.getMainLooper());
-    private final Runnable heartBeatRunnable = new Runnable() {
-        @Override
-        public void run() {
-            try {
-                ConfigStore cfg = new ConfigStore(HarnessService.this);
-                if (!cfg.isPersistentNotificationEnabled()) {
-                    stopForeground(true);
-                    stopSelf();
-                    return;
-                }
-                if (c != null && !c.isWebRunning()) {
-                    android.util.Log.i("DSHA", "[常驻通知] 检测到底层核心已停止运转，主动撤销常驻通知");
-                    stopForeground(true);
-                    stopSelf();
-                    return;
-                }
-            } catch (Throwable ignored) {}
-            // 仅在亮屏期间每 30 秒轻量确认一次核心存活
-            heartBeatHandler.postDelayed(this, 30_000L);
-        }
-    };
-
     /** 熄屏超时兜底定时器：防止网络或异常场景下锁死整夜 */
     private final android.os.Handler screenOffTimeoutHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private final Runnable screenOffTimeoutRunnable = new Runnable() {
@@ -215,7 +192,6 @@ public class HarnessService extends Service {
                     if (intent == null || intent.getAction() == null) return;
                     String action = intent.getAction();
                     if (Intent.ACTION_SCREEN_OFF.equals(action)) {
-                        heartBeatHandler.removeCallbacks(heartBeatRunnable);
                         // 熄屏：无论是否有任务，本机回环均无须占用物理 Wi-Fi 射频芯片，立即放锁让网卡休眠
                         releaseWifiLock();
                         long idleTime = System.currentTimeMillis() - sLastTaskActiveTime;
@@ -232,8 +208,6 @@ public class HarnessService extends Service {
                         }
                     } else if (Intent.ACTION_SCREEN_ON.equals(action) || Intent.ACTION_USER_PRESENT.equals(action)) {
                         screenOffTimeoutHandler.removeCallbacks(screenOffTimeoutRunnable);
-                        heartBeatHandler.removeCallbacks(heartBeatRunnable);
-                        heartBeatHandler.postDelayed(heartBeatRunnable, 30_000L);
                         if (isTaskRunning()) {
                             acquireLocks();
                         }
@@ -287,7 +261,6 @@ public class HarnessService extends Service {
     @Override
     public void onDestroy() {
         if (currentInstance == this) currentInstance = null;
-        heartBeatHandler.removeCallbacks(heartBeatRunnable);
         stopScreenWatcher();
         releaseLocks();
         if (shellHttp != null) {
@@ -343,25 +316,30 @@ public class HarnessService extends Service {
     }
 
     private Notification buildNotification(String title, String text) {
-        return buildNotification(title, text, false);
+        return buildNotification(this, title, text, false);
     }
 
     private Notification buildNotification(String title, String text, boolean isFrozen) {
-        Intent sheetIntent = new Intent(this, com.deepseekharness.app.ui.QuickChatSheetActivity.class)
+        return buildNotification(this, title, text, isFrozen);
+    }
+
+    public static Notification buildNotification(Context ctx, String title, String text, boolean isFrozen) {
+        Intent sheetIntent = new Intent(ctx, com.deepseekharness.app.ui.QuickChatSheetActivity.class)
                 .setAction("com.deepseekharness.app.OPEN_SHEET")
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS);
-        PendingIntent sheetPi = PendingIntent.getActivity(this, 1, sheetIntent,
+        PendingIntent sheetPi = PendingIntent.getActivity(ctx, 1, sheetIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
-        NotificationCompat.Builder b = new NotificationCompat.Builder(this, CHANNEL_ID)
+        NotificationCompat.Builder b = new NotificationCompat.Builder(ctx, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_whale_logo)
                 .setContentTitle(title)
                 .setContentText(text)
                 .setContentIntent(sheetPi)
-                .setOngoing(true);
+                .setOngoing(true)
+                .setOnlyAlertOnce(true);
 
         try {
-            android.graphics.Bitmap bmp = android.graphics.BitmapFactory.decodeResource(getResources(), R.drawable.ic_whale_logo);
+            android.graphics.Bitmap bmp = android.graphics.BitmapFactory.decodeResource(ctx.getResources(), R.drawable.ic_whale_logo);
             if (bmp != null) b.setLargeIcon(bmp);
         } catch (Throwable ignored) {}
 
@@ -369,17 +347,42 @@ public class HarnessService extends Service {
     }
 
     public static void updateFreezeState(boolean frozen) {
-        HarnessService s = currentInstance;
-        if (s == null) return;
+        updateFreezeState(null, frozen, false);
+    }
+
+    public static void updateFreezeState(Context callerCtx, boolean frozen, boolean dead) {
+        Context ctx = callerCtx;
+        if (ctx == null && currentInstance != null) {
+            ctx = currentInstance;
+        }
+        if (ctx == null) {
+            ctx = com.deepseekharness.app.DshaApp.get();
+        }
+        if (ctx == null) return;
+
         try {
-            ConfigStore cfg = new ConfigStore(s);
+            NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (dead) {
+                // 核心进程死亡事件：彻底收尸，撤销常驻通知并退出服务
+                if (nm != null) {
+                    nm.cancel(NOTIF_ID);
+                }
+                if (currentInstance != null) {
+                    currentInstance.stopForeground(true);
+                    currentInstance.stopSelf();
+                }
+                android.util.Log.i("DSHA", "[常驻通知] 收到核心死亡事件，已就地撤销常驻通知并退出服务");
+                return;
+            }
+
+            ConfigStore cfg = new ConfigStore(ctx);
             if (!cfg.isPersistentNotificationEnabled()) return;
-            NotificationManager nm = (NotificationManager) s.getSystemService(Context.NOTIFICATION_SERVICE);
+
             if (nm != null) {
                 if (frozen) {
-                    nm.notify(NOTIF_ID, s.buildNotification("DSH 休眠中", "DSH 休眠中", true));
+                    nm.notify(NOTIF_ID, buildNotification(ctx, "DSH 休眠中", "DSH 休眠中", true));
                 } else {
-                    nm.notify(NOTIF_ID, s.buildNotification("DSHA 运行中", "大肥鱼核心运行中", false));
+                    nm.notify(NOTIF_ID, buildNotification(ctx, "DSHA 运行中", "大肥鱼核心运行中", false));
                 }
             }
         } catch (Throwable ignored) {}

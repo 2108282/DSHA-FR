@@ -88,9 +88,20 @@ public class ConfigPresenter implements ConfigActions {
         String a11yStatus = checkA11yStatus();
         String asrStatus = checkAsrStatus();
 
+        int freezeCode = HarnessController.get(context).getFreezeState();
+        String freezeStatusText;
+        if (freezeCode == 1) {
+            freezeStatusText = "DSH 处于休眠冻结中 (SIGSTOP 挂起)";
+        } else if (freezeCode == 0) {
+            freezeStatusText = "DSH 正常运行中";
+        } else {
+            freezeStatusText = "DSH 核心未启动";
+        }
+
         ConfigUiState state = new ConfigUiState(
                 port, taskset, confirmShell, isIdleFreeze, overlayStream, capSensors,
-                capLocation, asrContinuous, allFilesStatus, a11yStatus, asrStatus, currentRootStatus
+                capLocation, asrContinuous, allFilesStatus, a11yStatus, asrStatus, currentRootStatus,
+                freezeCode, freezeStatusText
         );
         mainHandler.post(() -> callback.onRender(state));
     }
@@ -284,6 +295,46 @@ public class ConfigPresenter implements ConfigActions {
         } catch (Throwable t) {
             toast("无法打开无障碍设置");
         }
+    }
+
+    @Override
+    public void onTestFreeze() {
+        HarnessController ctrl = HarnessController.get(context);
+        int curState = ctrl.getFreezeState();
+        if (curState == -1) {
+            toast("DSH 核心未启动，无法进入休眠");
+            return;
+        }
+        if (curState == 1) {
+            toast("当前已处于休眠状态");
+            return;
+        }
+        ctrl.testFreeze(success -> {
+            if (success) {
+                toast("已执行休眠冻结，请下拉通知栏查看「DSH 休眠中」");
+            } else {
+                toast("触发休眠失败，请检查 Root 权限");
+            }
+            refreshState();
+        });
+    }
+
+    @Override
+    public void onTestWake() {
+        HarnessController ctrl = HarnessController.get(context);
+        int curState = ctrl.getFreezeState();
+        if (curState == -1) {
+            toast("DSH 核心未启动");
+            return;
+        }
+        ctrl.testWake(success -> {
+            if (success) {
+                toast("已解除休眠，主进程已复苏运行");
+            } else {
+                toast("触发唤醒失败，请检查 Root 权限");
+            }
+            refreshState();
+        });
     }
 
     private void toast(String msg) {

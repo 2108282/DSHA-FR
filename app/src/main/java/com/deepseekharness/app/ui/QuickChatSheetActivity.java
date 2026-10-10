@@ -2659,7 +2659,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
      */
     private void triggerForegroundWakeup() {
         if (controller != null) {
-            controller.resumeIfFrozen();
+            controller.resumeIfFrozen("快捷抽屉拉出");
         }
         if (sCachedWebView == null) return;
         sCachedWebView.onResume();

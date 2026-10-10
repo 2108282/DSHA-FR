@@ -235,12 +235,12 @@ public class LaunchPresenter implements LaunchActions {
         boolean hasUrl = !controller.getWebAuthUrl().isEmpty();
 
         if (running && hasUrl) {
-            controller.resumeIfFrozen();
+            controller.resumeIfFrozen("启动页主按钮点击");
             openExternalBrowser();
             return;
         }
         if (running && !hasUrl) {
-            controller.resumeIfFrozen();
+            controller.resumeIfFrozen("启动页主按钮点击");
             com.deepseekharness.app.util.ToastHelper.show(context, "正在同步鉴权凭据，请稍候…");
             controller.tryRecoverRunningUrl();
             return;

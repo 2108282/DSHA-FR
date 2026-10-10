@@ -523,8 +523,10 @@ public final class HttpShellService {
             } else if (path.startsWith("/app/task/cancel")) {
                 result = appTaskCancel();
             } else if (path.startsWith("/app/freeze/state")) {
-                boolean frozen = "1".equals(getParam(queryOf(path), "frozen", "0"));
-                HarnessService.updateFreezeState(frozen);
+                java.util.Map<String, String> q = queryOf(path);
+                boolean dead = "1".equals(getParam(q, "dead", "0"));
+                boolean frozen = "1".equals(getParam(q, "frozen", "0"));
+                HarnessService.updateFreezeState(ctx, frozen, dead);
                 result = "OK";
             } else if (path.startsWith("/app/notify")) {
                 // agent 通过 App 发通知栏提醒（App 层交互）

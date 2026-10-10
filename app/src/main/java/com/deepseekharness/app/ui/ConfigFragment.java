@@ -50,6 +50,11 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
     private View asrCheckBtn;
     private View asrFixBtn;
 
+    private View freezeDotView;
+    private TextView freezeStatusText;
+    private Button btnTestFreeze;
+    private Button btnTestWake;
+
     private boolean isBinding = false;
 
     @Nullable
@@ -132,12 +137,20 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         asrCheckBtn = view.findViewById(R.id.config_asr_btn_check);
         asrFixBtn = view.findViewById(R.id.config_asr_btn_fix);
 
+        freezeDotView = view.findViewById(R.id.config_freeze_dot);
+        freezeStatusText = view.findViewById(R.id.config_freeze_status);
+        btnTestFreeze = view.findViewById(R.id.config_btn_test_freeze);
+        btnTestWake = view.findViewById(R.id.config_btn_test_wake);
+
         if (allFilesBtn != null) allFilesBtn.setOnClickListener(v -> actions.onOpenAllFilesSettings());
         if (rootAuthBtn != null) rootAuthBtn.setOnClickListener(v -> actions.onCheckRootClick());
         batteryOptBtn.setOnClickListener(v -> actions.onOpenBatteryOptimization());
         a11yBtn.setOnClickListener(v -> actions.onOpenA11ySettings());
         asrCheckBtn.setOnClickListener(v -> actions.onCheckAsrStatus());
         asrFixBtn.setOnClickListener(v -> actions.onFixAsrConfig());
+
+        if (btnTestFreeze != null) btnTestFreeze.setOnClickListener(v -> actions.onTestFreeze());
+        if (btnTestWake != null) btnTestWake.setOnClickListener(v -> actions.onTestWake());
 
         translateBtn.setOnClickListener(v ->
                 ToastHelper.makeText(requireContext(), "插件市场翻译组件已内置，后续版本开放自定义模型接口", Toast.LENGTH_SHORT).show());
@@ -183,6 +196,10 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         asrContinuousCheck = null;
         asrCheckBtn = null;
         asrFixBtn = null;
+        freezeDotView = null;
+        freezeStatusText = null;
+        btnTestFreeze = null;
+        btnTestWake = null;
         super.onDestroyView();
     }
 
@@ -228,6 +245,19 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         if (asrStatusText != null) asrStatusText.setText(state.asrStatusText);
         if (rootStatusView != null && state.rootStatusText != null) {
             rootStatusView.setText(state.rootStatusText);
+        }
+
+        if (freezeStatusText != null && state.freezeStatusText != null) {
+            freezeStatusText.setText(state.freezeStatusText);
+        }
+        if (freezeDotView != null) {
+            if (state.freezeStateCode == 1) {
+                freezeDotView.setBackgroundResource(R.drawable.dot_warn);
+            } else if (state.freezeStateCode == 0) {
+                freezeDotView.setBackgroundResource(R.drawable.dot_active);
+            } else {
+                freezeDotView.setBackgroundResource(R.drawable.dot_inactive);
+            }
         }
     }
 
