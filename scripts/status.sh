@@ -7,7 +7,12 @@ LOG_FILE="$RUN_DIR/dsh-web.log"
 if [ -f "$PID_FILE" ]; then
     PID=$(cat "$PID_FILE" 2>/dev/null)
     if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
-        echo "STATUS:RUNNING PID:$PID"
+        PROC_STAT=$(awk '{print $3}' "/proc/$PID/stat" 2>/dev/null)
+        if [ -f "$RUN_DIR/freezer.state" ] || [ "$PROC_STAT" = "T" ]; then
+            echo "STATUS:FROZEN PID:$PID"
+        else
+            echo "STATUS:RUNNING PID:$PID"
+        fi
         TOKEN_FILE="$ROOTFS/root/.dsh/.bridge_token"
         [ -s "$TOKEN_FILE" ] && echo "BRIDGE_TOKEN:$(cat "$TOKEN_FILE" 2>/dev/null)"
         AUTH_URL=$(grep -o "http://127\.0\.0\.1:[0-9]*/?token=[^ ]*" "$LOG_FILE" 2>/dev/null | tail -n 1)
