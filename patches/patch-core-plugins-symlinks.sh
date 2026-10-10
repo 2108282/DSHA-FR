@@ -24,7 +24,11 @@ GLOBAL_NM="$ROOTFS/usr/local/lib/node_modules"
 mkdir -p "$PROFILE_NM" "$GLOBAL_NM" 2>/dev/null || true
 
 for p in dsh-device-shell-guide dsh-task-notifier dsh-status-overlay dsh-web-mobile; do
-    tgt="/root/dsha-${p#dsh-}"
+    if [ "$p" = "dsh-web-mobile" ]; then
+        tgt="/root/dsh-web-mobile"
+    else
+        tgt="/root/dsha-${p#dsh-}"
+    fi
     if [ -d "$ROOTFS$tgt" ]; then
         ln -sfn "$tgt" "$PROFILE_NM/$p" 2>/dev/null || true
         ln -sfn "$tgt" "$GLOBAL_NM/$p" 2>/dev/null || true

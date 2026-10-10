@@ -37,11 +37,11 @@
 │       └── @deepseek-ai/dsh/    # DSH 官方核心运行时源码与生产闭包
 │
 ├── [3. 全部 7 大插件实体与双向软链挂载层]
-│   ├── root/dsha-*              # 4 大原生内置核心插件实体：
+│   ├── root/dsha-* 与 root/dsh-web-mobile # 4 大核心插件实体：
 │   │   ├── dsha-device-shell-guide (设备指南提示词与 nsenter 直通说明)
 │   │   ├── dsha-status-overlay     (屏幕顶部悬浮流式状态条)
 │   │   ├── dsha-task-notifier      (任务结束通知，通过 3095 桥直推 Android 通知栏)
-│   │   └── dsha-web-mobile         (沉浸式移动端 UI、毛玻璃背景与触屏让路守卫)
+│   │   └── dsh-web-mobile          (移动端 UI、毛玻璃背景与触屏让路守卫，独立开源项目)
 │   │
 │   ├── root/.dsh/plugin-src/    # 3 大官方扩展插件源码实体：
 │   │   ├── dsh-agy                 (Antigravity 账户多模型与 Token 管理)

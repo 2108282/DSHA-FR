@@ -144,7 +144,7 @@ else
     "dsh-device-shell-guide": "link:/root/dsha-device-shell-guide",
     "dsh-task-notifier": "link:/root/dsha-task-notifier",
     "dsh-status-overlay": "link:/root/dsha-status-overlay",
-    "dsh-web-mobile": "link:/root/dsha-web-mobile"
+    "dsh-web-mobile": "link:/root/dsh-web-mobile"
   },
   "dsh": {
     "profile": {
