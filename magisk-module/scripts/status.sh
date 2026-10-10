@@ -8,9 +8,10 @@ if [ -f "$PID_FILE" ]; then
     PID=$(cat "$PID_FILE" 2>/dev/null)
     if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
         PROC_STAT=$(awk '{print $3}' "/proc/$PID/stat" 2>/dev/null)
-        if [ -f "$RUN_DIR/freezer.state" ] || [ "$PROC_STAT" = "T" ]; then
+        if [ "$PROC_STAT" = "T" ]; then
             echo "STATUS:FROZEN PID:$PID"
         else
+            [ -f "$RUN_DIR/freezer.state" ] && rm -f "$RUN_DIR/freezer.state" 2>/dev/null
             echo "STATUS:RUNNING PID:$PID"
         fi
         TOKEN_FILE="$ROOTFS/root/.dsh/.bridge_token"

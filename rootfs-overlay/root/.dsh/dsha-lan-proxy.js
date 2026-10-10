@@ -114,17 +114,18 @@ function ensureBackendAwake(trigger) {
         process.kill(pid, 'SIGCONT');
       } catch (e) {}
 
-      // 原地清理休眠标记文件
+      // 原地清理休眠标记文件 (容器内路径)
       try { fs.unlinkSync('/root/.dsh/freezer.state'); } catch (e) {}
-      try { fs.unlinkSync('/data/adb/dsha/run/freezer.state'); } catch (e) {}
 
       const cleanTrigger = (trigger || 'LAN访问').toString().replace(/["'`\n\r]/g, ' ');
       logFreezer('WAKE', `主进程已原地解冻恢复 (PID: ${pid}) | 唤醒源: [局域网: ${cleanTrigger}]`);
 
-      // 原地通知设备桥把常驻通知刷回运行中
+      // 原地通知设备桥把常驻通知与状态刷回运行中
       const token = getBridgeToken();
       if (token) {
-        http.get(`http://127.0.0.1:3095/app/freeze/state?token=${token}&frozen=0`, () => {}).on('error', () => {});
+        http.get(`http://127.0.0.1:3095/app/freeze/state?token=${token}&frozen=0`, (res) => {
+          res.resume();
+        }).on('error', () => {});
       }
     }
   } catch (e) {}
