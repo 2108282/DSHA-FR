@@ -54,11 +54,17 @@ public final class PtyTerminalFragment extends Fragment
     private static final int FONT_MAX_SP = 24;
     private static final int FONT_DEF_SP = 13;
 
+    private static final String ACTION_SELECT_ALL = "ACTION_SELECT_ALL";
+    private static final String ACTION_COPY = "ACTION_COPY";
+
     /**
      * 扩展键：{@code {显示, 要发的序列}}，序列为 null 表示这是个状态键（Ctrl / Alt）。
      * 手机软键盘没有 Esc、Ctrl 和方向键，缺了这排 TUI 基本没法用。
+     * 首位放置「全选」与「复制」，方便在手机触屏上随时随地一键复制。
      */
     private static final String[][] KEYS = {
+            {"全选", ACTION_SELECT_ALL},
+            {"复制", ACTION_COPY},
             {"ESC", "\033"},
             {"TAB", "\t"},
             {"CTRL", null},
@@ -196,7 +202,11 @@ public final class PtyTerminalFragment extends Fragment
             b.setLayoutParams(lp);
             final String seq = k[1];
             final String label = k[0];
-            if (seq == null) {
+            if (ACTION_SELECT_ALL.equals(seq)) {
+                b.setOnClickListener(v -> actions.onSelectAll());
+            } else if (ACTION_COPY.equals(seq)) {
+                b.setOnClickListener(v -> actions.onCopyAction());
+            } else if (seq == null) {
                 if ("CTRL".equals(label)) ctrlBtn = b;
                 else altBtn = b;
                 b.setOnClickListener(v -> actions.onToggleModifier(label));
@@ -306,6 +316,80 @@ public final class PtyTerminalFragment extends Fragment
     @Override
     public void onSendKey(String seq) {
         send(seq);
+    }
+
+    @Override
+    public void onSelectAll() {
+        selectAllAndCopy();
+    }
+
+    @Override
+    public void onCopyAction() {
+        copyOrToggleSelection();
+    }
+
+    private void copyToClipboard(String text, String successMsg) {
+        if (text == null || text.isEmpty()) return;
+        try {
+            android.content.ClipboardManager cm = (android.content.ClipboardManager)
+                    requireContext().getSystemService(Context.CLIPBOARD_SERVICE);
+            if (cm != null) {
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("term",
+                        SensitiveData.redact(text)));
+                ToastHelper.makeText(requireContext(), successMsg, Toast.LENGTH_SHORT).show();
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void selectAllAndCopy() {
+        PtySession s = session;
+        if (s == null || !s.isRunning()) {
+            ToastHelper.makeText(requireContext(), "会话未运行", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        try {
+            com.termux.terminal.TerminalSession ts = s.session();
+            if (ts != null && ts.getEmulator() != null && ts.getEmulator().getScreen() != null) {
+                String text = ts.getEmulator().getScreen().getTranscriptText();
+                if (text == null || text.trim().isEmpty()) {
+                    ToastHelper.makeText(requireContext(), "终端暂无内容", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                copyToClipboard(text, "已全选并复制全部终端内容");
+                if (view != null && view.isSelectingText()) {
+                    view.stopTextSelectionMode();
+                }
+                return;
+            }
+        } catch (Throwable e) {
+            android.util.Log.w("DSHA-pty", "selectAllAndCopy failed: " + e);
+        }
+        ToastHelper.makeText(requireContext(), "获取终端内容失败", Toast.LENGTH_SHORT).show();
+    }
+
+    private void copyOrToggleSelection() {
+        if (view == null) return;
+        if (view.isSelectingText()) {
+            PtySession s = session;
+            String selected = null;
+            if (s != null && s.session() != null && s.session().getEmulator() != null) {
+                try {
+                    selected = s.session().getEmulator().getSelectedText();
+                } catch (Throwable ignored) {
+                }
+            }
+            if (selected != null && !selected.isEmpty()) {
+                copyToClipboard(selected, "已复制所选内容");
+                view.stopTextSelectionMode();
+            } else {
+                view.stopTextSelectionMode();
+                ToastHelper.makeText(requireContext(), "已退出选择模式", Toast.LENGTH_SHORT).show();
+            }
+        } else {
+            view.startTextSelectionMode();
+            ToastHelper.makeText(requireContext(), "已开启自由选择，滑动游标选区后再点复制", Toast.LENGTH_SHORT).show();
+        }
     }
 
     public void render(PtyTerminalUiState state) {
@@ -524,7 +608,11 @@ public final class PtyTerminalFragment extends Fragment
 
     @Override
     public boolean onLongPress(MotionEvent e) {
-        return false;   // 返回 false 才会走库自带的文本选择
+        if (view != null && !view.isSelectingText()) {
+            view.startTextSelectionMode();
+            return true;
+        }
+        return false;
     }
 
     @Override

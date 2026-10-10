@@ -5,4 +5,6 @@ public interface PtyTerminalActions {
     void onSwitchToSimple();
     void onToggleModifier(String which);
     void onSendKey(String seq);
+    void onSelectAll();
+    void onCopyAction();
 }
