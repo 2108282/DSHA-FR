@@ -37,31 +37,40 @@ log_msg() {
 
 do_wake() {
     TRIGGER="${1:-手动执行或未指定来源}"
-    rm -f "$STATE_FILE" "$DSH_DIR/freezer.state" 2>/dev/null
     if [ -f "$PID_FILE" ]; then
         MAIN_PID=$(cat "$PID_FILE" 2>/dev/null)
         if [ -n "$MAIN_PID" ] && kill -0 "$MAIN_PID" 2>/dev/null; then
-            # 进程健在：瞬间解冻恢复主进程运行 (0.1毫秒原地复苏)
-            kill -CONT "$MAIN_PID" 2>/dev/null
-            log_msg "WAKE" "主进程已原地解冻恢复 (PID: $MAIN_PID) | 唤醒源: [$TRIGGER]"
-            
-            # 原地恢复常驻通知为运行状态 (走常驻通道，绝不弹窗打扰)
-            TOKEN=$(cat "$DSH_DIR/.bridge_token" 2>/dev/null)
-            if [ -n "$TOKEN" ]; then
-                curl -s -m 2 "http://127.0.0.1:3095/app/freeze/state?token=$TOKEN&frozen=0" >/dev/null 2>&1 &
+            PROC_STAT=$(awk '{print $3}' "/proc/$MAIN_PID/stat" 2>/dev/null)
+            # 严格判据：只有此前确实已被冻结（进程为 T 挂起态，或存在冻结标记）时才解冻并记录日志
+            if [ "$PROC_STAT" = "T" ] || [ -f "$STATE_FILE" ] || [ -f "$DSH_DIR/freezer.state" ]; then
+                kill -CONT "$MAIN_PID" 2>/dev/null
+                rm -f "$STATE_FILE" "$DSH_DIR/freezer.state" 2>/dev/null
+                log_msg "WAKE" "主进程已原地解冻恢复 (PID: $MAIN_PID) | 唤醒源: [$TRIGGER]"
+                
+                # 原地恢复常驻通知为运行状态 (走常驻通道，绝不弹窗打扰)
+                TOKEN=$(cat "$DSH_DIR/.bridge_token" 2>/dev/null)
+                if [ -n "$TOKEN" ]; then
+                    curl -s -m 2 "http://127.0.0.1:3095/app/freeze/state?token=$TOKEN&frozen=0" >/dev/null 2>&1 &
+                fi
+                
+                # 唤醒后，若前端开关仍处于开启状态，重新拉起守护扫描开启新一轮计时
+                if [ -f "$ENABLED_FILE" ]; then
+                    sh "/data/adb/dsha/scripts/idle-freezer.sh" start >/dev/null 2>&1 &
+                fi
             fi
+            # 进程原本就在正常运行（未冻结），静默忽略，绝不重复打印解冻日志！
+            return 0
         else
-            # 进程已死亡：严格保留现场，绝不自动拉起，方便排查！
-            log_msg "DEAD" "唤醒失败：主进程 (PID: $MAIN_PID) 已不存在/死亡 | 唤醒源: [$TRIGGER]"
-            TOKEN=$(cat "$DSH_DIR/.bridge_token" 2>/dev/null)
-            if [ -n "$TOKEN" ]; then
-                curl -s -m 2 "http://127.0.0.1:3095/app/freeze/state?token=$TOKEN&dead=1" >/dev/null 2>&1 &
+            # 进程已死亡
+            if [ -f "$STATE_FILE" ] || [ -f "$DSH_DIR/freezer.state" ]; then
+                rm -f "$STATE_FILE" "$DSH_DIR/freezer.state" 2>/dev/null
+                log_msg "DEAD" "唤醒失败：主进程 (PID: $MAIN_PID) 已不存在/死亡 | 唤醒源: [$TRIGGER]"
+                TOKEN=$(cat "$DSH_DIR/.bridge_token" 2>/dev/null)
+                if [ -n "$TOKEN" ]; then
+                    curl -s -m 2 "http://127.0.0.1:3095/app/freeze/state?token=$TOKEN&dead=1" >/dev/null 2>&1 &
+                fi
             fi
         fi
-    fi
-    # 唤醒后，若前端开关仍处于开启状态，重新拉起守护扫描开启新一轮计时
-    if [ -f "$ENABLED_FILE" ]; then
-        sh "/data/adb/dsha/scripts/idle-freezer.sh" start >/dev/null 2>&1 &
     fi
 }
 
@@ -112,6 +121,7 @@ do_daemon() {
         # 4. 任务避让保护：检查是否有未完成的审批挂起
         if [ -f "$DSH_DIR/.approval_status.json" ]; then
             if grep -q '"active":true' "$DSH_DIR/.approval_status.json" 2>/dev/null; then
+                log_msg "CHECK" "闲置检测: 检测到活跃审批任务挂起，跳过冻结避让中"
                 continue
             fi
         fi
@@ -138,13 +148,13 @@ do_daemon() {
         
         IDLE_SEC=$((NOW - LAST_WRITE))
         
-        # 6. 达到 30 分钟闲置阈值：执行冻结并彻底停止自身
+        # 6. 判断是否达到 30 分钟 (1800秒) 闲置阈值
         if [ $IDLE_SEC -ge $IDLE_THRESHOLD ]; then
             kill -STOP "$MAIN_PID" 2>/dev/null
             echo "FROZEN" > "$STATE_FILE"
             echo "FROZEN" > "$DSH_DIR/freezer.state" 2>/dev/null || true
             rm -f "$FREEZER_PID_FILE" 2>/dev/null
-            log_msg "FREEZE" "会话已闲置 $IDLE_SEC 秒 (满30分钟)，已执行 SIGSTOP 深度休眠冻结 (PID: $MAIN_PID)"
+            log_msg "FREEZE" "闲置检测: 会话已闲置 $IDLE_SEC 秒 (满30分钟)，满足冻结条件，已执行 SIGSTOP 深度休眠冻结 (PID: $MAIN_PID)"
             
             # 原地更新常驻通知为休眠状态 (绝不弹窗打扰、不亮屏，走同一通知通道)
             TOKEN=$(cat "$DSH_DIR/.bridge_token" 2>/dev/null)
@@ -154,6 +164,8 @@ do_daemon() {
             
             # 关键设计：冻结后自身立即退出，后台 0 轮询 0 唤醒！
             exit 0
+        else
+            log_msg "CHECK" "闲置检测: 当前已闲置 $IDLE_SEC 秒 (阈值 1800 秒 / 30分钟)，暂不满足冻结条件，继续保持运行"
         fi
     done
 }
@@ -188,6 +200,7 @@ case "$1" in
             FPID=$(cat "$FREEZER_PID_FILE" 2>/dev/null)
             if [ -n "$FPID" ] && kill -0 "$FPID" 2>/dev/null; then exit 0; fi
         fi
+        log_msg "START" "闲置冻结守护已拉起 (检测周期: 10分钟, 闲置阈值: 30分钟)"
         sh "/data/adb/dsha/scripts/idle-freezer.sh" daemon >/dev/null 2>&1 &
         ;;
     stop)
