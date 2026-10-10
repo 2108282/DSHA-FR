@@ -375,7 +375,16 @@ public final class PtyTerminalFragment extends Fragment
             String selected = null;
             if (s != null && s.session() != null && s.session().getEmulator() != null) {
                 try {
-                    Object controller = view.getTextSelectionCursorController();
+                    Object controller = null;
+                    try {
+                        java.lang.reflect.Method m = TerminalView.class.getDeclaredMethod("getTextSelectionCursorController");
+                        m.setAccessible(true);
+                        controller = m.invoke(view);
+                    } catch (Throwable t) {
+                        java.lang.reflect.Field f = TerminalView.class.getDeclaredField("mTextSelectionCursorController");
+                        f.setAccessible(true);
+                        controller = f.get(view);
+                    }
                     if (controller != null) {
                         java.lang.reflect.Field fX1 = controller.getClass().getDeclaredField("mSelX1");
                         java.lang.reflect.Field fY1 = controller.getClass().getDeclaredField("mSelY1");
