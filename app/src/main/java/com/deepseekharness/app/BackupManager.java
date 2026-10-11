@@ -204,58 +204,63 @@ public final class BackupManager {
               .append("' 2>/dev/null || true\n");
             sb.append("set --\n")
               .append("[ -d .dsha-tools ] && set -- \"$@\" .dsha-tools\n");
-        } else if (paths.length == 0 || scope == BackupScope.FULL) {
-            // 全量备份：动态扫描 workspace.json 以及默认工作区，把用户工作区项目文件收集进 .dsha-workspaces 一同归档
-            sb.append("python3 -c '\n")
-              .append("import json, os, shutil\n")
-              .append("ws_stage = \"/root/.dsha-workspaces\"\n")
-              .append("shutil.rmtree(ws_stage, ignore_errors=True)\n")
-              .append("os.makedirs(ws_stage, exist_ok=True)\n")
-              .append("ws_file = \"/root/.dsh/storages/workspace.json\"\n")
-              .append("meta = {}\n")
-              .append("ign = lambda d, files: {f for f in files if f in (\"node_modules\", \".git\", \"__pycache__\", \".pnpm-store\", \"dist\", \".next\", \".cache\", \".dsh\")}\n")
-              .append("if os.path.isfile(ws_file):\n")
-              .append("    try:\n")
-              .append("        with open(ws_file, \"r\", encoding=\"utf-8\") as f:\n")
-              .append("            data = json.load(f)\n")
-              .append("        for wid, rec in (data.get(\"tables\", {}).get(\"workspaces\", {}) or {}).items():\n")
-              .append("            p = (rec or {}).get(\"path\")\n")
-              .append("            t = (rec or {}).get(\"title\", \"工作区\")\n")
-              .append("            if not p or not os.path.isdir(p) or p in (\"/\", \"/root\", \"/sdcard\", \"/storage/emulated/0\", \"/sdcard/Download\"):\n")
-              .append("                continue\n")
-              .append("            dst = os.path.join(ws_stage, wid)\n")
-              .append("            os.makedirs(dst, exist_ok=True)\n")
-              .append("            meta[wid] = {\"title\": t, \"orig_path\": p}\n")
-              .append("            shutil.copytree(p, dst, dirs_exist_ok=True, ignore=ign)\n")
-              .append("    except Exception:\n")
-              .append("        pass\n")
-              .append("for extra_wd in [\"/root/内部存储/工作区\", \"/sdcard/Download/DSHA/工作区\"]:\n")
-              .append("    if os.path.isdir(extra_wd) and os.listdir(extra_wd):\n")
-              .append("        dst = os.path.join(ws_stage, \"default_workspace\")\n")
-              .append("        if not os.path.isdir(dst):\n")
-              .append("            os.makedirs(dst, exist_ok=True)\n")
-              .append("            meta[\"default_workspace\"] = {\"title\": \"默认工作区\", \"orig_path\": extra_wd}\n")
-              .append("            shutil.copytree(extra_wd, dst, dirs_exist_ok=True, ignore=ign)\n")
-              .append("if meta:\n")
-              .append("    with open(os.path.join(ws_stage, \"meta.json\"), \"w\", encoding=\"utf-8\") as mf:\n")
-              .append("        json.dump(meta, mf, ensure_ascii=False)\n")
-              .append("' 2>/dev/null || true\n");
-        }
-
-        sb.append("set --\n");
-        if (paths.length == 0) {
-            sb.append("set -- .dsh\n")
-              .append("[ -d .dsha-workspaces ] && set -- \"$@\" .dsha-workspaces\n");
-        } else {
-            for (String p : paths) {
-                if (!includeApiKey && (".dsh/.env".equals(p) || ".env".equals(p))) {
-                    continue;
-                }
-                sb.append("[ -e ").append(ShellQuote.arg(p)).append(" ] && set -- \"$@\" ")
-                  .append(ShellQuote.arg(p)).append("\n");
-            }
             if (includeApiKey) {
                 sb.append("[ -f .dsh/.env ] && set -- \"$@\" .dsh/.env\n");
+            }
+        } else {
+            if (scope == BackupScope.FULL) {
+                // 全量备份：动态扫描 workspace.json 以及默认工作区，把用户工作区项目文件收集进 .dsha-workspaces 一同归档
+                sb.append("python3 -c '\n")
+                  .append("import json, os, shutil\n")
+                  .append("ws_stage = \"/root/.dsha-workspaces\"\n")
+                  .append("shutil.rmtree(ws_stage, ignore_errors=True)\n")
+                  .append("os.makedirs(ws_stage, exist_ok=True)\n")
+                  .append("ws_file = \"/root/.dsh/storages/workspace.json\"\n")
+                  .append("meta = {}\n")
+                  .append("ign = lambda d, files: {f for f in files if f in (\"node_modules\", \".git\", \"__pycache__\", \".pnpm-store\", \"dist\", \".next\", \".cache\", \".dsh\")}\n")
+                  .append("if os.path.isfile(ws_file):\n")
+                  .append("    try:\n")
+                  .append("        with open(ws_file, \"r\", encoding=\"utf-8\") as f:\n")
+                  .append("            data = json.load(f)\n")
+                  .append("        for wid, rec in (data.get(\"tables\", {}).get(\"workspaces\", {}) or {}).items():\n")
+                  .append("            p = (rec or {}).get(\"path\")\n")
+                  .append("            t = (rec or {}).get(\"title\", \"工作区\")\n")
+                  .append("            if not p or not os.path.isdir(p) or p in (\"/\", \"/root\", \"/sdcard\", \"/storage/emulated/0\", \"/sdcard/Download\"):\n")
+                  .append("                continue\n")
+                  .append("            dst = os.path.join(ws_stage, wid)\n")
+                  .append("            os.makedirs(dst, exist_ok=True)\n")
+                  .append("            meta[wid] = {\"title\": t, \"orig_path\": p}\n")
+                  .append("            shutil.copytree(p, dst, dirs_exist_ok=True, ignore=ign)\n")
+                  .append("    except Exception:\n")
+                  .append("        pass\n")
+                  .append("for extra_wd in [\"/root/内部存储/工作区\", \"/sdcard/Download/DSHA/工作区\"]:\n")
+                  .append("    if os.path.isdir(extra_wd) and os.listdir(extra_wd):\n")
+                  .append("        dst = os.path.join(ws_stage, \"default_workspace\")\n")
+                  .append("        if not os.path.isdir(dst):\n")
+                  .append("            os.makedirs(dst, exist_ok=True)\n")
+                  .append("            meta[\"default_workspace\"] = {\"title\": \"默认工作区\", \"orig_path\": extra_wd}\n")
+                  .append("            shutil.copytree(extra_wd, dst, dirs_exist_ok=True, ignore=ign)\n")
+                  .append("if meta:\n")
+                  .append("    with open(os.path.join(ws_stage, \"meta.json\"), \"w\", encoding=\"utf-8\") as mf:\n")
+                  .append("        json.dump(meta, mf, ensure_ascii=False)\n")
+                  .append("' 2>/dev/null || true\n");
+            }
+
+            sb.append("set --\n");
+            if (paths.length == 0) {
+                sb.append("set -- .dsh\n")
+                  .append("[ -d .dsha-workspaces ] && set -- \"$@\" .dsha-workspaces\n");
+            } else {
+                for (String p : paths) {
+                    if (!includeApiKey && (".dsh/.env".equals(p) || ".env".equals(p))) {
+                        continue;
+                    }
+                    sb.append("[ -e ").append(ShellQuote.arg(p)).append(" ] && set -- \"$@\" ")
+                      .append(ShellQuote.arg(p)).append("\n");
+                }
+                if (includeApiKey) {
+                    sb.append("[ -f .dsh/.env ] && set -- \"$@\" .dsh/.env\n");
+                }
             }
         }
         if (includeSshKey) {
