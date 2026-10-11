@@ -201,34 +201,33 @@ public final class AdbManager {
     }
 
     /**
-     * 确保宿主 /system/etc/mkshrc 中持久植入直通穿透钩子
+     * 确保宿主 /system/bin/sh 与 /system/etc/mkshrc 中双重植入直通穿透钩子
      */
     private void ensureMkshrcHookMounted() {
-        String checkCmd = "grep -q 'DSHA_ADB_HOOK' /system/etc/mkshrc 2>/dev/null && echo 1 || echo 0";
-        if ("1".equals(execRoot(checkCmd).trim())) {
-            return;
-        }
-
         String setupCmd = "mkdir -p /data/adb/dsha/run && "
-                + "cat /system/etc/mkshrc > /data/adb/dsha/run/mkshrc.bak 2>/dev/null || true && "
-                + "cat << 'HOOK_EOF' > /data/adb/dsha/run/mkshrc\n"
-                + "#!/system/bin/sh\n"
-                + "if [ -f /data/adb/dsha/run/mkshrc.bak ]; then . /data/adb/dsha/run/mkshrc.bak; fi\n"
-                + "# DSHA_ADB_HOOK\n"
-                + "if [ -z \"$DSHA_IN_HOOK\" ]; then\n"
-                + "    export DSHA_IN_HOOK=1\n"
+                + "if [ ! -s /data/adb/dsha/run/sh.real ]; then "
+                + "    rm -f /data/adb/dsha/run/sh.real; "
+                + "    cat /system/bin/sh > /data/adb/dsha/run/sh.real; "
+                + "    chmod 755 /data/adb/dsha/run/sh.real; "
+                + "fi && "
+                + "cat << 'WRAPPER_EOF' > /data/adb/dsha/run/sh_wrapper\n"
+                + "#!/data/adb/dsha/run/sh.real\n"
+                + "if [ \"$USER\" = \"shell\" ] && [ -t 0 ] && [ -z \"$DSHA_IN_WRAPPER\" ]; then\n"
+                + "    export DSHA_IN_WRAPPER=1\n"
                 + "    if [ -f /data/local/tmp/dsha_chroot_direct ] && [ -f /data/adb/dsha/rootfs/bin/bash ]; then\n"
                 + "        if command -v su >/dev/null 2>&1; then exec su -c \"sh /data/adb/dsha/scripts/term.sh $@\";\n"
                 + "        elif [ -f /data/adb/magisk/magisk ]; then exec /data/adb/magisk/magisk su -c \"sh /data/adb/dsha/scripts/term.sh $@\"; fi\n"
                 + "    fi\n"
-                + "    if [ -f /data/local/tmp/dsha_root_direct ] && [ \"$(id -u)\" != \"0\" ]; then\n"
+                + "    if [ -f /data/local/tmp/dsha_root_direct ]; then\n"
                 + "        if command -v su >/dev/null 2>&1; then exec su;\n"
                 + "        elif [ -f /data/adb/magisk/magisk ]; then exec /data/adb/magisk/magisk su; fi\n"
                 + "    fi\n"
                 + "fi\n"
-                + "HOOK_EOF\n"
-                + "umount -l /system/etc/mkshrc 2>/dev/null || true && "
-                + "mount -o bind /data/adb/dsha/run/mkshrc /system/etc/mkshrc";
+                + "exec /data/adb/dsha/run/sh.real \"$@\"\n"
+                + "WRAPPER_EOF\n"
+                + "chmod 755 /data/adb/dsha/run/sh_wrapper && "
+                + "umount -l /system/bin/sh 2>/dev/null || true && "
+                + "mount -o bind /data/adb/dsha/run/sh_wrapper /system/bin/sh";
         execRoot(setupCmd);
     }
 
@@ -346,7 +345,10 @@ public final class AdbManager {
                     for (int i = 2; i < parts.length; i++) {
                         extra.append(parts[i]).append(" ");
                     }
-                    list.add(new AdbDevice(address, state, extra.toString().trim()));
+                    // 过滤掉本机 127.0.0.1 回环设备 emulator-5554，避免用户误解
+                    if (!address.startsWith("emulator-5554") && !address.startsWith("127.0.0.1")) {
+                        list.add(new AdbDevice(address, state, extra.toString().trim()));
+                    }
                 }
             }
         }

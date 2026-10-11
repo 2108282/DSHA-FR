@@ -60,6 +60,11 @@ public final class ExternalConnectFragment extends Fragment {
     private LinearLayout layoutWirelessInfo;
     private TextView tvConnectCmd;
     private TextView btnCopyCmd;
+    private LinearLayout layoutUsbInfo;
+    private TextView btnCopyUsbShell;
+    private TextView btnCopyUsbScrcpy;
+    private TextView btnCopyWirelessShell;
+    private TextView btnCopyWirelessScrcpy;
 
     private TextView tvPermissionDesc;
     private ModernSegmentedView segPermission;
@@ -131,6 +136,11 @@ public final class ExternalConnectFragment extends Fragment {
         layoutWirelessInfo = v.findViewById(R.id.ext_layout_wireless_info);
         tvConnectCmd = v.findViewById(R.id.ext_tv_connect_cmd);
         btnCopyCmd = v.findViewById(R.id.ext_btn_copy_cmd);
+        layoutUsbInfo = v.findViewById(R.id.ext_layout_usb_info);
+        btnCopyUsbShell = v.findViewById(R.id.ext_btn_copy_usb_shell);
+        btnCopyUsbScrcpy = v.findViewById(R.id.ext_btn_copy_usb_scrcpy);
+        btnCopyWirelessShell = v.findViewById(R.id.ext_btn_copy_wireless_shell);
+        btnCopyWirelessScrcpy = v.findViewById(R.id.ext_btn_copy_wireless_scrcpy);
 
         tvPermissionDesc = v.findViewById(R.id.ext_tv_permission_desc);
         segPermission = v.findViewById(R.id.ext_seg_permission);
@@ -182,9 +192,22 @@ public final class ExternalConnectFragment extends Fragment {
         // 复制命令
         if (btnCopyCmd != null) {
             btnCopyCmd.setOnClickListener(x -> {
-                if (tvConnectCmd != null) {
-                    copyToClipboard(tvConnectCmd.getText().toString());
-                }
+                if (tvConnectCmd != null) copyToClipboard(tvConnectCmd.getText().toString());
+            });
+        }
+        if (btnCopyUsbShell != null) {
+            btnCopyUsbShell.setOnClickListener(x -> copyToClipboard("adb -d shell"));
+        }
+        if (btnCopyUsbScrcpy != null) {
+            btnCopyUsbScrcpy.setOnClickListener(x -> copyToClipboard("scrcpy -d"));
+        }
+        if (btnCopyWirelessShell != null) {
+            btnCopyWirelessShell.setOnClickListener(x -> copyToClipboard("adb shell"));
+        }
+        if (btnCopyWirelessScrcpy != null) {
+            btnCopyWirelessScrcpy.setOnClickListener(x -> {
+                AdbManager.WirelessStatus st = adbManager.getWirelessStatus();
+                copyToClipboard("scrcpy -s " + st.ipAddress + ":" + st.port);
             });
         }
 
@@ -236,6 +259,9 @@ public final class ExternalConnectFragment extends Fragment {
                     // 1. USB 状态
                     if (tvUsbStatus != null) {
                         tvUsbStatus.setText(usb.stateDescription);
+                    }
+                    if (layoutUsbInfo != null) {
+                        layoutUsbInfo.setVisibility(usb.isConnected && usb.adbEnabled ? View.VISIBLE : View.GONE);
                     }
 
                     // 2. 无线状态
