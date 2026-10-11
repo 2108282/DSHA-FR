@@ -269,10 +269,10 @@ public final class AdbManager {
                     + "cat /system/etc/mkshrc > /data/adb/dsha/run/mkshrc && "
                     + "echo '' >> /data/adb/dsha/run/mkshrc && "
                     + "echo '# DSHA_ADB_HOOK' >> /data/adb/dsha/run/mkshrc && "
-                    + "echo 'if [ -f /data/adb/dsha/run/adb_chroot_direct ] && [ -z "$DSHA_IN_CHROOT" ]; then' >> /data/adb/dsha/run/mkshrc && "
+                    + "echo 'if [ -f /data/adb/dsha/run/adb_chroot_direct ] && [ -z \"$DSHA_IN_CHROOT\" ]; then' >> /data/adb/dsha/run/mkshrc && "
                     + "echo '    if [ -f /data/adb/dsha/rootfs/bin/bash ] && [ -f /data/adb/dsha/scripts/term.sh ]; then' >> /data/adb/dsha/run/mkshrc && "
                     + "echo '        export DSHA_IN_CHROOT=1' >> /data/adb/dsha/run/mkshrc && "
-                    + "echo '        exec sh /data/adb/dsha/scripts/term.sh "$@"' >> /data/adb/dsha/run/mkshrc && "
+                    + "echo '        exec sh /data/adb/dsha/scripts/term.sh \"$@\"' >> /data/adb/dsha/run/mkshrc && "
                     + "echo '    fi' >> /data/adb/dsha/run/mkshrc && "
                     + "echo 'fi' >> /data/adb/dsha/run/mkshrc && "
                     + "mount -o bind /data/adb/dsha/run/mkshrc /system/etc/mkshrc )";
