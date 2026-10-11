@@ -101,10 +101,10 @@ function getBackendPid() {
 function ensureBackendAwake(trigger) {
   try {
     const pid = getBackendPid();
-    if (!pid) return;
+    if (!pid) return false;
 
     const statPath = `/proc/${pid}/stat`;
-    if (!fs.existsSync(statPath)) return;
+    if (!fs.existsSync(statPath)) return false;
     const statContent = fs.readFileSync(statPath, 'utf8');
     const parts = statContent.split(' ');
     const state = parts[2]; // 进程状态代码 (T 为 SIGSTOP 冻结挂起)
@@ -127,8 +127,10 @@ function ensureBackendAwake(trigger) {
           res.resume();
         }).on('error', () => {});
       }
+      return true;
     }
   } catch (e) {}
+  return false;
 }
 
 // 后端 DSH 会话凭据缓存与文件跟踪
@@ -465,7 +467,7 @@ document.getElementById('tok').addEventListener('keydown', (e) => { if (e.key ==
 
 // 创建 HTTP 代理服务器
 const server = http.createServer((req, res) => {
-  ensureBackendAwake('HTTP请求 ' + (req.url || '/'));
+  const justWoken = ensureBackendAwake('HTTP请求 ' + (req.url || '/'));
   checkTokenChange();
 
   const currentToken = getCurrentToken();
@@ -545,49 +547,59 @@ const server = http.createServer((req, res) => {
     headers: headers
   };
 
-  const proxyReq = http.request(options, (proxyRes) => {
-    // 容灾自愈：若后端核心返回 401（说明密钥已外部变更或进程重启），立即击穿缓存刷新
-    if (proxyRes.statusCode === 401) {
-      console.warn('[DSHA LAN Proxy] 检测到后端返回 401，立即使本地 Cookie 缓存失效并触发自愈刷新');
-      getBackendDshAuthCookie(true);
-    }
+  const doForward = () => {
+    const proxyReq = http.request(options, (proxyRes) => {
+      // 容灾自愈：若后端核心返回 401（说明密钥已外部变更或进程重启），立即击穿缓存刷新
+      if (proxyRes.statusCode === 401) {
+        console.warn('[DSHA LAN Proxy] 检测到后端返回 401，立即使本地 Cookie 缓存失效并触发自愈刷新');
+        getBackendDshAuthCookie(true);
+      }
 
-    const resHeaders = Object.assign({}, proxyRes.headers);
+      const resHeaders = Object.assign({}, proxyRes.headers);
 
-    // 检查客户端是否已持有最新的 dsha_lan_token
-    const clientCookies = parseCookies(req.headers.cookie);
-    const needSetLanCookie = currentToken && (!clientCookies['dsha_lan_token'] || !safeCompare(clientCookies['dsha_lan_token'], currentToken));
+      // 检查客户端是否已持有最新的 dsha_lan_token
+      const clientCookies = parseCookies(req.headers.cookie);
+      const needSetLanCookie = currentToken && (!clientCookies['dsha_lan_token'] || !safeCompare(clientCookies['dsha_lan_token'], currentToken));
 
-    const setCookie = resHeaders['set-cookie'] || [];
-    let setCookieArr = Array.isArray(setCookie) ? setCookie.slice() : [setCookie];
+      const setCookie = resHeaders['set-cookie'] || [];
+      let setCookieArr = Array.isArray(setCookie) ? setCookie.slice() : [setCookie];
 
-    // 将后端返回的 SameSite=Strict 放宽为 SameSite=Lax，确保局域网跨设备访问正常携带 Cookie
-    setCookieArr = setCookieArr.map(sc => typeof sc === 'string' ? sc.replace(/SameSite=Strict/gi, 'SameSite=Lax') : sc);
+      // 将后端返回的 SameSite=Strict 放宽为 SameSite=Lax，确保局域网跨设备访问正常携带 Cookie
+      setCookieArr = setCookieArr.map(sc => typeof sc === 'string' ? sc.replace(/SameSite=Strict/gi, 'SameSite=Lax') : sc);
 
-    if (needSetLanCookie) {
-      setCookieArr.push(`dsha_lan_token=${currentToken}; Path=/; SameSite=Lax; Max-Age=31536000`);
-      setCookieArr.push(`dsha_t=${currentToken}; Path=/; SameSite=Lax; Max-Age=31536000`);
-    }
+      if (needSetLanCookie) {
+        setCookieArr.push(`dsha_lan_token=${currentToken}; Path=/; SameSite=Lax; Max-Age=31536000`);
+        setCookieArr.push(`dsha_t=${currentToken}; Path=/; SameSite=Lax; Max-Age=31536000`);
+      }
 
-    if (setCookieArr.length > 0) {
-      resHeaders['set-cookie'] = setCookieArr;
-    }
+      if (setCookieArr.length > 0) {
+        resHeaders['set-cookie'] = setCookieArr;
+      }
 
-    res.writeHead(proxyRes.statusCode, resHeaders);
-    proxyRes.pipe(res);
-  });
+      res.writeHead(proxyRes.statusCode, resHeaders);
+      proxyRes.pipe(res);
+    });
 
-  proxyReq.on('error', (err) => {
-    res.writeHead(502, { 'Content-Type': 'text/plain; charset=utf-8' });
-    res.end(`DSHA LAN Proxy: 无法连接本地 DSH 服务 (127.0.0.1:${BACKEND_PORT})，请确认核心服务已启动。\n错误详情: ${err.message}`);
-  });
+    proxyReq.on('error', (err) => {
+      if (!res.headersSent) {
+        res.writeHead(502, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end(`DSHA LAN Proxy: 无法连接本地 DSH 服务 (127.0.0.1:${BACKEND_PORT})，请确认核心服务已启动。\n错误详情: ${err.message}`);
+      }
+    });
 
-  req.pipe(proxyReq);
+    req.pipe(proxyReq);
+  };
+
+  if (justWoken) {
+    setTimeout(doForward, 50);
+  } else {
+    doForward();
+  }
 });
 
 // 处理 WebSocket Upgrade
 server.on('upgrade', (req, clientSocket, head) => {
-  ensureBackendAwake('WebSocket握手 ' + (req.url || '/'));
+  const justWoken = ensureBackendAwake('WebSocket握手 ' + (req.url || '/'));
   checkTokenChange();
 
   const currentToken = getCurrentToken();
@@ -606,53 +618,61 @@ server.on('upgrade', (req, clientSocket, head) => {
 
   const backendPath = sanitizeUrlForBackend(req.url);
 
-  const backendSocket = net.connect(BACKEND_PORT, BACKEND_HOST, () => {
-    let rawHeaders = `${req.method} ${backendPath} HTTP/1.1\r\n`;
-    const headers = Object.assign({}, req.headers);
-    headers['host'] = AUTHORITY;
-    headers['origin'] = `http://${AUTHORITY}`;
+  const doConnectBackend = () => {
+    const backendSocket = net.connect(BACKEND_PORT, BACKEND_HOST, () => {
+      let rawHeaders = `${req.method} ${backendPath} HTTP/1.1\r\n`;
+      const headers = Object.assign({}, req.headers);
+      headers['host'] = AUTHORITY;
+      headers['origin'] = `http://${AUTHORITY}`;
 
-    // 注入官方后端 DSH 会话凭证
-    const backendCookie = getBackendDshAuthCookie();
-    if (backendCookie) {
-      let clientCookies = headers['cookie'] || '';
-      if (clientCookies) {
-        const parts = clientCookies.split(';').map(p => p.trim()).filter(p => !p.startsWith('dsh-auth-'));
-        parts.push(backendCookie);
-        headers['cookie'] = parts.join('; ');
-      } else {
-        headers['cookie'] = backendCookie;
+      // 注入官方后端 DSH 会话凭证
+      const backendCookie = getBackendDshAuthCookie();
+      if (backendCookie) {
+        let clientCookies = headers['cookie'] || '';
+        if (clientCookies) {
+          const parts = clientCookies.split(';').map(p => p.trim()).filter(p => !p.startsWith('dsh-auth-'));
+          parts.push(backendCookie);
+          headers['cookie'] = parts.join('; ');
+        } else {
+          headers['cookie'] = backendCookie;
+        }
       }
-    }
 
-    if (bridgeToken) {
-      headers['x-dsha-token'] = bridgeToken;
-    }
+      if (bridgeToken) {
+        headers['x-dsha-token'] = bridgeToken;
+      }
 
-    for (const key of Object.keys(headers)) {
-      rawHeaders += `${key}: ${headers[key]}\r\n`;
-    }
-    rawHeaders += '\r\n';
+      for (const key of Object.keys(headers)) {
+        rawHeaders += `${key}: ${headers[key]}\r\n`;
+      }
+      rawHeaders += '\r\n';
 
-    backendSocket.write(rawHeaders);
-    if (head && head.length > 0) {
-      backendSocket.write(head);
-    }
+      backendSocket.write(rawHeaders);
+      if (head && head.length > 0) {
+        backendSocket.write(head);
+      }
 
-    backendSocket.pipe(clientSocket);
-    clientSocket.on('data', () => {
-      ensureBackendAwake('WebSocket交互数据帧');
+      backendSocket.pipe(clientSocket);
+      clientSocket.on('data', () => {
+        ensureBackendAwake('WebSocket交互数据帧');
+      });
+      clientSocket.pipe(backendSocket);
     });
-    clientSocket.pipe(backendSocket);
-  });
 
-  backendSocket.on('error', (err) => {
-    clientSocket.destroy();
-  });
+    backendSocket.on('error', (err) => {
+      clientSocket.destroy();
+    });
 
-  clientSocket.on('error', (err) => {
-    backendSocket.destroy();
-  });
+    clientSocket.on('error', (err) => {
+      backendSocket.destroy();
+    });
+  };
+
+  if (justWoken) {
+    setTimeout(doConnectBackend, 50);
+  } else {
+    doConnectBackend();
+  }
 });
 
 server.listen(LAN_PORT, '0.0.0.0', () => {
