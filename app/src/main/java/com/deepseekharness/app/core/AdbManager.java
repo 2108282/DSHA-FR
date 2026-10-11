@@ -280,6 +280,18 @@ public final class AdbManager {
     }
 
     /**
+     * 对目标设备发起无线配对 (Android 11+ 原生配对码机制)
+     */
+    public String pairRemote(String target, String pairingCode) {
+        if (TextUtils.isEmpty(target) || TextUtils.isEmpty(pairingCode)) {
+            return "地址和配对码不能为空";
+        }
+        String cleanTarget = target.trim();
+        String adbCmd = resolveAdbCmd("pair " + cleanTarget + " " + pairingCode.trim());
+        return execRoot(adbCmd).trim();
+    }
+
+    /**
      * 主动连接目标外部设备
      */
     public String connectRemote(String target) {
@@ -320,25 +332,29 @@ public final class AdbManager {
         String[] lines = output.split("\n");
         for (String line : lines) {
             String trimmed = line.trim();
-            if (trimmed.isEmpty() || trimmed.startsWith("List of devices") || trimmed.startsWith("*")) {
+            if (trimmed.isEmpty() || trimmed.startsWith("List of devices") || trimmed.startsWith("*") 
+                    || trimmed.startsWith("sh:") || trimmed.startsWith("chroot:") || trimmed.contains("No such file")) {
                 continue;
             }
             String[] parts = trimmed.split("\\s+");
             if (parts.length >= 2) {
                 String address = parts[0];
                 String state = parts[1];
-                StringBuilder extra = new StringBuilder();
-                for (int i = 2; i < parts.length; i++) {
-                    extra.append(parts[i]).append(" ");
+                // 仅合法状态才认作设备
+                if ("device".equalsIgnoreCase(state) || "offline".equalsIgnoreCase(state) || "unauthorized".equalsIgnoreCase(state)) {
+                    StringBuilder extra = new StringBuilder();
+                    for (int i = 2; i < parts.length; i++) {
+                        extra.append(parts[i]).append(" ");
+                    }
+                    list.add(new AdbDevice(address, state, extra.toString().trim()));
                 }
-                list.add(new AdbDevice(address, state, extra.toString().trim()));
             }
         }
         return list;
     }
 
     private String resolveAdbCmd(String args) {
-        return "sh /data/adb/dsha/bin/adb " + args + " 2>&1";
+        return "chroot /data/adb/dsha/rootfs /usr/bin/adb " + args + " 2>&1";
     }
 
     public String execRoot(String cmd) {

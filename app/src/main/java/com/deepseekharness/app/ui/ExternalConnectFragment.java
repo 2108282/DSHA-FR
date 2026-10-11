@@ -16,6 +16,13 @@ import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.FrameLayout;
+import android.content.res.ColorStateList;
+import android.net.nsd.NsdManager;
+import android.net.nsd.NsdServiceInfo;
+import java.net.InetAddress;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.Map;
 
 import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
@@ -66,6 +73,24 @@ public final class ExternalConnectFragment extends Fragment {
     private LinearLayout layoutDevices;
 
     private boolean isUpdatingUi = false;
+    private NsdManager nsdManager;
+    private NsdManager.DiscoveryListener pairingDiscoveryListener;
+    private NsdManager.DiscoveryListener connectDiscoveryListener;
+    private final Map<String, DiscoveredDevice> discoveredDevices = new ConcurrentHashMap<>();
+
+    public static class DiscoveredDevice {
+        public final String name;
+        public final String host;
+        public final int port;
+        public final boolean isPairing;
+
+        public DiscoveredDevice(String name, String host, int port, boolean isPairing) {
+            this.name = name;
+            this.host = host;
+            this.port = port;
+            this.isPairing = isPairing;
+        }
+    }
 
     @Nullable
     @Override
@@ -89,6 +114,7 @@ public final class ExternalConnectFragment extends Fragment {
                 }
         );
 
+        syncActivityTitle(true);
         initViews(v);
         applyTheme(v);
         bindEvents();
@@ -131,7 +157,7 @@ public final class ExternalConnectFragment extends Fragment {
             segPermission.setPrimaryColor(palette.primaryColor);
         }
         if (btnConnect != null && palette.isMonetActive) {
-            btnConnect.setBackgroundColor(palette.primaryColor);
+            btnConnect.setBackgroundTintList(ColorStateList.valueOf(palette.primaryColor));
         }
     }
 
@@ -380,6 +406,7 @@ public final class ExternalConnectFragment extends Fragment {
     }
 
     private void refreshDevicesAsync(boolean showToast) {
+        startNsdDiscovery();
         if (btnRefreshDevices != null) btnRefreshDevices.setText("刷新中...");
         executor.execute(() -> {
             List<AdbManager.AdbDevice> devices = adbManager.getConnectedDevices();
@@ -419,6 +446,60 @@ public final class ExternalConnectFragment extends Fragment {
         tvEmptyDevices.setVisibility(View.GONE);
         Context ctx = requireContext();
         float density = ctx.getResources().getDisplayMetrics().density;
+
+        // 先渲染局域网通过 mDNS 发现的设备
+        for (DiscoveredDevice disc : discoveredDevices.values()) {
+            LinearLayout item = new LinearLayout(ctx);
+            item.setOrientation(LinearLayout.HORIZONTAL);
+            item.setGravity(Gravity.CENTER_VERTICAL);
+            int py = Math.round(10f * density);
+            item.setPadding(0, py, 0, py);
+
+            LinearLayout infoBox = new LinearLayout(ctx);
+            infoBox.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout.LayoutParams lpInfo = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            infoBox.setLayoutParams(lpInfo);
+
+            TextView tvAddress = new TextView(ctx);
+            tvAddress.setText(disc.name + " (" + disc.host + ":" + disc.port + ")");
+            tvAddress.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+            tvAddress.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            tvAddress.setTextColor(ctx.getColor(R.color.text));
+            infoBox.addView(tvAddress);
+
+            TextView tvState = new TextView(ctx);
+            tvState.setText(disc.isPairing ? "发现可配对设备 (点击配对)" : "发现可连接设备 (点击连接)");
+            tvState.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+            tvState.setTextColor(ctx.getColor(R.color.primary));
+            infoBox.addView(tvState);
+
+            item.addView(infoBox);
+
+            TextView btnAction = new TextView(ctx);
+            btnAction.setText(disc.isPairing ? "配对" : "连接");
+            btnAction.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+            btnAction.setTextColor(ctx.getColor(R.color.accent_on));
+            btnAction.setBackgroundResource(R.drawable.m3_btn_primary_expressive);
+            btnAction.setGravity(Gravity.CENTER);
+            int px = Math.round(14f * density);
+            int h = Math.round(30f * density);
+            LinearLayout.LayoutParams lpBtn = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, h);
+            btnAction.setLayoutParams(lpBtn);
+            btnAction.setPadding(px, 0, px, 0);
+            btnAction.setClickable(true);
+            btnAction.setFocusable(true);
+            btnAction.setOnClickListener(x -> {
+                if (disc.isPairing) {
+                    showPairDialog(disc);
+                } else {
+                    if (etTarget != null) etTarget.setText(disc.host + ":" + disc.port);
+                    connectRemoteAsync();
+                }
+            });
+
+            item.addView(btnAction);
+            layoutDevices.addView(item);
+        }
 
         for (AdbManager.AdbDevice dev : devices) {
             LinearLayout item = new LinearLayout(ctx);
@@ -472,6 +553,165 @@ public final class ExternalConnectFragment extends Fragment {
         }
     }
 
+    private void syncActivityTitle(boolean isSubpage) {
+        if (!isAdded()) return;
+        TextView activityTitle = requireActivity().findViewById(R.id.app_title);
+        if (activityTitle != null) {
+            activityTitle.setText(isSubpage ? "外部连接" : getString(R.string.nav_settings));
+        }
+    }
+
+    private void startNsdDiscovery() {
+        if (nsdManager == null) {
+            try {
+                nsdManager = (NsdManager) requireContext().getSystemService(Context.NSD_SERVICE);
+            } catch (Throwable ignored) {}
+        }
+        if (nsdManager == null) return;
+
+        stopNsdDiscovery();
+        discoveredDevices.clear();
+
+        // 1. 发现可配对设备 (_adb-tls-pairing._tcp)
+        pairingDiscoveryListener = new NsdManager.DiscoveryListener() {
+            @Override
+            public void onStartDiscoveryFailed(String serviceType, int errorCode) {}
+            @Override
+            public void onStopDiscoveryFailed(String serviceType, int errorCode) {}
+            @Override
+            public void onDiscoveryStarted(String serviceType) {}
+            @Override
+            public void onDiscoveryStopped(String serviceType) {}
+            @Override
+            public void onServiceFound(NsdServiceInfo serviceInfo) {
+                resolveNsdService(serviceInfo, true);
+            }
+            @Override
+            public void onServiceLost(NsdServiceInfo serviceInfo) {}
+        };
+
+        // 2. 发现可直连设备 (_adb-tls-connect._tcp)
+        connectDiscoveryListener = new NsdManager.DiscoveryListener() {
+            @Override
+            public void onStartDiscoveryFailed(String serviceType, int errorCode) {}
+            @Override
+            public void onStopDiscoveryFailed(String serviceType, int errorCode) {}
+            @Override
+            public void onDiscoveryStarted(String serviceType) {}
+            @Override
+            public void onDiscoveryStopped(String serviceType) {}
+            @Override
+            public void onServiceFound(NsdServiceInfo serviceInfo) {
+                resolveNsdService(serviceInfo, false);
+            }
+            @Override
+            public void onServiceLost(NsdServiceInfo serviceInfo) {}
+        };
+
+        try {
+            nsdManager.discoverServices("_adb-tls-pairing._tcp", NsdManager.PROTOCOL_DNS_SD, pairingDiscoveryListener);
+            nsdManager.discoverServices("_adb-tls-connect._tcp", NsdManager.PROTOCOL_DNS_SD, connectDiscoveryListener);
+        } catch (Throwable ignored) {}
+    }
+
+    private void resolveNsdService(NsdServiceInfo serviceInfo, boolean isPairing) {
+        if (nsdManager == null) return;
+        try {
+            nsdManager.resolveService(serviceInfo, new NsdManager.ResolveListener() {
+                @Override
+                public void onResolveFailed(NsdServiceInfo serviceInfo, int errorCode) {}
+                @Override
+                public void onServiceResolved(NsdServiceInfo resolved) {
+                    InetAddress host = resolved.getHost();
+                    if (host != null) {
+                        String ip = host.getHostAddress();
+                        int port = resolved.getPort();
+                        String name = resolved.getServiceName();
+                        if (name == null || name.isEmpty()) name = "Android设备";
+                        discoveredDevices.put(ip + ":" + port, new DiscoveredDevice(name, ip, port, isPairing));
+                        mainHandler.post(() -> {
+                            if (!isAdded()) return;
+                            refreshAllAsync();
+                        });
+                    }
+                }
+            });
+        } catch (Throwable ignored) {}
+    }
+
+    private void stopNsdDiscovery() {
+        if (nsdManager != null) {
+            try {
+                if (pairingDiscoveryListener != null) {
+                    nsdManager.stopServiceDiscovery(pairingDiscoveryListener);
+                    pairingDiscoveryListener = null;
+                }
+                if (connectDiscoveryListener != null) {
+                    nsdManager.stopServiceDiscovery(connectDiscoveryListener);
+                    connectDiscoveryListener = null;
+                }
+            } catch (Throwable ignored) {}
+        }
+    }
+
+    private void showPairDialog(DiscoveredDevice dev) {
+        if (!isAdded()) return;
+        Context ctx = requireContext();
+        float density = ctx.getResources().getDisplayMetrics().density;
+
+        LinearLayout layout = new LinearLayout(ctx);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        int p = Math.round(18f * density);
+        layout.setPadding(p, p, p, p);
+
+        TextView tvTitle = new TextView(ctx);
+        tvTitle.setText("配对设备: " + dev.name);
+        tvTitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        tvTitle.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        tvTitle.setTextColor(ctx.getColor(R.color.text));
+        layout.addView(tvTitle);
+
+        TextView tvSub = new TextView(ctx);
+        tvSub.setText("目标地址: " + dev.host + ":" + dev.port + "\n请输入目标手机上显示的 6 位配对码");
+        tvSub.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        tvSub.setTextColor(ctx.getColor(R.color.text_muted));
+        tvSub.setPadding(0, Math.round(6f * density), 0, Math.round(12f * density));
+        layout.addView(tvSub);
+
+        EditText etCode = new EditText(ctx);
+        etCode.setHint("6 位数字配对码");
+        etCode.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        etCode.setBackgroundResource(R.drawable.bg_input);
+        etCode.setPadding(Math.round(14f * density), Math.round(10f * density), Math.round(14f * density), Math.round(10f * density));
+        layout.addView(etCode);
+
+        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(ctx)
+                .setView(layout)
+                .setPositiveButton("配对并连接", null)
+                .setNegativeButton("取消", null)
+                .create();
+
+        dialog.show();
+
+        dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
+            String code = etCode.getText().toString().trim();
+            if (code.length() < 6) {
+                ToastHelper.show(ctx, "请输入完整的 6 位配对码");
+                return;
+            }
+            dialog.dismiss();
+            ToastHelper.show(ctx, "正在配对 " + dev.name + "...");
+            executor.execute(() -> {
+                String pairRes = adbManager.pairRemote(dev.host + ":" + dev.port, code);
+                mainHandler.post(() -> {
+                    if (!isAdded()) return;
+                    ToastHelper.show(requireContext(), pairRes.isEmpty() ? "配对请求已发送" : pairRes);
+                    refreshAllAsync();
+                });
+            });
+        });
+    }
+
     private void copyToClipboard(String text) {
         if (TextUtils.isEmpty(text)) return;
         try {
@@ -488,6 +728,8 @@ public final class ExternalConnectFragment extends Fragment {
     @Override
     public void onDestroyView() {
         super.onDestroyView();
+        stopNsdDiscovery();
+        syncActivityTitle(false);
         executor.shutdown();
     }
 }
