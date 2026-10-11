@@ -450,11 +450,10 @@ public final class ExternalConnectFragment extends Fragment {
     private void disconnectRemoteAsync(String target) {
         executor.execute(() -> {
             String result = adbManager.disconnectRemote(target);
-            List<AdbManager.AdbDevice> devices = adbManager.getConnectedDevices();
             mainHandler.post(() -> {
                 if (!isAdded()) return;
                 ToastHelper.show(requireContext(), result.isEmpty() ? "已断开连接" : result);
-                renderDeviceList(devices);
+                refreshDevicesAsync(false);
             });
         });
     }
@@ -464,7 +463,10 @@ public final class ExternalConnectFragment extends Fragment {
         if (layoutDevices == null || tvEmptyDevices == null) return;
         layoutDevices.removeAllViews();
 
-        if (devices == null || devices.isEmpty()) {
+        boolean hasDiscovered = (discoveredDevices != null && !discoveredDevices.isEmpty());
+        boolean hasConnected = (devices != null && !devices.isEmpty());
+
+        if (!hasDiscovered && !hasConnected) {
             tvEmptyDevices.setVisibility(View.VISIBLE);
             return;
         }

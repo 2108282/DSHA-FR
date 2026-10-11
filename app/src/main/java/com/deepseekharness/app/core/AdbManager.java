@@ -346,10 +346,7 @@ public final class AdbManager {
                     for (int i = 2; i < parts.length; i++) {
                         extra.append(parts[i]).append(" ");
                     }
-                    // 过滤掉本机 127.0.0.1 回环设备 emulator-5554，避免用户误解
-                    if (!address.startsWith("emulator-5554") && !address.startsWith("127.0.0.1")) {
-                        list.add(new AdbDevice(address, state, extra.toString().trim()));
-                    }
+                    list.add(new AdbDevice(address, state, extra.toString().trim()));
                 }
             }
         }
