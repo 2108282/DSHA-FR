@@ -89,7 +89,7 @@ public final class SshManager {
                 + "export PATH=/usr/local/bin:/usr/bin:/bin:$PATH; "
                 + "mkdir -p /root/.ssh && chmod 700 /root/.ssh; "
                 + "rm -f /root/.ssh/id_ed25519 /root/.ssh/id_ed25519.pub; "
-                + "ssh-keygen -t ed25519 -N "" -f /root/.ssh/id_ed25519 -C "dsha-phone"'";
+                + "ssh-keygen -t ed25519 -N \"\" -f /root/.ssh/id_ed25519 -C \"dsha-phone\"'";
         execRoot(cmd);
         return !TextUtils.isEmpty(getPublicKey());
     }
