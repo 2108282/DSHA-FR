@@ -354,7 +354,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="1dp"
-                        android:text="ADB调试 · 无线连接 · 跨设备互联"
+                        android:text="ADB连接•SSH管理"
                         android:textColor="@color/text_muted"
                         android:textSize="12sp" />
                 </LinearLayout>

@@ -12,6 +12,8 @@ import android.widget.Toast;
 import com.deepseekharness.app.util.ToastHelper;
 
 import androidx.appcompat.app.AlertDialog;
+import android.content.res.ColorStateList;
+import com.deepseekharness.app.ui.MonetEngine;
 
 import com.deepseekharness.app.core.PluginRepository;
 import com.deepseekharness.app.ui.PluginFilePicker;
@@ -285,6 +287,9 @@ public class PluginPresenter implements PluginActions {
     public void onStatusMessageClick() {
         if (repoState != null && !repoState.message.isEmpty()) {
             android.view.View dialogView = android.view.LayoutInflater.from(activity).inflate(com.deepseekharness.app.R.layout.dialog_plugin_status, null);
+            MonetEngine.PaletteInfo palette = MonetEngine.resolveCurrentPalette(activity);
+            MonetEngine.applyToViewTree(dialogView, palette);
+
             android.widget.TextView msgView = dialogView.findViewById(com.deepseekharness.app.R.id.dialogStatusMessage);
             if (msgView != null) msgView.setText(repoState.message);
             AlertDialog dialog = new AlertDialog.Builder(activity)
@@ -295,7 +300,12 @@ public class PluginPresenter implements PluginActions {
                 dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
             }
             android.view.View btnClose = dialogView.findViewById(com.deepseekharness.app.R.id.btnDialogStatusClose);
-            if (btnClose != null) btnClose.setOnClickListener(v -> dialog.dismiss());
+            if (btnClose != null) {
+                if (palette.isMonetActive) {
+                    btnClose.setBackgroundTintList(ColorStateList.valueOf(palette.primaryColor));
+                }
+                btnClose.setOnClickListener(v -> dialog.dismiss());
+            }
             dialog.show();
         }
     }

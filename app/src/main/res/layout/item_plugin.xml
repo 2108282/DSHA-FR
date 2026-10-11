@@ -15,29 +15,10 @@
         android:gravity="top"
         android:orientation="horizontal">
 
-        <!-- 左侧 42x42dp 图标框 (.plugin-icon: border-radius 14px; background primary-container) -->
-        <FrameLayout
-            android:id="@+id/pluginIconBox"
-            android:layout_width="42dp"
-            android:layout_height="42dp"
-            android:background="@drawable/m3_btn_tonal_expressive">
-
-            <ImageView
-                android:id="@+id/pluginIcon"
-                android:layout_width="22dp"
-                android:layout_height="22dp"
-                android:layout_gravity="center"
-                android:contentDescription="@null"
-                android:src="@drawable/ic_plugins"
-                app:srcCompat="@drawable/ic_plugins"
-                app:tint="@color/primary" />
-        </FrameLayout>
-
         <!-- 中间信息栏 (.plugin-main) -->
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="12dp"
             android:layout_marginEnd="8dp"
             android:layout_weight="1"
             android:orientation="vertical">

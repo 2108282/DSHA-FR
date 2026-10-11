@@ -431,6 +431,8 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
         if (!isAdded() || root == null || previewDialog != null || preview == null) return;
 
         View dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_plugin_install_preview, null);
+        MonetEngine.PaletteInfo palette = MonetEngine.resolveCurrentPalette(requireContext());
+        MonetEngine.applyToViewTree(dialogView, palette);
 
         TextView tvName = dialogView.findViewById(R.id.dialogPluginName);
         ModernBadgeView badgeVersion = dialogView.findViewById(R.id.dialogPluginVersionBadge);
@@ -493,6 +495,9 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
             });
         }
         if (btnConfirm != null) {
+            if (palette.isMonetActive) {
+                btnConfirm.setBackgroundTintList(android.content.res.ColorStateList.valueOf(palette.primaryColor));
+            }
             btnConfirm.setOnClickListener(v -> {
                 dialog.dismiss();
                 repository.confirmPreview();

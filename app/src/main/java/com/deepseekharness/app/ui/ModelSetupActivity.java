@@ -495,6 +495,8 @@ public final class ModelSetupActivity extends AppCompatActivity {
         if (current == null || !current.has("providers")) return;
 
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_model_select_provider, null);
+        MonetEngine.PaletteInfo palette = MonetEngine.resolveCurrentPalette(this);
+        MonetEngine.applyToViewTree(dialogView, palette);
         AlertDialog dialog = new DshaDialogBuilder(this).setView(dialogView).create();
 
         LinearLayout listContainer = dialogView.findViewById(R.id.layout_dialog_provider_list);
@@ -550,7 +552,8 @@ public final class ModelSetupActivity extends AppCompatActivity {
         LinearLayout.LayoutParams ibLp = new LinearLayout.LayoutParams(dp(36), dp(36));
         ImageView iconView = new ImageView(this);
         iconView.setImageResource(iconRes);
-        iconView.setImageTintList(android.content.res.ColorStateList.valueOf(getColor(R.color.primary)));
+        MonetEngine.PaletteInfo palette = MonetEngine.resolveCurrentPalette(this);
+        iconView.setImageTintList(android.content.res.ColorStateList.valueOf(palette.primaryColor));
         iconBox.addView(iconView, new FrameLayout.LayoutParams(dp(18), dp(18), Gravity.CENTER));
         row.addView(iconBox, ibLp);
 
@@ -820,16 +823,20 @@ public final class ModelSetupActivity extends AppCompatActivity {
                 LinearLayout row = new LinearLayout(this);
                 row.setOrientation(LinearLayout.HORIZONTAL);
                 row.setGravity(Gravity.CENTER_VERTICAL);
-                row.setPadding(dp(16), dp(12), dp(16), dp(12));
-                row.setBackgroundResource(R.drawable.bg_card_clickable);
+                row.setPadding(dp(16), dp(13), dp(16), dp(13));
+                TypedValue rippleVal = new TypedValue();
+                getTheme().resolveAttribute(android.R.attr.selectableItemBackground, rippleVal, true);
+                row.setBackgroundResource(rippleVal.resourceId);
                 row.setClickable(true);
                 row.setFocusable(true);
+
+                MonetEngine.PaletteInfo palette = MonetEngine.resolveCurrentPalette(this);
 
                 FrameLayout iconBox = new FrameLayout(this);
                 iconBox.setBackgroundResource(R.drawable.bg_settings_icon_box);
                 ImageView iconView = new ImageView(this);
                 iconView.setImageResource(R.drawable.ic_cpu);
-                iconView.setImageTintList(android.content.res.ColorStateList.valueOf(getColor(R.color.primary)));
+                iconView.setImageTintList(android.content.res.ColorStateList.valueOf(palette.primaryColor));
                 iconBox.addView(iconView, new FrameLayout.LayoutParams(dp(20), dp(20), Gravity.CENTER));
                 row.addView(iconBox, new LinearLayout.LayoutParams(dp(38), dp(38)));
 
@@ -861,16 +868,10 @@ public final class ModelSetupActivity extends AppCompatActivity {
                 btnDel.setTypeface(null, android.graphics.Typeface.BOLD);
                 btnDel.setGravity(Gravity.CENTER);
                 btnDel.setBackgroundResource(R.drawable.bg_btn_danger_small);
-                btnDel.setPadding(dp(10), dp(4), dp(10), dp(4));
+                btnDel.setPadding(dp(12), dp(4), dp(12), dp(4));
                 LinearLayout.LayoutParams delLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(28));
-                delLp.rightMargin = dp(8);
                 btnDel.setOnClickListener(v -> confirmDeleteModel(index, modelId));
                 row.addView(btnDel, delLp);
-
-                ImageView chevron = new ImageView(this);
-                chevron.setImageResource(R.drawable.ic_chevron_right);
-                chevron.setImageTintList(android.content.res.ColorStateList.valueOf(getColor(R.color.text_muted)));
-                row.addView(chevron, new LinearLayout.LayoutParams(dp(18), dp(18)));
 
                 row.setOnClickListener(v -> editModel(index));
                 layoutModelsList.addView(row, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));

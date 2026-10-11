@@ -26,50 +26,6 @@
             android:paddingTop="14dp"
             android:paddingBottom="96dp">
 
-            <!-- ==================== 顶部导航与页面标题 ==================== -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:paddingVertical="4dp">
-
-                <ImageView
-                    android:id="@+id/ext_btn_back"
-                    android:layout_width="38dp"
-                    android:layout_height="38dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="返回"
-                    android:padding="9dp"
-                    android:src="@drawable/ic_nav_back"
-                    app:tint="@color/text" />
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="外部连接"
-                        android:textColor="@color/text"
-                        android:textSize="18sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:id="@+id/ext_tv_header_sub"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="1dp"
-                        android:text="ADB调试 · 无线连接 · SSH远程管理"
-                        android:textColor="@color/text_muted"
-                        android:textSize="12sp" />
-                </LinearLayout>
-            </LinearLayout>
-
             <!-- 顶部协议大 Tab 切换: [ ADB 调试互联 | SSH 远程管理 ] -->
             <com.deepseekharness.app.ui.ModernSegmentedView
                 android:id="@+id/ext_seg_protocol"

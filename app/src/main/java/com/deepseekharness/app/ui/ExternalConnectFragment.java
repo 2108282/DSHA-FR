@@ -313,7 +313,7 @@ public final class ExternalConnectFragment extends Fragment {
             });
         }
         if (btnRegenKey != null) {
-            btnRegenKey.setOnClickListener(x -> regenSshKeyAsync());
+            btnRegenKey.setOnClickListener(x -> showRegenKeyConfirmDialog());
         }
         if (btnSaveHost != null) {
             btnSaveHost.setOnClickListener(x -> saveSshHost());
@@ -397,6 +397,43 @@ public final class ExternalConnectFragment extends Fragment {
                 renderHostList(hosts);
             });
         });
+    }
+
+    private void showRegenKeyConfirmDialog() {
+        if (!isAdded()) return;
+        Context ctx = requireContext();
+        View dialogView = LayoutInflater.from(ctx).inflate(R.layout.dialog_ssh_regen_key, null);
+        MonetEngine.PaletteInfo palette = MonetEngine.resolveCurrentPalette(ctx);
+        MonetEngine.applyToViewTree(dialogView, palette);
+
+        ImageView iconView = dialogView.findViewById(R.id.dialogRegenKeyIcon);
+        if (iconView != null) {
+            iconView.setImageTintList(ColorStateList.valueOf(palette.primaryColor));
+        }
+
+        android.widget.Button btnCancel = dialogView.findViewById(R.id.btnDialogRegenCancel);
+        android.widget.Button btnConfirm = dialogView.findViewById(R.id.btnDialogRegenConfirm);
+        if (btnConfirm != null && palette.isMonetActive) {
+            btnConfirm.setBackgroundTintList(ColorStateList.valueOf(palette.primaryColor));
+        }
+
+        androidx.appcompat.app.AlertDialog dialog = new androidx.appcompat.app.AlertDialog.Builder(ctx)
+                .setView(dialogView)
+                .setCancelable(true)
+                .create();
+
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        }
+
+        if (btnCancel != null) btnCancel.setOnClickListener(v -> dialog.dismiss());
+        if (btnConfirm != null) {
+            btnConfirm.setOnClickListener(v -> {
+                dialog.dismiss();
+                regenSshKeyAsync();
+            });
+        }
+        dialog.show();
     }
 
     private void regenSshKeyAsync() {
