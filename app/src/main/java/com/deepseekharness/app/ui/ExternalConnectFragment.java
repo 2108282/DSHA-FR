@@ -3,6 +3,9 @@ package com.deepseekharness.app.ui;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.content.res.ColorStateList;
+import android.net.nsd.NsdManager;
+import android.net.nsd.NsdServiceInfo;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -16,13 +19,6 @@ import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
-import android.widget.FrameLayout;
-import android.content.res.ColorStateList;
-import android.net.nsd.NsdManager;
-import android.net.nsd.NsdServiceInfo;
-import java.net.InetAddress;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.Map;
 
 import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
@@ -31,38 +27,50 @@ import androidx.fragment.app.Fragment;
 
 import com.deepseekharness.app.R;
 import com.deepseekharness.app.core.AdbManager;
+import com.deepseekharness.app.core.SshManager;
 import com.deepseekharness.app.util.ToastHelper;
+import com.google.android.material.bottomnavigation.BottomNavigationView;
 
+import java.net.InetAddress;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * 外部连接二级管理页面：
- * 1. 纯 Skia 现代卡片规范 (ModernCardView + DshaToggle + ModernSegmentedView)；
+ * 外部连接与远程管理二级页面：
+ * 1. 顶部纯自绘 Skia 分段切换: [ ADB 调试互联 | SSH 远程管理 ]；
  * 2. 深度接入 MonetEngine 莫奈色彩体系；
  * 3. 严格禁止任何 emoji 字符，保证原生专业质感；
- * 4. 支持有线调试检测、无线调试开关及连接串、权限模式调节与外部设备主动互联。
+ * 4. 具备 ADB 有线/无线/权限/设备互联与 SSH 本机密钥/资产对象/一键终端穿透全套能力。
  */
 public final class ExternalConnectFragment extends Fragment {
 
     private final AdbManager adbManager = AdbManager.get();
+    private SshManager sshManager;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
-    // UI 组件引用
+    // 顶部公共组件
     private ImageView btnBack;
+    private TextView tvHeaderSub;
+    private ModernSegmentedView segProtocol;
+    private LinearLayout containerAdb;
+    private LinearLayout containerSsh;
+
+    // ADB 模块组件
     private TextView tvUsbStatus;
     private TextView btnCheckUsb;
+    private LinearLayout layoutUsbInfo;
+    private TextView btnCopyUsbShell;
+    private TextView btnCopyUsbScrcpy;
 
     private TextView tvWirelessStatus;
     private DshaToggle toggleWireless;
     private LinearLayout layoutWirelessInfo;
     private TextView tvConnectCmd;
     private TextView btnCopyCmd;
-    private LinearLayout layoutUsbInfo;
-    private TextView btnCopyUsbShell;
-    private TextView btnCopyUsbScrcpy;
     private TextView btnCopyWirelessShell;
     private TextView btnCopyWirelessScrcpy;
 
@@ -76,6 +84,21 @@ public final class ExternalConnectFragment extends Fragment {
     private TextView btnRefreshDevices;
     private TextView tvEmptyDevices;
     private LinearLayout layoutDevices;
+
+    // SSH 模块组件
+    private TextView tvSshKeyStatus;
+    private TextView tvSshPubkey;
+    private TextView btnCopyPubkey;
+    private TextView btnRegenKey;
+
+    private EditText etSshName;
+    private EditText etSshHost;
+    private EditText etSshUser;
+    private EditText etSshPort;
+    private TextView btnSaveHost;
+
+    private TextView tvEmptyHosts;
+    private LinearLayout layoutHosts;
 
     private boolean isUpdatingUi = false;
     private NsdManager nsdManager;
@@ -107,6 +130,7 @@ public final class ExternalConnectFragment extends Fragment {
     @Override
     public void onViewCreated(@NonNull View v, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(v, savedInstanceState);
+        sshManager = SshManager.get(requireContext());
 
         // 拦截系统返回手势
         requireActivity().getOnBackPressedDispatcher().addCallback(
@@ -124,21 +148,32 @@ public final class ExternalConnectFragment extends Fragment {
         applyTheme(v);
         bindEvents();
         refreshAllAsync();
+        refreshSshAllAsync();
     }
 
     private void initViews(View v) {
         btnBack = v.findViewById(R.id.ext_btn_back);
+        tvHeaderSub = v.findViewById(R.id.ext_tv_header_sub);
+        segProtocol = v.findViewById(R.id.ext_seg_protocol);
+        if (segProtocol != null) {
+            segProtocol.setTabs("ADB 调试互联", "SSH 远程管理");
+            segProtocol.setSelectedIndex(0, false);
+        }
+        containerAdb = v.findViewById(R.id.ext_container_adb);
+        containerSsh = v.findViewById(R.id.ext_container_ssh);
+
+        // ADB 控件
         tvUsbStatus = v.findViewById(R.id.ext_tv_usb_status);
         btnCheckUsb = v.findViewById(R.id.ext_btn_check_usb);
+        layoutUsbInfo = v.findViewById(R.id.ext_layout_usb_info);
+        btnCopyUsbShell = v.findViewById(R.id.ext_btn_copy_usb_shell);
+        btnCopyUsbScrcpy = v.findViewById(R.id.ext_btn_copy_usb_scrcpy);
 
         tvWirelessStatus = v.findViewById(R.id.ext_tv_wireless_status);
         toggleWireless = v.findViewById(R.id.ext_toggle_wireless);
         layoutWirelessInfo = v.findViewById(R.id.ext_layout_wireless_info);
         tvConnectCmd = v.findViewById(R.id.ext_tv_connect_cmd);
         btnCopyCmd = v.findViewById(R.id.ext_btn_copy_cmd);
-        layoutUsbInfo = v.findViewById(R.id.ext_layout_usb_info);
-        btnCopyUsbShell = v.findViewById(R.id.ext_btn_copy_usb_shell);
-        btnCopyUsbScrcpy = v.findViewById(R.id.ext_btn_copy_usb_scrcpy);
         btnCopyWirelessShell = v.findViewById(R.id.ext_btn_copy_wireless_shell);
         btnCopyWirelessScrcpy = v.findViewById(R.id.ext_btn_copy_wireless_scrcpy);
 
@@ -155,6 +190,21 @@ public final class ExternalConnectFragment extends Fragment {
         btnRefreshDevices = v.findViewById(R.id.ext_btn_refresh_devices);
         tvEmptyDevices = v.findViewById(R.id.ext_tv_empty_devices);
         layoutDevices = v.findViewById(R.id.ext_layout_devices);
+
+        // SSH 控件
+        tvSshKeyStatus = v.findViewById(R.id.ssh_tv_key_status);
+        tvSshPubkey = v.findViewById(R.id.ssh_tv_pubkey);
+        btnCopyPubkey = v.findViewById(R.id.ssh_btn_copy_pubkey);
+        btnRegenKey = v.findViewById(R.id.ssh_btn_regen_key);
+
+        etSshName = v.findViewById(R.id.ssh_et_name);
+        etSshHost = v.findViewById(R.id.ssh_et_host);
+        etSshUser = v.findViewById(R.id.ssh_et_user);
+        etSshPort = v.findViewById(R.id.ssh_et_port);
+        btnSaveHost = v.findViewById(R.id.ssh_btn_save_host);
+
+        tvEmptyHosts = v.findViewById(R.id.ssh_tv_empty_hosts);
+        layoutHosts = v.findViewById(R.id.ssh_layout_hosts);
     }
 
     private void applyTheme(View root) {
@@ -163,11 +213,17 @@ public final class ExternalConnectFragment extends Fragment {
         MonetEngine.PaletteInfo palette = MonetEngine.resolveCurrentPalette(ctx);
         MonetEngine.applyToViewTree(root, palette);
 
+        if (segProtocol != null) {
+            segProtocol.setPrimaryColor(palette.primaryColor);
+        }
         if (segPermission != null) {
             segPermission.setPrimaryColor(palette.primaryColor);
         }
-        if (btnConnect != null && palette.isMonetActive) {
-            btnConnect.setBackgroundTintList(ColorStateList.valueOf(palette.primaryColor));
+        if (palette.isMonetActive) {
+            ColorStateList csl = ColorStateList.valueOf(palette.primaryColor);
+            if (btnConnect != null) btnConnect.setBackgroundTintList(csl);
+            if (btnCopyPubkey != null) btnCopyPubkey.setBackgroundTintList(csl);
+            if (btnSaveHost != null) btnSaveHost.setBackgroundTintList(csl);
         }
     }
 
@@ -176,20 +232,28 @@ public final class ExternalConnectFragment extends Fragment {
             btnBack.setOnClickListener(x -> getParentFragmentManager().popBackStack());
         }
 
-        // 有线 USB 检测
+        // 协议 Tab 切换
+        if (segProtocol != null) {
+            segProtocol.setOnTabSelectedListener(index -> {
+                boolean isAdb = (index == 0);
+                if (containerAdb != null) containerAdb.setVisibility(isAdb ? View.VISIBLE : View.GONE);
+                if (containerSsh != null) containerSsh.setVisibility(isAdb ? View.GONE : View.VISIBLE);
+                if (tvHeaderSub != null) {
+                    tvHeaderSub.setText(isAdb ? "ADB调试 · 无线连接 · 跨设备管理" : "SSH远程主机 · 本机公钥 · 一键直连");
+                }
+            });
+        }
+
+        // ADB 事件
         if (btnCheckUsb != null) {
             btnCheckUsb.setOnClickListener(x -> checkUsbAsync(true));
         }
-
-        // 无线开关
         if (toggleWireless != null) {
             toggleWireless.setOnCheckedChangeListener((btn, isChecked) -> {
                 if (isUpdatingUi) return;
                 toggleWirelessAsync(isChecked);
             });
         }
-
-        // 复制命令
         if (btnCopyCmd != null) {
             btnCopyCmd.setOnClickListener(x -> {
                 if (tvConnectCmd != null) copyToClipboard(tvConnectCmd.getText().toString());
@@ -210,16 +274,12 @@ public final class ExternalConnectFragment extends Fragment {
                 copyToClipboard("scrcpy -s " + st.ipAddress + ":" + st.port);
             });
         }
-
-        // 权限切换
         if (segPermission != null) {
             segPermission.setOnTabSelectedListener(index -> {
                 if (isUpdatingUi) return;
                 switchPermissionAsync(index);
             });
         }
-
-        // 直连 chroot 容器终端
         if (toggleChrootDirect != null) {
             toggleChrootDirect.setOnCheckedChangeListener((btn, isChecked) -> {
                 if (isUpdatingUi) return;
@@ -231,19 +291,28 @@ public final class ExternalConnectFragment extends Fragment {
                 if (toggleChrootDirect != null) toggleChrootDirect.toggle();
             });
         }
-
-        // 主动连接
         if (btnConnect != null) {
             btnConnect.setOnClickListener(x -> connectRemoteAsync());
         }
-
-        // 刷新设备列表
         if (btnRefreshDevices != null) {
             btnRefreshDevices.setOnClickListener(x -> refreshDevicesAsync(true));
         }
+
+        // SSH 事件
+        if (btnCopyPubkey != null) {
+            btnCopyPubkey.setOnClickListener(x -> {
+                if (tvSshPubkey != null) copyToClipboard(tvSshPubkey.getText().toString());
+            });
+        }
+        if (btnRegenKey != null) {
+            btnRegenKey.setOnClickListener(x -> regenSshKeyAsync());
+        }
+        if (btnSaveHost != null) {
+            btnSaveHost.setOnClickListener(x -> saveSshHost());
+        }
     }
 
-    /** 异步全局刷新 */
+    /** 异步刷新 ADB 状态 */
     private void refreshAllAsync() {
         executor.execute(() -> {
             AdbManager.UsbStatus usb = adbManager.getUsbStatus();
@@ -256,15 +325,11 @@ public final class ExternalConnectFragment extends Fragment {
                 if (!isAdded()) return;
                 isUpdatingUi = true;
                 try {
-                    // 1. USB 状态
-                    if (tvUsbStatus != null) {
-                        tvUsbStatus.setText(usb.stateDescription);
-                    }
+                    if (tvUsbStatus != null) tvUsbStatus.setText(usb.stateDescription);
                     if (layoutUsbInfo != null) {
                         layoutUsbInfo.setVisibility(usb.isConnected && usb.adbEnabled ? View.VISIBLE : View.GONE);
                     }
 
-                    // 2. 无线状态
                     if (toggleWireless != null) {
                         toggleWireless.setChecked(wireless.isEnabled, false, false);
                     }
@@ -282,22 +347,15 @@ public final class ExternalConnectFragment extends Fragment {
                     if (layoutWirelessInfo != null) {
                         layoutWirelessInfo.setVisibility(wireless.isEnabled ? View.VISIBLE : View.GONE);
                     }
-                    if (tvConnectCmd != null) {
-                        tvConnectCmd.setText(wireless.connectCommand);
-                    }
+                    if (tvConnectCmd != null) tvConnectCmd.setText(wireless.connectCommand);
 
-                    // 3. 权限模式 (0: Shell, 1: Root)
-                    if (segPermission != null) {
-                        segPermission.setSelectedIndex(permMode, false);
-                    }
+                    if (segPermission != null) segPermission.setSelectedIndex(permMode, false);
                     updatePermissionDescText(permMode);
 
-                    // 3.5 直连 chroot 模式
                     if (toggleChrootDirect != null) {
                         toggleChrootDirect.setChecked(chrootDirect, false, false);
                     }
 
-                    // 4. 设备列表
                     renderDeviceList(devices);
                 } finally {
                     isUpdatingUi = false;
@@ -306,14 +364,191 @@ public final class ExternalConnectFragment extends Fragment {
         });
     }
 
+    /** 异步刷新 SSH 状态与主机列表 */
+    private void refreshSshAllAsync() {
+        executor.execute(() -> {
+            String pubKey = sshManager.getPublicKey();
+            List<SshManager.HostProfile> hosts = sshManager.getSavedHosts();
+            mainHandler.post(() -> {
+                if (!isAdded()) return;
+                if (tvSshPubkey != null) {
+                    if (TextUtils.isEmpty(pubKey)) {
+                        tvSshPubkey.setText("尚未生成本机公钥，点击右侧按钮生成");
+                    } else {
+                        tvSshPubkey.setText(pubKey);
+                    }
+                }
+                renderHostList(hosts);
+            });
+        });
+    }
+
+    private void regenSshKeyAsync() {
+        if (tvSshPubkey != null) tvSshPubkey.setText("正在生成 Ed25519 密钥对...");
+        executor.execute(() -> {
+            boolean ok = sshManager.generateKeyPair();
+            String key = sshManager.getPublicKey();
+            mainHandler.post(() -> {
+                if (!isAdded()) return;
+                if (tvSshPubkey != null) tvSshPubkey.setText(key);
+                ToastHelper.show(requireContext(), ok ? "密钥对已生成" : "密钥生成失败");
+            });
+        });
+    }
+
+    private void saveSshHost() {
+        String name = etSshName != null ? etSshName.getText().toString().trim() : "";
+        String host = etSshHost != null ? etSshHost.getText().toString().trim() : "";
+        String user = etSshUser != null ? etSshUser.getText().toString().trim() : "root";
+        String portStr = etSshPort != null ? etSshPort.getText().toString().trim() : "22";
+
+        if (TextUtils.isEmpty(host)) {
+            ToastHelper.show(requireContext(), "主机地址不能为空");
+            return;
+        }
+        if (TextUtils.isEmpty(name)) {
+            name = host;
+        }
+        if (TextUtils.isEmpty(user)) {
+            user = "root";
+        }
+        int port = 22;
+        try {
+            port = Integer.parseInt(portStr);
+        } catch (Throwable ignored) {}
+
+        SshManager.HostProfile profile = new SshManager.HostProfile(null, name, host, port, user);
+        sshManager.saveHost(profile);
+
+        if (etSshName != null) etSshName.setText("");
+        if (etSshHost != null) etSshHost.setText("");
+        ToastHelper.show(requireContext(), "已保存远程主机：" + name);
+        renderHostList(sshManager.getSavedHosts());
+    }
+
+    private void renderHostList(List<SshManager.HostProfile> hosts) {
+        if (layoutHosts == null || tvEmptyHosts == null) return;
+        layoutHosts.removeAllViews();
+
+        if (hosts == null || hosts.isEmpty()) {
+            tvEmptyHosts.setVisibility(View.VISIBLE);
+            return;
+        }
+
+        tvEmptyHosts.setVisibility(View.GONE);
+        Context ctx = requireContext();
+        float density = ctx.getResources().getDisplayMetrics().density;
+
+        for (SshManager.HostProfile h : hosts) {
+            LinearLayout item = new LinearLayout(ctx);
+            item.setOrientation(LinearLayout.VERTICAL);
+            int p = Math.round(12f * density);
+            item.setPadding(p, p, p, p);
+            item.setBackgroundResource(R.drawable.bg_input);
+
+            LinearLayout.LayoutParams lpItem = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            lpItem.setMargins(0, 0, 0, Math.round(10f * density));
+            item.setLayoutParams(lpItem);
+
+            // 标题与地址
+            TextView tvName = new TextView(ctx);
+            tvName.setText(h.name);
+            tvName.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+            tvName.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            tvName.setTextColor(ctx.getColor(R.color.text));
+            item.addView(tvName);
+
+            TextView tvCmd = new TextView(ctx);
+            tvCmd.setText(h.getSshCommand());
+            tvCmd.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+            tvCmd.setFontFeatureSettings("monospace");
+            tvCmd.setTextColor(ctx.getColor(R.color.text_muted));
+            tvCmd.setPadding(0, Math.round(2f * density), 0, Math.round(8f * density));
+            item.addView(tvCmd);
+
+            // 按钮操作行: [进入终端] [复制命令] [删除]
+            LinearLayout rowBtns = new LinearLayout(ctx);
+            rowBtns.setOrientation(LinearLayout.HORIZONTAL);
+            rowBtns.setGravity(Gravity.CENTER_VERTICAL);
+
+            TextView btnTerminal = new TextView(ctx);
+            btnTerminal.setText("进入终端");
+            btnTerminal.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+            btnTerminal.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            btnTerminal.setTextColor(ctx.getColor(R.color.accent_on));
+            btnTerminal.setBackgroundResource(R.drawable.m3_btn_primary_expressive);
+            btnTerminal.setGravity(Gravity.CENTER);
+            int px = Math.round(12f * density);
+            int btnH = Math.round(30f * density);
+            btnTerminal.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, btnH));
+            btnTerminal.setPadding(px, 0, px, 0);
+            btnTerminal.setClickable(true);
+            btnTerminal.setFocusable(true);
+            btnTerminal.setOnClickListener(x -> launchTerminalWithCommand(h.getSshCommand()));
+            rowBtns.addView(btnTerminal);
+
+            TextView btnCopy = new TextView(ctx);
+            btnCopy.setText("复制命令");
+            btnCopy.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+            btnCopy.setTextColor(ctx.getColor(R.color.primary));
+            btnCopy.setBackgroundResource(R.drawable.m3_btn_tonal_small);
+            btnCopy.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams lpCopy = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, btnH);
+            lpCopy.setMarginStart(Math.round(8f * density));
+            btnCopy.setLayoutParams(lpCopy);
+            btnCopy.setPadding(px, 0, px, 0);
+            btnCopy.setClickable(true);
+            btnCopy.setFocusable(true);
+            btnCopy.setOnClickListener(x -> copyToClipboard(h.getSshCommand()));
+            rowBtns.addView(btnCopy);
+
+            View spacer = new View(ctx);
+            rowBtns.addView(spacer, new LinearLayout.LayoutParams(0, 0, 1f));
+
+            TextView btnDel = new TextView(ctx);
+            btnDel.setText("删除");
+            btnDel.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+            btnDel.setTextColor(ctx.getColor(R.color.err));
+            btnDel.setBackgroundResource(R.drawable.bg_btn_danger_small);
+            btnDel.setGravity(Gravity.CENTER);
+            btnDel.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, btnH));
+            btnDel.setPadding(px, 0, px, 0);
+            btnDel.setClickable(true);
+            btnDel.setFocusable(true);
+            btnDel.setOnClickListener(x -> {
+                sshManager.deleteHost(h.id);
+                renderHostList(sshManager.getSavedHosts());
+                ToastHelper.show(ctx, "已删除主机：" + h.name);
+            });
+            rowBtns.addView(btnDel);
+
+            item.addView(rowBtns);
+            layoutHosts.addView(item);
+        }
+    }
+
+    /** 复制命令并一键拉起底部导航栏终端 */
+    private void launchTerminalWithCommand(String cmd) {
+        copyToClipboard(cmd);
+        ToastHelper.show(requireContext(), "已准备连接命令，正在切入终端...");
+        try {
+            BottomNavigationView nav = requireActivity().findViewById(R.id.bottom_nav);
+            if (nav != null) {
+                nav.setSelectedItemId(R.id.nav_terminal);
+            }
+        } catch (Throwable ignored) {}
+    }
+
     private void checkUsbAsync(boolean showToast) {
         if (tvUsbStatus != null) tvUsbStatus.setText("检测状态中...");
         executor.execute(() -> {
             AdbManager.UsbStatus usb = adbManager.getUsbStatus();
             mainHandler.post(() -> {
                 if (!isAdded()) return;
-                if (tvUsbStatus != null) {
-                    tvUsbStatus.setText(usb.stateDescription);
+                if (tvUsbStatus != null) tvUsbStatus.setText(usb.stateDescription);
+                if (layoutUsbInfo != null) {
+                    layoutUsbInfo.setVisibility(usb.isConnected && usb.adbEnabled ? View.VISIBLE : View.GONE);
                 }
                 if (showToast) {
                     ToastHelper.show(requireContext(), "USB 状态：" + usb.stateDescription);
@@ -475,7 +710,7 @@ public final class ExternalConnectFragment extends Fragment {
         Context ctx = requireContext();
         float density = ctx.getResources().getDisplayMetrics().density;
 
-        // 先渲染局域网通过 mDNS 发现的设备
+        // 渲染局域网通过 mDNS 发现的设备
         for (DiscoveredDevice disc : discoveredDevices.values()) {
             LinearLayout item = new LinearLayout(ctx);
             item.setOrientation(LinearLayout.HORIZONTAL);
@@ -529,55 +764,57 @@ public final class ExternalConnectFragment extends Fragment {
             layoutDevices.addView(item);
         }
 
-        for (AdbManager.AdbDevice dev : devices) {
-            LinearLayout item = new LinearLayout(ctx);
-            item.setOrientation(LinearLayout.HORIZONTAL);
-            item.setGravity(Gravity.CENTER_VERTICAL);
-            int py = Math.round(10f * density);
-            item.setPadding(0, py, 0, py);
+        if (devices != null) {
+            for (AdbManager.AdbDevice dev : devices) {
+                LinearLayout item = new LinearLayout(ctx);
+                item.setOrientation(LinearLayout.HORIZONTAL);
+                item.setGravity(Gravity.CENTER_VERTICAL);
+                int py = Math.round(10f * density);
+                item.setPadding(0, py, 0, py);
 
-            LinearLayout infoBox = new LinearLayout(ctx);
-            infoBox.setOrientation(LinearLayout.VERTICAL);
-            LinearLayout.LayoutParams lpInfo = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-            infoBox.setLayoutParams(lpInfo);
+                LinearLayout infoBox = new LinearLayout(ctx);
+                infoBox.setOrientation(LinearLayout.VERTICAL);
+                LinearLayout.LayoutParams lpInfo = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+                infoBox.setLayoutParams(lpInfo);
 
-            TextView tvAddress = new TextView(ctx);
-            tvAddress.setText(dev.address);
-            tvAddress.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-            tvAddress.setTypeface(android.graphics.Typeface.MONOSPACE, android.graphics.Typeface.BOLD);
-            tvAddress.setTextColor(ctx.getColor(R.color.text));
-            infoBox.addView(tvAddress);
+                TextView tvAddress = new TextView(ctx);
+                tvAddress.setText(dev.address);
+                tvAddress.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+                tvAddress.setTypeface(android.graphics.Typeface.MONOSPACE, android.graphics.Typeface.BOLD);
+                tvAddress.setTextColor(ctx.getColor(R.color.text));
+                infoBox.addView(tvAddress);
 
-            TextView tvState = new TextView(ctx);
-            String stateDesc = "device".equalsIgnoreCase(dev.state) ? "已连接并就绪" : ("状态: " + dev.state);
-            if (!TextUtils.isEmpty(dev.extraInfo)) {
-                stateDesc += " (" + dev.extraInfo + ")";
+                TextView tvState = new TextView(ctx);
+                String stateDesc = "device".equalsIgnoreCase(dev.state) ? "已连接并就绪" : ("状态: " + dev.state);
+                if (!TextUtils.isEmpty(dev.extraInfo)) {
+                    stateDesc += " (" + dev.extraInfo + ")";
+                }
+                tvState.setText(stateDesc);
+                tvState.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+                tvState.setTextColor(ctx.getColor("device".equalsIgnoreCase(dev.state) ? R.color.primary : R.color.text_muted));
+                infoBox.addView(tvState);
+
+                item.addView(infoBox);
+
+                // 断开按钮
+                TextView btnDisconnect = new TextView(ctx);
+                btnDisconnect.setText("断开");
+                btnDisconnect.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+                btnDisconnect.setTextColor(ctx.getColor(R.color.err));
+                btnDisconnect.setBackgroundResource(R.drawable.bg_btn_danger_small);
+                btnDisconnect.setGravity(Gravity.CENTER);
+                int px = Math.round(12f * density);
+                int h = Math.round(30f * density);
+                LinearLayout.LayoutParams lpBtn = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, h);
+                btnDisconnect.setLayoutParams(lpBtn);
+                btnDisconnect.setPadding(px, 0, px, 0);
+                btnDisconnect.setClickable(true);
+                btnDisconnect.setFocusable(true);
+                btnDisconnect.setOnClickListener(x -> disconnectRemoteAsync(dev.address));
+
+                item.addView(btnDisconnect);
+                layoutDevices.addView(item);
             }
-            tvState.setText(stateDesc);
-            tvState.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
-            tvState.setTextColor(ctx.getColor("device".equalsIgnoreCase(dev.state) ? R.color.primary : R.color.text_muted));
-            infoBox.addView(tvState);
-
-            item.addView(infoBox);
-
-            // 断开按钮
-            TextView btnDisconnect = new TextView(ctx);
-            btnDisconnect.setText("断开");
-            btnDisconnect.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
-            btnDisconnect.setTextColor(ctx.getColor(R.color.err));
-            btnDisconnect.setBackgroundResource(R.drawable.bg_btn_danger_small);
-            btnDisconnect.setGravity(Gravity.CENTER);
-            int px = Math.round(12f * density);
-            int h = Math.round(30f * density);
-            LinearLayout.LayoutParams lpBtn = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, h);
-            btnDisconnect.setLayoutParams(lpBtn);
-            btnDisconnect.setPadding(px, 0, px, 0);
-            btnDisconnect.setClickable(true);
-            btnDisconnect.setFocusable(true);
-            btnDisconnect.setOnClickListener(x -> disconnectRemoteAsync(dev.address));
-
-            item.addView(btnDisconnect);
-            layoutDevices.addView(item);
         }
     }
 
@@ -600,7 +837,6 @@ public final class ExternalConnectFragment extends Fragment {
         stopNsdDiscovery();
         discoveredDevices.clear();
 
-        // 1. 发现可配对设备 (_adb-tls-pairing._tcp)
         pairingDiscoveryListener = new NsdManager.DiscoveryListener() {
             @Override
             public void onStartDiscoveryFailed(String serviceType, int errorCode) {}
@@ -618,7 +854,6 @@ public final class ExternalConnectFragment extends Fragment {
             public void onServiceLost(NsdServiceInfo serviceInfo) {}
         };
 
-        // 2. 发现可直连设备 (_adb-tls-connect._tcp)
         connectDiscoveryListener = new NsdManager.DiscoveryListener() {
             @Override
             public void onStartDiscoveryFailed(String serviceType, int errorCode) {}
@@ -745,8 +980,8 @@ public final class ExternalConnectFragment extends Fragment {
         try {
             ClipboardManager cm = (ClipboardManager) requireContext().getSystemService(Context.CLIPBOARD_SERVICE);
             if (cm != null) {
-                cm.setPrimaryClip(ClipData.newPlainText("ADB命令", text));
-                ToastHelper.show(requireContext(), "连接命令已复制到剪贴板");
+                cm.setPrimaryClip(ClipData.newPlainText("连接命令", text));
+                ToastHelper.show(requireContext(), "命令/公钥已复制到剪贴板");
             }
         } catch (Throwable e) {
             ToastHelper.show(requireContext(), "复制失败");

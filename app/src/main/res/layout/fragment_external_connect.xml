@@ -60,616 +60,885 @@
                         android:textStyle="bold" />
 
                     <TextView
+                        android:id="@+id/ext_tv_header_sub"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="1dp"
-                        android:text="ADB调试 · 无线连接 · 跨设备管理"
+                        android:text="ADB调试 · 无线连接 · SSH远程管理"
                         android:textColor="@color/text_muted"
                         android:textSize="12sp" />
                 </LinearLayout>
             </LinearLayout>
 
-            <!-- ==================== 分组 1: 本机受控端 ==================== -->
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="6dp"
-                android:layout_marginTop="16dp"
-                android:layout_marginBottom="4dp"
-                android:letterSpacing="0.09"
-                android:text="本机受控与调试"
-                android:textAllCaps="true"
-                android:textColor="@color/text_muted"
-                android:textSize="12sp"
-                android:textStyle="bold" />
+            <!-- 顶部协议大 Tab 切换: [ ADB 调试互联 | SSH 远程管理 ] -->
+            <com.deepseekharness.app.ui.ModernSegmentedView
+                android:id="@+id/ext_seg_protocol"
+                android:layout_width="match_parent"
+                android:layout_height="50dp"
+                android:layout_marginTop="12dp" />
 
-            <com.deepseekharness.app.ui.ModernCardView
+            <!-- ==================== 协议容器 A: ADB 模块 ==================== -->
+            <LinearLayout
+                android:id="@+id/ext_container_adb"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:clipToOutline="true"
                 android:orientation="vertical"
-                app:cardRadius="18dp">
+                android:visibility="visible">
 
-                <!-- 1.1 有线 USB 调试行 -->
-                <LinearLayout
+                <!-- 分组 1: 本机受控端 -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:layout_marginTop="16dp"
+                    android:layout_marginBottom="4dp"
+                    android:letterSpacing="0.09"
+                    android:text="本机受控与调试"
+                    android:textAllCaps="true"
+                    android:textColor="@color/text_muted"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <com.deepseekharness.app.ui.ModernCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:paddingHorizontal="16dp"
-                    android:paddingVertical="14dp">
+                    android:clipToOutline="true"
+                    android:orientation="vertical"
+                    app:cardRadius="18dp">
 
-                    <FrameLayout
-                        android:layout_width="38dp"
-                        android:layout_height="38dp"
-                        android:background="@drawable/bg_settings_icon_box">
-
-                        <ImageView
-                            android:layout_width="20dp"
-                            android:layout_height="20dp"
-                            android:layout_gravity="center"
-                            android:contentDescription="有线调试"
-                            android:src="@drawable/ic_settings_sliders"
-                            app:tint="@color/primary" />
-                    </FrameLayout>
-
+                    <!-- 有线 USB 调试行 -->
                     <LinearLayout
-                        android:layout_width="0dp"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="12dp"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingHorizontal="16dp"
+                        android:paddingVertical="14dp">
+
+                        <FrameLayout
+                            android:layout_width="38dp"
+                            android:layout_height="38dp"
+                            android:background="@drawable/bg_settings_icon_box">
+
+                            <ImageView
+                                android:layout_width="20dp"
+                                android:layout_height="20dp"
+                                android:layout_gravity="center"
+                                android:contentDescription="有线调试"
+                                android:src="@drawable/ic_settings_sliders"
+                                app:tint="@color/primary" />
+                        </FrameLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="12dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="有线 USB 调试"
+                                android:textColor="@color/text"
+                                android:textSize="15sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/ext_tv_usb_status"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="1dp"
+                                android:text="检测状态中..."
+                                android:textColor="@color/text_muted"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:id="@+id/ext_btn_check_usb"
+                            android:layout_width="wrap_content"
+                            android:layout_height="32dp"
+                            android:background="@drawable/m3_btn_tonal_small"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:gravity="center"
+                            android:paddingHorizontal="12dp"
+                            android:text="检测状态"
+                            android:textColor="@color/primary"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+
+                    <!-- 有线连接命令展开区 -->
+                    <LinearLayout
+                        android:id="@+id/ext_layout_usb_info"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginHorizontal="16dp"
+                        android:layout_marginBottom="12dp"
+                        android:background="@drawable/bg_input"
+                        android:orientation="vertical"
+                        android:padding="12dp"
+                        android:visibility="gone">
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="有线 USB 调试"
+                            android:text="远端电脑有线操控命令 (无需指定IP)"
+                            android:textColor="@color/text_muted"
+                            android:textSize="11sp" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:fontFamily="monospace"
+                                android:text="adb -d shell"
+                                android:textColor="@color/primary"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/ext_btn_copy_usb_shell"
+                                android:layout_width="wrap_content"
+                                android:layout_height="28dp"
+                                android:background="@drawable/m3_btn_tonal_small"
+                                android:clickable="true"
+                                android:focusable="true"
+                                android:gravity="center"
+                                android:paddingHorizontal="10dp"
+                                android:text="复制终端命令"
+                                android:textColor="@color/primary"
+                                android:textSize="11sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:fontFamily="monospace"
+                                android:text="scrcpy -d"
+                                android:textColor="@color/primary"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/ext_btn_copy_usb_scrcpy"
+                                android:layout_width="wrap_content"
+                                android:layout_height="28dp"
+                                android:background="@drawable/m3_btn_tonal_small"
+                                android:clickable="true"
+                                android:focusable="true"
+                                android:gravity="center"
+                                android:paddingHorizontal="10dp"
+                                android:text="复制投屏命令"
+                                android:textColor="@color/primary"
+                                android:textSize="11sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginStart="66dp"
+                        android:background="@color/line_soft" />
+
+                    <!-- 无线网络调试行 -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingHorizontal="16dp"
+                        android:paddingVertical="14dp">
+
+                        <FrameLayout
+                            android:layout_width="38dp"
+                            android:layout_height="38dp"
+                            android:background="@drawable/bg_settings_icon_box">
+
+                            <ImageView
+                                android:layout_width="20dp"
+                                android:layout_height="20dp"
+                                android:layout_gravity="center"
+                                android:contentDescription="无线调试"
+                                android:src="@drawable/ic_wifi"
+                                app:tint="@color/primary" />
+                        </FrameLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="12dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="无线网络调试"
+                                android:textColor="@color/text"
+                                android:textSize="15sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/ext_tv_wireless_status"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="1dp"
+                                android:text="未开启"
+                                android:textColor="@color/text_muted"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <com.deepseekharness.app.ui.DshaToggle
+                            android:id="@+id/ext_toggle_wireless"
+                            android:layout_width="44dp"
+                            android:layout_height="26dp"
+                            android:layout_marginStart="8dp" />
+                    </LinearLayout>
+
+                    <!-- 无线调试全链路命令区 -->
+                    <LinearLayout
+                        android:id="@+id/ext_layout_wireless_info"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginHorizontal="16dp"
+                        android:layout_marginBottom="14dp"
+                        android:background="@drawable/bg_input"
+                        android:orientation="vertical"
+                        android:padding="12dp"
+                        android:visibility="gone">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="步骤 1: 远端电脑建立网络连接"
+                            android:textColor="@color/text_muted"
+                            android:textSize="11sp" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:id="@+id/ext_tv_connect_cmd"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:fontFamily="monospace"
+                                android:text="adb connect 192.168.2.131:5555"
+                                android:textColor="@color/primary"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/ext_btn_copy_cmd"
+                                android:layout_width="wrap_content"
+                                android:layout_height="28dp"
+                                android:background="@drawable/m3_btn_tonal_small"
+                                android:clickable="true"
+                                android:focusable="true"
+                                android:gravity="center"
+                                android:paddingHorizontal="10dp"
+                                android:text="复制连接命令"
+                                android:textColor="@color/primary"
+                                android:textSize="11sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:text="步骤 2: 连通后进入手机终端或极速投屏"
+                            android:textColor="@color/text_muted"
+                            android:textSize="11sp" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:fontFamily="monospace"
+                                android:text="adb shell"
+                                android:textColor="@color/primary"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/ext_btn_copy_wireless_shell"
+                                android:layout_width="wrap_content"
+                                android:layout_height="28dp"
+                                android:background="@drawable/m3_btn_tonal_small"
+                                android:clickable="true"
+                                android:focusable="true"
+                                android:gravity="center"
+                                android:paddingHorizontal="10dp"
+                                android:text="复制终端命令"
+                                android:textColor="@color/primary"
+                                android:textSize="11sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:id="@+id/ext_tv_scrcpy_cmd"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:fontFamily="monospace"
+                                android:text="scrcpy"
+                                android:textColor="@color/primary"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/ext_btn_copy_wireless_scrcpy"
+                                android:layout_width="wrap_content"
+                                android:layout_height="28dp"
+                                android:background="@drawable/m3_btn_tonal_small"
+                                android:clickable="true"
+                                android:focusable="true"
+                                android:gravity="center"
+                                android:paddingHorizontal="10dp"
+                                android:text="复制投屏命令"
+                                android:textColor="@color/primary"
+                                android:textSize="11sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginStart="16dp"
+                        android:layout_marginEnd="16dp"
+                        android:background="@color/line_soft" />
+
+                    <!-- 被连接权限调节 -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:paddingHorizontal="16dp"
+                        android:paddingTop="14dp"
+                        android:paddingBottom="16dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="被连接调试权限"
                             android:textColor="@color/text"
                             android:textSize="15sp"
                             android:textStyle="bold" />
 
                         <TextView
-                            android:id="@+id/ext_tv_usb_status"
+                            android:id="@+id/ext_tv_permission_desc"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="1dp"
-                            android:text="检测状态中..."
+                            android:layout_marginTop="2dp"
+                            android:text="控制远端接入时获得的操作权限等级"
                             android:textColor="@color/text_muted"
                             android:textSize="12sp" />
+
+                        <com.deepseekharness.app.ui.ModernSegmentedView
+                            android:id="@+id/ext_seg_permission"
+                            android:layout_width="match_parent"
+                            android:layout_height="50dp"
+                            android:layout_marginTop="12dp" />
                     </LinearLayout>
 
-                    <TextView
-                        android:id="@+id/ext_btn_check_usb"
-                        android:layout_width="wrap_content"
-                        android:layout_height="32dp"
-                        android:background="@drawable/m3_btn_tonal_small"
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginStart="16dp"
+                        android:layout_marginEnd="16dp"
+                        android:background="@color/line_soft" />
+
+                    <!-- 直连 Linux 容器终端行 -->
+                    <LinearLayout
+                        android:id="@+id/ext_row_chroot_direct"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:background="?attr/selectableItemBackground"
                         android:clickable="true"
                         android:focusable="true"
-                        android:gravity="center"
-                        android:paddingHorizontal="12dp"
-                        android:text="检测状态"
-                        android:textColor="@color/primary"
-                        android:textSize="12sp"
-                        android:textStyle="bold" />
-                </LinearLayout>
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingHorizontal="16dp"
+                        android:paddingVertical="14dp">
 
-                <!-- 有线连接就绪时的命令与使用指引区 -->
-                <LinearLayout
-                    android:id="@+id/ext_layout_usb_info"
+                        <FrameLayout
+                            android:layout_width="38dp"
+                            android:layout_height="38dp"
+                            android:background="@drawable/bg_settings_icon_box">
+
+                            <ImageView
+                                android:layout_width="20dp"
+                                android:layout_height="20dp"
+                                android:layout_gravity="center"
+                                android:contentDescription="直连容器"
+                                android:src="@drawable/ic_terminal"
+                                app:tint="@color/primary" />
+                        </FrameLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="12dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="直连 Linux 容器终端"
+                                android:textColor="@color/text"
+                                android:textSize="15sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/ext_tv_chroot_status"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="1dp"
+                                android:text="外部连入瞬间穿透进 chroot 容器，异常时自动回退宿主"
+                                android:textColor="@color/text_muted"
+                                android:textSize="12sp" />
+                        </LinearLayout>
+
+                        <com.deepseekharness.app.ui.DshaToggle
+                            android:id="@+id/ext_toggle_chroot_direct"
+                            android:layout_width="44dp"
+                            android:layout_height="26dp"
+                            android:layout_marginStart="8dp" />
+                    </LinearLayout>
+                </com.deepseekharness.app.ui.ModernCardView>
+
+                <!-- 分组 2: 主动连接外部设备 -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:layout_marginTop="18dp"
+                    android:layout_marginBottom="4dp"
+                    android:letterSpacing="0.09"
+                    android:text="主动连接外部设备"
+                    android:textAllCaps="true"
+                    android:textColor="@color/text_muted"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <com.deepseekharness.app.ui.ModernCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginHorizontal="16dp"
-                    android:layout_marginBottom="12dp"
-                    android:background="@drawable/bg_input"
+                    android:clipToOutline="true"
                     android:orientation="vertical"
-                    android:padding="12dp"
-                    android:visibility="gone">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="远端电脑有线操控命令 (无需指定IP)"
-                        android:textColor="@color/text_muted"
-                        android:textSize="11sp" />
+                    app:cardRadius="18dp">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:fontFamily="monospace"
-                            android:text="adb -d shell"
-                            android:textColor="@color/primary"
-                            android:textSize="13sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/ext_btn_copy_usb_shell"
-                            android:layout_width="wrap_content"
-                            android:layout_height="28dp"
-                            android:background="@drawable/m3_btn_tonal_small"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:gravity="center"
-                            android:paddingHorizontal="10dp"
-                            android:text="复制终端命令"
-                            android:textColor="@color/primary"
-                            android:textSize="11sp"
-                            android:textStyle="bold" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:fontFamily="monospace"
-                            android:text="scrcpy -d"
-                            android:textColor="@color/primary"
-                            android:textSize="13sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/ext_btn_copy_usb_scrcpy"
-                            android:layout_width="wrap_content"
-                            android:layout_height="28dp"
-                            android:background="@drawable/m3_btn_tonal_small"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:gravity="center"
-                            android:paddingHorizontal="10dp"
-                            android:text="复制投屏命令"
-                            android:textColor="@color/primary"
-                            android:textSize="11sp"
-                            android:textStyle="bold" />
-                    </LinearLayout>
-                </LinearLayout>
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:layout_marginStart="66dp"
-                    android:background="@color/line_soft" />
-
-                <!-- 1.2 无线网络调试行 -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:paddingHorizontal="16dp"
-                    android:paddingVertical="14dp">
-
-                    <FrameLayout
-                        android:layout_width="38dp"
-                        android:layout_height="38dp"
-                        android:background="@drawable/bg_settings_icon_box">
-
-                        <ImageView
-                            android:layout_width="20dp"
-                            android:layout_height="20dp"
-                            android:layout_gravity="center"
-                            android:contentDescription="无线调试"
-                            android:src="@drawable/ic_wifi"
-                            app:tint="@color/primary" />
-                    </FrameLayout>
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="12dp"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
+                        android:orientation="vertical"
+                        android:paddingHorizontal="16dp"
+                        android:paddingTop="16dp"
+                        android:paddingBottom="14dp">
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="无线网络调试"
+                            android:text="远端目标地址"
                             android:textColor="@color/text"
                             android:textSize="15sp"
                             android:textStyle="bold" />
 
                         <TextView
-                            android:id="@+id/ext_tv_wireless_status"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="1dp"
-                            android:text="未开启"
+                            android:layout_marginTop="2dp"
+                            android:text="输入局域网内其他 Android 设备的 IP 与调试端口"
                             android:textColor="@color/text_muted"
                             android:textSize="12sp" />
-                    </LinearLayout>
 
-                    <com.deepseekharness.app.ui.DshaToggle
-                        android:id="@+id/ext_toggle_wireless"
-                        android:layout_width="44dp"
-                        android:layout_height="26dp"
-                        android:layout_marginStart="8dp" />
-                </LinearLayout>
-
-                <!-- 无线开启时的完整三步操作命令区 -->
-                <LinearLayout
-                    android:id="@+id/ext_layout_wireless_info"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginHorizontal="16dp"
-                    android:layout_marginBottom="14dp"
-                    android:background="@drawable/bg_input"
-                    android:orientation="vertical"
-                    android:padding="12dp"
-                    android:visibility="gone">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="步骤 1: 远端电脑建立网络连接"
-                        android:textColor="@color/text_muted"
-                        android:textSize="11sp" />
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <TextView
-                            android:id="@+id/ext_tv_connect_cmd"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
+                        <EditText
+                            android:id="@+id/ext_et_target"
+                            android:layout_width="match_parent"
+                            android:layout_height="46dp"
+                            android:layout_marginTop="10dp"
+                            android:background="@drawable/bg_input"
                             android:fontFamily="monospace"
-                            android:text="adb connect 192.168.2.131:5555"
-                            android:textColor="@color/primary"
-                            android:textSize="13sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/ext_btn_copy_cmd"
-                            android:layout_width="wrap_content"
-                            android:layout_height="28dp"
-                            android:background="@drawable/m3_btn_tonal_small"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:gravity="center"
-                            android:paddingHorizontal="10dp"
-                            android:text="复制连接命令"
-                            android:textColor="@color/primary"
-                            android:textSize="11sp"
-                            android:textStyle="bold" />
-                    </LinearLayout>
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp"
-                        android:text="步骤 2: 连通后进入手机终端或极速投屏"
-                        android:textColor="@color/text_muted"
-                        android:textSize="11sp" />
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:fontFamily="monospace"
-                            android:text="adb shell"
-                            android:textColor="@color/primary"
-                            android:textSize="13sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/ext_btn_copy_wireless_shell"
-                            android:layout_width="wrap_content"
-                            android:layout_height="28dp"
-                            android:background="@drawable/m3_btn_tonal_small"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:gravity="center"
-                            android:paddingHorizontal="10dp"
-                            android:text="复制终端命令"
-                            android:textColor="@color/primary"
-                            android:textSize="11sp"
-                            android:textStyle="bold" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <TextView
-                            android:id="@+id/ext_tv_scrcpy_cmd"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:fontFamily="monospace"
-                            android:text="scrcpy"
-                            android:textColor="@color/primary"
-                            android:textSize="13sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/ext_btn_copy_wireless_scrcpy"
-                            android:layout_width="wrap_content"
-                            android:layout_height="28dp"
-                            android:background="@drawable/m3_btn_tonal_small"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:gravity="center"
-                            android:paddingHorizontal="10dp"
-                            android:text="复制投屏命令"
-                            android:textColor="@color/primary"
-                            android:textSize="11sp"
-                            android:textStyle="bold" />
-                    </LinearLayout>
-                </LinearLayout>
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:layout_marginStart="16dp"
-                    android:layout_marginEnd="16dp"
-                    android:background="@color/line_soft" />
-
-                <!-- 1.3 被连接权限调节 -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:paddingHorizontal="16dp"
-                    android:paddingTop="14dp"
-                    android:paddingBottom="16dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="被连接调试权限"
-                        android:textColor="@color/text"
-                        android:textSize="15sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:id="@+id/ext_tv_permission_desc"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp"
-                        android:text="控制远端接入时获得的操作权限等级"
-                        android:textColor="@color/text_muted"
-                        android:textSize="12sp" />
-
-                    <com.deepseekharness.app.ui.ModernSegmentedView
-                        android:id="@+id/ext_seg_permission"
-                        android:layout_width="match_parent"
-                        android:layout_height="50dp"
-                        android:layout_marginTop="12dp" />
-                </LinearLayout>
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:layout_marginStart="16dp"
-                    android:layout_marginEnd="16dp"
-                    android:background="@color/line_soft" />
-
-                <!-- 1.4 直连 Linux 容器终端 (chroot) 行 -->
-                <LinearLayout
-                    android:id="@+id/ext_row_chroot_direct"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:background="?attr/selectableItemBackground"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:paddingHorizontal="16dp"
-                    android:paddingVertical="14dp">
-
-                    <FrameLayout
-                        android:layout_width="38dp"
-                        android:layout_height="38dp"
-                        android:background="@drawable/bg_settings_icon_box">
-
-                        <ImageView
-                            android:layout_width="20dp"
-                            android:layout_height="20dp"
-                            android:layout_gravity="center"
-                            android:contentDescription="直连容器"
-                            android:src="@drawable/ic_terminal"
-                            app:tint="@color/primary" />
-                    </FrameLayout>
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="12dp"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="直连 Linux 容器终端"
+                            android:hint="例如 192.168.31.88:5555"
+                            android:imeOptions="actionDone"
+                            android:inputType="textUri"
+                            android:maxLines="1"
+                            android:paddingHorizontal="14dp"
                             android:textColor="@color/text"
-                            android:textSize="15sp"
+                            android:textColorHint="@color/text_muted"
+                            android:textSize="14sp" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="12dp"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:id="@+id/ext_btn_connect"
+                                android:layout_width="0dp"
+                                android:layout_height="40dp"
+                                android:layout_weight="1"
+                                android:background="@drawable/m3_btn_primary_expressive"
+                                android:clickable="true"
+                                android:focusable="true"
+                                android:gravity="center"
+                                android:text="连接设备"
+                                android:textColor="@color/accent_on"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/ext_btn_refresh_devices"
+                                android:layout_width="wrap_content"
+                                android:layout_height="40dp"
+                                android:layout_marginStart="10dp"
+                                android:background="@drawable/m3_btn_tonal_small"
+                                android:clickable="true"
+                                android:focusable="true"
+                                android:gravity="center"
+                                android:paddingHorizontal="16dp"
+                                android:text="识别与刷新"
+                                android:textColor="@color/primary"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:background="@color/line_soft" />
+
+                    <!-- 已连接设备与发现列表 -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:paddingHorizontal="16dp"
+                        android:paddingTop="12dp"
+                        android:paddingBottom="16dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="设备与局域网发现"
+                            android:textColor="@color/text_muted"
+                            android:textSize="12sp"
                             android:textStyle="bold" />
 
                         <TextView
-                            android:id="@+id/ext_tv_chroot_status"
-                            android:layout_width="wrap_content"
+                            android:id="@+id/ext_tv_empty_devices"
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="1dp"
-                            android:text="外部连入瞬间穿透进 chroot 容器，异常时自动回退宿主"
+                            android:layout_marginTop="8dp"
+                            android:gravity="center"
+                            android:paddingVertical="12dp"
+                            android:text="暂无已连接设备或发现的局域网无线设备"
                             android:textColor="@color/text_muted"
-                            android:textSize="12sp" />
+                            android:textSize="13sp" />
+
+                        <LinearLayout
+                            android:id="@+id/ext_layout_devices"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical" />
                     </LinearLayout>
+                </com.deepseekharness.app.ui.ModernCardView>
+            </LinearLayout>
 
-                    <com.deepseekharness.app.ui.DshaToggle
-                        android:id="@+id/ext_toggle_chroot_direct"
-                        android:layout_width="44dp"
-                        android:layout_height="26dp"
-                        android:layout_marginStart="8dp" />
-                </LinearLayout>
-            </com.deepseekharness.app.ui.ModernCardView>
-
-            <!-- ==================== 分组 2: 主动连接外部设备 ==================== -->
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="6dp"
-                android:layout_marginTop="18dp"
-                android:layout_marginBottom="4dp"
-                android:letterSpacing="0.09"
-                android:text="主动连接外部设备"
-                android:textAllCaps="true"
-                android:textColor="@color/text_muted"
-                android:textSize="12sp"
-                android:textStyle="bold" />
-
-            <com.deepseekharness.app.ui.ModernCardView
+            <!-- ==================== 协议容器 B: SSH 远程管理模块 ==================== -->
+            <LinearLayout
+                android:id="@+id/ext_container_ssh"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:clipToOutline="true"
                 android:orientation="vertical"
-                app:cardRadius="18dp">
+                android:visibility="gone">
 
-                <!-- 输入与操作区 -->
-                <LinearLayout
+                <!-- 卡片 1: 本机 SSH 密钥与身份 -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:layout_marginTop="16dp"
+                    android:layout_marginBottom="4dp"
+                    android:letterSpacing="0.09"
+                    android:text="本机 SSH 密钥与免密凭据"
+                    android:textAllCaps="true"
+                    android:textColor="@color/text_muted"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <com.deepseekharness.app.ui.ModernCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:clipToOutline="true"
                     android:orientation="vertical"
-                    android:paddingHorizontal="16dp"
-                    android:paddingTop="16dp"
-                    android:paddingBottom="14dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="远端目标地址"
-                        android:textColor="@color/text"
-                        android:textSize="15sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp"
-                        android:text="输入局域网内其他 Android 设备的 IP 与调试端口"
-                        android:textColor="@color/text_muted"
-                        android:textSize="12sp" />
-
-                    <EditText
-                        android:id="@+id/ext_et_target"
-                        android:layout_width="match_parent"
-                        android:layout_height="46dp"
-                        android:layout_marginTop="10dp"
-                        android:background="@drawable/bg_input"
-                        android:fontFamily="monospace"
-                        android:hint="例如 192.168.31.88:5555"
-                        android:imeOptions="actionDone"
-                        android:inputType="textUri"
-                        android:maxLines="1"
-                        android:paddingHorizontal="14dp"
-                        android:textColor="@color/text"
-                        android:textColorHint="@color/text_muted"
-                        android:textSize="14sp" />
+                    app:cardRadius="18dp">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
-                        android:orientation="horizontal">
+                        android:orientation="vertical"
+                        android:padding="16dp">
 
                         <TextView
-                            android:id="@+id/ext_btn_connect"
-                            android:layout_width="0dp"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="本机 Ed25519 身份公钥"
+                            android:textColor="@color/text"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/ssh_tv_key_status"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="将此公钥追加至远端 Linux ~/.ssh/authorized_keys 即可免密登录"
+                            android:textColor="@color/text_muted"
+                            android:textSize="12sp" />
+
+                        <TextView
+                            android:id="@+id/ssh_tv_pubkey"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="10dp"
+                            android:background="@drawable/bg_input"
+                            android:fontFamily="monospace"
+                            android:maxLines="3"
+                            android:ellipsize="middle"
+                            android:padding="12dp"
+                            android:text="正在读取密钥..."
+                            android:textColor="@color/primary"
+                            android:textSize="12sp" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="12dp"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:id="@+id/ssh_btn_copy_pubkey"
+                                android:layout_width="0dp"
+                                android:layout_height="36dp"
+                                android:layout_weight="1"
+                                android:background="@drawable/m3_btn_primary_expressive"
+                                android:clickable="true"
+                                android:focusable="true"
+                                android:gravity="center"
+                                android:text="复制公钥"
+                                android:textColor="@color/accent_on"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/ssh_btn_regen_key"
+                                android:layout_width="wrap_content"
+                                android:layout_height="36dp"
+                                android:layout_marginStart="10dp"
+                                android:background="@drawable/m3_btn_tonal_small"
+                                android:clickable="true"
+                                android:focusable="true"
+                                android:gravity="center"
+                                android:paddingHorizontal="14dp"
+                                android:text="生成密钥对"
+                                android:textColor="@color/primary"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+                    </LinearLayout>
+                </com.deepseekharness.app.ui.ModernCardView>
+
+                <!-- 卡片 2: 添加远程主机 -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:layout_marginTop="18dp"
+                    android:layout_marginBottom="4dp"
+                    android:letterSpacing="0.09"
+                    android:text="新增远程主机"
+                    android:textAllCaps="true"
+                    android:textColor="@color/text_muted"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <com.deepseekharness.app.ui.ModernCardView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:clipToOutline="true"
+                    android:orientation="vertical"
+                    app:cardRadius="18dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="16dp">
+
+                        <EditText
+                            android:id="@+id/ssh_et_name"
+                            android:layout_width="match_parent"
+                            android:layout_height="44dp"
+                            android:background="@drawable/bg_input"
+                            android:hint="主机备注 (例如 阿里云服务器 / 家庭NAS)"
+                            android:maxLines="1"
+                            android:paddingHorizontal="14dp"
+                            android:textColor="@color/text"
+                            android:textColorHint="@color/text_muted"
+                            android:textSize="13sp" />
+
+                        <EditText
+                            android:id="@+id/ssh_et_host"
+                            android:layout_width="match_parent"
+                            android:layout_height="44dp"
+                            android:layout_marginTop="8dp"
+                            android:background="@drawable/bg_input"
+                            android:fontFamily="monospace"
+                            android:hint="主机地址 (IP 或域名，例如 192.168.2.1)"
+                            android:maxLines="1"
+                            android:paddingHorizontal="14dp"
+                            android:textColor="@color/text"
+                            android:textColorHint="@color/text_muted"
+                            android:textSize="13sp" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:orientation="horizontal">
+
+                            <EditText
+                                android:id="@+id/ssh_et_user"
+                                android:layout_width="0dp"
+                                android:layout_height="44dp"
+                                android:layout_weight="1"
+                                android:background="@drawable/bg_input"
+                                android:hint="用户名 (默认 root)"
+                                android:maxLines="1"
+                                android:paddingHorizontal="14dp"
+                                android:textColor="@color/text"
+                                android:textColorHint="@color/text_muted"
+                                android:textSize="13sp" />
+
+                            <EditText
+                                android:id="@+id/ssh_et_port"
+                                android:layout_width="100dp"
+                                android:layout_height="44dp"
+                                android:layout_marginStart="8dp"
+                                android:background="@drawable/bg_input"
+                                android:hint="端口 (22)"
+                                android:inputType="number"
+                                android:maxLines="1"
+                                android:paddingHorizontal="14dp"
+                                android:textColor="@color/text"
+                                android:textColorHint="@color/text_muted"
+                                android:textSize="13sp" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:id="@+id/ssh_btn_save_host"
+                            android:layout_width="match_parent"
                             android:layout_height="40dp"
-                            android:layout_weight="1"
+                            android:layout_marginTop="12dp"
                             android:background="@drawable/m3_btn_primary_expressive"
                             android:clickable="true"
                             android:focusable="true"
                             android:gravity="center"
-                            android:text="连接设备"
+                            android:text="保存远程主机"
                             android:textColor="@color/accent_on"
                             android:textSize="13sp"
                             android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/ext_btn_refresh_devices"
-                            android:layout_width="wrap_content"
-                            android:layout_height="40dp"
-                            android:layout_marginStart="10dp"
-                            android:background="@drawable/m3_btn_tonal_small"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:gravity="center"
-                            android:paddingHorizontal="16dp"
-                            android:text="识别与刷新"
-                            android:textColor="@color/primary"
-                            android:textSize="13sp"
-                            android:textStyle="bold" />
                     </LinearLayout>
-                </LinearLayout>
+                </com.deepseekharness.app.ui.ModernCardView>
 
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:background="@color/line_soft" />
+                <!-- 卡片 3: 已保存的主机列表 -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:layout_marginTop="18dp"
+                    android:layout_marginBottom="4dp"
+                    android:letterSpacing="0.09"
+                    android:text="已保存的远程主机"
+                    android:textAllCaps="true"
+                    android:textColor="@color/text_muted"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
 
-                <!-- 已连接设备列表 -->
-                <LinearLayout
+                <com.deepseekharness.app.ui.ModernCardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:clipToOutline="true"
                     android:orientation="vertical"
-                    android:paddingHorizontal="16dp"
-                    android:paddingTop="12dp"
-                    android:paddingBottom="16dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="已连接设备"
-                        android:textColor="@color/text_muted"
-                        android:textSize="12sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:id="@+id/ext_tv_empty_devices"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:gravity="center"
-                        android:paddingVertical="12dp"
-                        android:text="暂无已连接的远程设备"
-                        android:textColor="@color/text_muted"
-                        android:textSize="13sp" />
+                    app:cardRadius="18dp">
 
                     <LinearLayout
-                        android:id="@+id/ext_layout_devices"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:orientation="vertical" />
-                </LinearLayout>
-            </com.deepseekharness.app.ui.ModernCardView>
+                        android:orientation="vertical"
+                        android:padding="16dp">
+
+                        <TextView
+                            android:id="@+id/ssh_tv_empty_hosts"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center"
+                            android:paddingVertical="14dp"
+                            android:text="暂无已保存的远程主机，上方新增后即可一键直连"
+                            android:textColor="@color/text_muted"
+                            android:textSize="13sp" />
+
+                        <LinearLayout
+                            android:id="@+id/ssh_layout_hosts"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical" />
+                    </LinearLayout>
+                </com.deepseekharness.app.ui.ModernCardView>
+            </LinearLayout>
 
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
