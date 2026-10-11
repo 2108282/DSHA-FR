@@ -97,6 +97,7 @@ public final class ExternalConnectFragment extends Fragment {
     private EditText etSshHost;
     private EditText etSshUser;
     private EditText etSshPort;
+    private EditText etSshPassword;
     private EditText etSshKey;
     private TextView btnSaveHost;
 
@@ -205,6 +206,7 @@ public final class ExternalConnectFragment extends Fragment {
         etSshHost = v.findViewById(R.id.ssh_et_host);
         etSshUser = v.findViewById(R.id.ssh_et_user);
         etSshPort = v.findViewById(R.id.ssh_et_port);
+        etSshPassword = v.findViewById(R.id.ssh_et_password);
         etSshKey = v.findViewById(R.id.ssh_et_key);
         btnSaveHost = v.findViewById(R.id.ssh_btn_save_host);
 
@@ -415,6 +417,7 @@ public final class ExternalConnectFragment extends Fragment {
         String host = etSshHost != null ? etSshHost.getText().toString().trim() : "";
         String user = etSshUser != null ? etSshUser.getText().toString().trim() : "root";
         String portStr = etSshPort != null ? etSshPort.getText().toString().trim() : "22";
+        String pwd = etSshPassword != null ? etSshPassword.getText().toString().trim() : "";
         String keyPath = etSshKey != null ? etSshKey.getText().toString().trim() : "";
 
         if (TextUtils.isEmpty(host)) {
@@ -432,11 +435,12 @@ public final class ExternalConnectFragment extends Fragment {
             port = Integer.parseInt(portStr);
         } catch (Throwable ignored) {}
 
-        SshManager.HostProfile profile = new SshManager.HostProfile(name, host, port, user, keyPath);
+        SshManager.HostProfile profile = new SshManager.HostProfile(name, host, port, user, keyPath, pwd);
         sshManager.saveHost(profile);
 
         if (etSshName != null) etSshName.setText("");
         if (etSshHost != null) etSshHost.setText("");
+        if (etSshPassword != null) etSshPassword.setText("");
         if (etSshKey != null) etSshKey.setText("");
         ToastHelper.show(requireContext(), "已保存远程主机：" + name);
         renderHostList(sshManager.getSavedHosts());
@@ -476,10 +480,11 @@ public final class ExternalConnectFragment extends Fragment {
             item.addView(tvName);
 
             TextView tvCmd = new TextView(ctx);
-            tvCmd.setText(h.getSshCommand());
+            String authMode = h.hasPassword() ? "密码直连" : "公钥免密";
+            if (!TextUtils.isEmpty(h.identityFile)) authMode += " (指定私钥)";
+            tvCmd.setText(h.user + "@" + h.host + ":" + h.port + " · " + authMode);
             tvCmd.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
-            tvCmd.setFontFeatureSettings("monospace");
-            tvCmd.setTextColor(ctx.getColor(R.color.text_muted));
+            tvCmd.setTextColor(ctx.getColor(h.hasPassword() ? R.color.primary : R.color.text_muted));
             tvCmd.setPadding(0, Math.round(2f * density), 0, Math.round(8f * density));
             item.addView(tvCmd);
 
@@ -518,6 +523,23 @@ public final class ExternalConnectFragment extends Fragment {
             btnCopy.setFocusable(true);
             btnCopy.setOnClickListener(x -> copyToClipboard(h.getSshCommand()));
             rowBtns.addView(btnCopy);
+
+            if (h.hasPassword()) {
+                TextView btnPushKey = new TextView(ctx);
+                btnPushKey.setText("推送公钥");
+                btnPushKey.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+                btnPushKey.setTextColor(ctx.getColor(R.color.primary));
+                btnPushKey.setBackgroundResource(R.drawable.m3_btn_tonal_small);
+                btnPushKey.setGravity(Gravity.CENTER);
+                LinearLayout.LayoutParams lpPush = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, btnH);
+                lpPush.setMarginStart(Math.round(8f * density));
+                btnPushKey.setLayoutParams(lpPush);
+                btnPushKey.setPadding(px, 0, px, 0);
+                btnPushKey.setClickable(true);
+                btnPushKey.setFocusable(true);
+                btnPushKey.setOnClickListener(x -> pushKeyToHostAsync(h));
+                rowBtns.addView(btnPushKey);
+            }
 
             View spacer = new View(ctx);
             rowBtns.addView(spacer, new LinearLayout.LayoutParams(0, 0, 1f));
@@ -872,6 +894,17 @@ public final class ExternalConnectFragment extends Fragment {
                         ToastHelper.show(requireContext(), "调用外部应用失败：" + t.getMessage());
                     }
                 }
+            });
+        });
+    }
+
+    private void pushKeyToHostAsync(SshManager.HostProfile h) {
+        ToastHelper.show(requireContext(), "正在向 " + h.name + " 推送本机公钥...");
+        executor.execute(() -> {
+            String res = sshManager.pushPublicKeyToHost(h);
+            mainHandler.post(() -> {
+                if (!isAdded()) return;
+                ToastHelper.show(requireContext(), res);
             });
         });
     }

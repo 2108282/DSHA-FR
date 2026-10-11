@@ -3,6 +3,8 @@ package com.deepseekharness.app.core;
 import android.content.Context;
 import android.text.TextUtils;
 
+import org.json.JSONObject;
+
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -12,13 +14,15 @@ import java.util.List;
 /**
  * SSH 远程主机与本机密钥管理器：
  * 1. 唯一真实源 (Single Source of Truth)：直接读写容器内物理文件 /data/adb/dsha/rootfs/root/.ssh/config；
- * 2. 任何外部编辑器 (如 MT 管理器) 或 APK 界面的新增、修改、删除均保持 100% 物理双向同步；
- * 3. 负责读取与生成本机的 Ed25519 SSH 密钥对，并保持纯文本解析的高鲁棒性。
+ * 2. 密码安全托管：伴生物理文件 /data/adb/dsha/rootfs/root/.ssh/passwords.json (600 权限)；
+ * 3. 双轨自适应直连：填了密码走 sshpass 全自动注入，留空走系统 Ed25519 或指定私钥公钥免密；
+ * 4. 支持一键推送公钥 (ssh-copy-id) 快速免密绑定。
  */
 public final class SshManager {
 
     public static final String SSH_CONFIG_PATH = "/data/adb/dsha/rootfs/root/.ssh/config";
     public static final String PUBKEY_PATH = "/data/adb/dsha/rootfs/root/.ssh/id_ed25519.pub";
+    public static final String PASSWORDS_JSON_PATH = "/data/adb/dsha/rootfs/root/.ssh/passwords.json";
 
     private static volatile SshManager sInstance;
     private final Context context;
@@ -46,21 +50,31 @@ public final class SshManager {
         public int port;
         public String user;
         public String identityFile; // 专属私钥文件路径 (可选)
+        public String password;     // 登录密码 (可选)
 
         public HostProfile(String name, String host, int port, String user) {
-            this(name, host, port, user, null);
+            this(name, host, port, user, null, null);
         }
 
-        public HostProfile(String name, String host, int port, String user, String identityFile) {
+        public HostProfile(String name, String host, int port, String user, String identityFile, String password) {
             this.name = name;
             this.host = host;
             this.port = port <= 0 ? 22 : port;
             this.user = TextUtils.isEmpty(user) ? "root" : user;
             this.identityFile = identityFile != null ? identityFile.trim() : "";
+            this.password = password != null ? password.trim() : "";
+        }
+
+        public boolean hasPassword() {
+            return !TextUtils.isEmpty(password);
         }
 
         public String getSshCommand() {
-            StringBuilder sb = new StringBuilder("ssh ");
+            StringBuilder sb = new StringBuilder();
+            if (hasPassword()) {
+                sb.append("sshpass -p '").append(password.replace("'", "'\''")).append("' ");
+            }
+            sb.append("ssh ");
             if (!TextUtils.isEmpty(identityFile)) {
                 sb.append("-i ").append(identityFile).append(" ");
             }
@@ -78,6 +92,10 @@ public final class SshManager {
         if (!"1".equals(check)) {
             String initContent = "# DSHA 外部连接配置文件\nHost *\n    StrictHostKeyChecking no\n    UserKnownHostsFile /dev/null\n";
             execRoot("printf '" + initContent + "' > " + SSH_CONFIG_PATH + " && chmod 600 " + SSH_CONFIG_PATH);
+        }
+        String checkPwd = execRoot("test -f " + PASSWORDS_JSON_PATH + " && echo 1 || echo 0").trim();
+        if (!"1".equals(checkPwd)) {
+            execRoot("echo '{}' > " + PASSWORDS_JSON_PATH + " && chmod 600 " + PASSWORDS_JSON_PATH);
         }
     }
 
@@ -106,6 +124,22 @@ public final class SshManager {
     }
 
     /**
+     * 使用已存密码自动向远程主机推送本机公钥 (ssh-copy-id)
+     */
+    public String pushPublicKeyToHost(HostProfile host) {
+        if (host == null || !host.hasPassword()) {
+            return "该主机未设置密码，无法自动推送公钥";
+        }
+        String cmd = "chroot /data/adb/dsha/rootfs /bin/bash -c '"
+                + "export PATH=/usr/local/bin:/usr/bin:/bin:$PATH; "
+                + "sshpass -p \"" + host.password.replace("\"", "\\\"") + "\" "
+                + "ssh-copy-id -p " + host.port + " -o StrictHostKeyChecking=no "
+                + host.user + "@" + host.host + " 2>&1'";
+        String out = execRoot(cmd).trim();
+        return out.isEmpty() ? "公钥推送完成" : out;
+    }
+
+    /**
      * 从物理文件 ~/.ssh/config 全量解析所有已保存的远程主机列表
      */
     public synchronized List<HostProfile> getSavedHosts() {
@@ -115,6 +149,7 @@ public final class SshManager {
             return list;
         }
 
+        JSONObject pwdMap = loadPasswordMap();
         String[] lines = content.split("\n");
         HostProfile current = null;
 
@@ -130,10 +165,10 @@ public final class SshManager {
                     current = null;
                     continue;
                 }
-                current = new HostProfile(hostPattern, "", 22, "root");
+                current = new HostProfile(hostPattern, "", 22, "root", null, pwdMap.optString(hostPattern, ""));
                 list.add(current);
             } else if (current != null) {
-                String[] parts = trimmed.split("\\s+", 2);
+                String[] parts = trimmed.split("\s+", 2);
                 if (parts.length == 2) {
                     String key = parts[0].toLowerCase();
                     String val = parts[1].trim();
@@ -155,7 +190,7 @@ public final class SshManager {
     }
 
     /**
-     * 保存或更新远程主机配置 (直接回写物理文件 ~/.ssh/config)
+     * 保存或更新远程主机配置 (直接回写物理文件 ~/.ssh/config 与 passwords.json)
      */
     public synchronized void saveHost(HostProfile host) {
         if (host == null || TextUtils.isEmpty(host.name) || TextUtils.isEmpty(host.host)) {
@@ -175,10 +210,21 @@ public final class SshManager {
             hosts.add(0, host);
         }
         rewriteConfigFile(hosts);
+
+        // 同步密码映射
+        JSONObject pwdMap = loadPasswordMap();
+        try {
+            if (host.hasPassword()) {
+                pwdMap.put(host.name, host.password);
+            } else {
+                pwdMap.remove(host.name);
+            }
+            savePasswordMap(pwdMap);
+        } catch (Throwable ignored) {}
     }
 
     /**
-     * 物理删除一个远程主机配置 (从 ~/.ssh/config 中抹除对应段落)
+     * 物理删除一个远程主机配置 (从 ~/.ssh/config 与 passwords.json 中彻底抹除)
      */
     public synchronized void deleteHost(String hostName) {
         if (TextUtils.isEmpty(hostName)) return;
@@ -190,6 +236,25 @@ public final class SshManager {
             }
         }
         rewriteConfigFile(hosts);
+
+        JSONObject pwdMap = loadPasswordMap();
+        pwdMap.remove(hostName);
+        savePasswordMap(pwdMap);
+    }
+
+    private JSONObject loadPasswordMap() {
+        String jsonStr = execRoot("cat " + PASSWORDS_JSON_PATH + " 2>/dev/null").trim();
+        try {
+            if (!TextUtils.isEmpty(jsonStr) && jsonStr.startsWith("{")) {
+                return new JSONObject(jsonStr);
+            }
+        } catch (Throwable ignored) {}
+        return new JSONObject();
+    }
+
+    private void savePasswordMap(JSONObject map) {
+        String safeContent = (map != null ? map.toString() : "{}").replace("'", "'\''");
+        execRoot("printf '%s' '" + safeContent + "' > " + PASSWORDS_JSON_PATH + " && chmod 600 " + PASSWORDS_JSON_PATH);
     }
 
     private synchronized void rewriteConfigFile(List<HostProfile> hosts) {

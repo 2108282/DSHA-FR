@@ -893,13 +893,27 @@
                         </LinearLayout>
 
                         <EditText
+                            android:id="@+id/ssh_et_password"
+                            android:layout_width="match_parent"
+                            android:layout_height="44dp"
+                            android:layout_marginTop="8dp"
+                            android:background="@drawable/bg_input"
+                            android:hint="登录密码 (选填，保存后可全自动免输入登录)"
+                            android:inputType="textPassword"
+                            android:maxLines="1"
+                            android:paddingHorizontal="14dp"
+                            android:textColor="@color/text"
+                            android:textColorHint="@color/text_muted"
+                            android:textSize="13sp" />
+
+                        <EditText
                             android:id="@+id/ssh_et_key"
                             android:layout_width="match_parent"
                             android:layout_height="44dp"
                             android:layout_marginTop="8dp"
                             android:background="@drawable/bg_input"
                             android:fontFamily="monospace"
-                            android:hint="私钥文件路径 (可选，留空则默认使用本机生成的公钥)"
+                            android:hint="私钥文件路径 (选填，留空默认使用本机生成的公钥)"
                             android:maxLines="1"
                             android:paddingHorizontal="14dp"
                             android:textColor="@color/text"
