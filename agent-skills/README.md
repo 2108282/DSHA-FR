@@ -8,6 +8,7 @@ Two portable skills for agents running in a Linux/proot environment that need to
 |---|---|
 | `device-shell` | Execute shell commands on an Android device via ADB, or via an optional local Shizuku HTTP bridge. |
 | `screen-ocr-operator` | See and operate the Android screen through an OCR/vision model + ADB. Optimized commander workflow with minimal round-trips. |
+| `external-device-mesh` | Cross-device mesh automation: discover and operate local-network Android devices (ADB) and remote Linux/Windows hosts (SSH). |
 
 ## Install
 
