@@ -130,12 +130,29 @@ public final class SshManager {
         if (host == null || !host.hasPassword()) {
             return "该主机未设置密码，无法自动推送公钥";
         }
+        if (TextUtils.isEmpty(getPublicKey())) {
+            generateKeyPair();
+        }
+        String keyPath = "/root/.ssh/id_ed25519.pub";
+        if (!TextUtils.isEmpty(host.identityFile)) {
+            keyPath = host.identityFile.endsWith(".pub") ? host.identityFile : (host.identityFile + ".pub");
+        }
+        String safePwd = host.password.replace("'", "'\\''");
         String cmd = "chroot /data/adb/dsha/rootfs /bin/bash -c '"
-                + "export PATH=/usr/local/bin:/usr/bin:/bin:$PATH; "
-                + "sshpass -p \"" + host.password.replace("\"", "\\\"") + "\" "
-                + "ssh-copy-id -p " + host.port + " -o StrictHostKeyChecking=no "
+                + "export HOME=/root USER=root PATH=/usr/local/bin:/usr/bin:/bin:$PATH; "
+                + "export SSHPASS=\\'" + safePwd + "\\'; "
+                + "sshpass -e ssh-copy-id -i \"" + keyPath + "\" -p " + host.port + " -o StrictHostKeyChecking=no "
                 + host.user + "@" + host.host + " 2>&1'";
         String out = execRoot(cmd).trim();
+        if (out.contains("Number of key(s) added") || out.contains("Now try logging into the machine")) {
+            return "公钥推送成功！目标主机已支持免密直连";
+        } else if (out.contains("already installed") || out.contains("already exist")) {
+            return "公钥已存在于目标主机，已支持免密直连";
+        } else if (out.contains("Permission denied")) {
+            return "推送失败：密码错误或被远程主机拒绝";
+        } else if (out.contains("Connection refused")) {
+            return "推送失败：连接被拒绝，请检查主机地址与端口";
+        }
         return out.isEmpty() ? "公钥推送完成" : out;
     }
 

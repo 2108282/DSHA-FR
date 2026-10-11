@@ -931,6 +931,7 @@ public final class ExternalConnectFragment extends Fragment {
             mainHandler.post(() -> {
                 if (!isAdded()) return;
                 ToastHelper.show(requireContext(), res);
+                refreshSshAllAsync();
             });
         });
     }
