@@ -429,7 +429,7 @@ public final class ExternalConnectFragment extends Fragment {
             port = Integer.parseInt(portStr);
         } catch (Throwable ignored) {}
 
-        SshManager.HostProfile profile = new SshManager.HostProfile(null, name, host, port, user);
+        SshManager.HostProfile profile = new SshManager.HostProfile(name, host, port, user);
         sshManager.saveHost(profile);
 
         if (etSshName != null) etSshName.setText("");
