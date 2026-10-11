@@ -206,13 +206,44 @@ EOF_PKG
     fi
     echo "    ✓ 官方技能打包列表已就绪: ${OFFICIAL_SKILLS[*]}"
 
-    # 4. 纯净模式脱敏黑名单
+    # 4. 收集后装第三方 Python 包排除项 (保留底座基础脚本 android_agent.py，排除后装 pip 依赖，对齐 BackupScope.TOOLS)
+    PYTHON_EXCLUDES=()
+    for py_dist in "/usr/local/lib/python3.12/dist-packages" "/usr/local/lib/python3/dist-packages"; do
+        if [ -d "$py_dist" ]; then
+            for pyd in "$py_dist"/*; do
+                [ -e "$pyd" ] || continue
+                pyb=$(basename "$pyd")
+                if [[ "$pyb" != "android_agent"* ]] && [[ "$pyb" != "__pycache__" ]]; then
+                    PYTHON_EXCLUDES+=("--exclude=.${py_dist}/$pyb")
+                fi
+            done
+        fi
+    done
+
+    # 5. 纯净模式脱敏黑名单
     CLEAN_EXCLUDES=(
         "${BASE_EXCLUDES[@]}"
         "${SYMLINK_EXCLUDES[@]}"
         "${SKILL_EXCLUDES[@]}"
+        "${PYTHON_EXCLUDES[@]}"
         "--exclude=./root/.dsh/skills/*/*.bak"
         "--exclude=./root/.dsh/skills/*/*~"
+        # 排除 dsh-web-mobile 源码开发依赖与文档 (生产底座仅需 lib/ 与 package.json)
+        "--exclude=./root/dsh-web-mobile/node_modules"
+        "--exclude=./root/dsh-web-mobile/node_modules/*"
+        "--exclude=./root/dsh-web-mobile/.git"
+        "--exclude=./root/dsh-web-mobile/.git/*"
+        "--exclude=./root/dsh-web-mobile/docs"
+        "--exclude=./root/dsh-web-mobile/docs/*"
+        "--exclude=./root/dsh-web-mobile/tests"
+        "--exclude=./root/dsh-web-mobile/tests/*"
+        "--exclude=./root/dsh-web-mobile/assets/banner*"
+        # 排除后装全局工具与可执行文件 (对齐 BackupScope.TOOLS，不属于底座)
+        "--exclude=./usr/local/lib/node_modules/rea-agents"
+        "--exclude=./usr/local/lib/node_modules/rea-agents/*"
+        "--exclude=./usr/local/bin/rea"
+        "--exclude=./root/.dsha-tools*"
+        "--exclude=./root/.dsha-workspaces*"
         # 排除当前含有后装插件的 package.json，后面追加注入纯净版
         "--exclude=./root/.dsh/profiles/web/package.json"
         # 排除个人会话、附件与存储
