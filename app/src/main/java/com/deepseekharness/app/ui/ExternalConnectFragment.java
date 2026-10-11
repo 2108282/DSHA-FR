@@ -218,7 +218,11 @@ public final class ExternalConnectFragment extends Fragment {
                     }
                     if (tvWirelessStatus != null) {
                         if (wireless.isEnabled) {
-                            tvWirelessStatus.setText("正在监听 " + wireless.port + " 端口 (" + wireless.ipAddress + ")");
+                            if (!wireless.inboundClients.isEmpty()) {
+                                tvWirelessStatus.setText("正在监听 " + wireless.port + " 端口 (已连入: " + String.join(", ", wireless.inboundClients) + ")");
+                            } else {
+                                tvWirelessStatus.setText("正在监听 " + wireless.port + " 端口 (" + wireless.ipAddress + ")");
+                            }
                         } else {
                             tvWirelessStatus.setText("未开启 (仅允许有线连接)");
                         }
