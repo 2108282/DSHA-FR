@@ -31,7 +31,7 @@ public class ModernSegmentedView extends View {
         void onTabSelected(int index);
     }
 
-    private final String[] tabs = {"插件市场", "插件管理"};
+    private String[] tabs = {"插件市场", "插件管理"};
     private int selectedIndex = 1; // 默认插件管理
     private float progress = 1f; // 0f = 市场, 1f = 管理
     private ValueAnimator animator;
@@ -209,6 +209,13 @@ public class ModernSegmentedView extends View {
     public void setPrimaryColor(int color) {
         if (this.colorPrimary != color) {
             this.colorPrimary = color;
+            invalidate();
+        }
+    }
+
+    public void setTabs(String leftTab, String rightTab) {
+        if (leftTab != null && rightTab != null) {
+            this.tabs = new String[]{leftTab, rightTab};
             invalidate();
         }
     }
