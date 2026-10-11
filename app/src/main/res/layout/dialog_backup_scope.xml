@@ -162,6 +162,17 @@
                 android:text="同时备份 API Key（关掉更安全，恢复后需重填）"
                 android:textColor="@color/text"
                 android:textSize="13sp" />
+
+            <CheckBox
+                android:id="@+id/dialogBackupCbSshKey"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:buttonTint="@color/primary"
+                android:checked="false"
+                android:text="同时备份 SSH 密钥与主机连接配置（含 Ed25519 凭据）"
+                android:textColor="@color/text"
+                android:textSize="13sp" />
         </LinearLayout>
 
         <!-- 4. 底部双操作按钮行 (44dp, 间距 10dp) -->

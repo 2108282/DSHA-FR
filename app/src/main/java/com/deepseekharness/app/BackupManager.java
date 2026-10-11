@@ -50,16 +50,21 @@ public final class BackupManager {
     }
 
     public static String backupToExternal(Context ctx, HarnessController c, int scope, boolean includeApiKey) {
+        return backupToExternal(ctx, c, scope, includeApiKey, false);
+    }
+
+    public static String backupToExternal(Context ctx, HarnessController c, int scope, boolean includeApiKey, boolean includeSshKey) {
         if (scope != BackupScope.FULL && scope != BackupScope.SESSIONS
-                && scope != BackupScope.SETTINGS && scope != BackupScope.PLUGINS) {
+                && scope != BackupScope.SETTINGS && scope != BackupScope.PLUGINS
+                && scope != BackupScope.TOOLS) {
             scope = BackupScope.FULL;
         }
-        return backup(ctx, c, scope, includeApiKey);
+        return backup(ctx, c, scope, includeApiKey, includeSshKey);
     }
 
     // ==================== 备份 ====================
 
-    private static String backup(Context ctx, HarnessController c, int scope, boolean includeApiKey) {
+    private static String backup(Context ctx, HarnessController c, int scope, boolean includeApiKey, boolean includeSshKey) {
         synchronized (BACKUP_LOCK) {
             lastError = "";
             try {
@@ -69,7 +74,7 @@ public final class BackupManager {
                 }
                 boolean isKsu = "ksu_chroot".equals(c.proot().runtime().id());
                 // 1. rootfs 内打包 + 验证条目数并直接就地输出
-                String out = c.proot().execChecked(buildTarScript(scope, includeApiKey, c.config().getApiKey()));
+                String out = c.proot().execChecked(buildTarScript(scope, includeApiKey, c.config().getApiKey(), includeSshKey));
 
                 int entries = parseEntries(out);
                 if (entries <= 0) {
@@ -121,7 +126,7 @@ public final class BackupManager {
                 + "\\\"}";
     }
 
-    private static String buildTarScript(int scope, boolean includeApiKey, String apiKey) {
+    private static String buildTarScript(int scope, boolean includeApiKey, String apiKey, boolean includeSshKey) {
         String[] paths = BackupScope.dshPaths(scope);
         String prefix = BackupScope.fileNamePrefix(scope);
         String latestName = prefix + "latest.tar.gz";
@@ -132,7 +137,7 @@ public final class BackupManager {
           .append("[ -d .dsh ] || { echo NO_DSH_DIR; exit 1; }\n");
 
         // 写入 manifest 文件
-        sb.append("printf '%s' '").append(manifestJson(scope, includeApiKey)).append("' > /root/.dsha-backup-manifest.json\n");
+        sb.append("printf '%s' '").append(manifestJson(scope, includeApiKey, includeSshKey)).append("' > /root/.dsha-backup-manifest.json\n");
 
         if (includeApiKey && apiKey != null && !apiKey.trim().isEmpty()) {
             sb.append("mkdir -p /root/.dsh\n")
@@ -251,6 +256,9 @@ public final class BackupManager {
             if (includeApiKey) {
                 sb.append("[ -f .dsh/.env ] && set -- \"$@\" .dsh/.env\n");
             }
+        }
+        if (includeSshKey) {
+            sb.append("[ -d .ssh ] && set -- \"$@\" .ssh\n");
         }
         sb.append("[ -f .dsha-backup-manifest.json ] && set -- \"$@\" .dsha-backup-manifest.json\n")
           .append("[ $# -gt 0 ] || { echo NOTHING_TO_PACK; exit 1; }\n");

@@ -90,6 +90,7 @@ public class WorkspacePresenter implements WorkspaceActions {
         RadioButton radioPlugins = dialogView.findViewById(R.id.radioScopePlugins);
         TextView tvPathHint = dialogView.findViewById(R.id.dialogBackupPathHint);
         CheckBox cbApiKey = dialogView.findViewById(R.id.dialogBackupCbApiKey);
+        CheckBox cbSshKey = dialogView.findViewById(R.id.dialogBackupCbSshKey);
         Button btnCancel = dialogView.findViewById(R.id.btnBackupCancel);
         Button btnConfirm = dialogView.findViewById(R.id.btnBackupConfirm);
 
@@ -130,7 +131,8 @@ public class WorkspacePresenter implements WorkspaceActions {
             btnConfirm.setOnClickListener(v -> {
                 dialog.dismiss();
                 boolean includeApiKey = cbApiKey != null && cbApiKey.isChecked();
-                doBackup(currentScope[0], includeApiKey);
+                boolean includeSshKey = cbSshKey != null && cbSshKey.isChecked();
+                doBackup(currentScope[0], includeApiKey, includeSshKey);
             });
         }
 
@@ -138,12 +140,12 @@ public class WorkspacePresenter implements WorkspaceActions {
         dialog.show();
     }
 
-    private void doBackup(final int scope, final boolean includeApiKey) {
+    private void doBackup(final int scope, final boolean includeApiKey, final boolean includeSshKey) {
         ToastHelper.makeText(context, "开始备份…", Toast.LENGTH_SHORT).show();
         AlertDialog progress = showLoadingDialog("备份中", "正在打包所选数据并校验…");
 
         new Thread(() -> {
-            String path = BackupManager.backupToExternal(context, controller, scope, includeApiKey);
+            String path = BackupManager.backupToExternal(context, controller, scope, includeApiKey, includeSshKey);
             mainHandler.post(() -> {
                 progress.dismiss();
                 if (path == null) {
@@ -159,6 +161,7 @@ public class WorkspacePresenter implements WorkspaceActions {
                 } else {
                     String msg = "已备份 " + BackupScope.label(scope)
                             + (includeApiKey ? "（已包含 API Key）" : "（未包含 API Key）")
+                            + (includeSshKey ? "（已包含 SSH 密钥配置）" : "")
                             + "\n\n保存位置：\n" + path
                             + "\n\n归档已通过条目数与大小完整性校验。";
                     showActionConfirmDialog(
