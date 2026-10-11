@@ -53,8 +53,6 @@ public final class ExternalConnectFragment extends Fragment {
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     // 顶部公共组件
-    private ImageView btnBack;
-    private TextView tvHeaderSub;
     private ModernSegmentedView segProtocol;
     private LinearLayout containerAdb;
     private LinearLayout containerSsh;
@@ -156,8 +154,6 @@ public final class ExternalConnectFragment extends Fragment {
     }
 
     private void initViews(View v) {
-        btnBack = v.findViewById(R.id.ext_btn_back);
-        tvHeaderSub = v.findViewById(R.id.ext_tv_header_sub);
         segProtocol = v.findViewById(R.id.ext_seg_protocol);
         if (segProtocol != null) {
             segProtocol.setTabs("ADB 调试互联", "SSH 远程管理");
@@ -236,19 +232,12 @@ public final class ExternalConnectFragment extends Fragment {
     }
 
     private void bindEvents() {
-        if (btnBack != null) {
-            btnBack.setOnClickListener(x -> getParentFragmentManager().popBackStack());
-        }
-
         // 协议 Tab 切换
         if (segProtocol != null) {
             segProtocol.setOnTabSelectedListener(index -> {
                 boolean isAdb = (index == 0);
                 if (containerAdb != null) containerAdb.setVisibility(isAdb ? View.VISIBLE : View.GONE);
                 if (containerSsh != null) containerSsh.setVisibility(isAdb ? View.GONE : View.VISIBLE);
-                if (tvHeaderSub != null) {
-                    tvHeaderSub.setText(isAdb ? "ADB调试 · 无线连接 · 跨设备管理" : "SSH远程主机 · 本机公钥 · 一键直连");
-                }
             });
         }
 

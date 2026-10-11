@@ -145,7 +145,7 @@ public final class MonetEngine {
         }
 
         // 3.5. 图标盒容器着色: 浅色容器色 (Container)
-        if (view.getId() == R.id.pluginIconBox || view.getId() == R.id.dialogBackupIconBox) {
+        if (view.getId() == R.id.dialogBackupIconBox) {
             view.setBackground(createSolidPillDrawable(context, targetContainer, dp(context, 14)));
         }
 
@@ -155,7 +155,7 @@ public final class MonetEngine {
             if (iv.getId() == R.id.about_logo_icon) {
                 return; // 保持中央 Logo 独立纯白与经典底板，坚决不跟随莫奈取色变化
             }
-            if (iv.getId() == R.id.pluginIcon || iv.getId() == R.id.dialogActionIcon
+            if (iv.getId() == R.id.dialogActionIcon
                     || iv.getId() == R.id.dialogBackupIcon || iv.getId() == R.id.appbar_icon
                     || iv.getId() == R.id.btnRefresh
                     || ImageViewCompat.getImageTintList(iv) != null || iv.getImageTintList() != null) {
