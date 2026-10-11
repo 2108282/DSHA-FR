@@ -177,10 +177,42 @@ EOF_PKG
         fi
     done
 
+    # 3. 收集并过滤技能打包列表 (显式维护官方标准技能白名单，确保 external-device-mesh 打入底包并脱敏排除私有技能)
+    OFFICIAL_SKILLS=(
+        "android-device-agent"
+        "boxproxy-support"
+        "open-code-review"
+        "open-code-review-delegate"
+        "penpot-mcp"
+        "external-device-mesh"
+    )
+    SKILL_EXCLUDES=()
+    if [ -d "/root/.dsh/skills" ]; then
+        for sdir in /root/.dsh/skills/*; do
+            [ -e "$sdir" ] || continue
+            sname=$(basename "$sdir")
+            is_official=0
+            for os in "${OFFICIAL_SKILLS[@]}"; do
+                if [ "$sname" = "$os" ]; then
+                    is_official=1
+                    break
+                fi
+            done
+            if [ "$is_official" -eq 0 ]; then
+                echo "  -> [脱敏排除非内置技能]: $sname"
+                SKILL_EXCLUDES+=("--exclude=./root/.dsh/skills/$sname" "--exclude=./root/.dsh/skills/$sname/*")
+            fi
+        done
+    fi
+    echo "    ✓ 官方技能打包列表已就绪: ${OFFICIAL_SKILLS[*]}"
+
     # 4. 纯净模式脱敏黑名单
     CLEAN_EXCLUDES=(
         "${BASE_EXCLUDES[@]}"
         "${SYMLINK_EXCLUDES[@]}"
+        "${SKILL_EXCLUDES[@]}"
+        "--exclude=./root/.dsh/skills/*/*.bak"
+        "--exclude=./root/.dsh/skills/*/*~"
         # 排除当前含有后装插件的 package.json，后面追加注入纯净版
         "--exclude=./root/.dsh/profiles/web/package.json"
         # 排除个人会话、附件与存储
@@ -264,7 +296,9 @@ EOF_PKG
     echo "==> [2/3] 动态注入纯净版 profiles/web/package.json 与核心插件标准软链接..."
     STAGE_PROFILE_NM="$STAGE_DIR/root/.dsh/profiles/web/node_modules"
     STAGE_GLOBAL_NM="$STAGE_DIR/usr/local/lib/node_modules"
-    mkdir -p "$STAGE_PROFILE_NM" "$STAGE_GLOBAL_NM"
+    STAGE_AGENTS_SKILLS="$STAGE_DIR/root/.agents/skills"
+    mkdir -p "$STAGE_PROFILE_NM" "$STAGE_GLOBAL_NM" "$STAGE_AGENTS_SKILLS"
+    touch "$STAGE_AGENTS_SKILLS/.gitkeep"
     for p in dsh-device-shell-guide dsh-task-notifier dsh-status-overlay dsh-web-mobile; do
         if [ "$p" = "dsh-web-mobile" ]; then
             tgt="/root/dsh-web-mobile"
@@ -283,7 +317,8 @@ EOF_PKG
         ./usr/local/lib/node_modules/dsh-device-shell-guide \
         ./usr/local/lib/node_modules/dsh-task-notifier \
         ./usr/local/lib/node_modules/dsh-status-overlay \
-        ./usr/local/lib/node_modules/dsh-web-mobile
+        ./usr/local/lib/node_modules/dsh-web-mobile \
+        ./root/.agents/skills/.gitkeep
 
     echo "==> [3/3] 正在执行多线程高效压缩..."
     $COMPRESS_CMD < "$TMP_RAW_TAR" > "$OUTPUT_TAR"
