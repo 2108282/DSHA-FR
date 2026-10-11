@@ -42,7 +42,7 @@ public final class BackupManager {
     }
 
     public static String backupToExternal(Context ctx, HarnessController c) {
-        return backup(ctx, c, BackupScope.FULL, false);
+        return backup(ctx, c, BackupScope.FULL, false, false);
     }
 
     public static String backupToExternal(Context ctx, HarnessController c, int scope) {
@@ -118,9 +118,10 @@ public final class BackupManager {
         }
     }
 
-    private static String manifestJson(int scope, boolean includeApiKey) {
+    private static String manifestJson(int scope, boolean includeApiKey, boolean includeSshKey) {
         return "{\\\"formatVersion\\\":1,\\\"scope\\\":\\\"" + BackupScope.id(scope)
                 + "\\\",\\\"includeApiKey\\\":" + includeApiKey
+                + ",\\\"includeSshKey\\\":" + includeSshKey
                 + ",\\\"appVersion\\\":\\\"1.2.0-native\\\",\\\"dshVersion\\\":\\\"0.1.5-rc.2\\\","
                 + "\\\"createdAt\\\":\\\"" + new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).format(new Date())
                 + "\\\"}";
