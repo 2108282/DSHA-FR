@@ -241,7 +241,7 @@ EOF_PKG
         # 排除后装全局工具与可执行文件 (对齐 BackupScope.TOOLS，不属于底座)
         "--exclude=./usr/local/lib/node_modules/rea-agents"
         "--exclude=./usr/local/lib/node_modules/rea-agents/*"
-        "--exclude=./usr/local/bin/rea"
+        "--exclude=./usr/local/bin/rea*"
         "--exclude=./root/.dsha-tools*"
         "--exclude=./root/.dsha-workspaces*"
         # 排除当前含有后装插件的 package.json，后面追加注入纯净版
