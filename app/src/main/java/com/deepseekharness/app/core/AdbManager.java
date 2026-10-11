@@ -350,7 +350,34 @@ public final class AdbManager {
                 }
             }
         }
+        syncConnectedDevicesToContainer(list);
         return list;
+    }
+
+    public static final String CONNECTED_DEVICES_JSON_PATH = "/data/adb/dsha/rootfs/root/.dsh/connected_devices.json";
+
+    /**
+     * 将当前已连接设备列表以结构化 JSON 格式持久化至容器内部 ~/.dsh/connected_devices.json
+     * 供 DSH 体系下的 AI Agent (如 external-device-mesh 技能) 实时感知与自动化调度。
+     */
+    private void syncConnectedDevicesToContainer(List<AdbDevice> devices) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("[\n");
+        if (devices != null) {
+            for (int i = 0; i < devices.size(); i++) {
+                AdbDevice d = devices.get(i);
+                sb.append("  {\n");
+                sb.append("    \"address\": \"").append(d.address).append("\",\n");
+                sb.append("    \"state\": \"").append(d.state).append("\",\n");
+                sb.append("    \"extra\": \"").append(d.extraInfo != null ? d.extraInfo.replace("\"", "\\\"") : "").append("\"\n");
+                sb.append("  }").append(i < devices.size() - 1 ? "," : "").append("\n");
+            }
+        }
+        sb.append("]\n");
+
+        String writeCmd = "mkdir -p /data/adb/dsha/rootfs/root/.dsh && "
+                + "printf '%s' '" + sb.toString().replace("'", "'\\''") + "' > " + CONNECTED_DEVICES_JSON_PATH;
+        execRoot(writeCmd);
     }
 
     private String resolveAdbCmd(String args) {

@@ -84,6 +84,8 @@ public final class ExternalConnectFragment extends Fragment {
     private TextView btnRefreshDevices;
     private TextView tvEmptyDevices;
     private LinearLayout layoutDevices;
+    private TextView btnOpenAdbConfig;
+    private TextView btnOpenSshConfig;
 
     // SSH 模块组件
     private TextView tvSshKeyStatus;
@@ -190,6 +192,7 @@ public final class ExternalConnectFragment extends Fragment {
         btnRefreshDevices = v.findViewById(R.id.ext_btn_refresh_devices);
         tvEmptyDevices = v.findViewById(R.id.ext_tv_empty_devices);
         layoutDevices = v.findViewById(R.id.ext_layout_devices);
+        btnOpenAdbConfig = v.findViewById(R.id.ext_btn_open_adb_config);
 
         // SSH 控件
         tvSshKeyStatus = v.findViewById(R.id.ssh_tv_key_status);
@@ -205,6 +208,7 @@ public final class ExternalConnectFragment extends Fragment {
 
         tvEmptyHosts = v.findViewById(R.id.ssh_tv_empty_hosts);
         layoutHosts = v.findViewById(R.id.ssh_layout_hosts);
+        btnOpenSshConfig = v.findViewById(R.id.ssh_btn_open_config);
     }
 
     private void applyTheme(View root) {
@@ -309,6 +313,14 @@ public final class ExternalConnectFragment extends Fragment {
         }
         if (btnSaveHost != null) {
             btnSaveHost.setOnClickListener(x -> saveSshHost());
+        }
+
+        // 打开外部配置文件
+        if (btnOpenAdbConfig != null) {
+            btnOpenAdbConfig.setOnClickListener(x -> openFileWithExternalApp(AdbManager.CONNECTED_DEVICES_JSON_PATH));
+        }
+        if (btnOpenSshConfig != null) {
+            btnOpenSshConfig.setOnClickListener(x -> openFileWithExternalApp(SshManager.SSH_CONFIG_PATH));
         }
     }
 
@@ -517,7 +529,7 @@ public final class ExternalConnectFragment extends Fragment {
             btnDel.setClickable(true);
             btnDel.setFocusable(true);
             btnDel.setOnClickListener(x -> {
-                sshManager.deleteHost(h.id);
+                sshManager.deleteHost(h.name);
                 renderHostList(sshManager.getSavedHosts());
                 ToastHelper.show(ctx, "已删除主机：" + h.name);
             });
@@ -815,6 +827,49 @@ public final class ExternalConnectFragment extends Fragment {
                 item.addView(btnDisconnect);
                 layoutDevices.addView(item);
             }
+        }
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        // 核心同步机制：每次从外部编辑器切回 App 时，自动重新解析底层物理文件，实现 100% 实时双向同步
+        refreshAllAsync();
+        refreshSshAllAsync();
+    }
+
+    private void openFileWithExternalApp(String absolutePath) {
+        if (!isAdded()) return;
+        try {
+            java.io.File file = new java.io.File(absolutePath);
+            if (!file.exists()) {
+                // 若文件尚未生成，先确保初始化
+                if (absolutePath.contains("ssh")) {
+                    sshManager.getSavedHosts();
+                } else {
+                    adbManager.getConnectedDevices();
+                }
+            }
+
+            android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_VIEW);
+            android.net.Uri uri;
+            try {
+                uri = androidx.core.content.FileProvider.getUriForFile(
+                        requireContext(),
+                        requireContext().getPackageName() + ".fileprovider",
+                        file
+                );
+                intent.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION | android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            } catch (Throwable e) {
+                // Root 管理器/文件浏览器兼容降级：直接传递 file:// 协议 URI
+                uri = android.net.Uri.fromFile(file);
+            }
+
+            intent.setDataAndType(uri, "text/plain");
+            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(android.content.Intent.createChooser(intent, "选择编辑器打开"));
+        } catch (Throwable t) {
+            ToastHelper.show(requireContext(), "调用外部编辑器失败：" + t.getMessage());
         }
     }
 
