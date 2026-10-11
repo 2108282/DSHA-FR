@@ -824,7 +824,7 @@ public final class ModelSetupActivity extends AppCompatActivity {
                 row.setOrientation(LinearLayout.HORIZONTAL);
                 row.setGravity(Gravity.CENTER_VERTICAL);
                 row.setPadding(dp(16), dp(13), dp(16), dp(13));
-                TypedValue rippleVal = new TypedValue();
+                android.util.TypedValue rippleVal = new android.util.TypedValue();
                 getTheme().resolveAttribute(android.R.attr.selectableItemBackground, rippleVal, true);
                 row.setBackgroundResource(rippleVal.resourceId);
                 row.setClickable(true);
