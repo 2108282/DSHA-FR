@@ -892,6 +892,20 @@
                                 android:textSize="13sp" />
                         </LinearLayout>
 
+                        <EditText
+                            android:id="@+id/ssh_et_key"
+                            android:layout_width="match_parent"
+                            android:layout_height="44dp"
+                            android:layout_marginTop="8dp"
+                            android:background="@drawable/bg_input"
+                            android:fontFamily="monospace"
+                            android:hint="私钥文件路径 (可选，留空则默认使用本机生成的公钥)"
+                            android:maxLines="1"
+                            android:paddingHorizontal="14dp"
+                            android:textColor="@color/text"
+                            android:textColorHint="@color/text_muted"
+                            android:textSize="13sp" />
+
                         <TextView
                             android:id="@+id/ssh_btn_save_host"
                             android:layout_width="match_parent"

@@ -45,19 +45,30 @@ public final class SshManager {
         public String host;
         public int port;
         public String user;
+        public String identityFile; // 专属私钥文件路径 (可选)
 
         public HostProfile(String name, String host, int port, String user) {
+            this(name, host, port, user, null);
+        }
+
+        public HostProfile(String name, String host, int port, String user, String identityFile) {
             this.name = name;
             this.host = host;
             this.port = port <= 0 ? 22 : port;
             this.user = TextUtils.isEmpty(user) ? "root" : user;
+            this.identityFile = identityFile != null ? identityFile.trim() : "";
         }
 
         public String getSshCommand() {
-            if (port == 22) {
-                return "ssh " + user + "@" + host;
+            StringBuilder sb = new StringBuilder("ssh ");
+            if (!TextUtils.isEmpty(identityFile)) {
+                sb.append("-i ").append(identityFile).append(" ");
             }
-            return "ssh -p " + port + " " + user + "@" + host;
+            if (port != 22) {
+                sb.append("-p ").append(port).append(" ");
+            }
+            sb.append(user).append("@").append(host);
+            return sb.toString();
         }
     }
 
@@ -134,6 +145,8 @@ public final class SshManager {
                         try {
                             current.port = Integer.parseInt(val);
                         } catch (Throwable ignored) {}
+                    } else if ("identityfile".equals(key)) {
+                        current.identityFile = val;
                     }
                 }
             }
@@ -190,7 +203,11 @@ public final class SshManager {
             sb.append("Host ").append(h.name).append("\n");
             sb.append("    HostName ").append(h.host).append("\n");
             sb.append("    User ").append(h.user).append("\n");
-            sb.append("    Port ").append(h.port).append("\n\n");
+            sb.append("    Port ").append(h.port).append("\n");
+            if (!TextUtils.isEmpty(h.identityFile)) {
+                sb.append("    IdentityFile ").append(h.identityFile).append("\n");
+            }
+            sb.append("\n");
         }
 
         String safeContent = sb.toString();

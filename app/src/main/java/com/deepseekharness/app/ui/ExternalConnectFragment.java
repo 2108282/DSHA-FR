@@ -97,6 +97,7 @@ public final class ExternalConnectFragment extends Fragment {
     private EditText etSshHost;
     private EditText etSshUser;
     private EditText etSshPort;
+    private EditText etSshKey;
     private TextView btnSaveHost;
 
     private TextView tvEmptyHosts;
@@ -204,6 +205,7 @@ public final class ExternalConnectFragment extends Fragment {
         etSshHost = v.findViewById(R.id.ssh_et_host);
         etSshUser = v.findViewById(R.id.ssh_et_user);
         etSshPort = v.findViewById(R.id.ssh_et_port);
+        etSshKey = v.findViewById(R.id.ssh_et_key);
         btnSaveHost = v.findViewById(R.id.ssh_btn_save_host);
 
         tvEmptyHosts = v.findViewById(R.id.ssh_tv_empty_hosts);
@@ -413,6 +415,7 @@ public final class ExternalConnectFragment extends Fragment {
         String host = etSshHost != null ? etSshHost.getText().toString().trim() : "";
         String user = etSshUser != null ? etSshUser.getText().toString().trim() : "root";
         String portStr = etSshPort != null ? etSshPort.getText().toString().trim() : "22";
+        String keyPath = etSshKey != null ? etSshKey.getText().toString().trim() : "";
 
         if (TextUtils.isEmpty(host)) {
             ToastHelper.show(requireContext(), "主机地址不能为空");
@@ -429,11 +432,12 @@ public final class ExternalConnectFragment extends Fragment {
             port = Integer.parseInt(portStr);
         } catch (Throwable ignored) {}
 
-        SshManager.HostProfile profile = new SshManager.HostProfile(name, host, port, user);
+        SshManager.HostProfile profile = new SshManager.HostProfile(name, host, port, user, keyPath);
         sshManager.saveHost(profile);
 
         if (etSshName != null) etSshName.setText("");
         if (etSshHost != null) etSshHost.setText("");
+        if (etSshKey != null) etSshKey.setText("");
         ToastHelper.show(requireContext(), "已保存远程主机：" + name);
         renderHostList(sshManager.getSavedHosts());
     }
@@ -840,37 +844,36 @@ public final class ExternalConnectFragment extends Fragment {
 
     private void openFileWithExternalApp(String absolutePath) {
         if (!isAdded()) return;
-        try {
-            java.io.File file = new java.io.File(absolutePath);
-            if (!file.exists()) {
-                // 若文件尚未生成，先确保初始化
-                if (absolutePath.contains("ssh")) {
-                    sshManager.getSavedHosts();
+        executor.execute(() -> {
+            // 确保物理文件已落盘
+            if (absolutePath.contains("ssh")) {
+                sshManager.getSavedHosts();
+            } else {
+                adbManager.getConnectedDevices();
+            }
+
+            // 方式 1: 直接通过系统的 Root 特权发送广播/命令呼起外部应用选择器 (不受沙箱与 FileUriExposedException 限制)
+            String amCmd = "am start -a android.intent.action.VIEW -d \"file://" + absolutePath + "\" -t \"*/*\" 2>&1";
+            String res = adbManager.execRoot(amCmd);
+
+            mainHandler.post(() -> {
+                if (!isAdded()) return;
+                if (res != null && (res.contains("Starting: Intent") || res.contains("Warning: Activity not started"))) {
+                    ToastHelper.show(requireContext(), "已呼起外部应用");
                 } else {
-                    adbManager.getConnectedDevices();
+                    // 方式 2: 降级尝试标准 Android 选择器
+                    try {
+                        android.os.StrictMode.setVmPolicy(new android.os.StrictMode.VmPolicy.Builder().build());
+                        android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_VIEW);
+                        intent.setDataAndType(android.net.Uri.fromFile(new java.io.File(absolutePath)), "*/*");
+                        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                        startActivity(android.content.Intent.createChooser(intent, "选择外部应用打开"));
+                    } catch (Throwable t) {
+                        ToastHelper.show(requireContext(), "调用外部应用失败：" + t.getMessage());
+                    }
                 }
-            }
-
-            android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_VIEW);
-            android.net.Uri uri;
-            try {
-                uri = androidx.core.content.FileProvider.getUriForFile(
-                        requireContext(),
-                        requireContext().getPackageName() + ".fileprovider",
-                        file
-                );
-                intent.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION | android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-            } catch (Throwable e) {
-                // Root 管理器/文件浏览器兼容降级：直接传递 file:// 协议 URI
-                uri = android.net.Uri.fromFile(file);
-            }
-
-            intent.setDataAndType(uri, "text/plain");
-            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(android.content.Intent.createChooser(intent, "选择编辑器打开"));
-        } catch (Throwable t) {
-            ToastHelper.show(requireContext(), "调用外部编辑器失败：" + t.getMessage());
-        }
+            });
+        });
     }
 
     private void syncActivityTitle(boolean isSubpage) {
