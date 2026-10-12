@@ -60,11 +60,28 @@
                     android:textSize="11sp" />
             </LinearLayout>
 
+            <!-- 操作胶囊: 重置 -->
+            <TextView
+                android:id="@+id/pty_reset"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:background="@drawable/m3_btn_tonal_expressive"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:paddingHorizontal="10dp"
+                android:stateListAnimator="@animator/btn_press_scale"
+                android:text="重置"
+                android:textColor="@color/primary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
             <!-- 操作胶囊: 字号调小 A- -->
             <TextView
                 android:id="@+id/pty_font_dec"
                 android:layout_width="wrap_content"
                 android:layout_height="32dp"
+                android:layout_marginStart="6dp"
                 android:background="@drawable/m3_btn_tonal_expressive"
                 android:clickable="true"
                 android:focusable="true"

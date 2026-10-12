@@ -220,7 +220,7 @@ public final class MonetEngine {
                 || id == R.id.btnBackupCancel || id == R.id.cred_enter_web || id == R.id.update_copy_mirror_cmd
                 || id == R.id.cred_add_remote_btn || id == R.id.pluginActions || id == R.id.btnPluginAddr || id == R.id.btnPluginRename
                 || id == R.id.btnPluginExport || id == R.id.term_clear || id == R.id.term_pty
-                || id == R.id.pty_font_dec || id == R.id.pty_font_inc || id == R.id.pty_simple
+                || id == R.id.pty_reset || id == R.id.pty_font_dec || id == R.id.pty_font_inc || id == R.id.pty_simple
                 || id == R.id.launch_port_chip_3080 || id == R.id.launch_port_chip_3088) {
             return true;
         }

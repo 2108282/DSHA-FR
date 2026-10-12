@@ -134,6 +134,7 @@ public final class PtyTerminalFragment extends Fragment
         applyFontSize(fontSp());
         buildExtraKeys(root.findViewById(R.id.pty_keys));
 
+        root.findViewById(R.id.pty_reset).setOnClickListener(v -> actions.onResetSession());
         root.findViewById(R.id.pty_font_dec).setOnClickListener(v -> actions.onBumpFont(-1));
         root.findViewById(R.id.pty_font_inc).setOnClickListener(v -> actions.onBumpFont(+1));
         root.findViewById(R.id.pty_simple).setOnClickListener(v -> actions.onSwitchToSimple());
@@ -301,6 +302,39 @@ public final class PtyTerminalFragment extends Fragment
     @Override
     public void onBumpFont(int delta) {
         bumpFont(delta);
+    }
+
+    @Override
+    public void onResetSession() {
+        PtySession s = session;
+        boolean wasRunning = s != null && s.isRunning();
+        if (wasRunning) {
+            new DshaDialogBuilder(requireContext())
+                    .setTitle("重置终端会话")
+                    .setMessage("确定要重置终端会话吗？当前执行的任务或远程连接将被终止，并将返回初始主目录。")
+                    .setPositiveButton("立即重置", (dialog, which) -> doResetSession())
+                    .setNegativeButton("取消", null)
+                    .show();
+        } else {
+            doResetSession();
+        }
+    }
+
+    private void doResetSession() {
+        PtySession s = session;
+        if (s != null) {
+            try {
+                s.detachListener(this);
+                s.finish();
+            } catch (Throwable ignored) {
+            }
+        }
+        session = null;
+        attachedSession = null;
+        if (view != null && isAdded()) {
+            attachOrStart();
+            ToastHelper.makeText(requireContext(), "终端已重置，已返回 /root", Toast.LENGTH_SHORT).show();
+        }
     }
 
     @Override

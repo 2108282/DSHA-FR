@@ -1,244 +1,333 @@
-/*
- * Decompiled with CFR 0.152.
- * 
- * Could not load the following classes:
- *  android.content.Context
- *  android.os.Bundle
- *  android.os.Handler
- *  android.os.Looper
- *  android.view.LayoutInflater
- *  android.view.View
- *  android.view.ViewGroup
- *  android.view.ViewParent
- *  android.widget.EditText
- *  android.widget.ScrollView
- *  android.widget.TextView
- *  android.widget.Toast
- *  androidx.annotation.NonNull
- *  androidx.annotation.Nullable
- *  androidx.fragment.app.Fragment
- *  com.deepseekharness.app.R$id
- *  com.deepseekharness.app.R$layout
- */
 package com.deepseekharness.app.ui;
 
 import android.content.Context;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
+import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
 import android.widget.ScrollView;
 import android.widget.TextView;
-import android.widget.Toast;
-import com.deepseekharness.app.util.ToastHelper;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import com.deepseekharness.app.R;
 import com.deepseekharness.app.core.HarnessController;
-import com.deepseekharness.app.ui.PtyTerminalFragment;
 import com.deepseekharness.app.util.Compat;
 import com.deepseekharness.app.util.SensitiveData;
+import com.deepseekharness.app.util.ToastHelper;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
-public class TerminalFragment
-extends Fragment {
-    private HarnessController c;
+/**
+ * 简易终端 Fragment：
+ * 1. 原生 Root 环境流式命令行交互；
+ * 2. 线程安全读写与命令队列缓冲（断线自动拉起并补发当前命令，绝不丢指令）；
+ * 3. 严格的线程生命周期管理，彻底杜绝孤儿读取线程竞争；
+ * 4. 软键盘与按钮动作去重防抖，默认工作目录对齐 /root。
+ */
+public class TerminalFragment extends Fragment {
+
+    private static final String DEFAULT_WELCOME = "Ubuntu 24.04 · 回车执行 · 中止 · exit 退出\n";
+    private static final Object SHELL_LOCK = new Object();
+
+    private HarnessController controller;
     private EditText inputEdit;
     private TextView outputText;
     private ScrollView scrollView;
+
     private static volatile Process shell;
     private static volatile boolean running;
     private static volatile Thread readerThread;
     private static volatile boolean shellStarting;
-    private static final StringBuilder buffer;
+    private static final StringBuilder buffer = new StringBuilder();
     private static volatile TextView boundOutput;
+    private static final ConcurrentLinkedQueue<String> pendingCommands = new ConcurrentLinkedQueue<>();
+
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     @Nullable
+    @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
         return inflater.inflate(R.layout.fragment_terminal, container, false);
     }
 
+    @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
-        this.c = new HarnessController(this.requireContext());
-        this.inputEdit = (EditText)view.findViewById(R.id.term_input);
-        this.outputText = (TextView)view.findViewById(R.id.term_output);
-        this.scrollView = (ScrollView)view.findViewById(R.id.term_scroll);
-        boundOutput = this.outputText;
-        TextView ctrlcBtn = (TextView)view.findViewById(R.id.term_ctrlc);
-        ctrlcBtn.setOnClickListener(v -> {
-            Process p = shell;
-            if (p != null && Compat.isAlive(p)) {
-                try {
-                    p.getOutputStream().write(3);
-                    p.getOutputStream().flush();
-                }
-                catch (IOException iOException) {
-                    // empty catch block
-                }
-            }
-        });
-        TextView clearBtn = (TextView)view.findViewById(R.id.term_clear);
-        clearBtn.setOnClickListener(v -> {
-            buffer.setLength(0);
-            this.outputText.setText((CharSequence)"Ubuntu 24.04 \u00b7 \u56de\u8f66\u6267\u884c \u00b7 \u4e2d\u6b62 \u00b7 exit \u9000\u51fa\n");
-        });
+        controller = new HarnessController(requireContext());
+        inputEdit = view.findViewById(R.id.term_input);
+        outputText = view.findViewById(R.id.term_output);
+        scrollView = view.findViewById(R.id.term_scroll);
+        boundOutput = outputText;
+
+        TextView ctrlcBtn = view.findViewById(R.id.term_ctrlc);
+        if (ctrlcBtn != null) {
+            ctrlcBtn.setOnClickListener(v -> sendInterrupt());
+        }
+
+        TextView clearBtn = view.findViewById(R.id.term_clear);
+        if (clearBtn != null) {
+            clearBtn.setOnClickListener(v -> clearOutput());
+        }
+
         View sendBtn = view.findViewById(R.id.term_send);
         if (sendBtn != null) {
-            sendBtn.setOnClickListener(v -> this.sendCommand());
+            sendBtn.setOnClickListener(v -> sendCommand());
         }
 
         View ptyBtn = view.findViewById(R.id.term_pty);
         if (ptyBtn != null) {
-            ptyBtn.setOnClickListener(v -> this.switchToPty());
+            ptyBtn.setOnClickListener(v -> switchToPty());
         }
-        this.inputEdit.setOnEditorActionListener((v, actionId, event) -> {
-            if (actionId == 4 || actionId == 2 || actionId == 6 || event != null && event.getKeyCode() == 66) {
-                this.sendCommand();
+
+        inputEdit.setOnEditorActionListener((v, actionId, event) -> {
+            boolean isEnter = event != null
+                    && event.getKeyCode() == KeyEvent.KEYCODE_ENTER
+                    && event.getAction() == KeyEvent.ACTION_DOWN;
+            if (actionId == EditorInfo.IME_ACTION_SEND
+                    || actionId == EditorInfo.IME_ACTION_DONE
+                    || actionId == EditorInfo.IME_ACTION_GO
+                    || isEnter) {
+                sendCommand();
                 return true;
             }
             return false;
         });
-        String show = buffer.length() == 0 ? "" : SensitiveData.redact(buffer.toString());
-        this.outputText.setText((CharSequence)(show.isEmpty() ? "Ubuntu 24.04 \u00b7 \u56de\u8f66\u6267\u884c \u00b7 \u4e2d\u6b62 \u00b7 exit \u9000\u51fa" : show));
-        this.scrollView.post(() -> this.scrollView.fullScroll(130));
-        this.startShell();
+
+        synchronized (SHELL_LOCK) {
+            String show = buffer.length() == 0 ? "" : SensitiveData.redact(buffer.toString());
+            outputText.setText(show.isEmpty() ? DEFAULT_WELCOME : show);
+        }
+        scrollView.post(() -> scrollView.fullScroll(ScrollView.FOCUS_DOWN));
+        startShell();
     }
 
     private void switchToPty() {
-        this.requireContext().getSharedPreferences("deepseekharness", 0).edit().putBoolean("term_pty", true).apply();
+        requireContext().getSharedPreferences("deepseekharness", Context.MODE_PRIVATE)
+                .edit().putBoolean("term_pty", true).apply();
         try {
-            int containerId = ((ViewGroup)this.requireView().getParent()).getId();
-            this.getParentFragmentManager().beginTransaction().replace(containerId, (Fragment)new PtyTerminalFragment()).commit();
+            int containerId = ((ViewGroup) requireView().getParent()).getId();
+            getParentFragmentManager().beginTransaction()
+                    .replace(containerId, new PtyTerminalFragment())
+                    .commit();
+        } catch (Throwable e) {
+            ToastHelper.makeText(requireContext(), "请退出终端页再进来", 0).show();
         }
-        catch (Throwable e) {
-            ToastHelper.makeText((Context)this.requireContext(), (CharSequence)"\u8bf7\u9000\u51fa\u7ec8\u7aef\u9875\u518d\u8fdb\u6765", (int)0).show();
+    }
+
+    private void clearOutput() {
+        synchronized (SHELL_LOCK) {
+            buffer.setLength(0);
+        }
+        if (outputText != null) {
+            outputText.setText(DEFAULT_WELCOME);
+        }
+        Process p = shell;
+        if (p == null || !Compat.isAlive(p)) {
+            startShell();
+        }
+    }
+
+    private void sendInterrupt() {
+        Process p = shell;
+        if (p != null && Compat.isAlive(p)) {
+            try {
+                OutputStream os = p.getOutputStream();
+                os.write(3); // ETX (Ctrl+C)
+                os.write(10); // \n
+                os.flush();
+                appendLine("^C");
+            } catch (IOException ignored) {
+            }
         }
     }
 
     private void startShell() {
+        synchronized (SHELL_LOCK) {
+            Process p = shell;
+            Thread t = readerThread;
+            if (p != null && Compat.isAlive(p) && t != null && t.isAlive()) {
+                drainPendingCommands();
+                return;
+            }
+            if (shellStarting) {
+                return;
+            }
+            shellStarting = true;
+
+            Thread worker = new Thread(() -> {
+                try {
+                    if (!controller.proot().isEnvironmentReady()) {
+                        mainHandler.post(() -> appendLine("未检测到 /data/adb/dsha 原生模块或未授予 Root 权限，请在授权管理器中允许"));
+                        return;
+                    }
+                } catch (Throwable ignored) {
+                }
+
+                try {
+                    Process proc = controller.proot().execRootfsInteractive();
+                    synchronized (SHELL_LOCK) {
+                        shell = proc;
+                        running = true;
+                    }
+
+                    // 启动后默认进入 /root 目录
+                    try {
+                        OutputStream os = proc.getOutputStream();
+                        os.write("cd /root 2>/dev/null || true\n".getBytes(StandardCharsets.UTF_8));
+                        os.flush();
+                    } catch (Throwable ignored) {
+                    }
+
+                    drainPendingCommands();
+
+                    InputStreamReader reader = new InputStreamReader(proc.getInputStream(), StandardCharsets.UTF_8);
+                    char[] cbuf = new char[4096];
+                    int n;
+                    while (running && (n = reader.read(cbuf)) != -1) {
+                        String chunk = stripAnsi(new String(cbuf, 0, n));
+                        mainHandler.post(() -> appendRaw(chunk));
+                    }
+                    mainHandler.post(() -> appendLine("\n[会话已退出，输入命令可自动重启]"));
+                } catch (Exception e) {
+                    mainHandler.post(() -> appendLine("终端启动失败：" + SensitiveData.redact(String.valueOf(e))));
+                } finally {
+                    synchronized (SHELL_LOCK) {
+                        running = false;
+                        shell = null;
+                        readerThread = null;
+                        shellStarting = false;
+                    }
+                }
+            }, "term-read");
+
+            readerThread = worker;
+            worker.start();
+        }
+    }
+
+    private void drainPendingCommands() {
         Process p = shell;
-        if (p != null && Compat.isAlive(p) && readerThread != null && readerThread.isAlive()) {
+        if (p == null || !Compat.isAlive(p)) {
             return;
         }
-        if (shellStarting) {
-            return;
+        String pending;
+        while ((pending = pendingCommands.poll()) != null) {
+            final String cmd = pending;
+            try {
+                OutputStream os = p.getOutputStream();
+                os.write((cmd + "\n").getBytes(StandardCharsets.UTF_8));
+                os.flush();
+            } catch (IOException e) {
+                pendingCommands.add(cmd);
+                mainHandler.post(() -> appendLine("写入待发命令失败，正在重试…"));
+                break;
+            }
         }
-        shellStarting = true;
-        new Thread(() -> {
-            try {
-                if (!this.c.proot().isEnvironmentReady()) {
-                    this.mainHandler.post(() -> this.appendLine("未检测到 /data/adb/dsha 原生模块或未授予 Root 权限，请在授权管理器中允许"));
-                    return;
-                }
-            }
-            catch (Throwable throwable) {
-                // empty catch block
-            }
-            try {
-                int n;
-                shell = this.c.proot().execRootfsInteractive();
-                running = true;
-                InputStreamReader reader = new InputStreamReader(shell.getInputStream(), StandardCharsets.UTF_8);
-                char[] cbuf = new char[4096];
-                while (running && (n = reader.read(cbuf)) != -1) {
-                    String chunk = TerminalFragment.stripAnsi(new String(cbuf, 0, n));
-                    this.mainHandler.post(() -> this.appendRaw(chunk));
-                }
-                this.mainHandler.post(() -> this.appendLine("\n[\u4f1a\u8bdd\u5df2\u9000\u51fa]"));
-            }
-            catch (Exception e) {
-                this.mainHandler.post(() -> this.appendLine("\u7ec8\u7aef\u542f\u52a8\u5931\u8d25\uff1a" + SensitiveData.redact(String.valueOf(e))));
-            }
-            finally {
-                shellStarting = false;
-            }
-        }, "term-read").start();
     }
 
     private void sendCommand() {
-        String cmd = this.inputEdit.getText().toString().trim();
+        if (inputEdit == null) return;
+        String raw = inputEdit.getText().toString();
+        String cmd = raw.trim();
         if (cmd.isEmpty()) {
             return;
         }
-        this.inputEdit.setText((CharSequence)"");
-        this.appendLine("$ " + cmd);
+        inputEdit.setText("");
+        appendLine("$ " + cmd);
+
         Process p = shell;
         if (p == null || !Compat.isAlive(p)) {
-            this.appendLine("\u4f1a\u8bdd\u672a\u8fd0\u884c\uff0c\u6b63\u5728\u91cd\u542f\u2026");
-            this.startShell();
+            pendingCommands.add(cmd);
+            appendLine("会话未连接，正在启动并执行…");
+            startShell();
             return;
         }
+
         try {
-            p.getOutputStream().write((cmd + "\n").getBytes(StandardCharsets.UTF_8));
-            p.getOutputStream().flush();
-        }
-        catch (IOException e) {
-            this.appendLine("\u53d1\u9001\u5931\u8d25\uff1a" + SensitiveData.redact(String.valueOf(e)));
+            OutputStream os = p.getOutputStream();
+            os.write((cmd + "\n").getBytes(StandardCharsets.UTF_8));
+            os.flush();
+        } catch (IOException e) {
+            appendLine("发送失败（流已断开），正在自动重连执行…");
+            pendingCommands.add(cmd);
+            shutdownShell();
+            startShell();
         }
     }
 
     private void appendLine(String s) {
-        this.appendRaw(s + "\n");
+        appendRaw(s + "\n");
     }
 
     private void appendRaw(String s) {
-        TextView out;
         if (s == null || s.isEmpty()) {
             return;
         }
         s = SensitiveData.redact(s);
-        buffer.append(s);
-        if (buffer.length() > 300000) {
-            buffer.delete(0, buffer.length() - 100000);
+        synchronized (SHELL_LOCK) {
+            buffer.append(s);
+            if (buffer.length() > 300000) {
+                buffer.delete(0, buffer.length() - 100000);
+            }
         }
-        if ((out = boundOutput) == null) {
+        TextView out = boundOutput;
+        if (out == null) {
             return;
         }
-        String show = buffer.length() > 100000 ? "\u2026\uff08\u8f93\u51fa\u8fc7\u957f\u5df2\u622a\u65ad\uff09\n" + buffer.substring(buffer.length() - 100000) : buffer.toString();
-        out.setText((CharSequence)show);
-        ScrollView sv = this.scrollView;
+        String show;
+        synchronized (SHELL_LOCK) {
+            show = buffer.length() > 100000
+                    ? "…（输出过长已截断）\n" + buffer.substring(buffer.length() - 100000)
+                    : buffer.toString();
+        }
+        out.setText(show);
+        ScrollView sv = scrollView;
         if (sv != null) {
-            sv.post(() -> sv.fullScroll(130));
+            sv.post(() -> sv.fullScroll(ScrollView.FOCUS_DOWN));
         }
     }
 
     private static String stripAnsi(String s) {
-        return s.replaceAll("\\x1B\\[[0-9;?]*[a-zA-Z]", "").replaceAll("\\x1B\\][^\\x07]*\\x07", "").replaceAll("\\x1B[()][0-9A-B]", "");
+        if (s == null) return "";
+        return s.replaceAll("\\x1B\\[[0-9;?]*[a-zA-Z]", "")
+                .replaceAll("\\x1B\\][^\\x07]*\\x07", "")
+                .replaceAll("\\x1B[()][0-9A-B]", "");
     }
 
+    @Override
     public void onDestroyView() {
         super.onDestroyView();
         boundOutput = null;
     }
 
     public static void shutdownShell() {
-        Process p = shell;
-        if (p != null) {
-            try {
-                p.getOutputStream().write("exit\n".getBytes(StandardCharsets.UTF_8));
-                p.getOutputStream().flush();
+        synchronized (SHELL_LOCK) {
+            Process p = shell;
+            if (p != null) {
+                try {
+                    p.getOutputStream().write("exit\n".getBytes(StandardCharsets.UTF_8));
+                    p.getOutputStream().flush();
+                } catch (Throwable ignored) {
+                }
+                try {
+                    Compat.destroy(p);
+                } catch (Throwable ignored) {
+                }
             }
-            catch (IOException iOException) {
-                // empty catch block
-            }
-            try {
-                Compat.destroy(p);
-            }
-            catch (Throwable throwable) {
-                // empty catch block
-            }
+            running = false;
+            shell = null;
+            readerThread = null;
+            shellStarting = false;
         }
-        running = false;
-        shell = null;
-        shellStarting = false;
     }
 
     public static void inject(String text) {
@@ -248,10 +337,7 @@ extends Fragment {
         String safeText = SensitiveData.redact(text);
         Handler h = new Handler(Looper.getMainLooper());
         h.post(() -> {
-            Class<TerminalFragment> clazz = TerminalFragment.class;
-            synchronized (TerminalFragment.class) {
-                ViewParent p;
-                TextView out;
+            synchronized (SHELL_LOCK) {
                 buffer.append(safeText);
                 if (!safeText.endsWith("\n")) {
                     buffer.append('\n');
@@ -259,20 +345,19 @@ extends Fragment {
                 if (buffer.length() > 300000) {
                     buffer.delete(0, buffer.length() - 100000);
                 }
-                if ((out = boundOutput) == null) {
-                    // ** MonitorExit[var1_1] (shouldn't be in output)
-                    return;
+                TextView out = boundOutput;
+                if (out != null) {
+                    String show = buffer.length() > 100000
+                            ? "…（输出过长已截断）\n" + buffer.substring(buffer.length() - 100000)
+                            : buffer.toString();
+                    out.setText(show);
+                    for (ViewParent p = out.getParent(); p != null; p = p.getParent()) {
+                        if (p instanceof ScrollView) {
+                            ((ScrollView) p).post(() -> ((ScrollView) p).fullScroll(ScrollView.FOCUS_DOWN));
+                            break;
+                        }
+                    }
                 }
-                String show = buffer.length() > 100000 ? "\u2026\uff08\u8f93\u51fa\u8fc7\u957f\u5df2\u622a\u65ad\uff09\n" + buffer.substring(buffer.length() - 100000) : buffer.toString();
-                out.setText((CharSequence)show);
-                for (p = out.getParent(); p != null && !(p instanceof ScrollView); p = p.getParent()) {
-                }
-                if (p instanceof ScrollView) {
-                    ScrollView sv = (ScrollView)p;
-                    sv.post(() -> sv.fullScroll(130));
-                }
-                // ** MonitorExit[var1_1] (shouldn't be in output)
-                return;
             }
         });
     }
@@ -280,6 +365,5 @@ extends Fragment {
     static {
         running = false;
         shellStarting = false;
-        buffer = new StringBuilder();
     }
 }
