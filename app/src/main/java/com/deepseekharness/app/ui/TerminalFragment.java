@@ -353,7 +353,8 @@ public class TerminalFragment extends Fragment {
                     out.setText(show);
                     for (ViewParent p = out.getParent(); p != null; p = p.getParent()) {
                         if (p instanceof ScrollView) {
-                            ((ScrollView) p).post(() -> ((ScrollView) p).fullScroll(ScrollView.FOCUS_DOWN));
+                            final ScrollView sv = (ScrollView) p;
+                            sv.post(() -> sv.fullScroll(ScrollView.FOCUS_DOWN));
                             break;
                         }
                     }
