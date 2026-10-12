@@ -13,6 +13,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.InputMethodManager;
+import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -20,6 +21,7 @@ import com.deepseekharness.app.util.ToastHelper;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.Fragment;
 
 import com.deepseekharness.app.PtySession;
@@ -309,15 +311,45 @@ public final class PtyTerminalFragment extends Fragment
         PtySession s = session;
         boolean wasRunning = s != null && s.isRunning();
         if (wasRunning) {
-            new DshaDialogBuilder(requireContext())
-                    .setTitle("重置终端会话")
-                    .setMessage("确定要重置终端会话吗？当前执行的任务或远程连接将被终止，并将返回初始主目录。")
-                    .setPositiveButton("立即重置", (dialog, which) -> doResetSession())
-                    .setNegativeButton("取消", null)
-                    .show();
+            showResetConfirmDialog();
         } else {
             doResetSession();
         }
+    }
+
+    private void showResetConfirmDialog() {
+        if (!isAdded()) return;
+
+        View dialogView = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_terminal_reset, null);
+        MonetEngine.PaletteInfo palette = MonetEngine.resolveCurrentPalette(requireContext());
+        MonetEngine.applyToViewTree(dialogView, palette);
+
+        Button btnCancel = dialogView.findViewById(R.id.btnDialogCancel);
+        Button btnConfirm = dialogView.findViewById(R.id.btnDialogConfirm);
+
+        AlertDialog dialog = new AlertDialog.Builder(requireContext(), R.style.Dialog_DSHA_Alert)
+                .setView(dialogView)
+                .setCancelable(true)
+                .create();
+
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        }
+
+        if (btnCancel != null) {
+            btnCancel.setOnClickListener(v -> dialog.dismiss());
+        }
+        if (btnConfirm != null) {
+            if (palette.isMonetActive) {
+                btnConfirm.setBackgroundTintList(android.content.res.ColorStateList.valueOf(palette.primaryColor));
+            }
+            btnConfirm.setOnClickListener(v -> {
+                dialog.dismiss();
+                doResetSession();
+            });
+        }
+
+        dialog.show();
     }
 
     private void doResetSession() {
