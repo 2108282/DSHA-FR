@@ -428,7 +428,7 @@ public final class AdbManager {
     }
 
     private String resolveAdbCmd(String args) {
-        return "chroot /data/adb/dsha/rootfs /usr/bin/adb " + args + " 2>&1";
+        return "TMPDIR=/tmp HOME=/root chroot /data/adb/dsha/rootfs /usr/bin/adb " + args + " 2>&1";
     }
 
     public String execRoot(String cmd) {
