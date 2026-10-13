@@ -719,6 +719,9 @@ public final class ExternalConnectFragment extends Fragment {
         btnConnect.setText("正在连接...");
         executor.execute(() -> {
             String result = adbManager.connectRemote(target);
+            try {
+                Thread.sleep(400);
+            } catch (InterruptedException ignored) {}
             List<AdbManager.AdbDevice> devices = adbManager.getConnectedDevices();
             mainHandler.post(() -> {
                 if (!isAdded()) return;
@@ -1084,9 +1087,33 @@ public final class ExternalConnectFragment extends Fragment {
             ToastHelper.show(ctx, "正在配对 " + dev.name + "...");
             executor.execute(() -> {
                 String pairRes = adbManager.pairRemote(dev.host + ":" + dev.port, code);
+                boolean isPairSuccess = pairRes.contains("成功") || pairRes.contains("建立 TLS");
+
+                String autoConnectMsg = null;
+                if (isPairSuccess) {
+                    // 自动搜寻同主机的 Connect 连接端口
+                    String connectTarget = null;
+                    for (DiscoveredDevice d : discoveredDevices.values()) {
+                        if (!d.isPairing && d.host.equals(dev.host)) {
+                            connectTarget = d.host + ":" + d.port;
+                            break;
+                        }
+                    }
+                    if (connectTarget != null) {
+                        String connRes = adbManager.connectRemote(connectTarget);
+                        autoConnectMsg = "配对成功，已自动连接: " + connRes;
+                    } else {
+                        autoConnectMsg = "配对成功！请在上方输入该手机显示的调试端口点击连接";
+                    }
+                    try {
+                        Thread.sleep(400);
+                    } catch (InterruptedException ignored) {}
+                }
+
+                String finalMsg = autoConnectMsg != null ? autoConnectMsg : pairRes;
                 mainHandler.post(() -> {
                     if (!isAdded()) return;
-                    ToastHelper.show(requireContext(), pairRes.isEmpty() ? "配对请求已发送" : pairRes);
+                    ToastHelper.show(requireContext(), finalMsg.isEmpty() ? "配对请求已发送" : finalMsg);
                     refreshAllAsync();
                 });
             });

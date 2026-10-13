@@ -288,7 +288,8 @@ public final class AdbManager {
         }
         String cleanTarget = target.trim();
         String adbCmd = resolveAdbCmd("pair " + cleanTarget + " " + pairingCode.trim());
-        return execRoot(adbCmd).trim();
+        String raw = execRoot(adbCmd).trim();
+        return cleanAdbOutput(raw);
     }
 
     /**
@@ -303,7 +304,8 @@ public final class AdbManager {
             cleanTarget = cleanTarget + ":5555";
         }
         String adbCmd = resolveAdbCmd("connect " + cleanTarget);
-        return execRoot(adbCmd).trim();
+        String raw = execRoot(adbCmd).trim();
+        return cleanAdbOutput(raw);
     }
 
     /**
@@ -315,7 +317,48 @@ public final class AdbManager {
         }
         String cleanTarget = target.trim();
         String adbCmd = resolveAdbCmd("disconnect " + cleanTarget);
-        return execRoot(adbCmd).trim();
+        String raw = execRoot(adbCmd).trim();
+        return cleanAdbOutput(raw);
+    }
+
+    /**
+     * 过滤掉 adb daemon 生命周期与启动噪音行，提取真实执行结果并转化为清晰中文反馈
+     */
+    public String cleanAdbOutput(String raw) {
+        if (TextUtils.isEmpty(raw)) return "";
+        String[] lines = raw.split("\n");
+        List<String> meaningful = new ArrayList<>();
+        for (String line : lines) {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty() || trimmed.startsWith("* daemon")) {
+                continue;
+            }
+            meaningful.add(trimmed);
+        }
+        if (meaningful.isEmpty()) {
+            return raw.trim();
+        }
+        String combined = String.join("\n", meaningful);
+
+        // 语义化智能提炼，彻底解决 Toast 截断误报问题
+        if (combined.contains("connected to")) {
+            return "已成功连接至目标设备";
+        } else if (combined.contains("already connected to")) {
+            return "设备已处于连接状态";
+        } else if (combined.contains("Connection refused")) {
+            return "连接被拒绝: 目标端口未开放，请确认远端手机无线调试端口是否已变动";
+        } else if (combined.contains("No route to host") || combined.contains("Connection timed out")) {
+            return "网络不可达: 无法连接目标 IP，请确认两台手机在同一局域网下";
+        } else if (combined.contains("failed to authenticate") || combined.contains("unauthorized")) {
+            return "设备未授权: 请在目标手机弹出的「允许调试」窗口点击确认或先进行配对";
+        } else if (combined.contains("Successfully paired to")) {
+            return "配对成功！已建立 TLS 密钥信任";
+        } else if (combined.contains("Wrong password") || combined.contains("bad password")) {
+            return "配对失败: 配对码错误，请重新确认 6 位配对码";
+        } else if (combined.contains("disconnected")) {
+            return "已断开连接";
+        }
+        return combined;
     }
 
     /**
@@ -346,7 +389,11 @@ public final class AdbManager {
                     for (int i = 2; i < parts.length; i++) {
                         extra.append(parts[i]).append(" ");
                     }
-                    list.add(new AdbDevice(address, state, extra.toString().trim()));
+                    String extraStr = extra.toString().trim();
+                    if ("emulator-5554".equalsIgnoreCase(address)) {
+                        extraStr = extraStr.isEmpty() ? "本机无线调试环回" : "本机无线调试环回 (" + extraStr + ")";
+                    }
+                    list.add(new AdbDevice(address, state, extraStr));
                 }
             }
         }
