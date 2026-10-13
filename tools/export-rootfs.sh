@@ -257,6 +257,15 @@ EOF_PKG
         "--exclude=./root/.dsh/.credentials.yaml"
         "--exclude=./root/.dsh/dsh-api-dashboard.json"
         "--exclude=./root/.dsh/settings.yaml*"
+        # 排除用户 SSH 个人公私钥、资产密码与主机指纹 (绝不外泄，确保每机独立性)
+        "--exclude=./root/.ssh"
+        "--exclude=./root/.ssh/*"
+        "--exclude=./etc/ssh/ssh_host_*_key"
+        "--exclude=./etc/ssh/ssh_host_*_key.pub"
+        # 排除 ADB 本机私钥与已知主机指纹
+        "--exclude=./root/.android/adbkey"
+        "--exclude=./root/.android/adbkey.pub"
+        "--exclude=./root/.android/adb_known_hosts.pb"
         # 排除设备桥与认证 Token
         "--exclude=./root/.dsh/.bridge_token"
         "--exclude=./root/.dsh/.bridge_*"
