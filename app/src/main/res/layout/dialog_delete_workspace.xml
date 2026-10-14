@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:clipChildren="false"
+    android:clipToPadding="false"
+    android:padding="20dp">
+
+    <!-- 弹窗主体卡片 (纯 Skia ModernCardView: 20dp 圆角, 硬件加速微阴影) -->
+    <com.deepseekharness.app.ui.ModernCardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp"
+        app:cardRadius="20dp">
+
+        <!-- 1. 顶部标题行: 40dp 警告色圆角图标盒 + 18sp 粗体标题 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <FrameLayout
+                android:id="@+id/dialogDelWsIconBox"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_btn_danger_small">
+
+                <ImageView
+                    android:id="@+id/dialogDelWsIcon"
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_box"
+                    app:tint="@color/err" />
+            </FrameLayout>
+
+            <TextView
+                android:id="@+id/dialogDelWsTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:text="注销工作区"
+                android:textColor="@color/text"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- 2. 工作区详细信息卡片 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:background="@drawable/bg_card_pill"
+            android:orientation="vertical"
+            android:padding="12dp">
+
+            <TextView
+                android:id="@+id/dialogDelWsName"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/dialogDelWsPath"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/dialogDelWsSessions"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="@color/text_muted"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <!-- 3. 清理选项勾选框 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:text="关联数据清理选项"
+            android:textColor="@color/text_secondary"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <!-- 选项 1: 同步删除会话记录 (默认勾选，推荐) -->
+        <CheckBox
+            android:id="@+id/dialogDelCbSessions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:checked="true"
+            android:lineSpacingMultiplier="1.2"
+            android:text="同步清理关联的历史对话记录 (推荐)\n彻底删除 .dsh/sessions 下该工作区的会话，避免幽灵残留占用存储"
+            android:textColor="@color/text"
+            android:textSize="13sp" />
+
+        <!-- 选项 2: 连同物理目录一并删除 (默认不勾选，防误删代码) -->
+        <CheckBox
+            android:id="@+id/dialogDelCbDirectory"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:checked="false"
+            android:lineSpacingMultiplier="1.2"
+            android:text="同时删除磁盘物理目录与文件 (谨慎不可逆)\n仅适用于临时测试工作区，重要代码请勿勾选"
+            android:textColor="@color/err"
+            android:textSize="13sp" />
+
+        <!-- 4. 底部操作按钮 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:gravity="end"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnDelCancel"
+                android:layout_width="wrap_content"
+                android:layout_height="44dp"
+                android:background="@drawable/m3_btn_tonal_expressive"
+                android:paddingHorizontal="20dp"
+                android:stateListAnimator="@animator/btn_press_scale"
+                android:text="取消"
+                android:textAllCaps="false"
+                android:textColor="@color/primary"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnDelConfirm"
+                android:layout_width="wrap_content"
+                android:layout_height="44dp"
+                android:layout_marginStart="10dp"
+                android:background="@drawable/bg_btn_danger"
+                android:paddingHorizontal="20dp"
+                android:stateListAnimator="@animator/btn_press_scale"
+                android:text="确认注销"
+                android:textAllCaps="false"
+                android:textColor="@color/accent_on"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+    </com.deepseekharness.app.ui.ModernCardView>
+</FrameLayout>

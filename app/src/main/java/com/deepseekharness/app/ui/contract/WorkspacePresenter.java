@@ -208,27 +208,50 @@ public class WorkspacePresenter implements WorkspaceActions {
     @Override
     public void onDeleteWorkspace(WorkspaceModel model) {
         if (model == null) return;
-        String msg = "确定要从 DSHA 注册表中注销工作区「" + model.title + "」吗？\n\n"
-                + "• 路径: " + model.path + "\n"
-                + "• 关联会话: " + model.sessionCount + " 个\n\n"
-                + "提示：操作仅解除注册关联，不会删除您磁盘中的代码与文件。";
 
-        showActionConfirmDialog(
-                R.drawable.ic_box,
-                "注销工作区",
-                msg,
-                "取消",
-                "确认注销",
-                null,
-                () -> new Thread(() -> {
-                    boolean ok = WorkspaceRepository.deleteWorkspace(controller, model.id);
-                    if (ok) {
-                        syncAndRefresh("工作区已注销");
-                    } else {
-                        mainHandler.post(this::init);
-                    }
-                }, "dsha-delete-ws").start()
-        );
+        View dialogView = LayoutInflater.from(activity).inflate(R.layout.dialog_delete_workspace, null);
+        AlertDialog dialog = new DshaDialogBuilder(activity).setView(dialogView).create();
+
+        TextView tvName = dialogView.findViewById(R.id.dialogDelWsName);
+        TextView tvPath = dialogView.findViewById(R.id.dialogDelWsPath);
+        TextView tvSessions = dialogView.findViewById(R.id.dialogDelWsSessions);
+        CheckBox cbSessions = dialogView.findViewById(R.id.dialogDelCbSessions);
+        CheckBox cbDirectory = dialogView.findViewById(R.id.dialogDelCbDirectory);
+        Button btnCancel = dialogView.findViewById(R.id.btnDelCancel);
+        Button btnConfirm = dialogView.findViewById(R.id.btnDelConfirm);
+
+        if (tvName != null) tvName.setText("工作区：" + model.title);
+        if (tvPath != null) tvPath.setText("物理路径：" + model.path);
+        if (tvSessions != null) tvSessions.setText("关联会话：" + model.sessionCount + " 条");
+
+        if (btnCancel != null) {
+            btnCancel.setOnClickListener(v -> dialog.dismiss());
+        }
+
+        if (btnConfirm != null) {
+            btnConfirm.setOnClickListener(v -> {
+                dialog.dismiss();
+                boolean delSessions = cbSessions != null && cbSessions.isChecked();
+                boolean delDirectory = cbDirectory != null && cbDirectory.isChecked();
+
+                AlertDialog loading = showLoadingDialog("正在注销工作区", "正在解除注册并清理关联数据…");
+                new Thread(() -> {
+                    boolean ok = WorkspaceRepository.deleteWorkspace(controller, model.id, model.path, delSessions, delDirectory);
+                    mainHandler.post(() -> {
+                        loading.dismiss();
+                        if (ok) {
+                            String tip = "工作区已注销" + (delSessions ? "（关联会话已清理）" : "");
+                            syncAndRefresh(tip);
+                        } else {
+                            init();
+                        }
+                    });
+                }, "dsha-delete-ws").start();
+            });
+        }
+
+        MonetEngine.applyToViewTree(dialogView, MonetEngine.resolveCurrentPalette(activity));
+        dialog.show();
     }
 
     @Override

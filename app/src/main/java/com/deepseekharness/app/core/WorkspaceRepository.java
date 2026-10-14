@@ -24,7 +24,7 @@ import java.util.UUID;
 
 /**
  * 工作区数据访问层：负责与 /root/.dsh/storages/workspace.json 交互，
- * 实现多工作区识别、状态同步与双轨（原生 Linux / 手机共享存储）创建管理。
+ * 实现多工作区识别、状态同步、双轨创建与安全注销清理。
  */
 public final class WorkspaceRepository {
 
@@ -48,6 +48,35 @@ public final class WorkspaceRepository {
             return false;
         }
         return true;
+    }
+
+    /**
+     * 1:1 严格对齐 DSH 官方 projectKey 算法：计算工作区物理路径在 .dsh/sessions/ 下对应的会话存储子目录名
+     */
+    public static String getProjectKey(String cwd) {
+        if (cwd == null || cwd.isEmpty()) return "--root--";
+        StringBuilder readable = new StringBuilder();
+        boolean separatorRun = false;
+        for (int i = 0; i < cwd.length(); i++) {
+            char ch = cwd.charAt(i);
+            int code = (int) ch;
+            if (ch == '/' || ch == '\\' || ch == ':') {
+                if (!separatorRun) readable.append('-');
+                separatorRun = true;
+            } else if (ch != '~' && ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '.' || ch == '_' || ch == '-')) {
+                readable.append(ch);
+                separatorRun = false;
+            } else {
+                String hex = Integer.toHexString(code).toUpperCase(Locale.US);
+                while (hex.length() < 4) hex = "0" + hex;
+                readable.append('~').append(hex);
+                separatorRun = false;
+            }
+        }
+        String s = readable.toString().replaceAll("^-+", "");
+        if (s.isEmpty()) s = "root";
+        if (s.length() > 251) s = s.substring(0, 251);
+        return "--" + s + "--";
     }
 
     /**
@@ -269,10 +298,35 @@ public final class WorkspaceRepository {
     }
 
     /**
-     * 删除工作区（仅解除 DSH 注册，不物理清除用户磁盘上的文件以保证物理安全）
+     * 注销并清理工作区：
+     * 1. 从 workspace.json 注册表中移除注销；
+     * 2. 若 deleteSessions 为 true，精确删除 .dsh/sessions/ 下对应的会话存储目录，彻底杜绝死文件残留；
+     * 3. 若 deleteDirectory 为 true，在严密的安全路径防线保护下清理磁盘工作区目录。
      */
-    public static boolean deleteWorkspace(HarnessController controller, String wid) {
+    public static boolean deleteWorkspace(HarnessController controller, String wid, String path,
+                                           boolean deleteSessions, boolean deleteDirectory) {
         try {
+            // 1. 同步清理关联的历史会话死文件
+            if (deleteSessions && path != null && !path.trim().isEmpty()) {
+                String projectKey = getProjectKey(path.trim());
+                if (!projectKey.equals("--root--") && !projectKey.isEmpty()) {
+                    String cleanSessionsCmd = "rm -rf " + ShellQuote.arg("/root/.dsh/sessions/" + projectKey);
+                    controller.proot().execChecked(cleanSessionsCmd);
+                }
+            }
+
+            // 2. 安全清理工作区物理目录（仅允许专属工作区子目录，绝不误触系统关键目录）
+            if (deleteDirectory && path != null && !path.trim().isEmpty()) {
+                String p = path.trim();
+                boolean isSafeSubdir = (p.startsWith("/root/workspaces/") && p.length() > "/root/workspaces/".length())
+                        || (p.startsWith("/sdcard/Download/DSHA/") && p.length() > "/sdcard/Download/DSHA/".length()
+                        && !p.equals("/sdcard/Download/DSHA/工作区"));
+                if (isSafeSubdir) {
+                    controller.proot().execChecked("rm -rf " + ShellQuote.arg(p));
+                }
+            }
+
+            // 3. 更新 workspace.json 注册表
             String json = readWorkspaceJson(controller);
             if (json == null || json.trim().isEmpty()) return false;
 
