@@ -4,10 +4,11 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
-import com.deepseekharness.app.util.ToastHelper;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -16,12 +17,19 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
 import com.deepseekharness.app.R;
+import com.deepseekharness.app.core.WorkspaceModel;
 import com.deepseekharness.app.ui.contract.WorkspaceActions;
 import com.deepseekharness.app.ui.contract.WorkspacePresenter;
 import com.deepseekharness.app.ui.contract.WorkspaceUiState;
+import com.deepseekharness.app.util.ToastHelper;
+
+import java.util.List;
 
 /**
- * 数据与备份二级页：1:1 像素级 Skia 现代卡片设计 (ModernCardView)，纯渲染与契约驱动。
+ * 工作区管理与数据备份二级页：
+ * - 纯 Skia 现代卡片设计 (ModernCardView)
+ * - 支持原生 Linux 工作区 (支持软链接 symlink) 与手机共享存储双轨管理
+ * - 契约驱动，多工作区自动识别与动态渲染，接入莫奈动态取色，全流程无 emoji。
  */
 public class WorkspaceFragment extends Fragment implements WorkspacePresenter.ViewCallback {
 
@@ -29,6 +37,7 @@ public class WorkspaceFragment extends Fragment implements WorkspacePresenter.Vi
     private WorkspaceActions actions;
 
     private EditText wsPathInput;
+    private LinearLayout wsListContainer;
 
     private final ActivityResultLauncher<String[]> restorePicker =
             registerForActivityResult(
@@ -49,11 +58,17 @@ public class WorkspaceFragment extends Fragment implements WorkspacePresenter.Vi
         actions = presenter;
 
         wsPathInput = v.findViewById(R.id.workspace_path);
+        wsListContainer = v.findViewById(R.id.workspace_list_container);
 
         v.findViewById(R.id.workspace_backup).setOnClickListener(x -> actions.onBackupClick());
         v.findViewById(R.id.workspace_restore).setOnClickListener(x -> actions.onRestoreClick());
         v.findViewById(R.id.workspace_location).setOnClickListener(x ->
                 ToastHelper.makeText(requireContext(), "备份保存在 Download/DSHA/", Toast.LENGTH_LONG).show());
+
+        View btnCreate = v.findViewById(R.id.btn_create_workspace);
+        if (btnCreate != null) {
+            btnCreate.setOnClickListener(x -> actions.onCreateWorkspaceClick());
+        }
 
         if (wsPathInput != null) {
             v.findViewById(R.id.workspace_apply).setOnClickListener(x ->
@@ -62,12 +77,12 @@ public class WorkspaceFragment extends Fragment implements WorkspacePresenter.Vi
 
         TextView shareStatus = v.findViewById(R.id.workspace_share_status);
         if (shareStatus != null) {
-            shareStatus.setText("KernelSU / Magisk 原生环境已打通直连：\n\n"
-                    + "· 原生根目录：/data/adb/dsha/rootfs\n"
-                    + "· 内部存储直通：/root/内部存储 → /sdcard/Download/DSHA\n"
-                    + "· 默认工作区：/root/内部存储/工作区（手机物理 Download/DSHA/工作区）\n"
-                    + "· 配置文件目录：/data/adb/dsha/rootfs/root/.dsh\n\n"
-                    + "支持在 MT 管理器、Termux 或手机系统文件管理器中直接访问与读写！");
+            shareStatus.setText("KernelSU / Magisk 原生环境存储架构说明：\n\n"
+                    + "· 原生开发工作区：/root/workspaces（ext4 格式，完整支持软链接 symlink 与 pnpm）\n"
+                    + "· 手机共享工作区：/sdcard/Download/DSHA（直通手机内部存储，便于系统文件管理）\n"
+                    + "· 容器系统根目录：/data/adb/dsha/rootfs\n"
+                    + "· 会话与配置目录：/data/adb/dsha/rootfs/root/.dsh\n\n"
+                    + "支持在 MT 管理器、Termux 或手机系统文件管理器中直接访问与读写。");
         }
 
         return v;
@@ -93,6 +108,7 @@ public class WorkspaceFragment extends Fragment implements WorkspacePresenter.Vi
         presenter = null;
         actions = null;
         wsPathInput = null;
+        wsListContainer = null;
         super.onDestroyView();
     }
 
@@ -100,15 +116,83 @@ public class WorkspaceFragment extends Fragment implements WorkspacePresenter.Vi
         if (!isAdded()) return;
         TextView activityTitle = requireActivity().findViewById(R.id.app_title);
         if (activityTitle != null) {
-            activityTitle.setText(isSubpage ? "数据与备份" : getString(R.string.nav_settings));
+            activityTitle.setText(isSubpage ? "工作区与备份" : getString(R.string.nav_settings));
         }
     }
 
     @Override
     public void onRender(WorkspaceUiState state) {
-        if (!isAdded()) return;
+        if (!isAdded() || getContext() == null) return;
+
         if (wsPathInput != null && state.workdirPath != null) {
             wsPathInput.setText(state.workdirPath);
+        }
+
+        if (wsListContainer == null) return;
+        wsListContainer.removeAllViews();
+
+        List<WorkspaceModel> list = state.workspaces;
+        if (list == null || list.isEmpty()) return;
+
+        LayoutInflater inflater = LayoutInflater.from(requireContext());
+        MonetEngine.PaletteInfo palette = MonetEngine.resolveCurrentPalette(requireActivity());
+
+        for (WorkspaceModel item : list) {
+            View itemView = inflater.inflate(R.layout.item_workspace, wsListContainer, false);
+
+            TextView tvTitle = itemView.findViewById(R.id.item_ws_title);
+            TextView tvPath = itemView.findViewById(R.id.item_ws_path);
+            TextView tvSessions = itemView.findViewById(R.id.item_ws_sessions);
+            ModernBadgeView badgeType = itemView.findViewById(R.id.item_ws_badge_type);
+            ModernBadgeView badgeCurrent = itemView.findViewById(R.id.item_ws_badge_current);
+            Button btnSwitch = itemView.findViewById(R.id.item_ws_btn_switch);
+            Button btnDelete = itemView.findViewById(R.id.item_ws_btn_delete);
+
+            if (tvTitle != null) tvTitle.setText(item.title);
+            if (tvPath != null) tvPath.setText(item.path);
+            if (tvSessions != null) tvSessions.setText("历史会话：" + item.sessionCount + " 条");
+
+            if (badgeType != null) {
+                if (item.supportsSymlink) {
+                    badgeType.setBadge(true, "支持软链接");
+                } else {
+                    badgeType.setBadge(false, "共享存储");
+                }
+            }
+
+            if (badgeCurrent != null) {
+                if (item.isCurrent) {
+                    badgeCurrent.setVisibility(View.VISIBLE);
+                    badgeCurrent.setBadge(true, "当前活跃");
+                } else {
+                    badgeCurrent.setVisibility(View.GONE);
+                }
+            }
+
+            if (btnSwitch != null) {
+                if (item.isCurrent) {
+                    btnSwitch.setVisibility(View.GONE);
+                } else {
+                    btnSwitch.setVisibility(View.VISIBLE);
+                    btnSwitch.setOnClickListener(v -> {
+                        if (actions != null) actions.onSwitchWorkspace(item);
+                    });
+                }
+            }
+
+            if (btnDelete != null) {
+                if (list.size() <= 1 || item.isCurrent) {
+                    btnDelete.setVisibility(View.GONE);
+                } else {
+                    btnDelete.setVisibility(View.VISIBLE);
+                    btnDelete.setOnClickListener(v -> {
+                        if (actions != null) actions.onDeleteWorkspace(item);
+                    });
+                }
+            }
+
+            MonetEngine.applyToViewTree(itemView, palette);
+            wsListContainer.addView(itemView);
         }
     }
 

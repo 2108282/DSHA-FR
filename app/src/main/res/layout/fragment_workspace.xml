@@ -57,7 +57,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:lineSpacingMultiplier="1.4"
-                android:text="可选全部数据、对话记录、设置或插件。默认不包含 API Key，不删除当前数据。"
+                android:text="支持全量数据、多工作区代码、对话记录、设置与工具技能备份。默认不包含 API Key，恢复时自动自愈会话历史映射。"
                 android:textColor="@color/text_secondary"
                 android:textSize="12sp" />
 
@@ -108,7 +108,7 @@
 
         </com.deepseekharness.app.ui.ModernCardView>
 
-        <!-- ========== 卡片 2: 环境与工作区直通 (.gcard) ========== -->
+        <!-- ========== 卡片 2: 工作区管理与存储直通 (.gcard) ========== -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -116,7 +116,7 @@
             android:layout_marginTop="16dp"
             android:layout_marginBottom="4dp"
             android:letterSpacing="0.09"
-            android:text="存储直通"
+            android:text="工作区管理"
             android:textAllCaps="true"
             android:textColor="@color/text_muted"
             android:textSize="12sp"
@@ -129,49 +129,97 @@
             android:padding="18dp"
             app:cardRadius="18dp">
 
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="多工作区管理"
+                    android:textColor="@color/text"
+                    android:textSize="17sp"
+                    android:textStyle="bold" />
+
+                <!-- 新建工作区按钮 -->
+                <Button
+                    android:id="@+id/btn_create_workspace"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:background="@drawable/m3_btn_tonal_expressive"
+                    android:minWidth="0dp"
+                    android:paddingHorizontal="14dp"
+                    android:stateListAnimator="@animator/btn_press_scale"
+                    android:text="新建工作区"
+                    android:textAllCaps="false"
+                    android:textColor="@color/primary"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="环境与工作区直通"
-                android:textColor="@color/text"
-                android:textSize="17sp"
-                android:textStyle="bold" />
+                android:layout_marginTop="4dp"
+                android:lineSpacingMultiplier="1.3"
+                android:text="原生 Linux 工作区完整支持软链接 (symlink) 与 pnpm 构建；手机共享存储工作区支持普通文件管理器直接互传。"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp" />
+
+            <!-- 动态工作区列表容器 -->
+            <LinearLayout
+                android:id="@+id/workspace_list_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="vertical" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:text="默认工作区路径（直通手机物理存储）"
+                android:layout_marginTop="14dp"
+                android:text="自定义工作区路径"
                 android:textColor="@color/text_secondary"
                 android:textSize="13sp"
                 android:textStyle="bold" />
 
-            <EditText
-                android:id="@+id/workspace_path"
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="44dp"
-                android:layout_marginTop="8dp"
-                android:background="@drawable/bg_input"
-                android:hint="/root/内部存储/工作区"
-                android:importantForAutofill="no"
-                android:paddingHorizontal="14dp"
-                android:textColor="@color/text"
-                android:textSize="14sp" />
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
 
-            <!-- 应用新工作区路径按钮 (.btn .btn-tonal .btn-block) -->
-            <Button
-                android:id="@+id/workspace_apply"
-                android:layout_width="match_parent"
-                android:layout_height="46dp"
-                android:layout_marginTop="12dp"
-                android:background="@drawable/m3_btn_tonal_expressive"
-                android:stateListAnimator="@animator/btn_press_scale"
-                android:text="应用新工作区路径"
-                android:textAllCaps="false"
-                android:textColor="@color/primary"
-                android:textSize="14sp"
-                android:textStyle="bold" />
+                <EditText
+                    android:id="@+id/workspace_path"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_input"
+                    android:hint="/root/内部存储/工作区"
+                    android:importantForAutofill="no"
+                    android:paddingHorizontal="14dp"
+                    android:singleLine="true"
+                    android:textColor="@color/text"
+                    android:textSize="13sp" />
 
+                <Button
+                    android:id="@+id/workspace_apply"
+                    android:layout_width="wrap_content"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/m3_btn_tonal_expressive"
+                    android:paddingHorizontal="16dp"
+                    android:stateListAnimator="@animator/btn_press_scale"
+                    android:text="应用"
+                    android:textAllCaps="false"
+                    android:textColor="@color/primary"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
 
         </com.deepseekharness.app.ui.ModernCardView>
 

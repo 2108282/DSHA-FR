@@ -778,11 +778,36 @@ def read_manifest(stage):
     return None
 
 
+def dsh_project_key(cwd):
+    """1:1 严格对齐 DSH 官方 projectKey 转义算法，用于会话目录与工作区路径映射"""
+    if not cwd:
+        return "--root--"
+    readable = []
+    separator_run = False
+    for ch in cwd:
+        code = ord(ch)
+        if ch in ("/", "\\", ":"):
+            if not separator_run:
+                readable.append("-")
+            separator_run = True
+        elif ch != "~" and (("a" <= ch <= "z") or ("A" <= ch <= "Z") or ("0" <= ch <= "9") or ch in "._-"):
+            readable.append(ch)
+            separator_run = False
+        else:
+            readable.append("~%04X" % code)
+            separator_run = False
+    s = "".join(readable).lstrip("-")
+    if not s:
+        s = "root"
+    return "--%s--" % s[:251]
+
+
 def restore_workspaces(stage, root):
     """全量恢复：将备份包内的 .dsha-workspaces 恢复到实际工作区目录。
-    智能兼容跨设备路径：若原路径存在且可写则恢复至原路径；
-    若换机后原路径不可写或属异机私有路径，则重定向至本机公开存储（/sdcard/Download/DSHA/<title>），
-    并自动同步写回 .dsh/storages/workspace.json，确保恢复后 WebUI 对话与代码完整对应且不被剪枝。
+    智能兼容跨设备路径与原生 Linux / 手机共享双轨：
+    若原路径存在且可写（含原生 Linux /root/workspaces 路径）则完整恢复（含软链接）；
+    若换机后原路径不可写，则安全迁移至本机共享存储（/sdcard/Download/DSHA/<title>）；
+    若路径发生迁移，自动自愈重映射 .dsh/sessions/ 下的会话目录，确保对话历史绝不丢失！
     """
     ws_stage = os.path.join(stage, ".dsha-workspaces")
     if not os.path.isdir(ws_stage):
@@ -808,7 +833,9 @@ def restore_workspaces(stage, root):
         except Exception:
             pass
 
+    sessions_dir = os.path.join(root, ".dsh", "sessions")
     restored = []
+    first_active_path = None
     try:
         entries = os.listdir(ws_stage)
     except OSError:
@@ -846,6 +873,23 @@ def restore_workspaces(stage, root):
         try:
             shutil.copytree(wid_dir, target_path, dirs_exist_ok=True)
             restored.append("%s → %s" % (title, target_path))
+            if not first_active_path:
+                first_active_path = target_path
+
+            # 关键：路径发生迁移自愈，同步把会话目录重定向对齐，防对话历史丢失
+            if orig_path and target_path and orig_path.rstrip("/") != target_path.rstrip("/"):
+                orig_key = dsh_project_key(orig_path)
+                target_key = dsh_project_key(target_path)
+                if orig_key != target_key and os.path.isdir(sessions_dir):
+                    src_sess = os.path.join(sessions_dir, orig_key)
+                    dst_sess = os.path.join(sessions_dir, target_key)
+                    if os.path.isdir(src_sess) and not os.path.isdir(dst_sess):
+                        try:
+                            os.rename(src_sess, dst_sess)
+                            say("· 已自动自愈会话历史映射：%s → %s" % (orig_key, target_key))
+                        except Exception as se:
+                            say("· 迁移会话目录失败: %s" % se)
+
             if ws_data:
                 tbl = ws_data.setdefault("tables", {}).setdefault("workspaces", {})
                 if wid in tbl:
@@ -859,6 +903,15 @@ def restore_workspaces(stage, root):
                 json.dump(ws_data, f, ensure_ascii=False, indent=2)
         except Exception as e:
             say("· 同步工作区注册表路径失败: %s" % e)
+
+    # 写入当前活跃工作区标记，供 APK 恢复完成后自动对齐当前工作区
+    if first_active_path:
+        try:
+            marker = os.path.join(root, ".dsh", ".dsha_restored_active_workdir")
+            with open(marker, "w", encoding="utf-8") as mf:
+                mf.write(first_active_path)
+        except Exception:
+            pass
 
     if restored:
         say("· 已恢复工作区代码与文件：%s" % "；".join(restored))

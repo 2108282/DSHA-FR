@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:clipChildren="false"
+    android:clipToPadding="false"
+    android:padding="20dp">
+
+    <!-- 弹窗主体卡片 (纯 Skia ModernCardView: 20dp 圆角, 硬件加速微阴影) -->
+    <com.deepseekharness.app.ui.ModernCardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp"
+        app:cardRadius="20dp">
+
+        <!-- 1. 顶部标题行: 40dp 浅色圆角图标盒 + 18sp 粗体标题 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <FrameLayout
+                android:id="@+id/dialogWsIconBox"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="@drawable/bg_settings_icon_box">
+
+                <ImageView
+                    android:id="@+id/dialogWsIcon"
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_box"
+                    app:tint="@color/primary" />
+            </FrameLayout>
+
+            <TextView
+                android:id="@+id/dialogWsTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:text="新建工作区"
+                android:textColor="@color/text"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- 2. 工作区名称输入 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="工作区名称"
+            android:textColor="@color/text_secondary"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <EditText
+            android:id="@+id/dialogWsTitleInput"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:layout_marginTop="6dp"
+            android:background="@drawable/bg_input"
+            android:hint="输入工作区名称 (例如: project-demo)"
+            android:importantForAutofill="no"
+            android:paddingHorizontal="14dp"
+            android:singleLine="true"
+            android:textColor="@color/text"
+            android:textSize="14sp" />
+
+        <!-- 3. 存储类型单选组 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:text="工作区存储类型"
+            android:textColor="@color/text_secondary"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <RadioGroup
+            android:id="@+id/dialogWsTypeGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp">
+
+            <RadioButton
+                android:id="@+id/radioWsNativeLinux"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:checked="true"
+                android:lineSpacingMultiplier="1.2"
+                android:text="原生 Linux 工作区 (推荐)\n完整支持软链接 (symlink)，性能最佳，兼容 pnpm 与构建依赖"
+                android:textColor="@color/text"
+                android:textSize="13sp" />
+
+            <RadioButton
+                android:id="@+id/radioWsShared"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:lineSpacingMultiplier="1.2"
+                android:text="手机共享存储工作区\n保存在 Download/DSHA 下，手机文件管理器直连，但不支持软链接"
+                android:textColor="@color/text"
+                android:textSize="13sp" />
+        </RadioGroup>
+
+        <!-- 4. 路径预览提示 -->
+        <TextView
+            android:id="@+id/dialogWsPathPreview"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:background="@drawable/bg_card_pill"
+            android:padding="10dp"
+            android:text="物理路径：/root/workspaces/project-demo"
+            android:textColor="@color/text_muted"
+            android:textSize="12sp" />
+
+        <!-- 5. 底部按钮 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:gravity="end"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnWsCancel"
+                android:layout_width="wrap_content"
+                android:layout_height="44dp"
+                android:background="@drawable/m3_btn_tonal_expressive"
+                android:paddingHorizontal="20dp"
+                android:stateListAnimator="@animator/btn_press_scale"
+                android:text="取消"
+                android:textAllCaps="false"
+                android:textColor="@color/primary"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnWsConfirm"
+                android:layout_width="wrap_content"
+                android:layout_height="44dp"
+                android:layout_marginStart="10dp"
+                android:background="@drawable/m3_btn_primary_expressive"
+                android:elevation="3dp"
+                android:outlineAmbientShadowColor="#00000000"
+                android:outlineSpotShadowColor="#3847699F"
+                android:paddingHorizontal="20dp"
+                android:stateListAnimator="@animator/btn_press_scale"
+                android:text="立即创建"
+                android:textAllCaps="false"
+                android:textColor="@color/accent_on"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+    </com.deepseekharness.app.ui.ModernCardView>
+</FrameLayout>

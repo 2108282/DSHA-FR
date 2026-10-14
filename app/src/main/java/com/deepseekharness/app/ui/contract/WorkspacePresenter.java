@@ -5,25 +5,32 @@ import android.content.Context;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.Button;
 import android.widget.CheckBox;
+import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.TextView;
 import android.widget.Toast;
-import com.deepseekharness.app.util.ToastHelper;
 
 import androidx.appcompat.app.AlertDialog;
 
 import com.deepseekharness.app.BackupManager;
 import com.deepseekharness.app.R;
 import com.deepseekharness.app.core.HarnessController;
+import com.deepseekharness.app.core.WorkspaceModel;
+import com.deepseekharness.app.core.WorkspaceRepository;
 import com.deepseekharness.app.ui.DshaDialogBuilder;
 import com.deepseekharness.app.ui.MonetEngine;
 import com.deepseekharness.app.util.BackupScope;
+import com.deepseekharness.app.util.ToastHelper;
+
+import java.util.List;
 
 public class WorkspacePresenter implements WorkspaceActions {
 
@@ -47,8 +54,23 @@ public class WorkspacePresenter implements WorkspaceActions {
     }
 
     public void init() {
-        WorkspaceUiState state = new WorkspaceUiState(controller.config().getWorkdir(), "");
-        callback.onRender(state);
+        String currentWd = controller.config().getWorkdir();
+        // 初始先行渲染，防止 UI 闪烁
+        callback.onRender(new WorkspaceUiState(currentWd, "", null, true));
+
+        // 异步加载完整工作区列表
+        new Thread(() -> {
+            List<WorkspaceModel> list = WorkspaceRepository.loadWorkspaces(controller);
+            mainHandler.post(() -> {
+                WorkspaceUiState state = new WorkspaceUiState(controller.config().getWorkdir(), "", list, false);
+                callback.onRender(state);
+            });
+        }, "dsha-load-workspaces").start();
+    }
+
+    @Override
+    public void onRefresh() {
+        init();
     }
 
     @Override
@@ -61,9 +83,150 @@ public class WorkspacePresenter implements WorkspaceActions {
         String p = path != null ? path.trim() : "";
         if (!p.isEmpty()) {
             controller.config().setWorkdir(p);
-            ToastHelper.makeText(context, "工作区目录已更新：" + p, Toast.LENGTH_SHORT).show();
+            ToastHelper.makeText(context, "工作区路径已更新: " + p, Toast.LENGTH_SHORT).show();
             init();
         }
+    }
+
+    @Override
+    public void onSwitchWorkspace(WorkspaceModel model) {
+        if (model == null) return;
+        new Thread(() -> {
+            boolean ok = WorkspaceRepository.switchWorkspace(controller, model.id, model.path);
+            mainHandler.post(() -> {
+                if (ok) {
+                    ToastHelper.makeText(context, "已切换至工作区: " + model.title, Toast.LENGTH_SHORT).show();
+                }
+                init();
+            });
+        }, "dsha-switch-ws").start();
+    }
+
+    @Override
+    public void onCreateWorkspaceClick() {
+        View dialogView = LayoutInflater.from(activity).inflate(R.layout.dialog_create_workspace, null);
+        AlertDialog dialog = new DshaDialogBuilder(activity).setView(dialogView).create();
+
+        EditText etTitle = dialogView.findViewById(R.id.dialogWsTitleInput);
+        RadioGroup typeGroup = dialogView.findViewById(R.id.dialogWsTypeGroup);
+        RadioButton radioNative = dialogView.findViewById(R.id.radioWsNativeLinux);
+        TextView tvPreview = dialogView.findViewById(R.id.dialogWsPathPreview);
+        Button btnCancel = dialogView.findViewById(R.id.btnWsCancel);
+        Button btnConfirm = dialogView.findViewById(R.id.btnWsConfirm);
+
+        Runnable updatePreview = () -> {
+            if (tvPreview == null || etTitle == null) return;
+            String name = etTitle.getText().toString().trim();
+            if (name.isEmpty()) name = "project-demo";
+            boolean isNative = radioNative != null && radioNative.isChecked();
+            if (isNative) {
+                tvPreview.setText("创建路径：/root/workspaces/" + name + " (支持软链接)");
+            } else {
+                tvPreview.setText("创建路径：/sdcard/Download/DSHA/" + name + " (手机直通)");
+            }
+        };
+
+        if (etTitle != null) {
+            etTitle.addTextChangedListener(new TextWatcher() {
+                @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+                @Override public void onTextChanged(CharSequence s, int start, int before, int count) { updatePreview.run(); }
+                @Override public void afterTextChanged(Editable s) {}
+            });
+        }
+
+        if (typeGroup != null) {
+            typeGroup.setOnCheckedChangeListener((group, checkedId) -> updatePreview.run());
+        }
+        updatePreview.run();
+
+        if (btnCancel != null) {
+            btnCancel.setOnClickListener(v -> dialog.dismiss());
+        }
+
+        if (btnConfirm != null) {
+            btnConfirm.setOnClickListener(v -> {
+                String name = etTitle != null ? etTitle.getText().toString().trim() : "";
+                if (name.isEmpty()) {
+                    ToastHelper.makeText(context, "请输入工作区名称", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                boolean isNative = radioNative != null && radioNative.isChecked();
+                dialog.dismiss();
+                onCreateWorkspaceConfirm(name, isNative);
+            });
+        }
+
+        MonetEngine.applyToViewTree(dialogView, MonetEngine.resolveCurrentPalette(activity));
+        dialog.show();
+    }
+
+    @Override
+    public void onCreateWorkspaceConfirm(String title, boolean isNativeLinux) {
+        AlertDialog loading = showLoadingDialog("创建工作区", "正在初始化工作区目录与注册表…");
+        new Thread(() -> {
+            try {
+                WorkspaceModel created = WorkspaceRepository.createWorkspace(controller, title, isNativeLinux);
+                mainHandler.post(() -> {
+                    loading.dismiss();
+                    ToastHelper.makeText(context, "工作区「" + created.title + "」已创建并激活", Toast.LENGTH_SHORT).show();
+                    init();
+                });
+            } catch (Throwable t) {
+                mainHandler.post(() -> {
+                    loading.dismiss();
+                    showActionConfirmDialog(
+                            R.drawable.ic_settings_database,
+                            "创建失败",
+                            t.getMessage() != null ? t.getMessage() : t.toString(),
+                            null,
+                            "确定",
+                            null,
+                            null
+                    );
+                });
+            }
+        }, "dsha-create-ws").start();
+    }
+
+    @Override
+    public void onDeleteWorkspace(WorkspaceModel model) {
+        if (model == null) return;
+        String msg = "确定要从 DSHA 注册表中注销工作区「" + model.title + "」吗？\n\n"
+                + "• 路径: " + model.path + "\n"
+                + "• 关联会话: " + model.sessionCount + " 个\n\n"
+                + "提示：操作仅解除注册关联，不会删除您磁盘中的代码与文件。";
+
+        showActionConfirmDialog(
+                R.drawable.ic_box,
+                "注销工作区",
+                msg,
+                "取消",
+                "确认注销",
+                null,
+                () -> new Thread(() -> {
+                    boolean ok = WorkspaceRepository.deleteWorkspace(controller, model.id);
+                    mainHandler.post(() -> {
+                        if (ok) {
+                            ToastHelper.makeText(context, "工作区已注销", Toast.LENGTH_SHORT).show();
+                        }
+                        init();
+                    });
+                }, "dsha-delete-ws").start()
+        );
+    }
+
+    @Override
+    public void onRenameWorkspace(WorkspaceModel model, String newTitle) {
+        if (model == null || newTitle == null || newTitle.trim().isEmpty()) return;
+        new Thread(() -> {
+            boolean ok = WorkspaceRepository.renameWorkspace(controller, model.id, newTitle.trim());
+            mainHandler.post(() -> {
+                if (ok) {
+                    ToastHelper.makeText(context, "已重命名为: " + newTitle.trim(), Toast.LENGTH_SHORT).show();
+                }
+                init();
+            });
+        }, "dsha-rename-ws").start();
     }
 
     @Override
@@ -75,19 +238,11 @@ public class WorkspacePresenter implements WorkspaceActions {
         }
     }
 
-    /**
-     * 1:1 对齐插件安装弹窗规范：基于 ModernCardView 的纯 Skia 风格备份范围与安全选项弹窗
-     */
     private void showBackupScopeDialog() {
         View dialogView = LayoutInflater.from(activity).inflate(R.layout.dialog_backup_scope, null);
         AlertDialog dialog = new DshaDialogBuilder(activity).setView(dialogView).create();
 
         RadioGroup scopeGroup = dialogView.findViewById(R.id.dialogBackupScopeGroup);
-        RadioButton radioTools = dialogView.findViewById(R.id.radioScopeTools);
-        RadioButton radioFull = dialogView.findViewById(R.id.radioScopeFull);
-        RadioButton radioSessions = dialogView.findViewById(R.id.radioScopeSessions);
-        RadioButton radioSettings = dialogView.findViewById(R.id.radioScopeSettings);
-        RadioButton radioPlugins = dialogView.findViewById(R.id.radioScopePlugins);
         TextView tvPathHint = dialogView.findViewById(R.id.dialogBackupPathHint);
         CheckBox cbApiKey = dialogView.findViewById(R.id.dialogBackupCbApiKey);
         CheckBox cbSshKey = dialogView.findViewById(R.id.dialogBackupCbSshKey);
@@ -191,6 +346,7 @@ public class WorkspacePresenter implements WorkspaceActions {
         String msg = "请从存储中选择要恢复的备份文件（Download/DSHA/ 下的 .tar.gz）。\n\n"
                 + "• 自动保护：恢复前会自动将现有配置安全重命名保留\n"
                 + "• 覆盖生效：将解压并合并覆盖配置与历史会话\n"
+                + "• 智能自愈：多工作区路径自愈重映射，会话历史完整保留\n"
                 + "• 隔离安全：仅作用于 DSHA 原生容器运行环境";
 
         showActionConfirmDialog(

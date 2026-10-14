@@ -579,6 +579,14 @@ public final class BackupManager {
 
     private static void trySyncRestoredApiKey(HarnessController c) {
         try {
+            // 同步恢复后标记的活跃工作区
+            String activeWd = c.proot().execChecked("cat /root/.dsh/.dsha_restored_active_workdir 2>/dev/null || true");
+            if (activeWd != null && !activeWd.trim().isEmpty()) {
+                c.config().setWorkdir(activeWd.trim());
+                c.proot().execChecked("rm -f /root/.dsh/.dsha_restored_active_workdir 2>/dev/null || true");
+            }
+        } catch (Throwable ignored) {}
+        try {
             String envContent = c.proot().execChecked("cat /root/.dsh/.env 2>/dev/null || true");
             if (envContent == null || envContent.trim().isEmpty()) {
                 String wd = c.config().getWorkdir();
