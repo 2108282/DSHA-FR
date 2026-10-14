@@ -2,6 +2,7 @@ package com.deepseekharness.app.core;
 
 import android.content.Context;
 import android.text.TextUtils;
+import android.util.Base64;
 
 import org.json.JSONObject;
 
@@ -154,6 +155,97 @@ public final class SshManager {
             return "推送失败：连接被拒绝，请检查主机地址与端口";
         }
         return out.isEmpty() ? "公钥推送完成" : out;
+    }
+
+    /**
+     * SSH 连通性测试返回结果
+     */
+    public static class TestResult {
+        public static final int CODE_SUCCESS = 0;
+        public static final int CODE_NEED_PASSWORD = 1;
+        public static final int CODE_AUTH_FAILED = 2;
+        public static final int CODE_REFUSED = 3;
+        public static final int CODE_TIMEOUT = 4;
+        public static final int CODE_FAILED = 5;
+
+        public final int code;
+        public final String message;
+
+        public TestResult(int code, String message) {
+            this.code = code;
+            this.message = message;
+        }
+
+        public boolean isSuccess() {
+            return code == CODE_SUCCESS;
+        }
+
+        public boolean isNeedPassword() {
+            return code == CODE_NEED_PASSWORD;
+        }
+    }
+
+    /**
+     * 测试与远程主机的 SSH 连通性
+     * @param host 目标主机配置
+     * @param overridePassword 可选传入的临时密码（若为 null 则使用 host 自身保存的密码或公钥免密）
+     */
+    public TestResult testConnection(HostProfile host, String overridePassword) {
+        if (host == null || TextUtils.isEmpty(host.host)) {
+            return new TestResult(TestResult.CODE_FAILED, "目标主机配置无效");
+        }
+
+        String pwd = (overridePassword != null) ? overridePassword.trim() : host.password;
+        boolean hasPwd = !TextUtils.isEmpty(pwd);
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("chroot /data/adb/dsha/rootfs /bin/bash -c '");
+        sb.append("export HOME=/root USER=root PATH=/usr/local/bin:/usr/bin:/bin:$PATH; ");
+
+        if (hasPwd) {
+            String b64 = Base64.encodeToString(pwd.getBytes(StandardCharsets.UTF_8), Base64.NO_WRAP);
+            sb.append("export SSHPASS=$(printf \"%s\" \"").append(b64).append("\" | base64 -d); ");
+            sb.append("sshpass -e ssh -o BatchMode=no -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ");
+        } else {
+            sb.append("ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ");
+        }
+
+        if (!TextUtils.isEmpty(host.identityFile)) {
+            sb.append("-i \"").append(host.identityFile).append("\" ");
+        }
+        if (host.port > 0) {
+            sb.append("-p ").append(host.port).append(" ");
+        }
+        sb.append(TextUtils.isEmpty(host.user) ? "root" : host.user).append("@").append(host.host);
+        sb.append(" \"echo __DSHA_SSH_TEST_OK__\" 2>&1'");
+
+        String out = execRoot(sb.toString()).trim();
+
+        if (out.contains("__DSHA_SSH_TEST_OK__")) {
+            return new TestResult(TestResult.CODE_SUCCESS, "连接测试成功！" + (hasPwd ? "密码验证通过" : "公钥免密认证通过"));
+        }
+
+        if (out.contains("Connection refused")) {
+            return new TestResult(TestResult.CODE_REFUSED, "连接失败：目标端口 " + host.port + " 拒绝连接（SSH 服务可能未开启）");
+        }
+
+        if (out.contains("Connection timed out") || out.contains("Operation timed out") || out.contains("timed out")) {
+            return new TestResult(TestResult.CODE_TIMEOUT, "连接失败：连接超时，请检查主机 IP/端口与网络连通性");
+        }
+
+        if (out.contains("Could not resolve hostname") || out.contains("Name or service not known")) {
+            return new TestResult(TestResult.CODE_FAILED, "连接失败：无法解析目标主机名/IP：" + host.host);
+        }
+
+        if (out.contains("Permission denied")) {
+            if (!hasPwd) {
+                return new TestResult(TestResult.CODE_NEED_PASSWORD, "公钥免密未通过，目标主机需要密码认证");
+            } else {
+                return new TestResult(TestResult.CODE_AUTH_FAILED, "认证失败：登录密码错误或被远程主机拒绝");
+            }
+        }
+
+        return new TestResult(TestResult.CODE_FAILED, "连接失败：" + (out.isEmpty() ? "目标主机未响应" : out));
     }
 
     /**

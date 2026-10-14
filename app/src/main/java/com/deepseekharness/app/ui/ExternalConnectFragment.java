@@ -9,12 +9,14 @@ import android.net.nsd.NsdServiceInfo;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.InputType;
 import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -29,7 +31,6 @@ import com.deepseekharness.app.R;
 import com.deepseekharness.app.core.AdbManager;
 import com.deepseekharness.app.core.SshManager;
 import com.deepseekharness.app.util.ToastHelper;
-import com.google.android.material.bottomnavigation.BottomNavigationView;
 
 import java.net.InetAddress;
 import java.util.List;
@@ -514,26 +515,27 @@ public final class ExternalConnectFragment extends Fragment {
             tvCmd.setPadding(0, Math.round(2f * density), 0, Math.round(8f * density));
             item.addView(tvCmd);
 
-            // 按钮操作行: [进入终端] [复制命令] [删除]
+            // 按钮操作行: [测试连接] [复制命令] [删除]
             LinearLayout rowBtns = new LinearLayout(ctx);
             rowBtns.setOrientation(LinearLayout.HORIZONTAL);
             rowBtns.setGravity(Gravity.CENTER_VERTICAL);
 
-            TextView btnTerminal = new TextView(ctx);
-            btnTerminal.setText("进入终端");
-            btnTerminal.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
-            btnTerminal.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
-            btnTerminal.setTextColor(ctx.getColor(R.color.accent_on));
-            btnTerminal.setBackgroundResource(R.drawable.m3_btn_primary_expressive);
-            btnTerminal.setGravity(Gravity.CENTER);
             int px = Math.round(12f * density);
             int btnH = Math.round(30f * density);
-            btnTerminal.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, btnH));
-            btnTerminal.setPadding(px, 0, px, 0);
-            btnTerminal.setClickable(true);
-            btnTerminal.setFocusable(true);
-            btnTerminal.setOnClickListener(x -> launchTerminalWithCommand(h.getSshCommand()));
-            rowBtns.addView(btnTerminal);
+
+            TextView btnTest = new TextView(ctx);
+            btnTest.setText("测试连接");
+            btnTest.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+            btnTest.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            btnTest.setTextColor(ctx.getColor(R.color.accent_on));
+            btnTest.setBackgroundResource(R.drawable.m3_btn_primary_expressive);
+            btnTest.setGravity(Gravity.CENTER);
+            btnTest.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, btnH));
+            btnTest.setPadding(px, 0, px, 0);
+            btnTest.setClickable(true);
+            btnTest.setFocusable(true);
+            btnTest.setOnClickListener(x -> testSshConnectionAsync(h));
+            rowBtns.addView(btnTest);
 
             TextView btnCopy = new TextView(ctx);
             btnCopy.setText("复制命令");
@@ -549,23 +551,6 @@ public final class ExternalConnectFragment extends Fragment {
             btnCopy.setFocusable(true);
             btnCopy.setOnClickListener(x -> copyToClipboard(h.getSshCommand()));
             rowBtns.addView(btnCopy);
-
-            if (h.hasPassword()) {
-                TextView btnPushKey = new TextView(ctx);
-                btnPushKey.setText("推送公钥");
-                btnPushKey.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
-                btnPushKey.setTextColor(ctx.getColor(R.color.primary));
-                btnPushKey.setBackgroundResource(R.drawable.m3_btn_tonal_small);
-                btnPushKey.setGravity(Gravity.CENTER);
-                LinearLayout.LayoutParams lpPush = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, btnH);
-                lpPush.setMarginStart(Math.round(8f * density));
-                btnPushKey.setLayoutParams(lpPush);
-                btnPushKey.setPadding(px, 0, px, 0);
-                btnPushKey.setClickable(true);
-                btnPushKey.setFocusable(true);
-                btnPushKey.setOnClickListener(x -> pushKeyToHostAsync(h));
-                rowBtns.addView(btnPushKey);
-            }
 
             View spacer = new View(ctx);
             rowBtns.addView(spacer, new LinearLayout.LayoutParams(0, 0, 1f));
@@ -590,18 +575,6 @@ public final class ExternalConnectFragment extends Fragment {
             item.addView(rowBtns);
             layoutHosts.addView(item);
         }
-    }
-
-    /** 复制命令并一键拉起底部导航栏终端 */
-    private void launchTerminalWithCommand(String cmd) {
-        copyToClipboard(cmd);
-        ToastHelper.show(requireContext(), "已准备连接命令，正在切入终端...");
-        try {
-            BottomNavigationView nav = requireActivity().findViewById(R.id.bottom_nav);
-            if (nav != null) {
-                nav.setSelectedItemId(R.id.nav_terminal);
-            }
-        } catch (Throwable ignored) {}
     }
 
     private void checkUsbAsync(boolean showToast) {
@@ -935,6 +908,105 @@ public final class ExternalConnectFragment extends Fragment {
                 if (!isAdded()) return;
                 ToastHelper.show(requireContext(), res);
                 refreshSshAllAsync();
+            });
+        });
+    }
+
+    private void testSshConnectionAsync(SshManager.HostProfile h) {
+        if (!isAdded()) return;
+        ToastHelper.show(requireContext(), "正在测试与 " + h.name + " 的连接...");
+        executor.execute(() -> {
+            SshManager.TestResult res = sshManager.testConnection(h, null);
+            mainHandler.post(() -> {
+                if (!isAdded()) return;
+                if (res.isSuccess()) {
+                    ToastHelper.show(requireContext(), res.message);
+                } else if (res.isNeedPassword()) {
+                    showSshPasswordDialog(h);
+                } else {
+                    ToastHelper.show(requireContext(), res.message);
+                }
+            });
+        });
+    }
+
+    private void showSshPasswordDialog(SshManager.HostProfile h) {
+        if (!isAdded()) return;
+        Context ctx = requireContext();
+        float density = ctx.getResources().getDisplayMetrics().density;
+
+        LinearLayout layout = new LinearLayout(ctx);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        int p = Math.round(18f * density);
+        layout.setPadding(p, p, p, p);
+
+        TextView tvTitle = new TextView(ctx);
+        tvTitle.setText("SSH 密码验证: " + h.name);
+        tvTitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        tvTitle.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        tvTitle.setTextColor(ctx.getColor(R.color.text));
+        layout.addView(tvTitle);
+
+        TextView tvSub = new TextView(ctx);
+        String targetUser = TextUtils.isEmpty(h.user) ? "root" : h.user;
+        tvSub.setText("目标地址: " + targetUser + "@" + h.host + ":" + h.port + "\n公钥验证未通过或该主机需要密码登录，请输入远程主机密码：");
+        tvSub.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        tvSub.setTextColor(ctx.getColor(R.color.text_muted));
+        tvSub.setPadding(0, Math.round(6f * density), 0, Math.round(12f * density));
+        layout.addView(tvSub);
+
+        EditText etPassword = new EditText(ctx);
+        etPassword.setHint("远程主机密码");
+        etPassword.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        etPassword.setBackgroundResource(R.drawable.bg_input);
+        etPassword.setTextColor(ctx.getColor(R.color.text));
+        etPassword.setHintTextColor(ctx.getColor(R.color.text_muted));
+        int padH = Math.round(14f * density);
+        int padV = Math.round(10f * density);
+        etPassword.setPadding(padH, padV, padH, padV);
+        layout.addView(etPassword);
+
+        CheckBox cbSave = new CheckBox(ctx);
+        cbSave.setText("保存此密码（后续直连与免输）");
+        cbSave.setChecked(true);
+        cbSave.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        cbSave.setTextColor(ctx.getColor(R.color.text_muted));
+        cbSave.setPadding(Math.round(4f * density), Math.round(8f * density), 0, Math.round(4f * density));
+        layout.addView(cbSave);
+
+        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(ctx)
+                .setView(layout)
+                .setPositiveButton("测试连接", null)
+                .setNegativeButton("取消", null)
+                .create();
+
+        dialog.show();
+
+        dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
+            String password = etPassword.getText().toString().trim();
+            if (TextUtils.isEmpty(password)) {
+                ToastHelper.show(ctx, "请输入远程主机密码");
+                return;
+            }
+            dialog.dismiss();
+            ToastHelper.show(ctx, "正在验证 " + h.name + " 密码...");
+            executor.execute(() -> {
+                SshManager.TestResult res = sshManager.testConnection(h, password);
+                mainHandler.post(() -> {
+                    if (!isAdded()) return;
+                    if (res.isSuccess()) {
+                        if (cbSave.isChecked()) {
+                            h.password = password;
+                            sshManager.saveHost(h);
+                            refreshSshAllAsync();
+                            ToastHelper.show(requireContext(), "连接测试成功！密码已自动保存");
+                        } else {
+                            ToastHelper.show(requireContext(), "连接测试成功！密码验证正确");
+                        }
+                    } else {
+                        ToastHelper.show(requireContext(), res.message);
+                    }
+                });
             });
         });
     }
