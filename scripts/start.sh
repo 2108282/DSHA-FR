@@ -393,6 +393,7 @@ chroot "$ROOTFS" /usr/bin/setsid /usr/bin/env -i \
     LC_ALL=C.UTF-8 \
     DSH_CONFIRM=1 \
     NODE_PATH=/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules \
+    UV_THREADPOOL_SIZE=3 \
     $PRELOAD_OPT \
     nice -n 10 /usr/local/bin/node --v8-pool-size=2 /usr/local/lib/node_modules/@deepseek-ai/dsh/lib/bin.js web $PATCH_ARG --no-open --port "$PORT" --host 127.0.0.1 $EXTRA_ARGS > "$LOG_FILE" 2>&1 &
 
@@ -405,6 +406,12 @@ echo -800 > "/proc/$NEW_PID/oom_score_adj" 2>/dev/null || true
 if [ -d "/dev/cpuctl/background" ]; then
     echo "$NEW_PID" > /dev/cpuctl/background/cgroup.procs 2>/dev/null || true
 fi
+
+# 纳入系统免压缩 memcg 组（锁定真实物理内存，严禁 ZRAM 压缩换页）
+mkdir -p /dev/memcg/dsh 2>/dev/null || true
+echo 0 > /dev/memcg/dsh/memory.swappiness 2>/dev/null || true
+echo 1 > /dev/memcg/dsh/memory.anno_writeback_protected 2>/dev/null || true
+echo "$NEW_PID" > /dev/memcg/dsh/cgroup.procs 2>/dev/null || true
 
 # 确保进程进入根 cpuset，解除受限核心屏蔽，使后续 taskset 可以自由绑定任意 0-7 核心
 if [ -f "/dev/cpuset/cgroup.procs" ]; then
