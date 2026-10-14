@@ -835,6 +835,7 @@ def restore_workspaces(stage, root):
 
     sessions_dir = os.path.join(root, ".dsh", "sessions")
     restored = []
+    restored_real_paths = set()
     first_active_path = None
     try:
         entries = os.listdir(ws_stage)
@@ -869,6 +870,12 @@ def restore_workspaces(stage, root):
             except Exception as e:
                 say("· 恢复工作区「%s」目录失败（%s）：%s" % (title, target_path, e))
                 continue
+
+        real_target = os.path.realpath(target_path)
+        if real_target in restored_real_paths:
+            say("· 工作区目标路径 %s 已恢复过，跳过冗余解压" % target_path)
+            continue
+        restored_real_paths.add(real_target)
 
         try:
             shutil.copytree(wid_dir, target_path, dirs_exist_ok=True)
