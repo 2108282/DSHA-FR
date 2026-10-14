@@ -68,6 +68,26 @@ public class WorkspacePresenter implements WorkspaceActions {
         }, "dsha-load-workspaces").start();
     }
 
+    /**
+     * 工作区变更后的双向同步枢纽：
+     * 若 DSH Web 服务正在运行，自动在后台秒级平滑重载以使 dsh 内存 registry 100% 同步磁盘变更；
+     * 若服务未运行，则直接刷新 App 本地列表，下次启动即生效。
+     */
+    private void syncAndRefresh(String message) {
+        new Thread(() -> {
+            boolean running = controller.isWebRunning();
+            mainHandler.post(() -> {
+                if (running) {
+                    ToastHelper.makeText(context, message + "，正在同步 DSH 服务…", Toast.LENGTH_SHORT).show();
+                    controller.restartWeb(status -> {});
+                } else {
+                    ToastHelper.makeText(context, message, Toast.LENGTH_SHORT).show();
+                }
+                init();
+            });
+        }, "dsha-sync-web").start();
+    }
+
     @Override
     public void onRefresh() {
         init();
@@ -83,8 +103,7 @@ public class WorkspacePresenter implements WorkspaceActions {
         String p = path != null ? path.trim() : "";
         if (!p.isEmpty()) {
             controller.config().setWorkdir(p);
-            ToastHelper.makeText(context, "工作区路径已更新: " + p, Toast.LENGTH_SHORT).show();
-            init();
+            syncAndRefresh("工作区路径已更新: " + p);
         }
     }
 
@@ -93,12 +112,11 @@ public class WorkspacePresenter implements WorkspaceActions {
         if (model == null) return;
         new Thread(() -> {
             boolean ok = WorkspaceRepository.switchWorkspace(controller, model.id, model.path);
-            mainHandler.post(() -> {
-                if (ok) {
-                    ToastHelper.makeText(context, "已切换至工作区: " + model.title, Toast.LENGTH_SHORT).show();
-                }
-                init();
-            });
+            if (ok) {
+                syncAndRefresh("已切换至工作区: " + model.title);
+            } else {
+                mainHandler.post(this::init);
+            }
         }, "dsha-switch-ws").start();
     }
 
@@ -168,8 +186,7 @@ public class WorkspacePresenter implements WorkspaceActions {
                 WorkspaceModel created = WorkspaceRepository.createWorkspace(controller, title, isNativeLinux);
                 mainHandler.post(() -> {
                     loading.dismiss();
-                    ToastHelper.makeText(context, "工作区「" + created.title + "」已创建并激活", Toast.LENGTH_SHORT).show();
-                    init();
+                    syncAndRefresh("工作区「" + created.title + "」已创建并激活");
                 });
             } catch (Throwable t) {
                 mainHandler.post(() -> {
@@ -205,12 +222,11 @@ public class WorkspacePresenter implements WorkspaceActions {
                 null,
                 () -> new Thread(() -> {
                     boolean ok = WorkspaceRepository.deleteWorkspace(controller, model.id);
-                    mainHandler.post(() -> {
-                        if (ok) {
-                            ToastHelper.makeText(context, "工作区已注销", Toast.LENGTH_SHORT).show();
-                        }
-                        init();
-                    });
+                    if (ok) {
+                        syncAndRefresh("工作区已注销");
+                    } else {
+                        mainHandler.post(this::init);
+                    }
                 }, "dsha-delete-ws").start()
         );
     }
@@ -220,12 +236,11 @@ public class WorkspacePresenter implements WorkspaceActions {
         if (model == null || newTitle == null || newTitle.trim().isEmpty()) return;
         new Thread(() -> {
             boolean ok = WorkspaceRepository.renameWorkspace(controller, model.id, newTitle.trim());
-            mainHandler.post(() -> {
-                if (ok) {
-                    ToastHelper.makeText(context, "已重命名为: " + newTitle.trim(), Toast.LENGTH_SHORT).show();
-                }
-                init();
-            });
+            if (ok) {
+                syncAndRefresh("已重命名为: " + newTitle.trim());
+            } else {
+                mainHandler.post(this::init);
+            }
         }, "dsha-rename-ws").start();
     }
 
