@@ -288,7 +288,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="1dp"
-                        android:text="反色 · 圈定即搜 · 白天黑夜透明度"
+                        android:text="透明度·色彩风格·手势"
                         android:textColor="@color/text_muted"
                         android:textSize="12sp" />
                 </LinearLayout>
@@ -438,7 +438,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="1dp"
-                        android:text="脱敏反馈 · 导出报告 · 证书 / npm 修复"
+                        android:text="查看日志·修复环境"
                         android:textColor="@color/text_muted"
                         android:textSize="12sp" />
                 </LinearLayout>
@@ -505,7 +505,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="1dp"
-                        android:text="升级 DSH 核心 · 客户端与模块"
+                        android:text="当前版本"
                         android:textColor="@color/text_muted"
                         android:textSize="12sp" />
                 </LinearLayout>

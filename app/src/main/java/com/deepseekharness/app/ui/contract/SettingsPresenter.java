@@ -50,7 +50,7 @@ public class SettingsPresenter implements SettingsActions {
         } catch (Exception ignored) { }
 
         String versionText = "DSHA-FR v" + version + " · MIT License";
-        String updateSubText = "当前 v" + version + " · 稳定 / 预览更新通道";
+        String updateSubText = "当前 v" + version;
         boolean persistent = configStore.isPersistentNotificationEnabled();
 
         SettingsUiState state = new SettingsUiState(versionText, updateSubText, persistent);

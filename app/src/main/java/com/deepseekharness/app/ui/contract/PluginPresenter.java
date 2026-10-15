@@ -13,6 +13,17 @@ import com.deepseekharness.app.util.ToastHelper;
 
 import androidx.appcompat.app.AlertDialog;
 import android.content.res.ColorStateList;
+import android.graphics.Typeface;
+import android.view.Gravity;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.CheckBox;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import com.deepseekharness.app.R;
+import com.deepseekharness.app.ui.ModernBadgeView;
 import com.deepseekharness.app.ui.MonetEngine;
 
 import com.deepseekharness.app.core.PluginRepository;
@@ -232,37 +243,174 @@ public class PluginPresenter implements PluginActions {
     @Override
     public void onExportClick() {
         if (repoState == null || repository.isBusy()) return;
-        List<String> names = new ArrayList<>();
+        List<PluginRepository.Item> exportableItems = new ArrayList<>();
         for (PluginRepository.Item item : repoState.items) {
-            if (item.exportable) names.add(item.name);
+            if (item.exportable) exportableItems.add(item);
         }
-        if (names.isEmpty()) {
+        if (exportableItems.isEmpty()) {
             ToastHelper.makeText(context, "没有可导出的插件", Toast.LENGTH_SHORT).show();
             return;
         }
-        boolean[] checked = new boolean[names.size()];
-        AlertDialog dialog = new AlertDialog.Builder(activity)
-                .setTitle("选择要导出的插件")
-                .setMultiChoiceItems(names.toArray(new String[0]), checked, (d, which, value) -> {
-                    checked[which] = value;
-                    boolean any = false;
-                    for (boolean selected : checked) any |= selected;
-                    ((AlertDialog) d).getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(any);
-                })
-                .setNegativeButton("取消", null)
-                .setPositiveButton("选择保存位置", (d, which) -> {
-                    ArrayList<String> selected = new ArrayList<>();
-                    for (int i = 0; i < checked.length; i++) {
-                        if (checked[i]) selected.add(names.get(i));
+
+        View dialogView = LayoutInflater.from(activity).inflate(R.layout.dialog_plugin_export, null);
+        MonetEngine.PaletteInfo palette = MonetEngine.resolveCurrentPalette(activity);
+        MonetEngine.applyToViewTree(dialogView, palette);
+
+        TextView dialogExportSub = dialogView.findViewById(R.id.dialogExportSub);
+        TextView dialogExportToggleAll = dialogView.findViewById(R.id.dialogExportToggleAll);
+        LinearLayout listContainer = dialogView.findViewById(R.id.dialogExportListContainer);
+        Button btnCancel = dialogView.findViewById(R.id.btnDialogCancel);
+        Button btnConfirm = dialogView.findViewById(R.id.btnDialogConfirm);
+
+        final int totalCount = exportableItems.size();
+        final boolean[] checked = new boolean[totalCount];
+        for (int i = 0; i < totalCount; i++) {
+            checked[i] = true;
+        }
+
+        final float density = activity.getResources().getDisplayMetrics().density;
+        final int dp8 = (int) (8 * density + 0.5f);
+        final int dp10 = (int) (10 * density + 0.5f);
+        final int dp1 = Math.max(1, (int) (1 * density + 0.5f));
+        final int badgeHeight = (int) (20 * density + 0.5f);
+
+        final List<CheckBox> checkBoxes = new ArrayList<>();
+        if (listContainer != null) {
+            listContainer.removeAllViews();
+            for (int i = 0; i < totalCount; i++) {
+                final int index = i;
+                PluginRepository.Item item = exportableItems.get(i);
+
+                if (i > 0) {
+                    View divider = new View(activity);
+                    divider.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp1));
+                    divider.setBackgroundColor(activity.getColor(R.color.line_soft));
+                    listContainer.addView(divider);
+                }
+
+                LinearLayout row = new LinearLayout(activity);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setGravity(Gravity.CENTER_VERTICAL);
+                row.setPadding(dp8, dp10, dp8, dp10);
+
+                android.util.TypedValue outValue = new android.util.TypedValue();
+                activity.getTheme().resolveAttribute(android.R.attr.selectableItemBackground, outValue, true);
+                row.setBackgroundResource(outValue.resourceId);
+                row.setClickable(true);
+                row.setFocusable(true);
+
+                CheckBox cb = new CheckBox(activity);
+                cb.setClickable(false);
+                cb.setFocusable(false);
+                cb.setChecked(checked[i]);
+                if (palette.isMonetActive) {
+                    cb.setButtonTintList(ColorStateList.valueOf(palette.primaryColor));
+                } else {
+                    cb.setButtonTintList(ColorStateList.valueOf(activity.getColor(R.color.primary)));
+                }
+                checkBoxes.add(cb);
+
+                LinearLayout.LayoutParams cbLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                cbLp.setMarginEnd(dp8);
+                row.addView(cb, cbLp);
+
+                TextView nameView = new TextView(activity);
+                nameView.setText(item.name);
+                nameView.setTextColor(activity.getColor(R.color.text));
+                nameView.setTextSize(14f);
+                nameView.setTypeface(null, Typeface.BOLD);
+                LinearLayout.LayoutParams nameLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+                row.addView(nameView, nameLp);
+
+                if (item.version != null && !item.version.isEmpty()) {
+                    ModernBadgeView badge = new ModernBadgeView(activity);
+                    badge.setBadge(true, "v" + item.version);
+                    LinearLayout.LayoutParams badgeLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, badgeHeight);
+                    badgeLp.setMarginStart(dp8);
+                    row.addView(badge, badgeLp);
+                }
+
+                row.setOnClickListener(v -> {
+                    checked[index] = !checked[index];
+                    cb.setChecked(checked[index]);
+                    updateExportDialogState(checked, totalCount, dialogExportSub, dialogExportToggleAll, btnConfirm);
+                });
+
+                listContainer.addView(row);
+            }
+        }
+
+        updateExportDialogState(checked, totalCount, dialogExportSub, dialogExportToggleAll, btnConfirm);
+
+        if (dialogExportToggleAll != null) {
+            if (palette.isMonetActive) {
+                dialogExportToggleAll.setTextColor(palette.primaryColor);
+            }
+            dialogExportToggleAll.setOnClickListener(v -> {
+                int sel = 0;
+                for (boolean c : checked) {
+                    if (c) sel++;
+                }
+                boolean target = (sel != totalCount);
+                for (int i = 0; i < totalCount; i++) {
+                    checked[i] = target;
+                    if (i < checkBoxes.size()) {
+                        checkBoxes.get(i).setChecked(target);
                     }
-                    if (!selected.isEmpty()) {
-                        String name = selected.size() == 1 ? selected.get(0).replaceAll("[^A-Za-z0-9._-]", "_") : "DSHA-plugins";
-                        String stamp = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.ROOT).format(new Date());
-                        callback.onLaunchExport(name + "-" + stamp + ".tar.gz", selected);
-                    }
-                }).create();
-        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false));
+                }
+                updateExportDialogState(checked, totalCount, dialogExportSub, dialogExportToggleAll, btnConfirm);
+            });
+        }
+
+        AlertDialog dialog = new AlertDialog.Builder(activity, R.style.Dialog_DSHA_Alert)
+                .setView(dialogView)
+                .setCancelable(true)
+                .create();
+
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        }
+
+        if (btnCancel != null) {
+            btnCancel.setOnClickListener(v -> dialog.dismiss());
+        }
+
+        if (btnConfirm != null) {
+            if (palette.isMonetActive) {
+                btnConfirm.setBackgroundTintList(ColorStateList.valueOf(palette.primaryColor));
+            }
+            btnConfirm.setOnClickListener(v -> {
+                ArrayList<String> selected = new ArrayList<>();
+                for (int i = 0; i < totalCount; i++) {
+                    if (checked[i]) selected.add(exportableItems.get(i).name);
+                }
+                if (!selected.isEmpty()) {
+                    dialog.dismiss();
+                    String name = selected.size() == 1 ? selected.get(0).replaceAll("[^A-Za-z0-9._-]", "_") : "DSHA-plugins";
+                    String stamp = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.ROOT).format(new Date());
+                    callback.onLaunchExport(name + "-" + stamp + ".tar.gz", selected);
+                }
+            });
+        }
+
         dialog.show();
+    }
+
+    private void updateExportDialogState(boolean[] checked, int total, TextView subView, TextView toggleAllView, Button confirmBtn) {
+        int selectedCount = 0;
+        for (boolean c : checked) {
+            if (c) selectedCount++;
+        }
+        if (subView != null) {
+            subView.setText("已选择 " + selectedCount + " / " + total + " 个插件：");
+        }
+        if (toggleAllView != null) {
+            toggleAllView.setText(selectedCount == total ? "取消全选" : "全选");
+        }
+        if (confirmBtn != null) {
+            confirmBtn.setEnabled(selectedCount > 0);
+            confirmBtn.setAlpha(selectedCount > 0 ? 1.0f : 0.45f);
+        }
     }
 
     @Override

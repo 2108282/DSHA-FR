@@ -54,8 +54,8 @@ public class ConfigPresenter implements ConfigActions {
                 ok = (p.waitFor() == 0);
             } catch (Throwable ignored) {}
             currentRootStatus = ok
-                    ? "✅ Root 授权正常"
-                    : "⚠️ 未获取到 Root 权限，请在授权管理器中允许";
+                    ? "Root 授权正常"
+                    : "未获取到 Root 权限，请在授权管理器中允许";
             mainHandler.post(this::refreshState);
         }, "check-root-config").start();
     }
@@ -82,8 +82,8 @@ public class ConfigPresenter implements ConfigActions {
             allFilesGranted = true;
         }
         String allFilesStatus = allFilesGranted
-                ? "✅ 已开启：容器可读写手机存储任意文件（含工作区直通）"
-                : "⚠️ 未开启：仅能访问 App 私有目录；点击跳转系统设置开启";
+                ? "已开启：容器可读写手机存储任意文件（含工作区直通）"
+                : "未开启：仅能访问 App 私有目录；点击跳转系统设置开启";
 
         String a11yStatus = checkA11yStatus();
         String asrStatus = checkAsrStatus();
@@ -116,7 +116,7 @@ public class ConfigPresenter implements ConfigActions {
             } catch (Throwable ignored) {}
             final boolean rootOk = ok;
             mainHandler.post(() -> {
-                toast(rootOk ? "✅ Root 授权正常" : "❌ 未获取到 Root 权限，请在授权管理器中允许");
+                toast(rootOk ? "Root 授权正常" : "未获取到 Root 权限，请在授权管理器中允许");
                 refreshRootStatus();
             });
         }, "recheck-root-config").start();
@@ -207,9 +207,9 @@ public class ConfigPresenter implements ConfigActions {
             if (enabled == null) enabled = "";
             String myService = context.getPackageName() + "/com.deepseekharness.app.DshaAccessibilityService";
             if (enabled.contains(myService)) {
-                return "✅ 正常：无障碍服务已开启，具备读屏/点按/输入能力";
+                return "正常：无障碍服务已开启，具备读屏/点按/输入能力";
             } else {
-                return "⚠️ 未开启：点此前往系统设置开启无障碍，否则 Agent 无法操作屏幕";
+                return "未开启：点此前往系统设置开启无障碍，否则 Agent 无法操作屏幕";
             }
         } catch (Throwable t) {
             return "状态检测失败：" + t.getMessage();
@@ -223,9 +223,9 @@ public class ConfigPresenter implements ConfigActions {
             boolean hasAudioPerm = context.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
 
             if (isXiaomi && hasAudioPerm) {
-                return "✅ 已就绪：小米底层 ASR 引擎正常，录音权限已授予";
+                return "已就绪：小米底层 ASR 引擎正常，录音权限已授予";
             } else {
-                StringBuilder sb = new StringBuilder("⚠️ 需配置：");
+                StringBuilder sb = new StringBuilder("需配置：");
                 if (!isXiaomi) {
                     String shortName = currentService != null ? currentService.substring(currentService.lastIndexOf('.') + 1) : "未设置";
                     sb.append("当前引擎=").append(shortName).append("；");

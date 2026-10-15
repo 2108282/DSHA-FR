@@ -293,7 +293,7 @@
                     android:textStyle="bold" />
             </com.deepseekharness.app.ui.ModernCardView>
 
-            <!-- 卡片 4: 安装与分享规则 (padding: 18px; border-radius: 18px) -->
+            <!-- 卡片 4: 安装规则 (padding: 18px; border-radius: 18px) -->
             <com.deepseekharness.app.ui.ModernCardView
                 android:id="@+id/marketHelp"
                 android:layout_width="match_parent"
@@ -306,7 +306,7 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="安装与分享规则"
+                    android:text="安装规则"
                     android:textColor="@color/text"
                     android:textSize="18sp"
                     android:textStyle="bold" />
@@ -316,7 +316,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     android:lineSpacingMultiplier="1.8"
-                    android:text="• 链接安装：支持 GitHub 仓库、分支与子目录、Release 附件和 HTTPS 压缩包直链。\n• 本地导入：支持 ZIP、TAR、TAR.GZ、TGZ。\n• 导出分享：可多选插件，导出包可在其他 DSHA 中导入。"
+                    android:text="• 链接安装：支持 GitHub 仓库、分支与子目录、Release 附件和 HTTPS 压缩包直链。\n• npm安装：直接输入插件名安装。\n• 本地导入：支持 ZIP、TAR、TAR.GZ、TGZ。\n• 导出分享：导出插件包可在其他dsh安装。"
                     android:textColor="@color/text_muted"
                     android:textSize="13sp" />
             </com.deepseekharness.app.ui.ModernCardView>

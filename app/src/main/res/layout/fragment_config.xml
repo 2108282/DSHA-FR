@@ -148,7 +148,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="1dp"
-                        android:text="30分钟无任务自动冻结（0功耗），访问时秒级自愈"
+                        android:text="无任务30分钟后冻结DSH核心"
                         android:textColor="@color/text_muted"
                         android:textSize="12sp" />
                 </LinearLayout>
