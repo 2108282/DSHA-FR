@@ -188,6 +188,10 @@ public class WebPreviewActivity extends AppCompatActivity implements WebFullscre
             settings.setAllowContentAccess(true);
             settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
             settings.setSupportMultipleWindows(false);
+            settings.setSupportZoom(false);
+            try {
+                settings.setSafeBrowsingEnabled(false);
+            } catch (Throwable ignored) {}
             settings.setLoadWithOverviewMode(true);
             settings.setUseWideViewPort(true);
             view.setWebViewClient(new PreviewClient());

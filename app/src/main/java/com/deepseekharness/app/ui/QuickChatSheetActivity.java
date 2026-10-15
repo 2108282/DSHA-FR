@@ -1703,6 +1703,10 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         ws.setDomStorageEnabled(true);
         ws.setDatabaseEnabled(true);
         ws.setSupportMultipleWindows(false);
+        ws.setSupportZoom(false);
+        try {
+            ws.setSafeBrowsingEnabled(false);
+        } catch (Throwable ignored) {}
         ws.setUseWideViewPort(true);
         ws.setLoadWithOverviewMode(false);
         ws.setTextZoom(100);
