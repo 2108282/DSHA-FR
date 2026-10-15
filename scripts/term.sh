@@ -70,7 +70,7 @@ else
             HOME=/root USER=root LOGNAME=root \
             PATH=/root/dsh-bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
             TERM="${TERM:-xterm-256color}" LANG=C.UTF-8 LC_ALL=C.UTF-8 \
-            /bin/bash +m -l
+            /bin/bash -c "cd /root && exec /bin/bash +m -l"
     else
         exec chroot "$ROOTFS" /usr/bin/env -i \
             HOME=/root USER=root LOGNAME=root \

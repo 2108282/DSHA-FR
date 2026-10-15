@@ -341,6 +341,39 @@ HCMD_EOF
 chmod 755 "$DSH_BIN/$HCMD"
 done
 
+# pnpm 安全包装器（多工作区白名单放行，非工作区禁止 build / run build）
+cat << 'PNPM_EOF' > "$DSH_BIN/pnpm"
+#!/bin/bash
+# DSHA: 仅允许在工作区执行 pnpm build / pnpm run build，非工作区一律禁止
+
+REAL_PNPM="/usr/local/bin/node /usr/local/lib/dsha-pnpm/bin/pnpm.cjs"
+
+in_workspace() {
+  local p="$(pwd)"
+  local rp
+  rp="$(realpath "$p" 2>/dev/null || pwd -P 2>/dev/null || echo "$p")"
+  case "$p" in
+    /sdcard/Download/DSHA/工作区*|/storage/emulated/0/Download/DSHA/工作区*|/root/workspaces*|/data/adb/dsha/rootfs/root/workspaces*) return 0 ;;
+  esac
+  case "$rp" in
+    /sdcard/Download/DSHA/工作区*|/storage/emulated/0/Download/DSHA/工作区*|/root/workspaces*|/data/adb/dsha/rootfs/root/workspaces*) return 0 ;;
+  esac
+  return 1
+}
+
+# 仅精确判定 build 与 run build
+if [ "$1" = "build" ] || ([ "$1" = "run" ] && [ "$2" = "build" ]); then
+  if ! in_workspace; then
+    echo "❌ [DSHA 拦截] 已禁止运行 pnpm $*：仅允许在工作区执行编译！" >&2
+    exit 1
+  fi
+fi
+
+# 在工作区内的编译命令，以及其他所有命令完全原样放行
+exec $REAL_PNPM "$@"
+PNPM_EOF
+chmod 755 "$DSH_BIN/pnpm"
+
 # 清空旧日志
 > "$LOG_FILE"
 mkdir -p "$ROOTFS/root"
