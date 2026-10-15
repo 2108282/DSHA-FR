@@ -59,6 +59,7 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 import com.deepseekharness.app.util.ToastHelper;
@@ -224,6 +225,8 @@ public class QuickChatSheetActivity extends AppCompatActivity {
     private View dragHandle;
     private TextView headerTitle;
     private TextView headerSubTitle;
+    private FrameLayout turnOutlineDropdownMask = null;
+    private View turnOutlineDropdownCard = null;
     private HeaderIconButton btnClose;
     private HeaderIconButton btnSettings;
     private HeaderIconButton btnFiles;
@@ -554,6 +557,10 @@ public class QuickChatSheetActivity extends AppCompatActivity {
     private void dispatchBackAction() {
         if (currentActiveDialogMask != null) {
             dismissActiveDialog();
+            return;
+        }
+        if (turnOutlineDropdownMask != null && turnOutlineDropdownMask.getVisibility() == View.VISIBLE) {
+            dismissTurnOutlineDropdown();
             return;
         }
         if (fileViewerContainer != null && fileViewerContainer.getVisibility() == View.VISIBLE) {
@@ -1258,6 +1265,20 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         headerTitle.setSingleLine(true);
         headerTitle.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
         headerTitle.setGravity(Gravity.CENTER);
+        headerTitle.setPadding(dpToPx(8), dpToPx(4), dpToPx(8), dpToPx(4));
+        headerTitle.setClickable(true);
+        headerTitle.setFocusable(true);
+        android.util.TypedValue titleRipple = new android.util.TypedValue();
+        if (getTheme().resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, titleRipple, true)) {
+            headerTitle.setBackgroundResource(titleRipple.resourceId);
+        }
+        headerTitle.setOnClickListener(v -> {
+            if (fileViewerContainer != null && fileViewerContainer.getVisibility() == View.VISIBLE) {
+                return;
+            }
+            v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+            toggleTurnOutlineDropdown();
+        });
         titleBox.addView(headerTitle);
         updateHeaderTitleText();
 
@@ -2731,6 +2752,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         if (isDismissing) return;
         isDismissing = true;
         dismissActiveDialog();
+        dismissTurnOutlineDropdownDirect();
         cancelFileSelection();
 
         // 退出前顺带隐藏键盘
@@ -4493,12 +4515,458 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         }
     }
 
+    // =========================================================================
+    // 历史对话轮次下拉列表（方案 A：React Fiber 内核级跳转，纯文字触发，实心底色自适应）
+    // =========================================================================
+
+    private static class TurnOutlineItem {
+        final int turn;
+        final String prompt;
+        final String response;
+        final boolean active;
+
+        TurnOutlineItem(int turn, String prompt, String response, boolean active) {
+            this.turn = turn;
+            this.prompt = prompt;
+            this.response = response;
+            this.active = active;
+        }
+    }
+
+    private static final String SCRIPT_GET_TURN_OUTLINE =
+            "(function() {\n" +
+            "    try {\n" +
+            "        // 优先方案 A：从 TurnNavigator 的 React Fiber 读取全量轮次\n" +
+            "        var el = document.querySelector('[aria-label*=\"轮次\" i], [aria-label*=\"Turn\" i], [class*=\"eGxaPq_frame\"], [class*=\"_marks\"], nav[class*=\"frame\"]');\n" +
+            "        if (el) {\n" +
+            "            var fk = Object.keys(el).find(function(k) { return k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'); });\n" +
+            "            if (fk) {\n" +
+            "                var f = el[fk];\n" +
+            "                while (f) {\n" +
+            "                    if (f.memoizedProps && Array.isArray(f.memoizedProps.items)) {\n" +
+            "                        var activeTurn = f.memoizedProps.activeTurn;\n" +
+            "                        var turns = f.memoizedProps.items.map(function(item) {\n" +
+            "                            return {\n" +
+            "                                turn: item.turn,\n" +
+            "                                prompt: (item.prompt || '').trim(),\n" +
+            "                                response: (item.response || '').trim(),\n" +
+            "                                active: item.turn === activeTurn\n" +
+            "                            };\n" +
+            "                        });\n" +
+            "                        return JSON.stringify({ ok: true, turns: turns });\n" +
+            "                    }\n" +
+            "                    f = f.return;\n" +
+            "                }\n" +
+            "            }\n" +
+            "        }\n" +
+            "    } catch(e) {}\n" +
+            "    // 兜底方案 B：DOM 扫描已渲染的 [data-chat-turn]\n" +
+            "    try {\n" +
+            "        var turnNodes = document.querySelectorAll('[data-chat-turn]');\n" +
+            "        if (turnNodes.length > 0) {\n" +
+            "            var turnMap = {};\n" +
+            "            var turnList = [];\n" +
+            "            for (var i = 0; i < turnNodes.length; i++) {\n" +
+            "                var t = parseInt(turnNodes[i].getAttribute('data-chat-turn'), 10);\n" +
+            "                if (isNaN(t) || turnMap[t]) continue;\n" +
+            "                turnMap[t] = true;\n" +
+            "                var userNode = document.querySelector('[data-chat-turn=\"' + t + '\"][data-chat-flow-kind=\"user\"]');\n" +
+            "                var promptText = userNode ? (userNode.innerText || userNode.textContent || '').trim() : '';\n" +
+            "                promptText = promptText.replace(/\\s+/g, ' ').slice(0, 80);\n" +
+            "                var botNode = document.querySelector('[data-chat-turn=\"' + t + '\"][data-chat-flow-kind=\"assistant\"]');\n" +
+            "                var botText = botNode ? (botNode.innerText || botNode.textContent || '').trim() : '';\n" +
+            "                botText = botText.replace(/\\s+/g, ' ').slice(0, 100);\n" +
+            "                turnList.push({\n" +
+            "                    turn: t,\n" +
+            "                    prompt: promptText,\n" +
+            "                    response: botText,\n" +
+            "                    active: false\n" +
+            "                });\n" +
+            "            }\n" +
+            "            if (turnList.length > 0) {\n" +
+            "                turnList.sort(function(a, b) { return a.turn - b.turn; });\n" +
+            "                return JSON.stringify({ ok: true, turns: turnList });\n" +
+            "            }\n" +
+            "        }\n" +
+            "    } catch(e) {}\n" +
+            "    return JSON.stringify({ ok: false, turns: [] });\n" +
+            "})()";
+
+    private void hideSoftKeyboard() {
+        try {
+            InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+            View focus = getCurrentFocus();
+            if (imm != null && focus != null) {
+                imm.hideSoftInputFromWindow(focus.getWindowToken(), 0);
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    private void ensureTurnOutlineDropdownMask() {
+        if (turnOutlineDropdownMask == null && webContainer != null) {
+            turnOutlineDropdownMask = new FrameLayout(this);
+            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+            turnOutlineDropdownMask.setLayoutParams(lp);
+            turnOutlineDropdownMask.setBackgroundColor(Color.TRANSPARENT);
+            turnOutlineDropdownMask.setClipChildren(true);
+            turnOutlineDropdownMask.setOnClickListener(v -> dismissTurnOutlineDropdown());
+            turnOutlineDropdownMask.setVisibility(View.GONE);
+            webContainer.addView(turnOutlineDropdownMask);
+        }
+    }
+
+    private void toggleTurnOutlineDropdown() {
+        if (turnOutlineDropdownMask != null && turnOutlineDropdownMask.getVisibility() == View.VISIBLE) {
+            dismissTurnOutlineDropdown();
+            return;
+        }
+        showTurnOutlineDropdown();
+    }
+
+    private void showTurnOutlineDropdown() {
+        if (isFinishing() || isDestroyed() || webContainer == null) return;
+        hideSoftKeyboard();
+
+        WebView activeWeb = getActiveWebView();
+        if (activeWeb == null) return;
+
+        activeWeb.evaluateJavascript(SCRIPT_GET_TURN_OUTLINE, value -> {
+            if (isFinishing() || isDestroyed()) return;
+            List<TurnOutlineItem> items = parseTurnOutlineJson(value);
+            renderAndShowTurnOutline(items);
+        });
+    }
+
+    private List<TurnOutlineItem> parseTurnOutlineJson(String value) {
+        List<TurnOutlineItem> list = new ArrayList<>();
+        if (value == null || "null".equals(value) || value.isEmpty()) {
+            return list;
+        }
+        String json = value;
+        if (json.startsWith("\"") && json.endsWith("\"")) {
+            try {
+                Object unescaped = new org.json.JSONTokener(json).nextValue();
+                if (unescaped instanceof String) {
+                    json = (String) unescaped;
+                }
+            } catch (Throwable t) {
+                if (json.length() >= 2) {
+                    json = json.substring(1, json.length() - 1)
+                            .replace("\\\"", "\"")
+                            .replace("\\\\", "\\")
+                            .replace("\\n", "\n")
+                            .replace("\\r", "\r");
+                }
+            }
+        }
+        try {
+            org.json.JSONObject root = new org.json.JSONObject(json);
+            if (root.optBoolean("ok", false)) {
+                org.json.JSONArray arr = root.optJSONArray("turns");
+                if (arr != null) {
+                    for (int i = 0; i < arr.length(); i++) {
+                        org.json.JSONObject obj = arr.optJSONObject(i);
+                        if (obj != null) {
+                            int turn = obj.optInt("turn", 0);
+                            String prompt = obj.optString("prompt", "");
+                            String response = obj.optString("response", "");
+                            boolean active = obj.optBoolean("active", false);
+                            list.add(new TurnOutlineItem(turn, prompt, response, active));
+                        }
+                    }
+                }
+            }
+        } catch (Throwable ignored) {}
+        return list;
+    }
+
+    private void renderAndShowTurnOutline(List<TurnOutlineItem> items) {
+        if (isFinishing() || isDestroyed() || webContainer == null) return;
+        ensureTurnOutlineDropdownMask();
+        if (turnOutlineDropdownMask == null) return;
+
+        // 获取当前抽屉调色板（深色/浅色/莫奈取色全自动适配）
+        com.deepseekharness.app.core.ConfigStore cfg = new com.deepseekharness.app.core.ConfigStore(this);
+        int opacity = isDarkMode ? cfg.getSheetOpacityNight() : cfg.getSheetOpacityDay();
+        MonetThemeHelper.Palette palette = MonetThemeHelper.resolve(this, isDarkMode, cfg.isSheetMonetColor(), opacity);
+
+        int solidBgColor = Color.parseColor(palette.solidBgHex); // 100% 实心底色
+        int textColor = palette.textColor;
+        int textSecondaryColor = palette.textSecondaryColor;
+        int borderColor = palette.borderColor;
+        int lineColor = palette.lineColor;
+        int activeBadgeColor = palette.handleColor;
+
+        if (turnOutlineDropdownCard != null && turnOutlineDropdownCard.getParent() == turnOutlineDropdownMask) {
+            turnOutlineDropdownMask.removeView(turnOutlineDropdownCard);
+        }
+
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setClickable(true);
+
+        GradientDrawable cardBg = new GradientDrawable();
+        cardBg.setShape(GradientDrawable.RECTANGLE);
+        float r = dpToPx(16);
+        cardBg.setCornerRadii(new float[]{ 0, 0, 0, 0, r, r, r, r }); // 上平下圆，顶边平滑贴合顶栏底部分割线
+        cardBg.setColor(solidBgColor);
+        cardBg.setStroke(dpToPx(1), borderColor);
+        card.setBackground(cardBg);
+        card.setElevation(dpToPx(12));
+
+        FrameLayout.LayoutParams cardLp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cardLp.gravity = Gravity.TOP;
+        card.setLayoutParams(cardLp);
+
+        // 顶栏概要行
+        LinearLayout topBar = new LinearLayout(this);
+        topBar.setOrientation(LinearLayout.HORIZONTAL);
+        topBar.setGravity(Gravity.CENTER_VERTICAL);
+        topBar.setPadding(dpToPx(16), dpToPx(10), dpToPx(16), dpToPx(10));
+
+        TextView tvTitle = new TextView(this);
+        tvTitle.setText("历史对话轮次");
+        tvTitle.setTextColor(textColor);
+        tvTitle.setTextSize(13);
+        tvTitle.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
+        topBar.addView(tvTitle, titleLp);
+
+        TextView tvCount = new TextView(this);
+        tvCount.setText((items != null && !items.isEmpty()) ? ("共 " + items.size() + " 轮") : "");
+        tvCount.setTextColor(textSecondaryColor);
+        tvCount.setTextSize(11);
+        topBar.addView(tvCount);
+
+        card.addView(topBar);
+
+        View div = new View(this);
+        div.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dpToPx(1)));
+        div.setBackgroundColor(lineColor);
+        card.addView(div);
+
+        View activeRowView = null;
+        ScrollView scrollView = null;
+
+        if (items == null || items.isEmpty()) {
+            TextView emptyTv = new TextView(this);
+            emptyTv.setText("当前会话暂无历史轮次");
+            emptyTv.setTextColor(textSecondaryColor);
+            emptyTv.setTextSize(13);
+            emptyTv.setGravity(Gravity.CENTER);
+            emptyTv.setPadding(0, dpToPx(28), 0, dpToPx(28));
+            card.addView(emptyTv);
+        } else {
+            scrollView = new ScrollView(this);
+            scrollView.setVerticalScrollBarEnabled(true);
+            int maxContainerH = webContainer.getHeight();
+            if (maxContainerH <= 0) maxContainerH = dpToPx(380);
+            int maxScrollH = Math.max(dpToPx(120), Math.min(dpToPx(340), maxContainerH - dpToPx(60)));
+            if (items.size() > 5) {
+                scrollView.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, maxScrollH));
+            } else {
+                scrollView.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            }
+
+            LinearLayout listLayout = new LinearLayout(this);
+            listLayout.setOrientation(LinearLayout.VERTICAL);
+            listLayout.setPadding(0, dpToPx(4), 0, dpToPx(8));
+
+            for (int i = 0; i < items.size(); i++) {
+                TurnOutlineItem item = items.get(i);
+                LinearLayout row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setGravity(Gravity.CENTER_VERTICAL);
+                row.setPadding(dpToPx(16), dpToPx(9), dpToPx(16), dpToPx(9));
+                row.setClickable(true);
+                row.setFocusable(true);
+
+                android.util.TypedValue out = new android.util.TypedValue();
+                if (getTheme().resolveAttribute(android.R.attr.selectableItemBackground, out, true)) {
+                    row.setBackgroundResource(out.resourceId);
+                }
+
+                // 轮次徽章 (#1, #2...)
+                TextView badge = new TextView(this);
+                badge.setText("#" + item.turn);
+                badge.setTextSize(11);
+                badge.setGravity(Gravity.CENTER);
+                GradientDrawable badgeBg = new GradientDrawable();
+                badgeBg.setShape(GradientDrawable.RECTANGLE);
+                badgeBg.setCornerRadius(dpToPx(6));
+                if (item.active) {
+                    badgeBg.setColor(activeBadgeColor);
+                    badge.setTextColor(Color.WHITE);
+                    badge.setTypeface(Typeface.DEFAULT_BOLD);
+                } else {
+                    badgeBg.setColor(lineColor);
+                    badge.setTextColor(textSecondaryColor);
+                }
+                badge.setBackground(badgeBg);
+                badge.setPadding(dpToPx(6), dpToPx(2), dpToPx(6), dpToPx(2));
+                LinearLayout.LayoutParams badgeLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                badgeLp.rightMargin = dpToPx(10);
+                row.addView(badge, badgeLp);
+
+                // 文字列（Prompt + Response 预览）
+                LinearLayout textCol = new LinearLayout(this);
+                textCol.setOrientation(LinearLayout.VERTICAL);
+                LinearLayout.LayoutParams colLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
+                textCol.setLayoutParams(colLp);
+
+                TextView promptTv = new TextView(this);
+                String pText = item.prompt;
+                if (pText == null || pText.trim().isEmpty()) {
+                    pText = "轮次 #" + item.turn;
+                }
+                promptTv.setText(pText);
+                promptTv.setTextColor(textColor);
+                promptTv.setTextSize(13);
+                promptTv.setSingleLine(true);
+                promptTv.setEllipsize(TextUtils.TruncateAt.END);
+                if (item.active) promptTv.setTypeface(Typeface.DEFAULT_BOLD);
+                textCol.addView(promptTv);
+
+                if (item.response != null && !item.response.trim().isEmpty()) {
+                    TextView respTv = new TextView(this);
+                    respTv.setText(item.response.trim());
+                    respTv.setTextColor(textSecondaryColor);
+                    respTv.setTextSize(11);
+                    respTv.setSingleLine(true);
+                    respTv.setEllipsize(TextUtils.TruncateAt.END);
+                    LinearLayout.LayoutParams respLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                    respLp.topMargin = dpToPx(2);
+                    textCol.addView(respTv, respLp);
+                }
+
+                row.addView(textCol);
+
+                final int targetTurn = item.turn;
+                row.setOnClickListener(v -> {
+                    v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                    dismissTurnOutlineDropdown();
+                    jumpToTurn(targetTurn);
+                });
+
+                if (item.active) {
+                    activeRowView = row;
+                }
+
+                listLayout.addView(row);
+
+                if (i < items.size() - 1) {
+                    View rowDiv = new View(this);
+                    LinearLayout.LayoutParams rowDivLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 1);
+                    rowDivLp.leftMargin = dpToPx(16);
+                    rowDivLp.rightMargin = dpToPx(16);
+                    rowDiv.setLayoutParams(rowDivLp);
+                    rowDiv.setBackgroundColor(lineColor);
+                    listLayout.addView(rowDiv);
+                }
+            }
+
+            scrollView.addView(listLayout);
+            card.addView(scrollView);
+        }
+
+        turnOutlineDropdownCard = card;
+        turnOutlineDropdownMask.addView(card);
+        turnOutlineDropdownMask.bringToFront();
+        turnOutlineDropdownMask.setVisibility(View.VISIBLE);
+
+        if (scrollView != null && activeRowView != null) {
+            final ScrollView sv = scrollView;
+            final View target = activeRowView;
+            sv.post(() -> sv.smoothScrollTo(0, Math.max(0, target.getTop() - dpToPx(36))));
+        }
+
+        card.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
+            @Override
+            public boolean onPreDraw() {
+                card.getViewTreeObserver().removeOnPreDrawListener(this);
+                int h = card.getHeight();
+                card.setTranslationY(-h);
+                card.animate()
+                        .translationY(0f)
+                        .setDuration(220)
+                        .setInterpolator(new DecelerateInterpolator(1.8f))
+                        .start();
+                return true;
+            }
+        });
+    }
+
+    private void dismissTurnOutlineDropdown() {
+        if (turnOutlineDropdownMask == null || turnOutlineDropdownMask.getVisibility() != View.VISIBLE) return;
+        if (turnOutlineDropdownCard != null) {
+            int h = turnOutlineDropdownCard.getHeight();
+            if (h <= 0) h = dpToPx(200);
+            turnOutlineDropdownCard.animate()
+                    .translationY(-h)
+                    .setDuration(180)
+                    .setInterpolator(new DecelerateInterpolator())
+                    .withEndAction(() -> {
+                        if (turnOutlineDropdownMask != null) {
+                            turnOutlineDropdownMask.setVisibility(View.GONE);
+                        }
+                    })
+                    .start();
+        } else {
+            turnOutlineDropdownMask.setVisibility(View.GONE);
+        }
+    }
+
+    private void dismissTurnOutlineDropdownDirect() {
+        if (turnOutlineDropdownMask != null) {
+            turnOutlineDropdownMask.setVisibility(View.GONE);
+        }
+    }
+
+    private void jumpToTurn(int turn) {
+        WebView activeWeb = getActiveWebView();
+        if (activeWeb == null) return;
+        String js = String.format(Locale.US,
+                "(function() {\n" +
+                "    try {\n" +
+                "        var el = document.querySelector('[aria-label*=\"轮次\" i], [aria-label*=\"Turn\" i], [class*=\"eGxaPq_frame\"], [class*=\"_marks\"], nav[class*=\"frame\"]');\n" +
+                "        if (el) {\n" +
+                "            var fk = Object.keys(el).find(function(k) { return k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'); });\n" +
+                "            if (fk) {\n" +
+                "                var f = el[fk];\n" +
+                "                while (f) {\n" +
+                "                    if (f.memoizedProps && Array.isArray(f.memoizedProps.items) && typeof f.memoizedProps.onNavigate === 'function') {\n" +
+                "                        var target = f.memoizedProps.items.find(function(it) { return it.turn === %d; });\n" +
+                "                        if (target) {\n" +
+                "                            f.memoizedProps.onNavigate(target);\n" +
+                "                            return true;\n" +
+                "                        }\n" +
+                "                    }\n" +
+                "                    f = f.return;\n" +
+                "                }\n" +
+                "            }\n" +
+                "        }\n" +
+                "    } catch(e) {}\n" +
+                "    try {\n" +
+                "        var node = document.querySelector('[data-chat-turn=\"%d\"]');\n" +
+                "        if (node) {\n" +
+                "            node.scrollIntoView({ behavior: 'smooth', block: 'start' });\n" +
+                "            return true;\n" +
+                "        }\n" +
+                "    } catch(e) {}\n" +
+                "    return false;\n" +
+                "})();", turn, turn);
+        activeWeb.evaluateJavascript(js, null);
+    }
+
     @Override
     protected void onDestroy() {
         if (sCurrentInstance == this) {
             sCurrentInstance = null;
         }
         
+        dismissTurnOutlineDropdownDirect();
         cancelFileSelection();
         WebUploads.clean(uploads);
         if (keyboardLayoutListener != null && getWindow() != null && getWindow().getDecorView() != null) {
