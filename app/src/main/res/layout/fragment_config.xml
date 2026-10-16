@@ -312,7 +312,7 @@
                         android:layout_height="20dp"
                         android:layout_gravity="center"
                         android:contentDescription="Chromium 实验性参数"
-                        android:src="@drawable/ic_rocket"
+                        android:src="@drawable/ic_chromium"
                         app:tint="@color/primary" />
                 </FrameLayout>
 

@@ -54,7 +54,9 @@ public final class ChromiumFlagsHelper {
     }
 
     /**
-     * 用户切换开关时，同步配置宿主 /data/local/tmp 命令行文件与 debug-app 状态
+     * 用户切换开关时，同步配置宿主 /data/local/tmp 命令行文件与 debug-app 状态。
+     * 注意：严禁使用 am set-debug-app，该命令会直接触发 Android ActivityManager 的 forceStopPackage 强制杀死 App；
+     * 采用 settings put global debug_app 直接写入 SettingsProvider，既能让 Chromium 识别，又绝对不会引发前台闪退。
      */
     public static void syncSystemCommandLine(Context context, boolean enabled) {
         if (context == null) return;
@@ -62,13 +64,13 @@ public final class ChromiumFlagsHelper {
         new Thread(() -> {
             try {
                 if (enabled) {
-                    String cmd = "echo '_ --enable-gpu-rasterization --enable-zero-copy --ignore-gpu-blocklist --enable-features=Vulkan --webview-draw-functor-uses-vulkan --disable-low-end-device-mode --js-flags=\"--max-old-space-size=2048\"' > /data/local/tmp/webview-command-line; "
+                    String cmd = "echo '_ --enable-gpu-rasterization --enable-zero-copy --ignore-gpu-blocklist --enable-features=Vulkan --webview-draw-functor-uses-vulkan --disable-low-end-device-mode --js-flags=--max-old-space-size=2048' > /data/local/tmp/webview-command-line; "
                             + "chmod 777 /data/local/tmp/webview-command-line; "
-                            + "am set-debug-app --persistent " + pkg;
+                            + "settings put global debug_app " + pkg + " 2>/dev/null || cmd settings put global debug_app " + pkg;
                     Runtime.getRuntime().exec(new String[]{"su", "-c", cmd}).waitFor();
                 } else {
                     String cmd = "rm -f /data/local/tmp/webview-command-line; "
-                            + "am clear-debug-app";
+                            + "settings delete global debug_app 2>/dev/null || cmd settings delete global debug_app";
                     Runtime.getRuntime().exec(new String[]{"su", "-c", cmd}).waitFor();
                 }
             } catch (Throwable t) {
