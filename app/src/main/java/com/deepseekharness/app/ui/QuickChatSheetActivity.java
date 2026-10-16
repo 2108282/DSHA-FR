@@ -2125,9 +2125,10 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         final String finalPath = path;
         final String origRawPath = rawPath;
 
-        // 核心规范：仅对安卓外部工作区（/sdcard/ 或 /storage/）执行 Native 拦截；
-        // 内部容器工作区（/root/...）或非外部存储文件直接放行，由 DSH Web 原生处理！
-        if (!sIsRemoteActive) {
+        // 核心规范：仅对本地模式下的【短按点击预览】（action == 0）进行外部工作区限定；
+        // 内部容器工作区直接放行交由 DSH Web 原生处理；
+        // 而长按操作菜单（action == 2 / 3）在所有模式（包括远端与内部工作区）下均正常呼出悬浮菜单！
+        if (!sIsRemoteActive && action == 0) {
             boolean isExternalWorkspace = finalPath.startsWith("/sdcard/")
                     || finalPath.startsWith("/storage/")
                     || finalPath.contains("/Download/DSHA/工作区/");
@@ -2596,14 +2597,10 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                         + "        } catch(err) {}\n"
                         + "        if (window.DshaNativeBridge) {\n"
                         + "          if (targetEl.closest('[data-files-entry]')) {\n"
-                        + "            var cleanP = p ? p.split('?')[0].split('#')[0] : '';\n"
-                        + "            var isExternal = cleanP.startsWith('/sdcard/') || cleanP.startsWith('/storage/') || cleanP.indexOf('/Download/DSHA/工作区/') >= 0;\n"
-                        + "            if (isExternal) {\n"
-                        + "              if (window.DshaNativeBridge.showFileActionMenuAt) {\n"
-                        + "                window.DshaNativeBridge.showFileActionMenuAt(p, touchStartX, touchStartY);\n"
-                        + "              } else if (window.DshaNativeBridge.showFileActionMenu) {\n"
-                        + "                window.DshaNativeBridge.showFileActionMenu(p);\n"
-                        + "              }\n"
+                        + "            if (window.DshaNativeBridge.showFileActionMenuAt) {\n"
+                        + "              window.DshaNativeBridge.showFileActionMenuAt(p, touchStartX, touchStartY);\n"
+                        + "            } else if (window.DshaNativeBridge.showFileActionMenu) {\n"
+                        + "              window.DshaNativeBridge.showFileActionMenu(p);\n"
                         + "            }\n"
                         + "          } else {\n"
                         + "            if (window.DshaNativeBridge.openExternalFile) {\n"
@@ -3502,12 +3499,13 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         final String finalFileName = displayName;
 
         TextView titleTv = new TextView(this);
-        titleTv.setText((isDir ? "📁 " : "📄 ") + finalFileName);
+        titleTv.setText(finalFileName);
         titleTv.setTextColor(palette.textSecondaryColor);
-        titleTv.setTextSize(11);
+        titleTv.setTextSize(12);
+        titleTv.setTypeface(null, Typeface.BOLD);
         titleTv.setSingleLine(true);
         titleTv.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
-        titleTv.setPadding(dpToPx(14), dpToPx(6), dpToPx(14), dpToPx(6));
+        titleTv.setPadding(dpToPx(14), dpToPx(8), dpToPx(14), dpToPx(8));
         menuCard.addView(titleTv);
 
         View sep = new View(this);
@@ -3518,7 +3516,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         mask.setOnClickListener(v -> dismissActiveDialog());
 
         // 1. 外部打开
-        menuCard.addView(createMenuItem("↗   调用系统打开方式", palette.textColor, v -> {
+        menuCard.addView(createMenuItem("调用系统打开方式", palette.textColor, v -> {
             dismissActiveDialog();
             if (sIsRemoteActive) {
                 // 远端文件：先下载到手机本地 Download 目录，再调起系统打开
@@ -3534,7 +3532,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         }));
 
         // 2. 重命名
-        menuCard.addView(createMenuItem("✏️   重命名", palette.textColor, v -> {
+        menuCard.addView(createMenuItem("重命名", palette.textColor, v -> {
             dismissActiveDialog();
             if (sIsRemoteActive) {
                 ToastHelper.makeText(this, "远端文件请在网页中直接重命名", Toast.LENGTH_SHORT).show();
@@ -3544,20 +3542,20 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         }));
 
         // 3. 复制文件名
-        menuCard.addView(createMenuItem("📋   复制文件名", palette.textColor, v -> {
+        menuCard.addView(createMenuItem("复制文件名", palette.textColor, v -> {
             dismissActiveDialog();
-            copyToClipboard(finalFileName, "✓ 已复制文件名：" + finalFileName);
+            copyToClipboard(finalFileName, "已复制文件名：" + finalFileName);
         }));
 
         // 4. 复制文件路径
-        menuCard.addView(createMenuItem("📍   复制文件路径", palette.textColor, v -> {
+        menuCard.addView(createMenuItem("复制文件路径", palette.textColor, v -> {
             dismissActiveDialog();
             String showPath = (rawPath != null && !rawPath.isEmpty()) ? rawPath : file.getAbsolutePath();
-            copyToClipboard(showPath, "✓ 已复制路径：" + showPath);
+            copyToClipboard(showPath, "已复制路径：" + showPath);
         }));
 
         // 5. 下载到 Download 目录（全环境支持）
-        menuCard.addView(createMenuItem("📥   下载到 Download 目录", palette.textColor, v -> {
+        menuCard.addView(createMenuItem("下载到 Download 目录", palette.textColor, v -> {
             dismissActiveDialog();
             if (isDir) {
                 ToastHelper.makeText(this, "暂不支持直接下载整个文件夹", Toast.LENGTH_SHORT).show();
@@ -3567,7 +3565,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         }));
 
         // 6. 删除（警示红）
-        menuCard.addView(createMenuItem("🗑️   删除" + (isDir ? "文件夹" : ""), Color.parseColor("#FF5252"), v -> {
+        menuCard.addView(createMenuItem("删除" + (isDir ? "文件夹" : ""), Color.parseColor("#FF5252"), v -> {
             dismissActiveDialog();
             if (sIsRemoteActive) {
                 ToastHelper.makeText(this, "远端文件请在网页中直接删除", Toast.LENGTH_SHORT).show();
