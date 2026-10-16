@@ -1,12 +1,14 @@
 package com.deepseekharness.app.runtime;
 import com.deepseekharness.app.util.Compat;
-import com.deepseekharness.app.util.PatchToggle;
 import com.deepseekharness.app.util.ShellQuote;
 
 import android.content.Context;
 import android.system.Os;
 import android.util.Base64;
 import android.util.Log;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import com.deepseekharness.app.util.SensitiveData;
 
@@ -512,87 +514,83 @@ public class ProotBootstrap {
     }
 
     /**
-     * 启用 / 禁用某个插件（内置或官方核心）：
-     * 遵循 DSH 官方规范，通过修改 profile 的 cordis.patch.yml 实现 patch 层热开关（PatchToggle）。
-     * 绝不篡改 package.json 的 bundles 清单，绝不删除 node_modules 软链接，杜绝核心缺失与启动报错。
+     * 启用 / 禁用某个插件（内置、官方核心或第三方）：
+     * 遵循 DSH 官方规范，修改 profile 的 package.json 中的 dsh.profile.bundles 数组。
+     * 启用时追加到 bundles 列表，禁用时从 bundles 移除，完全对齐官方 DSH 后端基准。
+     * 同时顺手清理历史 PatchToggle 写入 cordis.patch.yml 的残留块以及 .disabled 标记。
      *
-     * @param name   插件名（如 dsh-web-mobile 或 @deepseek-ai/dsh-web-app）
+     * @param name   插件名（如 dsh-web-mobile、@deepseek-ai/dsh-web-app 或 dsh-xiaomi-asr）
      * @param enable true=启用 false=禁用
      */
     public String setPluginEnabled(String name, boolean enable) {
         if (name == null || name.isEmpty()) return "NO_NAME";
         synchronized (PLUGIN_SCRIPT_LOCK) {
             try {
-                // 1. 获取目标插件的 Loader 行 ID
-                List<String> targetIds = resolvePluginLoaderIds(name);
-                if (targetIds.isEmpty()) return "ERROR: 无法解析插件 Loader ID";
+                // 1. 读取当前的 profile package.json 文本
+                String pkgFile = "/root/.dsh/profiles/web/package.json";
+                String jsonStr = execAndRead("cat " + pkgFile + " 2>/dev/null || true", 5000);
+                if (jsonStr == null || jsonStr.startsWith("ERROR:") || jsonStr.trim().isEmpty()) {
+                    return "ERROR: package.json 读取失败";
+                }
 
-                // 2. 读取当前的 profile cordis.patch.yml 文本
+                org.json.JSONObject doc = new org.json.JSONObject(jsonStr);
+                org.json.JSONObject dsh = doc.optJSONObject("dsh");
+                if (dsh == null) {
+                    dsh = new org.json.JSONObject();
+                    doc.put("dsh", dsh);
+                }
+                org.json.JSONObject profile = dsh.optJSONObject("profile");
+                if (profile == null) {
+                    profile = new org.json.JSONObject();
+                    dsh.put("profile", profile);
+                }
+                org.json.JSONArray bundlesArr = profile.optJSONArray("bundles");
+                List<String> bundles = new ArrayList<>();
+                if (bundlesArr != null) {
+                    for (int i = 0; i < bundlesArr.length(); i++) {
+                        bundles.add(bundlesArr.getString(i));
+                    }
+                }
+
+                if (enable) {
+                    if (!bundles.contains(name)) {
+                        bundles.add(name);
+                    }
+                } else {
+                    bundles.remove(name);
+                }
+                profile.put("bundles", new org.json.JSONArray(bundles));
+
+                // 2. 原子安全写入 package.json
+                String newJson = doc.toString(2) + "\n";
+                String b64Pkg = Base64.encodeToString(newJson.getBytes(StandardCharsets.UTF_8), Base64.NO_WRAP);
+                String writePkgCmd = "printf '%s' '" + b64Pkg + "' | base64 -d > " + pkgFile;
+                String writePkgOut = execAndRead(writePkgCmd, 10000);
+                if (writePkgOut != null && writePkgOut.startsWith("ERROR:")) return writePkgOut;
+
+                // 3. 清理历史遗留在 cordis.patch.yml 中的 managed block
                 String patchFile = "/root/.dsh/profiles/web/cordis.patch.yml";
                 String currentYaml = execAndRead("cat " + patchFile + " 2>/dev/null || true", 5000);
-                if (currentYaml == null || currentYaml.startsWith("ERROR:")) currentYaml = "";
-
-                // 3. 计算 Patch 覆盖后的新 YAML
-                Set<String> off = new LinkedHashSet<>(PatchToggle.disabledIds(currentYaml));
-                if (enable) {
-                    off.removeAll(targetIds);
-                } else {
-                    off.addAll(targetIds);
+                if (currentYaml != null && currentYaml.contains("# >>> DSHA managed")) {
+                    String cleanedYaml = stripLegacyPatchBlock(currentYaml);
+                    String b64Patch = Base64.encodeToString(cleanedYaml.getBytes(StandardCharsets.UTF_8), Base64.NO_WRAP);
+                    execAndRead("printf '%s' '" + b64Patch + "' | base64 -d > " + patchFile, 5000);
                 }
-                String newYaml = PatchToggle.withDisabled(currentYaml, off);
 
-                // 4. 原子安全写入容器
-                String b64 = Base64.encodeToString(newYaml.getBytes(StandardCharsets.UTF_8), Base64.NO_WRAP);
-                String writeCmd = "mkdir -p /root/.dsh/profiles/web; printf '%s' '" + b64 + "' | base64 -d > " + patchFile;
-                String writeOut = execAndRead(writeCmd, 10000);
-                if (writeOut != null && writeOut.startsWith("ERROR:")) return writeOut;
-
-                // 5. 清理历史遗留的 .disabled 物理标记文件
-                if (enable) {
-                    execAndRead("rm -f /root/.dsh/profiles/web/node_modules/" + name + ".disabled /root/.dsh/plugin-src/" + name + ".disabled 2>/dev/null || true", 3000);
-                }
+                // 4. 清理历史遗留的 .disabled 物理标记文件
+                execAndRead("rm -f /root/.dsh/profiles/web/node_modules/" + name + ".disabled /root/.dsh/plugin-src/" + name + ".disabled 2>/dev/null || true", 3000);
 
                 return "BUILTIN_REGISTER_OK: " + name + (enable ? " 已启用" : " 已禁用");
             } catch (Throwable e) {
-                Log.w("DSHA", "PatchToggle 切换失败: " + SensitiveData.redact(String.valueOf(e)));
+                Log.w("DSHA", "插件启用/禁用切换失败: " + SensitiveData.redact(String.valueOf(e)));
                 return "ERROR: " + SensitiveData.redact(String.valueOf(e));
             }
         }
     }
 
-    /** 从插件实体中识别其在 cordis.patch.yml 中声明的 Loader 行 ID。 */
-    private List<String> resolvePluginLoaderIds(String name) {
-        List<String> ids = new ArrayList<>();
-        // 1. 优先匹配四大内置核心插件与已知扩展插件的标准 ID 映射
-        if ("dsh-device-shell-guide".equals(name)) { ids.add("device-shell-guide"); return ids; }
-        if ("dsh-status-overlay".equals(name)) { ids.add("dsha-status-overlay"); return ids; }
-        if ("dsh-task-notifier".equals(name)) { ids.add("task-notifier"); return ids; }
-        if ("dsh-web-mobile".equals(name)) { ids.add("dsh-web-mobile"); return ids; }
-        if ("@deepseek-ai/dsh-web-app".equals(name)) { ids.add("web-runtime"); ids.add("webserver"); return ids; }
-        if ("dsh-agy".equals(name)) { ids.add("dsh-agy"); ids.add("dsh-agy-web"); return ids; }
-        if ("dsh-api-dashboard".equals(name)) { ids.add("dsh-api-dashboard"); return ids; }
-        if ("@xmanrui/dsh-im".equals(name)) { ids.add("dsh-im"); return ids; }
-
-        // 2. 尝试从容器中插件实体的 cordis.patch.yml 解析
-        String[] cands = {
-                "/root/.dsh/plugin-src/" + name + "/cordis.patch.yml",
-                "/root/dsha-" + (name.startsWith("dsh-") ? name.substring(4) : name) + "/cordis.patch.yml",
-                "/root/" + name + "/cordis.patch.yml",
-                "/root/.dsh/profiles/web/node_modules/" + name + "/cordis.patch.yml"
-        };
-        for (String cand : cands) {
-            String out = execAndRead("cat " + ShellQuote.arg(cand) + " 2>/dev/null || true", 5000);
-            if (out != null && !out.isEmpty() && !out.startsWith("ERROR:")) {
-                List<String> parsed = PatchToggle.insertedIds(out);
-                if (!parsed.isEmpty()) return parsed;
-            }
-        }
-
-        // 3. 兜底策略：使用包名去前缀作为 loader id
-        String fallbackId = name.startsWith("dsh-") ? name.substring(4) : name;
-        if (fallbackId.contains("/")) fallbackId = fallbackId.substring(fallbackId.lastIndexOf('/') + 1);
-        ids.add(fallbackId);
-        return ids;
+    private static String stripLegacyPatchBlock(String yaml) {
+        if (yaml == null || !yaml.contains("# >>> DSHA managed")) return yaml == null ? "" : yaml;
+        return yaml.replaceAll("(?s)# >>> DSHA managed[^\n]*\n.*?# <<< DSHA managed <<<(?:\n|$)", "").trim();
     }
 
     private void extractAssetFile(String assetPath, File dest) {

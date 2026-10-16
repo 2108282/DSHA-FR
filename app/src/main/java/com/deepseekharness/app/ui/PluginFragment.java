@@ -679,7 +679,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
                     if (item.builtin) {
                         ToastHelper.makeText(requireContext(), "DSHA 系统内置核心插件无法卸载", Toast.LENGTH_SHORT).show();
                     } else if (actions != null) {
-                        actions.onItemActionClick(item);
+                        actions.onUninstallClick(item);
                     }
                 });
             }

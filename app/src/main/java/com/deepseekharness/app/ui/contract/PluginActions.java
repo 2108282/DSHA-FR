@@ -19,5 +19,5 @@ public interface PluginActions {
     void onToggleSortClick();
     void onStatusMessageClick();
     void onToggleItem(PluginRepository.Item item, boolean enabled);
-    void onItemActionClick(PluginRepository.Item item);
+    void onUninstallClick(PluginRepository.Item item);
 }

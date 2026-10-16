@@ -478,60 +478,16 @@ public class PluginPresenter implements PluginActions {
     }
 
     @Override
-    public void onItemActionClick(PluginRepository.Item item) {
-        List<String> actions = new ArrayList<>();
-        actions.add("复制插件名称");
-        if (!item.source.isEmpty()) actions.add("复制来源链接");
-        if (item.exportable) actions.add("导出插件包");
-        if (!item.official && (!item.source.isEmpty() || item.builtin)) actions.add("检查插件更新");
-        if (item.updateAvailable) actions.add("更新至 " + item.latestVersion);
-        if (!item.rollbackVersion.isEmpty()) {
-            actions.add(item.builtin ? "恢复至 " + item.rollbackVersion : "回退至 " + item.rollbackVersion);
+    public void onUninstallClick(PluginRepository.Item item) {
+        if (item.builtin) {
+            ToastHelper.makeText(context, "DSHA 系统内置核心插件无法卸载", Toast.LENGTH_SHORT).show();
+            return;
         }
-        if (item.deletable) actions.add("删除插件");
-
         new AlertDialog.Builder(activity)
-                .setTitle(item.name)
-                .setItems(actions.toArray(new String[0]), (d, which) -> {
-                    String action = actions.get(which);
-                    if ("复制插件名称".equals(action)) {
-                        copyText("插件名称", item.name);
-                    } else if ("复制来源链接".equals(action)) {
-                        copyText("来源链接", item.source);
-                    } else if ("导出插件包".equals(action)) {
-                        ArrayList<String> selected = new ArrayList<>();
-                        selected.add(item.name);
-                        String stamp = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.ROOT).format(new Date());
-                        callback.onLaunchExport(item.name.replaceAll("[^A-Za-z0-9._-]", "_") + "-" + stamp + ".tar.gz", selected);
-                    } else if ("检查插件更新".equals(action)) {
-                        repository.checkUpdates(item);
-                    } else if (action.startsWith("更新至 ")) {
-                        repository.prepareUpdate(item);
-                    } else if (action.startsWith("回退至 ") || action.startsWith("恢复至 ")) {
-                        new AlertDialog.Builder(activity)
-                                .setTitle(item.builtin ? "恢复预装版本？" : "回退插件？")
-                                .setMessage(item.name + "：" + item.version + " → " + item.rollbackVersion
-                                        + (item.builtin ? "\n恢复为底座预装内置版本，当前启用状态保留；重启 Web 生效。"
-                                                        : "\n只恢复插件文件，当前启用状态和对话数据保留；重启 Web 生效。"))
-                                .setNegativeButton("取消", null)
-                                .setPositiveButton(item.builtin ? "恢复" : "回退", (c, b) -> repository.rollback(item))
-                                .show();
-                    } else if ("删除插件".equals(action)) {
-                        new AlertDialog.Builder(activity)
-                                .setTitle("删除 " + item.name + "？")
-                                .setMessage("插件文件将被移除，相关配置和对话数据保留；重启 Web 生效。")
-                                .setNegativeButton("取消", null)
-                                .setPositiveButton("删除", (c, b) -> repository.delete(item))
-                                .show();
-                    }
-                }).show();
-    }
-
-    private void copyText(String label, String content) {
-        ClipboardManager cm = (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
-        if (cm != null) {
-            cm.setPrimaryClip(ClipData.newPlainText(label, content));
-            ToastHelper.makeText(context, label + " 已复制", Toast.LENGTH_SHORT).show();
-        }
+                .setTitle("卸载 " + item.name + "？")
+                .setMessage("插件将被彻底卸载并移除文件，相关配置和对话数据保留；重启 Web 生效。")
+                .setNegativeButton("取消", null)
+                .setPositiveButton("卸载", (c, b) -> repository.delete(item))
+                .show();
     }
 }

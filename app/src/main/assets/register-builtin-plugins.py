@@ -367,7 +367,7 @@ def merge_manifest(doc, registered):
     deps = dict(doc.get("dependencies") or {})
     added = []
     for name, d in registered.items():
-        if name not in bundles:
+        if name not in deps and name not in bundles:
             bundles.append(name)
             added.append(name)
         deps[name] = "link:" + d
@@ -482,21 +482,26 @@ def enable_plugin(name):
 
 
 def disable_plugin(name):
-    """--disable：安全降级，不再物理删除 bundles 与软链接，改由 patch 层热覆盖。"""
+    """--disable：从 profile 的 dsh.profile.bundles 清单中剔除，对齐官方 DSH 标准。"""
     lines = ["== " + time.strftime("%Y-%m-%d %H:%M:%S") + " 禁用 " + name]
     try:
-        # 1. 确保 bundles 绝不被破坏（官方核心与预装插件永不剪除）
-        # 2. 写入 cordis.patch.yml 覆盖禁用
-        patch_file = local(os.path.join(DSH_HOME, "profiles", "web", "cordis.patch.yml"))
-        os.makedirs(os.path.dirname(patch_file), exist_ok=True)
-        # 统一使用官方 patch 规范，保护 package.json 物理完整性
-        lines.append("已转由 PatchToggle 机制管理")
-    except RuntimeError as e:
+        doc = read_manifest()
+        if doc is None:
+            raise RuntimeError("profile 不存在")
+        bundles = list(doc.get("dsh", {}).get("profile", {}).get("bundles") or [])
+        if name in bundles:
+            bundles = [b for b in bundles if b != name]
+            doc.setdefault("dsh", {}).setdefault("profile", {})["bundles"] = bundles
+            write_manifest(doc)
+            lines.append("已从 bundles 移除：%s" % name)
+        else:
+            lines.append("插件本就未在 bundles 中：%s" % name)
+    except Exception as e:
         lines.append(str(e))
         _write_log(lines, ok=False)
         print("BUILTIN_REGISTER_FAIL: %s" % e)
         return 1
-    lines.append("禁用完成，刷新或重启 Web 后生效")
+    lines.append("禁用完成，重启 Web 后生效")
     _write_log(lines, ok=True)
     print("BUILTIN_REGISTER_OK: %s 已禁用" % name)
     return 0
