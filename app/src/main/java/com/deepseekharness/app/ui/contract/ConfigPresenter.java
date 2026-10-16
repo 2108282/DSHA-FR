@@ -70,6 +70,7 @@ public class ConfigPresenter implements ConfigActions {
         boolean overlayStream = sp.getBoolean("overlay_stream", false);
         boolean capSensors = sp.getBoolean("cap_sensors", false);
         boolean capLocation = sp.getBoolean("cap_location", false);
+        boolean chromiumFlags = sp.getBoolean(Constants.KEY_CHROMIUM_FLAGS, false);
         boolean asrContinuous = sp.getBoolean("asr_continuous", false);
 
         boolean allFilesGranted;
@@ -100,10 +101,19 @@ public class ConfigPresenter implements ConfigActions {
 
         ConfigUiState state = new ConfigUiState(
                 port, taskset, confirmShell, isIdleFreeze, overlayStream, capSensors,
-                capLocation, asrContinuous, allFilesStatus, a11yStatus, asrStatus, currentRootStatus,
+                capLocation, chromiumFlags, asrContinuous, allFilesStatus, a11yStatus, asrStatus, currentRootStatus,
                 freezeCode, freezeStatusText
         );
         mainHandler.post(() -> callback.onRender(state));
+    }
+
+    @Override
+    public void onToggleChromiumFlags(boolean enabled) {
+        context.getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE).edit()
+                .putBoolean(Constants.KEY_CHROMIUM_FLAGS, enabled).apply();
+        com.deepseekharness.app.util.ChromiumFlagsHelper.syncSystemCommandLine(context, enabled);
+        toast(enabled ? "已开启 Chromium 实验性参数（重启应用后生效）" : "已关闭 Chromium 实验性参数（重启应用后生效）");
+        refreshState();
     }
 
     @Override

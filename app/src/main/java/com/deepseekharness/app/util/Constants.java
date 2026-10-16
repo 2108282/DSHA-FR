@@ -74,6 +74,8 @@ public final class Constants {
     public static final String KEY_WELCOMED = "welcomed";
     /** 强制用 GeckoView 内核（系统 WebView 过旧时兜底）。 */
     public static final String KEY_GECKO_CORE = "gecko_core";
+    /** Chromium 实验性参数（GPU 硬件光栅化、零拷贝渲染、解除低端限制）。 */
+    public static final String KEY_CHROMIUM_FLAGS = "chromium_flags";
     /** 危险 shell 操作需确认（DSH_CONFIRM）。 */
     public static final String KEY_CONFIRM_SHELL = "confirm_shell";
     /** 允许 root shell（--su 提权）。 */

@@ -282,6 +282,71 @@
                     android:layout_marginStart="8dp" />
             </LinearLayout>
 
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginStart="66dp"
+                android:background="@color/line_soft" />
+
+            <!-- 1.5 Chromium 实验性参数 -->
+            <LinearLayout
+                android:id="@+id/config_row_chromium_flags"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="14dp">
+
+                <FrameLayout
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:background="@drawable/bg_settings_icon_box">
+
+                    <ImageView
+                        android:id="@+id/config_icon_chromium_flags"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="Chromium 实验性参数"
+                        android:src="@drawable/ic_rocket"
+                        app:tint="@color/primary" />
+                </FrameLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Chromium 实验性参数"
+                        android:textColor="@color/text"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="1dp"
+                        android:text="全硬件 GPU 光栅化、零拷贝渲染与解除限制（重启生效）"
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <com.deepseekharness.app.ui.DshaToggle
+                    android:id="@+id/config_toggle_chromium_flags"
+                    android:layout_width="44dp"
+                    android:layout_height="26dp"
+                    android:layout_marginStart="8dp" />
+            </LinearLayout>
+
         </com.deepseekharness.app.ui.ModernCardView>
 
         <!-- ========== 卡片 2: CPU 核心绑定 (常驻展开显示 + 保存按钮) ========== -->

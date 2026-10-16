@@ -36,6 +36,7 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
     private DshaToggle idleFreezeToggle;
     private DshaToggle sensorsToggle;
     private DshaToggle locationToggle;
+    private DshaToggle chromiumFlagsToggle;
 
     private View translateBtn;
     private View allFilesBtn;
@@ -123,6 +124,16 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
             if (row != null) row.setOnClickListener(v -> locationToggle.toggle());
         }
 
+        chromiumFlagsToggle = view.findViewById(R.id.config_toggle_chromium_flags);
+        if (chromiumFlagsToggle != null) {
+            chromiumFlagsToggle.setOnCheckedChangeListener((toggle, isChecked) -> {
+                if (isBinding) return;
+                actions.onToggleChromiumFlags(isChecked);
+            });
+            View row = view.findViewById(R.id.config_row_chromium_flags);
+            if (row != null) row.setOnClickListener(v -> chromiumFlagsToggle.toggle());
+        }
+
         // 3. 扩展功能与系统保活权限入口
         translateBtn = view.findViewById(R.id.config_translate);
         allFilesBtn = view.findViewById(R.id.config_all_files);
@@ -157,6 +168,9 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
 
         asrContinuousCheck.setOnCheckedChangeListener((btn, checked) -> actions.onToggleAsrContinuous(checked));
 
+        MonetEngine.PaletteInfo palette = MonetEngine.resolveCurrentPalette(requireContext());
+        MonetEngine.applyToViewTree(view, palette);
+
         presenter.init();
     }
 
@@ -164,6 +178,9 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
     public void onResume() {
         super.onResume();
         syncActivityTitle(true);
+        if (getView() != null) {
+            MonetEngine.applyToViewTree(getView(), MonetEngine.resolveCurrentPalette(requireContext()));
+        }
         if (presenter != null) {
             presenter.refreshState();
         }
@@ -173,8 +190,10 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
     public void onDestroyView() {
         syncActivityTitle(false);
         if (confirmShellToggle != null) confirmShellToggle.setOnCheckedChangeListener(null);
+        if (idleFreezeToggle != null) idleFreezeToggle.setOnCheckedChangeListener(null);
         if (sensorsToggle != null) sensorsToggle.setOnCheckedChangeListener(null);
         if (locationToggle != null) locationToggle.setOnCheckedChangeListener(null);
+        if (chromiumFlagsToggle != null) chromiumFlagsToggle.setOnCheckedChangeListener(null);
 
         presenter = null;
         actions = null;
@@ -184,6 +203,7 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         idleFreezeToggle = null;
         sensorsToggle = null;
         locationToggle = null;
+        chromiumFlagsToggle = null;
         translateBtn = null;
         allFilesBtn = null;
         allFilesStatusText = null;
@@ -229,6 +249,9 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         }
         if (locationToggle != null && locationToggle.isChecked() != state.isCapLocation) {
             locationToggle.setChecked(state.isCapLocation, false, false);
+        }
+        if (chromiumFlagsToggle != null && chromiumFlagsToggle.isChecked() != state.isChromiumFlags) {
+            chromiumFlagsToggle.setChecked(state.isChromiumFlags, false, false);
         }
         isBinding = false;
 

@@ -6,6 +6,7 @@ public interface ConfigActions {
     void onToggleIdleFreeze(boolean enabled);
     void onToggleSensors(boolean enabled);
     void onToggleLocation(boolean enabled);
+    void onToggleChromiumFlags(boolean enabled);
     void onBack();
     void onOpenAllFilesSettings();
     void onOpenBatteryOptimization();

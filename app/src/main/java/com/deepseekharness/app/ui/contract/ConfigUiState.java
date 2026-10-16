@@ -8,6 +8,7 @@ public class ConfigUiState {
     public final boolean isOverlayStream;
     public final boolean isCapSensors;
     public final boolean isCapLocation;
+    public final boolean isChromiumFlags;
     public final boolean isAsrContinuous;
     public final String allFilesStatusText;
     public final String a11yStatusText;
@@ -18,7 +19,7 @@ public class ConfigUiState {
 
     public ConfigUiState(String port, String taskset, boolean isConfirmShell, boolean isIdleFreeze,
                          boolean isOverlayStream, boolean isCapSensors, boolean isCapLocation,
-                         boolean isAsrContinuous, String allFilesStatusText,
+                         boolean isChromiumFlags, boolean isAsrContinuous, String allFilesStatusText,
                          String a11yStatusText, String asrStatusText, String rootStatusText,
                          int freezeStateCode, String freezeStatusText) {
         this.port = port;
@@ -28,6 +29,7 @@ public class ConfigUiState {
         this.isOverlayStream = isOverlayStream;
         this.isCapSensors = isCapSensors;
         this.isCapLocation = isCapLocation;
+        this.isChromiumFlags = isChromiumFlags;
         this.isAsrContinuous = isAsrContinuous;
         this.allFilesStatusText = allFilesStatusText;
         this.a11yStatusText = a11yStatusText;
