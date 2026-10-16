@@ -14,6 +14,7 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.MutableContextWrapper;
 import android.content.res.ColorStateList;
 import android.graphics.Canvas;
 import android.graphics.Bitmap;
@@ -1717,9 +1718,10 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         }
     }
 
-    /** 创建并配置标准参数的 DshaWebView 实例（本机与远端槽位共用） */
+    /** 创建并配置标准参数的 DshaWebView 实例（本机与远端槽位共用，采用 MutableContextWrapper 支持动态换绑宿主 Activity） */
     private WebView createConfiguredWebView() {
-        DshaWebView web = new DshaWebView(getApplicationContext());
+        MutableContextWrapper contextWrapper = new MutableContextWrapper(this);
+        DshaWebView web = new DshaWebView(contextWrapper);
         WebSettings ws = web.getSettings();
         ws.setJavaScriptEnabled(true);
         ws.setDomStorageEnabled(true);
@@ -1920,6 +1922,8 @@ public class QuickChatSheetActivity extends AppCompatActivity {
     private void ensureRemoteWebViewLoaded(String remoteUrl) {
         if (sRemoteWebView == null) {
             sRemoteWebView = createConfiguredWebView();
+        } else if (sRemoteWebView.getContext() instanceof MutableContextWrapper) {
+            ((MutableContextWrapper) sRemoteWebView.getContext()).setBaseContext(this);
         }
         String curUrl = sRemoteWebView.getUrl();
         boolean isBlank = curUrl == null || curUrl.isEmpty() || "about:blank".equals(curUrl);
@@ -2005,8 +2009,11 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             loadInitialLocalWeb();
         } else {
             ensureWebViewParentClean(sLocalWebView);
-            // 核心修复：复用已保活的静态 WebView 时，必须重新绑定当前存活 Activity 的 Clients，
-            // 确保 onShowFileChooser 等生命周期回调能够正确调用当前 Activity 的 ActivityResultLauncher
+            // 核心修复：复用已保活的静态 WebView 时，必须重新绑定当前存活 Activity 的 Context 与 Clients，
+            // 确保 onShowFileChooser 能正常回调，且 <select> 选项窗能依托真实 Activity 窗口 Token 正常弹出
+            if (sLocalWebView.getContext() instanceof MutableContextWrapper) {
+                ((MutableContextWrapper) sLocalWebView.getContext()).setBaseContext(this);
+            }
             sLocalWebView.setWebViewClient(createSheetWebViewClient());
             sLocalWebView.setWebChromeClient(new SheetChromeClient());
             sLocalWebView.addJavascriptInterface(new NativeBridgeInterface(), "DshaNativeBridge");
@@ -2024,7 +2031,10 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             sRemoteWebLoaded = false;
         } else if (sRemoteWebView != null) {
             sRemoteWebView.onPause();
-            // 远端槽位复用时也同样重新绑定当前存活 Activity 的 Clients
+            // 远端槽位复用时也同样重新绑定当前存活 Activity 的 Context 与 Clients
+            if (sRemoteWebView.getContext() instanceof MutableContextWrapper) {
+                ((MutableContextWrapper) sRemoteWebView.getContext()).setBaseContext(this);
+            }
             sRemoteWebView.setWebViewClient(createSheetWebViewClient());
             sRemoteWebView.setWebChromeClient(new SheetChromeClient());
             sRemoteWebView.addJavascriptInterface(new NativeBridgeInterface(), "DshaNativeBridge");
@@ -2086,6 +2096,18 @@ public class QuickChatSheetActivity extends AppCompatActivity {
 
         final String finalPath = path;
         final String origRawPath = rawPath;
+
+        // 核心规范：仅对安卓外部工作区（/sdcard/ 或 /storage/）执行 Native 拦截；
+        // 内部容器工作区（/root/...）或非外部存储文件直接放行，由 DSH Web 原生处理！
+        if (!sIsRemoteActive) {
+            boolean isExternalWorkspace = finalPath.startsWith("/sdcard/")
+                    || finalPath.startsWith("/storage/")
+                    || finalPath.contains("/Download/DSHA/工作区/");
+            if (!isExternalWorkspace) {
+                return;
+            }
+        }
+
         QuickChatSheetActivity act = sCurrentInstance;
         if (act == null || act.isFinishing() || act.isDestroyed()) return;
         act.runOnUiThread(() -> {
@@ -2143,7 +2165,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 }
                 com.deepseekharness.app.viewer.FileOpenHelper.openWithSystem(currentAct, targetFile);
             } else {
-                currentAct.openFileInSheet(finalPath);
+                currentAct.openFileInSheet(targetFile != null && targetFile.exists() ? targetFile.getAbsolutePath() : finalPath);
             }
         });
     }
@@ -2546,10 +2568,14 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                         + "        } catch(err) {}\n"
                         + "        if (window.DshaNativeBridge) {\n"
                         + "          if (targetEl.closest('[data-files-entry]')) {\n"
-                        + "            if (window.DshaNativeBridge.showFileActionMenuAt) {\n"
-                        + "              window.DshaNativeBridge.showFileActionMenuAt(p, touchStartX, touchStartY);\n"
-                        + "            } else if (window.DshaNativeBridge.showFileActionMenu) {\n"
-                        + "              window.DshaNativeBridge.showFileActionMenu(p);\n"
+                        + "            var cleanP = p ? p.split('?')[0].split('#')[0] : '';\n"
+                        + "            var isExternal = cleanP.startsWith('/sdcard/') || cleanP.startsWith('/storage/') || cleanP.indexOf('/Download/DSHA/工作区/') >= 0;\n"
+                        + "            if (isExternal) {\n"
+                        + "              if (window.DshaNativeBridge.showFileActionMenuAt) {\n"
+                        + "                window.DshaNativeBridge.showFileActionMenuAt(p, touchStartX, touchStartY);\n"
+                        + "              } else if (window.DshaNativeBridge.showFileActionMenu) {\n"
+                        + "                window.DshaNativeBridge.showFileActionMenu(p);\n"
+                        + "              }\n"
                         + "            }\n"
                         + "          } else {\n"
                         + "            if (window.DshaNativeBridge.openExternalFile) {\n"
@@ -2622,7 +2648,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                         + "          return;\n"
                         + "        }\n"
                         + "      }\n"
-                        + "      /* 2. 文件树列表内部节点：短按文件保留原地查看器（Office 文档放行，由 DSH 内置查看器承载） */\n"
+                        + "      /* 2. 文件树列表内部节点：短按文件保留原地查看器（仅外部工作区生效，内部工作区完全放行 DSH 原生处理） */\n"
                         + "      var treeEntry = e.target && e.target.closest ? e.target.closest('li[data-files-entry=\"file\"]') : null;\n"
                         + "      if (treeEntry) {\n"
                         + "        if (window.__dsha_is_remote__) {\n"
@@ -2633,6 +2659,12 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                         + "          var cleanPath = treePath.split('?')[0].split('#')[0];\n"
                         + "          var isOffice = /\\.(docx?|xlsx?|pptx?|odt|ods|odp)$/i.test(cleanPath);\n"
                         + "          if (isOffice) {\n"
+                        + "            return;\n"
+                        + "          }\n"
+                        + "          var isExternalWorkspace = cleanPath.startsWith('/sdcard/')\n"
+                        + "              || cleanPath.startsWith('/storage/')\n"
+                        + "              || cleanPath.indexOf('/Download/DSHA/工作区/') >= 0;\n"
+                        + "          if (!isExternalWorkspace) {\n"
                         + "            return;\n"
                         + "          }\n"
                         + "          if (window.DshaNativeBridge && window.DshaNativeBridge.openWorkspaceFile) {\n"
@@ -4972,6 +5004,12 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         WebUploads.clean(uploads);
         if (keyboardLayoutListener != null && getWindow() != null && getWindow().getDecorView() != null) {
             getWindow().getDecorView().getViewTreeObserver().removeOnGlobalLayoutListener(keyboardLayoutListener);
+        }
+        if (sLocalWebView != null && sLocalWebView.getContext() instanceof MutableContextWrapper) {
+            ((MutableContextWrapper) sLocalWebView.getContext()).setBaseContext(getApplicationContext());
+        }
+        if (sRemoteWebView != null && sRemoteWebView.getContext() instanceof MutableContextWrapper) {
+            ((MutableContextWrapper) sRemoteWebView.getContext()).setBaseContext(getApplicationContext());
         }
         super.onDestroy();
         if (sCachedWebView != null && sCachedWebView.getParent() == webContainer) {

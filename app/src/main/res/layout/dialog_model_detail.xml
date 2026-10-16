@@ -70,8 +70,19 @@
             </LinearLayout>
         </LinearLayout>
 
-        <!-- 2. 表单字段 -->
-        <!-- 模型 ID (必填) -->
+        <!-- 2. 表单可滚动主体 -->
+        <androidx.core.widget.NestedScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:overScrollMode="never"
+            android:scrollbars="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <!-- 模型 ID (必填) -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -224,6 +235,130 @@
                 android:layout_height="26dp"
                 android:layout_marginStart="8dp" />
         </LinearLayout>
+
+        <!-- 支持推理等级配置 (DshaToggle 开关) -->
+        <LinearLayout
+            android:id="@+id/row_dialog_model_reasoning"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingVertical="4dp">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="推理等级 (Reasoning)"
+                        android:textColor="@color/text"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+
+                    <ImageView
+                        android:id="@+id/btn_dialog_model_reasoning_info"
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:layout_marginStart="6dp"
+                        android:contentDescription="@null"
+                        android:src="@drawable/ic_settings_info"
+                        app:tint="@color/text_muted" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="1dp"
+                    android:text="自选思考档位与 API 参数值 (reasoningEfforts)"
+                    android:textColor="@color/text_muted"
+                    android:textSize="11sp" />
+            </LinearLayout>
+
+            <com.deepseekharness.app.ui.DshaToggle
+                android:id="@+id/toggle_dialog_model_reasoning"
+                android:layout_width="44dp"
+                android:layout_height="26dp"
+                android:layout_marginStart="8dp" />
+        </LinearLayout>
+
+        <!-- 推理等级档位列表容器 (展开时可见) -->
+        <LinearLayout
+            android:id="@+id/layout_dialog_model_reasoning_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <!-- 标头：档位 | API 参数值 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1.1"
+                    android:text="档位"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1.6"
+                    android:text="API 参数值"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <View
+                    android:layout_width="32dp"
+                    android:layout_height="1dp"
+                    android:layout_marginStart="8dp" />
+            </LinearLayout>
+
+            <!-- 动态档位列表项 -->
+            <LinearLayout
+                android:id="@+id/layout_dialog_model_reasoning_list"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
+            <!-- 添加档位按钮 -->
+            <Button
+                android:id="@+id/btn_dialog_model_add_tier"
+                android:layout_width="wrap_content"
+                android:layout_height="34dp"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/m3_btn_tonal_small"
+                android:paddingHorizontal="14dp"
+                android:stateListAnimator="@animator/chip_press_scale"
+                android:text="+ 添加档位"
+                android:textAllCaps="false"
+                android:textColor="@color/primary"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+        </androidx.core.widget.NestedScrollView>
 
         <!-- 错误提示文本 -->
         <TextView

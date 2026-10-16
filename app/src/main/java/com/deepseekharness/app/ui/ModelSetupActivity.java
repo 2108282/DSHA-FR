@@ -810,6 +810,9 @@ public final class ModelSetupActivity extends AppCompatActivity {
                 if (modelName.isEmpty()) {
                     modelName = t("模型容量与多模态", "Capacity & Modalities");
                 }
+                if (model.has("reasoningEfforts") && model.get("reasoningEfforts").isJsonObject()) {
+                    modelName += " · " + t("支持思考", "Reasoning");
+                }
 
                 if (layoutModelsList.getChildCount() > 0) {
                     View divider = new View(this);
@@ -957,6 +960,12 @@ public final class ModelSetupActivity extends AppCompatActivity {
         EditText editTokens = dialogView.findViewById(R.id.edit_dialog_model_tokens);
         DshaToggle toggleVision = dialogView.findViewById(R.id.toggle_dialog_model_vision);
         View rowVision = dialogView.findViewById(R.id.row_dialog_model_vision);
+        View rowReasoning = dialogView.findViewById(R.id.row_dialog_model_reasoning);
+        DshaToggle toggleReasoning = dialogView.findViewById(R.id.toggle_dialog_model_reasoning);
+        View btnReasoningInfo = dialogView.findViewById(R.id.btn_dialog_model_reasoning_info);
+        LinearLayout layoutReasoningContainer = dialogView.findViewById(R.id.layout_dialog_model_reasoning_container);
+        LinearLayout layoutReasoningList = dialogView.findViewById(R.id.layout_dialog_model_reasoning_list);
+        Button btnAddTier = dialogView.findViewById(R.id.btn_dialog_model_add_tier);
         TextView tvError = dialogView.findViewById(R.id.tv_dialog_model_error);
         Button btnCancel = dialogView.findViewById(R.id.btn_dialog_model_cancel);
         Button btnSave = dialogView.findViewById(R.id.btn_dialog_model_save);
@@ -973,6 +982,201 @@ public final class ModelSetupActivity extends AppCompatActivity {
         toggleVision.setChecked(hasVision);
         if (rowVision != null) {
             rowVision.setOnClickListener(v -> toggleVision.toggle());
+        }
+
+        // 推理等级（Reasoning Levels / reasoningEfforts）自选配置
+        final List<String> ALL_TIERS = List.of("off", "minimal", "low", "medium", "high", "xhigh", "max");
+        class TierEntry {
+            String level;
+            String wireValue;
+            EditText editWire;
+            TierEntry(String level, String wireValue) {
+                this.level = level;
+                this.wireValue = wireValue;
+            }
+        }
+        final List<TierEntry> tierEntries = new ArrayList<>();
+
+        boolean initialReasoningOn = false;
+        if (original.has("reasoningEfforts")) {
+            JsonElement re = original.get("reasoningEfforts");
+            if (re.isJsonObject()) {
+                JsonObject obj = re.getAsJsonObject();
+                for (Map.Entry<String, JsonElement> e : obj.entrySet()) {
+                    String k = e.getKey();
+                    JsonElement v = e.getValue();
+                    String wire = (v == null || v.isJsonNull()) ? "" : v.getAsString();
+                    tierEntries.add(new TierEntry(k, wire));
+                }
+                initialReasoningOn = !tierEntries.isEmpty();
+            }
+        }
+        toggleReasoning.setChecked(initialReasoningOn);
+        layoutReasoningContainer.setVisibility(initialReasoningOn ? View.VISIBLE : View.GONE);
+
+        Runnable syncTierViews = new Runnable() {
+            @Override
+            public void run() {
+                layoutReasoningList.removeAllViews();
+                for (int i = 0; i < tierEntries.size(); i++) {
+                    final int tierIdx = i;
+                    final TierEntry te = tierEntries.get(i);
+
+                    LinearLayout row = new LinearLayout(ModelSetupActivity.this);
+                    row.setOrientation(LinearLayout.HORIZONTAL);
+                    row.setGravity(Gravity.CENTER_VERTICAL);
+                    LinearLayout.LayoutParams rLp = new LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                    rLp.topMargin = dp(6);
+
+                    // 1. 档位选择框（以 Skia 输入框圆角风格呈现，点击呼出选择弹窗）
+                    TextView tvLevel = new TextView(ModelSetupActivity.this);
+                    tvLevel.setBackgroundResource(R.drawable.bg_input);
+                    tvLevel.setPadding(dp(10), dp(8), dp(10), dp(8));
+                    tvLevel.setTextColor(getColor(R.color.text));
+                    tvLevel.setTextSize(13);
+                    tvLevel.setTypeface(null, android.graphics.Typeface.BOLD);
+                    tvLevel.setGravity(Gravity.CENTER_VERTICAL);
+                    tvLevel.setText(te.level);
+                    tvLevel.setClickable(true);
+                    tvLevel.setFocusable(true);
+                    LinearLayout.LayoutParams lvlLp = new LinearLayout.LayoutParams(0, dp(38), 1.1f);
+                    row.addView(tvLevel, lvlLp);
+
+                    // 2. API 参数值输入框
+                    EditText editWire = new EditText(ModelSetupActivity.this);
+                    editWire.setBackgroundResource(R.drawable.bg_input);
+                    editWire.setPadding(dp(10), dp(8), dp(10), dp(8));
+                    editWire.setTextColor(getColor(R.color.text));
+                    editWire.setTextSize(13);
+                    editWire.setSingleLine(true);
+                    if ("off".equals(te.level)) {
+                        editWire.setEnabled(false);
+                        editWire.setText("");
+                        editWire.setHint(t("关闭思考", "Turn off thinking"));
+                        editWire.setHintTextColor(getColor(R.color.text_muted));
+                    } else {
+                        editWire.setEnabled(true);
+                        editWire.setText(te.wireValue.isEmpty() ? te.level : te.wireValue);
+                        editWire.setHint(te.level);
+                        editWire.setHintTextColor(getColor(R.color.text_muted));
+                    }
+                    te.editWire = editWire;
+                    LinearLayout.LayoutParams wireLp = new LinearLayout.LayoutParams(0, dp(38), 1.6f);
+                    wireLp.leftMargin = dp(8);
+                    row.addView(editWire, wireLp);
+
+                    // 3. 删除按钮
+                    TextView btnDel = new TextView(ModelSetupActivity.this);
+                    btnDel.setText("✕");
+                    btnDel.setTextColor(getColor(R.color.err));
+                    btnDel.setTextSize(14);
+                    btnDel.setTypeface(null, android.graphics.Typeface.BOLD);
+                    btnDel.setGravity(Gravity.CENTER);
+                    android.util.TypedValue ripple = new android.util.TypedValue();
+                    if (getTheme().resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, ripple, true)) {
+                        btnDel.setBackgroundResource(ripple.resourceId);
+                    }
+                    btnDel.setOnClickListener(v -> {
+                        for (TierEntry t : tierEntries) {
+                            if (t.editWire != null && !"off".equals(t.level)) {
+                                t.wireValue = t.editWire.getText().toString();
+                            }
+                        }
+                        tierEntries.remove(tierIdx);
+                        run();
+                    });
+                    LinearLayout.LayoutParams delLp = new LinearLayout.LayoutParams(dp(32), dp(38));
+                    delLp.leftMargin = dp(8);
+                    row.addView(btnDel, delLp);
+
+                    // 点击切换档位选择对话框
+                    tvLevel.setOnClickListener(v -> {
+                        Set<String> used = new HashSet<>();
+                        for (int k = 0; k < tierEntries.size(); k++) {
+                            if (k != tierIdx) used.add(tierEntries.get(k).level);
+                        }
+                        List<String> available = new ArrayList<>();
+                        for (String lvl : ALL_TIERS) {
+                            if (!used.contains(lvl)) available.add(lvl);
+                        }
+                        String[] items = available.toArray(new String[0]);
+                        new DshaDialogBuilder(ModelSetupActivity.this)
+                                .setTitle(t("选择档位", "Select Level"))
+                                .setItems(items, (d, which) -> {
+                                    String chosen = items[which];
+                                    String oldLevel = te.level;
+                                    te.level = chosen;
+                                    if ("off".equals(chosen)) {
+                                        te.wireValue = "";
+                                    } else if ("off".equals(oldLevel) || oldLevel.equals(te.wireValue)) {
+                                        te.wireValue = chosen;
+                                    }
+                                    run();
+                                })
+                                .show();
+                    });
+
+                    layoutReasoningList.addView(row, rLp);
+                }
+            }
+        };
+
+        if (initialReasoningOn) {
+            syncTierViews.run();
+        }
+
+        if (rowReasoning != null) {
+            rowReasoning.setOnClickListener(v -> toggleReasoning.toggle());
+        }
+
+        toggleReasoning.setOnCheckedChangeListener((btn, isChecked) -> {
+            layoutReasoningContainer.setVisibility(isChecked ? View.VISIBLE : View.GONE);
+            if (isChecked && tierEntries.isEmpty()) {
+                tierEntries.add(new TierEntry("off", ""));
+                tierEntries.add(new TierEntry("low", "low"));
+                tierEntries.add(new TierEntry("medium", "medium"));
+                tierEntries.add(new TierEntry("high", "high"));
+                syncTierViews.run();
+            }
+        });
+
+        btnAddTier.setOnClickListener(v -> {
+            Set<String> used = new HashSet<>();
+            for (TierEntry t : tierEntries) {
+                used.add(t.level);
+                if (t.editWire != null && !"off".equals(t.level)) {
+                    t.wireValue = t.editWire.getText().toString();
+                }
+            }
+            String candidate = null;
+            for (String lvl : ALL_TIERS) {
+                if (!used.contains(lvl)) {
+                    candidate = lvl;
+                    break;
+                }
+            }
+            if (candidate == null) {
+                ToastHelper.makeText(ModelSetupActivity.this, t("已添加全部可用档位", "All tiers added"), Toast.LENGTH_SHORT).show();
+                return;
+            }
+            tierEntries.add(new TierEntry(candidate, "off".equals(candidate) ? "" : candidate));
+            syncTierViews.run();
+        });
+
+        if (btnReasoningInfo != null) {
+            btnReasoningInfo.setOnClickListener(v -> {
+                new DshaDialogBuilder(ModelSetupActivity.this)
+                        .setTitle(t("推理等级说明", "Reasoning Levels"))
+                        .setMessage(t("推理等级（reasoningEfforts）用于配置模型向上游 API 发送的思考强度参数：\n\n"
+                                        + "· 档位：在 DSH 选择器中展示的等级标识（如 low, medium, high 等）；\n"
+                                        + "· API 参数值：实际在请求协议中发送的参数字符串；\n"
+                                        + "· off 档位：固定表示关闭深度思考，参数值锁定为空；\n"
+                                        + "· 必须包含至少一个除 off 以外的思考档位。",
+                                "Reasoning levels configure model thinking effort dispatched to API."))
+                        .setPositiveButton(t("知道了", "Got it"), null)
+                        .show();
+            });
         }
 
         if (index >= 0) {
@@ -1013,6 +1217,31 @@ public final class ModelSetupActivity extends AppCompatActivity {
                             : ModelConfiguration.path("text"));
                 }
 
+                if (toggleReasoning.isChecked()) {
+                    JsonObject efforts = new JsonObject();
+                    boolean hasThinking = false;
+                    for (TierEntry te : tierEntries) {
+                        if (te.editWire != null && !"off".equals(te.level)) {
+                            te.wireValue = te.editWire.getText().toString().trim();
+                        }
+                        if ("off".equals(te.level)) {
+                            efforts.add("off", JsonNull.INSTANCE);
+                        } else {
+                            if (te.wireValue == null || te.wireValue.isEmpty()) {
+                                throw new IllegalArgumentException("TIER_EMPTY_VALUE");
+                            }
+                            efforts.addProperty(te.level, te.wireValue);
+                            hasThinking = true;
+                        }
+                    }
+                    if (!hasThinking) {
+                        throw new IllegalArgumentException("NO_THINKING_LEVEL");
+                    }
+                    next.add("reasoningEfforts", efforts);
+                } else {
+                    next.remove("reasoningEfforts");
+                }
+
                 JsonArray checked = draft.modelList.deepCopy();
                 if (index < 0) checked.add(next);
                 else checked.set(index, next);
@@ -1025,7 +1254,13 @@ public final class ModelSetupActivity extends AppCompatActivity {
                 dialog.dismiss();
             } catch (RuntimeException invalid) {
                 tvError.setVisibility(View.VISIBLE);
-                tvError.setText(t("请检查模型 ID、重复项和正整数容量。", "Check model ID, duplicates and positive integer capacities."));
+                if ("NO_THINKING_LEVEL".equals(invalid.getMessage())) {
+                    tvError.setText(t("推理等级至少需配置一个除 off 以外的思考档位。", "At least one thinking level beyond 'off' is required."));
+                } else if ("TIER_EMPTY_VALUE".equals(invalid.getMessage())) {
+                    tvError.setText(t("思考档位的 API 参数值不能为空。", "API parameter value cannot be empty."));
+                } else {
+                    tvError.setText(t("请检查模型 ID、重复项和正整数容量。", "Check model ID, duplicates and positive integer capacities."));
+                }
             }
         });
 

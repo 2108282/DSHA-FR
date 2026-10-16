@@ -195,6 +195,9 @@ public final class ModelConfiguration {
       copyPositiveInteger(candidate, adopted, "maxTokens");
       JsonElement modalities = candidate.get("inputModalities");
       if (validModalities(modalities)) adopted.add("input", modalities.deepCopy());
+      if (candidate.has("reasoningEfforts")) {
+        adopted.add("reasoningEfforts", candidate.get("reasoningEfforts").deepCopy());
+      }
       merged.add(adopted);
       known.add(id);
     }
