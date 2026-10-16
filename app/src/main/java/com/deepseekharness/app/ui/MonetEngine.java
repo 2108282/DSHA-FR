@@ -175,7 +175,7 @@ public final class MonetEngine {
 
             // 豁免危险警告按钮 (停止服务、删除、卸载等)，保持警示红醒目
             boolean isDanger = (btnId == R.id.launch_stop || btnId == R.id.btnPluginUninstall
-                    || btnId == R.id.btnDiscardConfirm || btnId == R.id.term_ctrlc);
+                    || btnId == R.id.btnPluginUninstallConfirm || btnId == R.id.btnDiscardConfirm || btnId == R.id.term_ctrlc);
 
             if (!isDanger) {
                 if (isPrimaryButton(btn)) {

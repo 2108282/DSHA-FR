@@ -483,11 +483,52 @@ public class PluginPresenter implements PluginActions {
             ToastHelper.makeText(context, "DSHA 系统内置核心插件无法卸载", Toast.LENGTH_SHORT).show();
             return;
         }
-        new AlertDialog.Builder(activity)
-                .setTitle("卸载 " + item.name + "？")
-                .setMessage("插件将被彻底卸载并移除文件，相关配置和对话数据保留；重启 Web 生效。")
-                .setNegativeButton("取消", null)
-                .setPositiveButton("卸载", (c, b) -> repository.delete(item))
-                .show();
+
+        View dialogView = LayoutInflater.from(activity).inflate(R.layout.dialog_plugin_uninstall, null);
+        MonetEngine.PaletteInfo palette = MonetEngine.resolveCurrentPalette(activity);
+        MonetEngine.applyToViewTree(dialogView, palette);
+
+        TextView tvName = dialogView.findViewById(R.id.dialogUninstallPluginName);
+        ModernBadgeView badgeVersion = dialogView.findViewById(R.id.dialogUninstallPluginVersionBadge);
+        ModernBadgeView badgeType = dialogView.findViewById(R.id.dialogUninstallPluginTypeBadge);
+        TextView tvDesc = dialogView.findViewById(R.id.dialogUninstallPluginDesc);
+        Button btnCancel = dialogView.findViewById(R.id.btnDialogCancel);
+        Button btnConfirm = dialogView.findViewById(R.id.btnPluginUninstallConfirm);
+
+        if (tvName != null) tvName.setText(item.name);
+        if (badgeVersion != null) {
+            String ver = (item.version == null || item.version.isEmpty()) ? "未知版本" : "v" + item.version.replace("v", "");
+            badgeVersion.setBadge(true, ver);
+        }
+        if (badgeType != null) {
+            String type = item.builtin ? "内置插件" : item.official ? "官方核心" : "第三方插件";
+            badgeType.setBadge(false, type);
+        }
+        if (tvDesc != null) {
+            tvDesc.setText((item.description == null || item.description.isEmpty())
+                    ? "DSHA 社区扩展插件，卸载后将移除运行环境中的依赖与文件。"
+                    : item.description);
+        }
+
+        AlertDialog dialog = new AlertDialog.Builder(activity, R.style.Dialog_DSHA_Alert)
+                .setView(dialogView)
+                .setCancelable(true)
+                .create();
+
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+        }
+
+        if (btnCancel != null) {
+            btnCancel.setOnClickListener(v -> dialog.dismiss());
+        }
+        if (btnConfirm != null) {
+            btnConfirm.setOnClickListener(v -> {
+                dialog.dismiss();
+                repository.delete(item);
+            });
+        }
+
+        dialog.show();
     }
 }
