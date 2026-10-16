@@ -727,6 +727,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         // 3. 顶部操作栏文字颜色
         if (headerTitle != null) {
             headerTitle.setTextColor(textColor);
+            applyHeaderTitleRipple(textColor);
         }
 
         // 4. 顶部操作栏矢量图标按钮（图片）颜色
@@ -1267,13 +1268,14 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         headerTitle.setSingleLine(true);
         headerTitle.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
         headerTitle.setGravity(Gravity.CENTER);
-        headerTitle.setPadding(dpToPx(8), dpToPx(4), dpToPx(8), dpToPx(4));
+        headerTitle.setPadding(dpToPx(10), dpToPx(3), dpToPx(10), dpToPx(3));
         headerTitle.setClickable(true);
         headerTitle.setFocusable(true);
-        android.util.TypedValue titleRipple = new android.util.TypedValue();
-        if (getTheme().resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, titleRipple, true)) {
-            headerTitle.setBackgroundResource(titleRipple.resourceId);
-        }
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        titleLp.gravity = Gravity.CENTER_HORIZONTAL;
+        headerTitle.setLayoutParams(titleLp);
+        applyHeaderTitleRipple(textColor);
         headerTitle.setOnClickListener(v -> {
             if (fileViewerContainer != null && fileViewerContainer.getVisibility() == View.VISIBLE) {
                 return;
@@ -1290,9 +1292,17 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         headerSubTitle.setSingleLine(true);
         headerSubTitle.setGravity(Gravity.CENTER);
         headerSubTitle.setVisibility(View.GONE);
+        LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        subLp.gravity = Gravity.CENTER_HORIZONTAL;
+        headerSubTitle.setLayoutParams(subLp);
         titleBox.addView(headerSubTitle);
 
         headerBar.addView(titleBox);
+
+        // 核心保护：两侧按钮组显式提到最顶层，杜绝中间区域对按钮点击事件的任何误触拦截
+        leftGroup.bringToFront();
+        rightGroup.bringToFront();
 
         sheetCard.addView(headerBar);
 
@@ -1871,6 +1881,24 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             headerTitle.setText("DSHA 对话");
         }
         headerTitle.setTextSize(17);
+    }
+
+    private void applyHeaderTitleRipple(int textColor) {
+        if (headerTitle == null) return;
+        try {
+            GradientDrawable mask = new GradientDrawable();
+            mask.setShape(GradientDrawable.RECTANGLE);
+            mask.setCornerRadius(dpToPx(8));
+            mask.setColor(Color.WHITE);
+            int rippleColor = Color.argb(0x28, Color.red(textColor), Color.green(textColor), Color.blue(textColor));
+            RippleDrawable ripple = new RippleDrawable(ColorStateList.valueOf(rippleColor), null, mask);
+            headerTitle.setBackground(ripple);
+        } catch (Throwable ignored) {
+            android.util.TypedValue out = new android.util.TypedValue();
+            if (getTheme().resolveAttribute(android.R.attr.selectableItemBackground, out, true)) {
+                headerTitle.setBackgroundResource(out.resourceId);
+            }
+        }
     }
 
     private void toggleDshConnectionTarget() {
