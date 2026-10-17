@@ -2164,6 +2164,10 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 File dl = new File(finalPath.replace("/Download/DSHA/工作区/", "/Download/"));
                 if (dl.exists()) f = dl;
             }
+            if (!f.exists() && (finalPath.startsWith("/root/") || finalPath.startsWith("/usr/") || finalPath.startsWith("/home/"))) {
+                File rootfsFile = new File("/data/adb/dsha/rootfs" + finalPath);
+                f = rootfsFile;
+            }
 
             // Root 特权保障：赋予所有人可读权限，确保 MT 管理器和安装器畅通读取物理文件
             if (f.exists()) {
@@ -3386,7 +3390,12 @@ public class QuickChatSheetActivity extends AppCompatActivity {
 
     // ---------------- 手势位置跟随的悬浮气泡微菜单（100% 继承抽屉毛玻璃与莫奈主题） ----------------
     private void showWorkspaceFileActionMenu(final File file, final String rawPath, float touchX, float touchY) {
-        if (file == null || (!sIsRemoteActive && !file.exists()) || rootOverlay == null) {
+        boolean isContainer = !sIsRemoteActive && (
+                (rawPath != null && (rawPath.startsWith("/root/") || rawPath.startsWith("/usr/") || rawPath.startsWith("/home/")))
+                || (file != null && (file.getAbsolutePath().startsWith("/data/adb/dsha/rootfs/") || file.getAbsolutePath().startsWith("/root/")))
+        );
+
+        if (file == null || (!sIsRemoteActive && !isContainer && !file.exists()) || rootOverlay == null) {
             ToastHelper.makeText(this, "目标不存在", Toast.LENGTH_SHORT).show();
             return;
         }
@@ -3518,9 +3527,9 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         // 1. 外部打开
         menuCard.addView(createMenuItem("调用系统打开方式", palette.textColor, v -> {
             dismissActiveDialog();
-            if (sIsRemoteActive) {
-                // 远端文件：先下载到手机本地 Download 目录，再调起系统打开
-                ToastHelper.makeText(this, "正在下载远端文件后调用系统打开...", Toast.LENGTH_SHORT).show();
+            if (sIsRemoteActive || isContainer) {
+                // 远端文件或容器内部文件：先复制/下载到手机本地 Download 目录，再调起系统打开
+                ToastHelper.makeText(this, isContainer ? "正在导出后调用系统打开..." : "正在下载远端文件后调用系统打开...", Toast.LENGTH_SHORT).show();
                 performDownloadFileToDownloads(file, rawPath, destFile -> {
                     if (destFile != null && destFile.exists()) {
                         com.deepseekharness.app.viewer.FileOpenHelper.openWithSystem(QuickChatSheetActivity.this, destFile);
@@ -3701,8 +3710,17 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 ToastHelper.makeText(this, "同名目标已存在", Toast.LENGTH_SHORT).show();
                 return;
             }
-            if (file.renameTo(target)) {
-                ToastHelper.makeText(this, "✓ 重命名成功", Toast.LENGTH_SHORT).show();
+            boolean renamed = file.renameTo(target);
+            if (!renamed) {
+                try {
+                    String cmd = "mv " + com.deepseekharness.app.util.ShellQuote.arg(file.getAbsolutePath())
+                            + " " + com.deepseekharness.app.util.ShellQuote.arg(target.getAbsolutePath());
+                    Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
+                    renamed = (p.waitFor() == 0);
+                } catch (Throwable ignored) {}
+            }
+            if (renamed) {
+                ToastHelper.makeText(this, "重命名成功", Toast.LENGTH_SHORT).show();
                 dismiss.run();
                 reloadWorkspaceFileTree();
             } else {
@@ -3801,8 +3819,15 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             } else {
                 ok = file.delete();
             }
+            if (!ok) {
+                try {
+                    String cmd = "rm -rf " + com.deepseekharness.app.util.ShellQuote.arg(file.getAbsolutePath());
+                    Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
+                    ok = (p.waitFor() == 0);
+                } catch (Throwable ignored) {}
+            }
             if (ok) {
-                ToastHelper.makeText(this, "✓ 已删除", Toast.LENGTH_SHORT).show();
+                ToastHelper.makeText(this, "已删除", Toast.LENGTH_SHORT).show();
                 dismiss.run();
                 reloadWorkspaceFileTree();
             } else {
@@ -3913,10 +3938,18 @@ public class QuickChatSheetActivity extends AppCompatActivity {
 
     private void performDownloadFileToDownloads(final File srcFile, final String rawPath, final OnFileDownloadedCallback callback) {
         if (!sIsRemoteActive) {
-            if (srcFile == null || !srcFile.exists() || !srcFile.isFile()) {
+            File realSrc = srcFile;
+            if (realSrc != null && !realSrc.exists() && (realSrc.getAbsolutePath().startsWith("/root/") || realSrc.getAbsolutePath().startsWith("/usr/"))) {
+                File rootfsFile = new File("/data/adb/dsha/rootfs" + realSrc.getAbsolutePath());
+                if (rootfsFile.exists()) {
+                    realSrc = rootfsFile;
+                }
+            }
+            if (realSrc == null || !realSrc.exists() || !realSrc.isFile()) {
                 ToastHelper.makeText(this, "文件不可读或不存在", Toast.LENGTH_SHORT).show();
                 return;
             }
+            final File finalSrc = realSrc;
 
             ToastHelper.makeText(this, "正在保存至 Download 目录...", Toast.LENGTH_SHORT).show();
             new Thread(() -> {
@@ -3930,7 +3963,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                         downloadDir = new File("/sdcard/Download");
                     }
 
-                    String baseName = srcFile.getName();
+                    String baseName = finalSrc.getName();
                     String namePart = baseName;
                     String extPart = "";
                     int dot = baseName.lastIndexOf('.');
@@ -3946,7 +3979,8 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                         count++;
                     }
 
-                    try (java.io.FileInputStream in = new java.io.FileInputStream(srcFile);
+                    boolean copySuccess = false;
+                    try (java.io.FileInputStream in = new java.io.FileInputStream(finalSrc);
                          java.io.FileOutputStream out = new java.io.FileOutputStream(dest)) {
                         byte[] buffer = new byte[64 * 1024];
                         int len;
@@ -3954,6 +3988,18 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                             out.write(buffer, 0, len);
                         }
                         out.flush();
+                        copySuccess = true;
+                    } catch (Exception streamErr) {
+                        try {
+                            String cmd = "cp -f " + com.deepseekharness.app.util.ShellQuote.arg(finalSrc.getAbsolutePath())
+                                    + " " + com.deepseekharness.app.util.ShellQuote.arg(dest.getAbsolutePath())
+                                    + " && chmod 666 " + com.deepseekharness.app.util.ShellQuote.arg(dest.getAbsolutePath());
+                            Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
+                            copySuccess = (p.waitFor() == 0) && dest.exists() && dest.length() > 0;
+                        } catch (Throwable ignored) {}
+                        if (!copySuccess) {
+                            throw streamErr;
+                        }
                     }
 
                     final File finalDest = dest;
@@ -3972,7 +4018,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                                 rootOverlay.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK);
                             } catch (Throwable ignored) {}
                         }
-                        ToastHelper.makeText(this, "✓ 已下载至 Download/" + finalDest.getName(), Toast.LENGTH_LONG).show();
+                        ToastHelper.makeText(this, "已下载至 Download/" + finalDest.getName(), Toast.LENGTH_LONG).show();
                         if (callback != null) callback.onDownloaded(finalDest);
                     });
                 } catch (Exception e) {
