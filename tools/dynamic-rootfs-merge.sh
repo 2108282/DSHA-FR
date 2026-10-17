@@ -49,10 +49,14 @@ if [ -d "$OVERLAY_DIR" ]; then
     mkdir -p "$PROFILE_NM" "$GLOBAL_NM"
 
     # 动态扫描注入的插件实体，自动完成安装凭证立牌与语法检测
-    for pdir in "$STAGE_DIR/root/dsha-"*; do
+    for pdir in "$STAGE_DIR/root/dsha-"* "$STAGE_DIR/root/dsh-web-mobile"; do
         [ -d "$pdir" ] || continue
         pname=$(basename "$pdir")
-        pkg_name="dsh-${pname#dsha-}"
+        if [ "$pname" = "dsh-web-mobile" ]; then
+            pkg_name="dsh-web-mobile"
+        else
+            pkg_name="dsh-${pname#dsha-}"
+        fi
         
         # 1. 自动立牌：确保 App 与底座将其识别为内置插件
         touch "$STAGE_DIR/root/${pname}-installed"

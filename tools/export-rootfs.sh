@@ -122,6 +122,16 @@ else
             mv -f "$d" "$orig" 2>/dev/null || true
             echo "  -> [自动自愈] 恢复核心包实体: $b -> $real"
         done
+
+        # 自动去重：清理 npm 重复下载的 50+ 个子包内冗余嵌套 node_modules/zod
+        python3 -c '
+import os, shutil
+base = "/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai"
+for d in os.listdir(base):
+    zod_nm = os.path.join(base, d, "node_modules", "zod")
+    if os.path.isdir(zod_nm):
+        shutil.rmtree(os.path.join(base, d, "node_modules"), ignore_errors=True)
+' 2>/dev/null || true
     fi
 
     echo "==> 正在执行运行时完整性断言 (dsh --version)..."
@@ -132,7 +142,7 @@ else
     }
     echo "    ✓ 核心运行时健康: $DSH_VER"
 
-    # 1. 在临时 Stage 中准备纯净的 profiles/web/package.json
+    # 1. 在临时 Stage 中准备纯净的 profiles/web/package.json 与 cordis.patch.yml
     CLEAN_PROFILE_DIR="$STAGE_DIR/root/.dsh/profiles/web"
     mkdir -p "$CLEAN_PROFILE_DIR"
 
@@ -162,14 +172,83 @@ else
 }
 EOF_PKG
 
-    # 2. 收集需要排除的死链 (profiles/web/node_modules, /usr/local/lib/node_modules, /usr/local/bin 中所有指向 plugin-src/ 的软链)
+    cat > "$CLEAN_PROFILE_DIR/cordis.patch.yml" << 'EOF_CORDIS'
+- id: ui-conversation
+  name: "@deepseek-ai/dsh-client-ui-conversation"
+  config:
+    busyEnter: steer
+- id: session-log-deepseek
+  name: "@deepseek-ai/dsh-session-log-deepseek"
+  config:
+    enabled: false
+- id: ui-settings-general
+  name: "@deepseek-ai/dsh-client-ui-settings-general"
+  config:
+    welcomeNoticeVersion: 2026-09-28.1
+- id: agent-default-model
+  name: "@deepseek-ai/dsh-agent-default-model"
+  config:
+    provider: agy
+    model: gemini-3.8-flash-tiered
+    reasoningEffort: high
+- id: permission
+  name: "@deepseek-ai/dsh-permission-presets"
+  config:
+    presets:
+      read-only:
+        sandbox: read-only
+        approval: ask
+      workspace-write:
+        sandbox: workspace-write
+        approval: ask
+      danger-full-access:
+        sandbox: danger-full-access
+        approval: never
+    defaultPreset: danger-full-access
+- id: llm-pi-ai
+  name: "@deepseek-ai/dsh-llm-pi-ai"
+  config:
+    providers:
+      shusheng:
+        baseURL: https://discovery-api.intern-ai.org.cn/v1
+        api: openai-completions
+        displayName: jdjd
+        models:
+          - id: Agents-A1
+            name: Agents-A1
+          - id: Atria-Dawn-Preview
+            name: Atria-Dawn-Preview
+          - id: deepseek-v4-flash-0731
+            name: DeepSeek-V4-Flash-0731
+          - id: deepseek-v4-flash-vision
+            name: DeepSeek-V4-Flash-Vision
+          - id: deepseek-v4-pro-0813
+            name: DeepSeek-V4-Pro-0813
+          - id: glm-5.3
+            name: GLM-5.3
+          - id: intern-s2
+            name: 书生-S2
+          - id: kimi-k2.6
+            name: Kimi-K2.6
+          - id: minimax-m3
+            name: MiniMax-M3
+          - id: qwen3.8-27b
+            name: Qwen3.8-27B
+        apiKeyEnv: DSHA_SHUSHENG_API_KEY
+- id: ui-theme
+  name: "@deepseek-ai/dsh-client-ui-theme"
+  config:
+    fontSize: 15
+EOF_CORDIS
+
+    # 2. 收集需要排除的死链 (profiles/web/node_modules, /usr/local/lib/node_modules, /usr/local/bin 中所有指向 plugin-src/、外部存储或悬空的软链)
     SYMLINK_EXCLUDES=()
     for scan_dir in "/root/.dsh/profiles/web/node_modules" "/usr/local/lib/node_modules" "/usr/local/bin"; do
         if [ -d "$scan_dir" ]; then
             while IFS= read -r link_entry; do
                 [ -L "$link_entry" ] || continue
                 target=$(readlink "$link_entry" || true)
-                if [[ "$target" == *"plugin-src"* ]]; then
+                if [[ "$target" == *"plugin-src"* ]] || [[ "$target" == *"/sdcard"* ]] || [[ "$target" == *"/storage"* ]] || [ ! -e "$link_entry" ]; then
                     rel_path=".${link_entry}"
                     SYMLINK_EXCLUDES+=("--exclude=$rel_path")
                 fi
@@ -238,14 +317,23 @@ EOF_PKG
         "--exclude=./root/dsh-web-mobile/tests"
         "--exclude=./root/dsh-web-mobile/tests/*"
         "--exclude=./root/dsh-web-mobile/assets/banner*"
+        # 排除工作区与个人工程文件 (严禁将用户工作区数据打入公开底包)
+        "--exclude=./root/workspaces/*"
+        "--exclude=./root/.dsha-workspaces*"
         # 排除后装全局工具与可执行文件 (对齐 BackupScope.TOOLS，不属于底座)
         "--exclude=./usr/local/lib/node_modules/rea-agents"
         "--exclude=./usr/local/lib/node_modules/rea-agents/*"
         "--exclude=./usr/local/bin/rea*"
         "--exclude=./root/.dsha-tools*"
-        "--exclude=./root/.dsha-workspaces*"
-        # 排除当前含有后装插件的 package.json，后面追加注入纯净版
+        # 排除后装第三方插件实体、依赖与管理配置 (彻底排除 react-icons/mermaid 等 220MB 冗余依赖)
+        "--exclude=./root/.dsh/profiles/web/node_modules/*"
+        "--exclude=./root/.dsh/profiles/web/.dsh-market*"
+        "--exclude=./root/.dsh/profiles/web/.plugin-manager*"
+        "--exclude=./usr/local/lib/node_modules/dsh-better-sidebar*"
+        "--exclude=./usr/local/lib/node_modules/dshmarket*"
+        # 排除当前含有后装插件的 package.json 与个性化配置，后面追加注入纯净版
         "--exclude=./root/.dsh/profiles/web/package.json"
+        "--exclude=./root/.dsh/profiles/web/cordis.patch.yml"
         # 排除个人会话、附件与存储
         "--exclude=./root/.dsh/sessions/*"
         "--exclude=./root/.dsh/attachments/*"
@@ -307,9 +395,20 @@ EOF_PKG
         "--exclude=./var/tmp/*"
 
         "--exclude=./root/*.log"
+        "--exclude=./root/*.xml"
+        "--exclude=./root/test-*.sh"
         "--exclude=./root/.*.pid"
+        "--exclude=./root/.dsh/*.pid"
+        "--exclude=./root/.dsh/dsh.pid"
+        "--exclude=./root/.dsh/*.log"
+        "--exclude=./root/.dsh/browser-tabs"
+        "--exclude=./root/.dsh/browser-tabs/*"
+        "--exclude=./root/.dsh/.approval_status*"
+        "--exclude=./root/.dsh/.plugins.lock"
+        "--exclude=./root/.dsh/connected_devices.json"
+        "--exclude=./root/.dsh/taskset"
+        "--exclude=./root/.dsh/freezer.state"
         "--exclude=./root/.dsh.pre-restore*"
-        "--exclude=./root/.dsha-backup*"
         "--exclude=./root/.dsh/__pycache__"
         "--exclude=./root/.dsh/repair-builtin.log"
         "--exclude=./root/.dsh/restore-report.txt"
@@ -337,8 +436,9 @@ EOF_PKG
     STAGE_PROFILE_NM="$STAGE_DIR/root/.dsh/profiles/web/node_modules"
     STAGE_GLOBAL_NM="$STAGE_DIR/usr/local/lib/node_modules"
     STAGE_AGENTS_SKILLS="$STAGE_DIR/root/.agents/skills"
-    mkdir -p "$STAGE_PROFILE_NM" "$STAGE_GLOBAL_NM" "$STAGE_AGENTS_SKILLS"
-    touch "$STAGE_AGENTS_SKILLS/.gitkeep"
+    STAGE_WORKSPACES="$STAGE_DIR/root/workspaces"
+    mkdir -p "$STAGE_PROFILE_NM" "$STAGE_GLOBAL_NM" "$STAGE_AGENTS_SKILLS" "$STAGE_WORKSPACES"
+    touch "$STAGE_AGENTS_SKILLS/.gitkeep" "$STAGE_WORKSPACES/.gitkeep"
     for p in dsh-device-shell-guide dsh-task-notifier dsh-status-overlay dsh-web-mobile; do
         if [ "$p" = "dsh-web-mobile" ]; then
             tgt="/root/dsh-web-mobile"
@@ -350,6 +450,7 @@ EOF_PKG
     done
     tar --numeric-owner -rf "$TMP_RAW_TAR" -C "$STAGE_DIR" \
         ./root/.dsh/profiles/web/package.json \
+        ./root/.dsh/profiles/web/cordis.patch.yml \
         ./root/.dsh/profiles/web/node_modules/dsh-device-shell-guide \
         ./root/.dsh/profiles/web/node_modules/dsh-task-notifier \
         ./root/.dsh/profiles/web/node_modules/dsh-status-overlay \
@@ -358,7 +459,8 @@ EOF_PKG
         ./usr/local/lib/node_modules/dsh-task-notifier \
         ./usr/local/lib/node_modules/dsh-status-overlay \
         ./usr/local/lib/node_modules/dsh-web-mobile \
-        ./root/.agents/skills/.gitkeep
+        ./root/.agents/skills/.gitkeep \
+        ./root/workspaces/.gitkeep
 
     echo "==> [3/3] 正在执行多线程高效压缩..."
     $COMPRESS_CMD < "$TMP_RAW_TAR" > "$OUTPUT_TAR"
