@@ -759,31 +759,12 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         return liquidBody;
     }
 
-    /** 构建拖拽把手背景：液态模式下呈现 3D 悬浮水滴胶囊与晶核倒角高光 */
+    /** 构建拖拽把手背景：纯色圆角矩形，无任何渐变与高光描边 */
     private Drawable buildDragHandleBackground(ConfigStore cfg, int handleColor) {
         GradientDrawable handleBg = new GradientDrawable();
         handleBg.setShape(GradientDrawable.RECTANGLE);
-        handleBg.setCornerRadius(dpToPx(2.5f));
-        if (cfg.isSheetLiquidGlass()) {
-            if (isDarkMode) {
-                // 水滴晶核：顶部高光折射 -> 底部深透蓝灰
-                handleBg.setOrientation(GradientDrawable.Orientation.TOP_BOTTOM);
-                handleBg.setColors(new int[] {
-                        Color.parseColor("#E6FFFFFF"),
-                        Color.parseColor("#708BA0B8")
-                });
-                handleBg.setStroke(dpToPx(1f), Color.parseColor("#CCFFFFFF"));
-            } else {
-                handleBg.setOrientation(GradientDrawable.Orientation.TOP_BOTTOM);
-                handleBg.setColors(new int[] {
-                        Color.parseColor("#FAFFFFFF"),
-                        Color.parseColor("#8094A3B8")
-                });
-                handleBg.setStroke(dpToPx(1f), Color.parseColor("#EEFFFFFF"));
-            }
-        } else {
-            handleBg.setColor(handleColor);
-        }
+        handleBg.setCornerRadius(dpToPx(2));
+        handleBg.setColor(handleColor);
         return handleBg;
     }
 
@@ -1165,7 +1146,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         updateDragAreaBackground(cfg);
 
         dragHandle = new View(this);
-        FrameLayout.LayoutParams handleLp = new FrameLayout.LayoutParams(dpToPx(40), dpToPx(5));
+        FrameLayout.LayoutParams handleLp = new FrameLayout.LayoutParams(dpToPx(36), dpToPx(4));
         handleLp.gravity = Gravity.CENTER_HORIZONTAL;
         dragHandle.setLayoutParams(handleLp);
         dragHandle.setBackground(buildDragHandleBackground(cfg, handleColor));
