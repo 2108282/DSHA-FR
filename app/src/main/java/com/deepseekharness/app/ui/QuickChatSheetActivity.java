@@ -794,24 +794,10 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         return handleBg;
     }
 
-    /** 顶部 14dp 拖拽区域：液态模式下注入弧面液态倒角折射流光 */
+    /** 顶部拖拽区域：保持完全透明，顶角圆角与流光由整体外框统领，根除局部 14dp 高度压扁圆角导致的曲率错位 */
     private void updateDragAreaBackground(ConfigStore cfg) {
         if (dragArea == null) return;
-        if (cfg.isSheetLiquidGlass()) {
-            float[] radii = calculateCardCornerRadii(cfg.getSheetMarginLeft(), cfg.getSheetMarginRight());
-            GradientDrawable crest = new GradientDrawable(
-                    GradientDrawable.Orientation.TOP_BOTTOM,
-                    new int[] {
-                            isDarkMode ? Color.argb(0x35, 0xFF, 0xFF, 0xFF) : Color.argb(0x60, 0xFF, 0xFF, 0xFF),
-                            Color.TRANSPARENT
-                    }
-            );
-            crest.setShape(GradientDrawable.RECTANGLE);
-            crest.setCornerRadii(new float[] { radii[0], radii[1], radii[2], radii[3], 0, 0, 0, 0 });
-            dragArea.setBackground(crest);
-        } else {
-            dragArea.setBackground(null);
-        }
+        dragArea.setBackground(null);
     }
 
     private void updateSheetCardShadow(ConfigStore cfg) {
@@ -1171,6 +1157,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         sheetCard.setOrientation(LinearLayout.VERTICAL);
         sheetCard.setElevation(dpToPx(16));
         sheetCard.setClipChildren(true);
+        sheetCard.setClipToOutline(true);
         sheetCard.setFitsSystemWindows(false);
 
         // 顶部圆角 + 智能底角（自适应液态玻璃与平铺半透）
