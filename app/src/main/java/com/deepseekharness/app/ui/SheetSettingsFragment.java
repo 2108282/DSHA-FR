@@ -119,6 +119,7 @@ public class SheetSettingsFragment extends Fragment {
                 }
                 MonetThemeHelper.clearCache(requireContext());
                 QuickChatSheetActivity.refreshThemeFromConfig(requireContext());
+                MonetEngine.applyToViewTree(v, MonetEngine.resolveCurrentPalette(requireContext()));
                 com.deepseekharness.app.util.ToastHelper.show(requireContext(),
                         isChecked ? "莫奈取色已开启（跟随系统壁纸调色，仅浅色生效）" : "莫奈取色已关闭（恢复经典浅色）");
             });
@@ -138,6 +139,7 @@ public class SheetSettingsFragment extends Fragment {
                 }
                 MonetThemeHelper.clearCache(requireContext());
                 QuickChatSheetActivity.refreshThemeFromConfig(requireContext());
+                MonetEngine.applyToViewTree(v, MonetEngine.resolveCurrentPalette(requireContext()));
                 com.deepseekharness.app.util.ToastHelper.show(requireContext(),
                         isChecked ? "已启用莫奈三色倒序" : "已恢复莫奈三色正常顺序");
             });
@@ -319,6 +321,10 @@ public class SheetSettingsFragment extends Fragment {
             });
         }
 
+        // 统一注入莫奈取色（图标、胶囊开关与保存按钮）
+        MonetEngine.PaletteInfo palette = MonetEngine.resolveCurrentPalette(requireContext());
+        MonetEngine.applyToViewTree(v, palette);
+
         return v;
     }
 
@@ -326,6 +332,9 @@ public class SheetSettingsFragment extends Fragment {
     public void onResume() {
         super.onResume();
         syncActivityTitle(true);
+        if (getView() != null) {
+            MonetEngine.applyToViewTree(getView(), MonetEngine.resolveCurrentPalette(requireContext()));
+        }
     }
 
     @Override
