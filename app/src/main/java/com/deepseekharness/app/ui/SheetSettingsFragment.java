@@ -190,21 +190,15 @@ public class SheetSettingsFragment extends Fragment {
             }
         }
 
-        // 4.5 液态玻璃拟态开关与实机动态预览盒（DshaToggle 纯 Skia 自绘）
-        View previewCard = v.findViewById(R.id.sheet_settings_liquid_preview_card);
-        View previewHandle = v.findViewById(R.id.sheet_settings_liquid_preview_handle);
-        TextView previewText = v.findViewById(R.id.sheet_settings_liquid_preview_text);
-        updateLiquidGlassPreview(previewCard, previewHandle, previewText, cfg.isSheetLiquidGlass());
-
+        // 4.5 渐变材质开关（DshaToggle 纯 Skia 自绘）
         DshaToggle liquidToggle = v.findViewById(R.id.sheet_settings_liquid_glass_toggle);
         if (liquidToggle != null) {
             liquidToggle.setChecked(cfg.isSheetLiquidGlass(), false, false);
             liquidToggle.setOnCheckedChangeListener((toggle, isChecked) -> {
                 cfg.setSheetLiquidGlass(isChecked);
-                updateLiquidGlassPreview(previewCard, previewHandle, previewText, isChecked);
                 QuickChatSheetActivity.refreshThemeFromConfig(requireContext());
                 com.deepseekharness.app.util.ToastHelper.show(requireContext(),
-                        isChecked ? "已开启液态玻璃拟态（晶莹高透光折射与高光边缘）" : "已切换为经典平铺半透卡片");
+                        isChecked ? "已开启渐变材质（顶部柔和反光与晶体渐变）" : "已切换为经典平铺半透卡片");
             });
             View liquidRow = v.findViewById(R.id.sheet_settings_liquid_glass_row);
             if (liquidRow != null) {
@@ -212,45 +206,31 @@ public class SheetSettingsFragment extends Fragment {
             }
         }
 
-        // 5. 抽屉白天不透明度
+        // 5. 抽屉不透明度（白天/黑夜独立可调，统一单排保存）
         EditText opacityDayInput = v.findViewById(R.id.sheet_settings_opacity_day_input);
-        Button opacityDaySave = v.findViewById(R.id.sheet_settings_opacity_day_save);
-        if (opacityDayInput != null) {
-            opacityDayInput.setText(String.valueOf(cfg.getSheetOpacityDay()));
-        }
-        if (opacityDaySave != null) {
-            opacityDaySave.setOnClickListener(x -> {
-                int val = 88;
-                try {
-                    val = Integer.parseInt(opacityDayInput.getText().toString().trim());
-                } catch (Exception ignored) {}
-                if (val < 30 || val > 100) {
-                    com.deepseekharness.app.util.ToastHelper.show(requireContext(), "请输入 30 ~ 100 之间的数值");
-                    return;
-                }
-                cfg.setSheetOpacityDay(val);
-                com.deepseekharness.app.util.ToastHelper.show(requireContext(), "已保存白天不透明度为 " + val + "%（下次唤起抽屉生效）");
-            });
-        }
-
-        // 6. 抽屉黑夜不透明度
         EditText opacityNightInput = v.findViewById(R.id.sheet_settings_opacity_night_input);
-        Button opacityNightSave = v.findViewById(R.id.sheet_settings_opacity_night_save);
-        if (opacityNightInput != null) {
+        Button opacitySave = v.findViewById(R.id.sheet_settings_opacity_save);
+        if (opacityDayInput != null && opacityNightInput != null) {
+            opacityDayInput.setText(String.valueOf(cfg.getSheetOpacityDay()));
             opacityNightInput.setText(String.valueOf(cfg.getSheetOpacityNight()));
         }
-        if (opacityNightSave != null) {
-            opacityNightSave.setOnClickListener(x -> {
-                int val = 80;
+        if (opacitySave != null) {
+            opacitySave.setOnClickListener(x -> {
+                int day = 88, night = 80;
                 try {
-                    val = Integer.parseInt(opacityNightInput.getText().toString().trim());
+                    day = Integer.parseInt(opacityDayInput.getText().toString().trim());
+                    night = Integer.parseInt(opacityNightInput.getText().toString().trim());
                 } catch (Exception ignored) {}
-                if (val < 30 || val > 100) {
+                if (day < 30 || day > 100 || night < 30 || night > 100) {
                     com.deepseekharness.app.util.ToastHelper.show(requireContext(), "请输入 30 ~ 100 之间的数值");
                     return;
                 }
-                cfg.setSheetOpacityNight(val);
-                com.deepseekharness.app.util.ToastHelper.show(requireContext(), "已保存黑夜不透明度为 " + val + "%（下次唤起抽屉生效）");
+                cfg.setSheetOpacityDay(day);
+                cfg.setSheetOpacityNight(night);
+                MonetThemeHelper.clearCache(requireContext());
+                QuickChatSheetActivity.refreshThemeFromConfig(requireContext());
+                com.deepseekharness.app.util.ToastHelper.show(requireContext(),
+                        "不透明度已保存：白天 " + day + "%，黑夜 " + night + "%");
             });
         }
 
@@ -310,7 +290,7 @@ public class SheetSettingsFragment extends Fragment {
         }
         if (dimSave != null) {
             dimSave.setOnClickListener(x -> {
-                int day = 0, night = 42;
+                int day = 20, night = 0;
                 try {
                     day = Integer.parseInt(dimDayInput.getText().toString().trim());
                     night = Integer.parseInt(dimNightInput.getText().toString().trim());
@@ -660,60 +640,5 @@ public class SheetSettingsFragment extends Fragment {
         boolean invert = ConfigStore.get(getContext()).isSheetMonetInvert();
         int[] colors = getStylePreviewColors(style, seedColor, invert);
         dotsContainer.addView(createPaletteDotsView(getContext(), colors));
-    }
-
-    private void updateLiquidGlassPreview(View previewCard, View previewHandle, TextView previewText, boolean isLiquid) {
-        if (previewCard == null || previewHandle == null || previewText == null || getContext() == null) return;
-        boolean dark = ThemeController.isDark(getContext());
-        float density = getResources().getDisplayMetrics().density;
-        int cornerRadius = Math.round(14 * density);
-
-        if (isLiquid) {
-            // 液态玻璃拟态卡片预览：弧面高光脊线 + 水滴晶核 + 晶钻描边
-            GradientDrawable cardBg = new GradientDrawable(
-                    GradientDrawable.Orientation.TOP_BOTTOM,
-                    dark
-                            ? new int[] { 0x4D334466, 0x30182233, 0x1A101724 }
-                            : new int[] { 0x60FFFFFF, 0x38F0F5FA, 0x24E2EAF2 }
-            );
-            cardBg.setShape(GradientDrawable.RECTANGLE);
-            cardBg.setCornerRadius(cornerRadius);
-            // 亮丽清晰的 1.5dp 晶莹反光边缘
-            cardBg.setStroke(Math.max(1, Math.round(1.5f * density)), dark ? 0x99D0E4FF : 0xD9FFFFFF);
-            previewCard.setBackground(cardBg);
-
-            // 水滴高光把手
-            GradientDrawable handleBg = new GradientDrawable(
-                    GradientDrawable.Orientation.TOP_BOTTOM,
-                    dark
-                            ? new int[] { 0xE6FFFFFF, 0x808BA0B8 }
-                            : new int[] { 0xFAFFFFFF, 0x90CBD5E1 }
-            );
-            handleBg.setShape(GradientDrawable.RECTANGLE);
-            handleBg.setCornerRadius(Math.round(2.5f * density));
-            handleBg.setStroke(Math.max(1, Math.round(1f * density)), dark ? 0xCCFFFFFF : 0xEEFFFFFF);
-            previewHandle.setBackground(handleBg);
-
-            previewText.setText("✦ 液态玻璃拟态已开启 · 弧面高光脊线与晶莹水滴把手");
-            previewText.setTextColor(dark ? 0xFF8AA0B8 : 0xFF2A5080);
-        } else {
-            // 经典平铺半透
-            GradientDrawable cardBg = new GradientDrawable();
-            cardBg.setShape(GradientDrawable.RECTANGLE);
-            cardBg.setCornerRadius(cornerRadius);
-            cardBg.setColor(dark ? 0x3010141B : 0x30CBD5E1);
-            cardBg.setStroke(Math.max(1, Math.round(1f * density)), dark ? 0x20FFFFFF : 0x30000000);
-            previewCard.setBackground(cardBg);
-
-            // 平铺灰条把手
-            GradientDrawable handleBg = new GradientDrawable();
-            handleBg.setShape(GradientDrawable.RECTANGLE);
-            handleBg.setCornerRadius(Math.round(2f * density));
-            handleBg.setColor(dark ? 0x608BA0B8 : 0x60CBD5E1);
-            previewHandle.setBackground(handleBg);
-
-            previewText.setText("经典平铺半透 · 无高光折射与边缘流光");
-            previewText.setTextColor(dark ? 0x808BA0B8 : 0x8064748B);
-        }
     }
 }

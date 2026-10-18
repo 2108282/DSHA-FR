@@ -277,7 +277,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="液态玻璃拟态"
+                        android:text="渐变材质"
                         android:textColor="@color/text"
                         android:textSize="15sp"
                         android:textStyle="bold" />
@@ -286,7 +286,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="1dp"
-                        android:text="晶莹折射高光与菲涅尔晶钻边缘（非磨砂毛玻璃）"
+                        android:text="开启顶部柔和反光与微透明晶体渐变质感"
                         android:textColor="@color/text_muted"
                         android:textSize="12sp" />
                 </LinearLayout>
@@ -297,35 +297,6 @@
                     android:layout_height="26dp"
                     android:layout_marginStart="8dp" />
             </LinearLayout>
-
-            <!-- 液态玻璃实机动态质感预览盒 -->
-            <FrameLayout
-                android:id="@+id/sheet_settings_liquid_preview_card"
-                android:layout_width="match_parent"
-                android:layout_height="64dp"
-                android:layout_marginHorizontal="16dp"
-                android:layout_marginTop="2dp"
-                android:layout_marginBottom="12dp"
-                android:padding="10dp">
-
-                <!-- 模拟水滴高光晶核把手 -->
-                <View
-                    android:id="@+id/sheet_settings_liquid_preview_handle"
-                    android:layout_width="42dp"
-                    android:layout_height="5dp"
-                    android:layout_gravity="top|center_horizontal" />
-
-                <!-- 状态文字说明 -->
-                <TextView
-                    android:id="@+id/sheet_settings_liquid_preview_text"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="bottom|center_horizontal"
-                    android:text="✦ 液态玻璃拟态 · 弧面高光脊线与晶莹水滴把手"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="12sp"
-                    android:textStyle="bold" />
-            </FrameLayout>
 
             <View
                 android:layout_width="match_parent"
@@ -755,7 +726,7 @@
                     android:layout_weight="1"
                     android:background="@drawable/bg_input"
                     android:gravity="center"
-                    android:hint="0"
+                    android:hint="20"
                     android:importantForAutofill="no"
                     android:inputType="number"
                     android:maxLength="3"
@@ -778,7 +749,7 @@
                     android:layout_weight="1"
                     android:background="@drawable/bg_input"
                     android:gravity="center"
-                    android:hint="42"
+                    android:hint="0"
                     android:importantForAutofill="no"
                     android:inputType="number"
                     android:maxLength="3"
@@ -808,12 +779,12 @@
                     android:textStyle="bold" />
             </LinearLayout>
 
-            <!-- 4. 白天不透明度（30~100%） -->
+            <!-- 4. 抽屉不透明度（30~100%） -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="14dp"
-                android:text="白天不透明度（30~100%）"
+                android:text="抽屉不透明度（30~100%）"
                 android:textColor="@color/text_secondary"
                 android:textSize="13sp"
                 android:textStyle="bold" />
@@ -827,8 +798,9 @@
 
                 <EditText
                     android:id="@+id/sheet_settings_opacity_day_input"
-                    android:layout_width="72dp"
+                    android:layout_width="0dp"
                     android:layout_height="42dp"
+                    android:layout_weight="1"
                     android:background="@drawable/bg_input"
                     android:gravity="center"
                     android:hint="88"
@@ -841,47 +813,17 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:text="%"
+                    android:layout_marginStart="6dp"
+                    android:text="白天 %"
                     android:textColor="@color/text_secondary"
-                    android:textSize="14sp" />
-
-                <Button
-                    android:id="@+id/sheet_settings_opacity_day_save"
-                    android:layout_width="wrap_content"
-                    android:layout_height="38dp"
-                    android:layout_marginStart="16dp"
-                    android:background="@drawable/bg_btn_primary_compact"
-                    android:stateListAnimator="@animator/btn_press_scale"
-                    android:paddingHorizontal="18dp"
-                    android:text="保存"
-                    android:textAllCaps="false"
-                    android:textColor="@color/accent_on"
-                    android:textSize="13sp"
-                    android:textStyle="bold" />
-            </LinearLayout>
-
-            <!-- 5. 黑夜不透明度（30~100%） -->
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="14dp"
-                android:text="黑夜不透明度（30~100%）"
-                android:textColor="@color/text_secondary"
-                android:textSize="13sp"
-                android:textStyle="bold" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
+                    android:textSize="12sp" />
 
                 <EditText
                     android:id="@+id/sheet_settings_opacity_night_input"
-                    android:layout_width="72dp"
+                    android:layout_width="0dp"
                     android:layout_height="42dp"
+                    android:layout_marginStart="10dp"
+                    android:layout_weight="1"
                     android:background="@drawable/bg_input"
                     android:gravity="center"
                     android:hint="80"
@@ -894,16 +836,16 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:text="%"
+                    android:layout_marginStart="6dp"
+                    android:text="黑夜 %"
                     android:textColor="@color/text_secondary"
-                    android:textSize="14sp" />
+                    android:textSize="12sp" />
 
                 <Button
-                    android:id="@+id/sheet_settings_opacity_night_save"
+                    android:id="@+id/sheet_settings_opacity_save"
                     android:layout_width="wrap_content"
                     android:layout_height="38dp"
-                    android:layout_marginStart="16dp"
+                    android:layout_marginStart="12dp"
                     android:background="@drawable/bg_btn_primary_compact"
                     android:stateListAnimator="@animator/btn_press_scale"
                     android:paddingHorizontal="18dp"

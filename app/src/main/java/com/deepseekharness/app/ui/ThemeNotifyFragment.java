@@ -101,7 +101,7 @@ public final class ThemeNotifyFragment extends Fragment {
         DshaToggle monetInvertToggle = v.findViewById(R.id.theme_notify_toggle_monet_invert);
 
         boolean monetEnabled = requireContext().getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE)
-                .getBoolean(PREF_KEY_MONET, true);
+                .getBoolean(PREF_KEY_MONET, false);
         if (monetInvertRow != null) {
             monetInvertRow.setVisibility(monetEnabled ? View.VISIBLE : View.GONE);
         }

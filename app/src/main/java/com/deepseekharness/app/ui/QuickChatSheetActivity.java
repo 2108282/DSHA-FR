@@ -768,12 +768,6 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         return handleBg;
     }
 
-    /** 顶部拖拽区域：保持完全透明，顶角圆角与流光由整体外框统领，根除局部 14dp 高度压扁圆角导致的曲率错位 */
-    private void updateDragAreaBackground(ConfigStore cfg) {
-        if (dragArea == null) return;
-        dragArea.setBackground(null);
-    }
-
     private void updateSheetCardShadow(ConfigStore cfg) {
         if (sheetCard == null) return;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -828,8 +822,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             }
         }
 
-        // 2. 顶部拖拽横条颜色与顶部流光
-        updateDragAreaBackground(cfg);
+        // 2. 顶部拖拽横条颜色
         if (dragHandle != null) {
             dragHandle.setBackground(buildDragHandleBackground(cfg, handleColor));
         }
@@ -1143,7 +1136,6 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         dragArea.setLayoutParams(new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dpToPx(14)));
         dragArea.setPadding(0, dpToPx(4), 0, dpToPx(2));
-        updateDragAreaBackground(cfg);
 
         dragHandle = new View(this);
         FrameLayout.LayoutParams handleLp = new FrameLayout.LayoutParams(dpToPx(36), dpToPx(4));

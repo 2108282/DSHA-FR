@@ -314,7 +314,7 @@ public class ConfigStore {
     }
 
     public int getSheetDimDay() {
-        return prefs.getInt(Constants.KEY_SHEET_DIM_DAY, 0);
+        return prefs.getInt(Constants.KEY_SHEET_DIM_DAY, 20);
     }
 
     public void setSheetDimDay(int percent) {
@@ -323,7 +323,7 @@ public class ConfigStore {
     }
 
     public int getSheetDimNight() {
-        return prefs.getInt(Constants.KEY_SHEET_DIM_NIGHT, prefs.getInt(Constants.KEY_SHEET_DIM_PERCENT, 42));
+        return prefs.getInt(Constants.KEY_SHEET_DIM_NIGHT, prefs.getInt(Constants.KEY_SHEET_DIM_PERCENT, 0));
     }
 
     public void setSheetDimNight(int percent) {
