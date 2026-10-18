@@ -225,6 +225,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
     private HarnessController controller;
 
     // 抽屉顶排操作栏与拖拽/分割线组件引用（用于反色时动态同步颜色）
+    private FrameLayout dragArea;
     private View dragHandle;
     private TextView headerTitle;
     private TextView headerSubTitle;
@@ -727,31 +728,31 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         int rimStrokeColor;
 
         if (isDarkMode) {
-            // 深曜液态黑晶：顶部微光折射（冷调蓝灰银反光），底座深邃清澈，边框带有钻石微冷高光
-            int topR = Math.min(255, r + 24);
-            int topG = Math.min(255, g + 28);
-            int topB = Math.min(255, b + 42);
-            int topAlpha = Math.min(255, (int) (alpha * 1.08f));
+            // 深曜液态黑晶：顶部泛出冷调蓝灰银反光，底座深邃清澈，边框带有醒目晶钻微冷高光
+            int topR = Math.min(255, r + 45);
+            int topG = Math.min(255, g + 52);
+            int topB = Math.min(255, b + 75);
+            int topAlpha = Math.min(255, (int) (alpha * 1.18f));
             topHighlightColor = Color.argb(topAlpha, topR, topG, topB);
 
             int botR = Math.max(0, r - 4);
             int botG = Math.max(0, g - 4);
             int botB = Math.max(0, b - 4);
-            int botAlpha = Math.max(0, (int) (alpha * 0.94f));
+            int botAlpha = Math.max(0, (int) (alpha * 0.90f));
             bottomClearColor = Color.argb(botAlpha, botR, botG, botB);
 
-            // 菲涅尔冷调晶体高光外边缘 (1.2dp)
-            rimStrokeColor = Color.argb(0x38, 0x8A, 0xB4, 0xF8);
+            // 菲涅尔冷调晶体高光外边缘 (1.5dp，高对比晶钻亮白，清晰勾勒晶体倒角)
+            rimStrokeColor = Color.argb(0x99, 0xE0, 0xEE, 0xFF);
         } else {
-            // 清水液态水晶：顶部白皙纯净折射高光，底部极润透光，高透亮白高光边缘
-            int topAlpha = Math.min(255, (int) (alpha * 1.05f));
+            // 清水液态水晶：顶部纯净白皙折射高光，底部极润透光，高透纯白高光边缘
+            int topAlpha = Math.min(255, (int) (alpha * 1.10f));
             topHighlightColor = Color.argb(topAlpha, 0xFF, 0xFF, 0xFF);
 
-            int botAlpha = Math.max(0, (int) (alpha * 0.92f));
-            bottomClearColor = Color.argb(botAlpha, Math.max(0, r - 6), Math.max(0, g - 6), Math.max(0, b - 4));
+            int botAlpha = Math.max(0, (int) (alpha * 0.88f));
+            bottomClearColor = Color.argb(botAlpha, Math.max(0, r - 8), Math.max(0, g - 8), Math.max(0, b - 6));
 
-            // 菲涅尔白皙高光边缘 (1.2dp)
-            rimStrokeColor = Color.argb(0x75, 0xFF, 0xFF, 0xFF);
+            // 菲涅尔白皙高光边缘 (1.5dp，92% 纯白反光)
+            rimStrokeColor = Color.argb(0xEA, 0xFF, 0xFF, 0xFF);
         }
 
         GradientDrawable liquidBody = new GradientDrawable(
@@ -760,28 +761,57 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         );
         liquidBody.setShape(GradientDrawable.RECTANGLE);
         liquidBody.setCornerRadii(radii);
-        liquidBody.setStroke(dpToPx(1.2f), rimStrokeColor);
+        liquidBody.setStroke(dpToPx(1.5f), rimStrokeColor);
 
         return liquidBody;
     }
 
-    /** 构建拖拽把手背景：液态模式下带有精致微晶胶囊倒角高光 */
+    /** 构建拖拽把手背景：液态模式下呈现 3D 悬浮水滴胶囊与晶核倒角高光 */
     private Drawable buildDragHandleBackground(ConfigStore cfg, int handleColor) {
         GradientDrawable handleBg = new GradientDrawable();
         handleBg.setShape(GradientDrawable.RECTANGLE);
         handleBg.setCornerRadius(dpToPx(2.5f));
         if (cfg.isSheetLiquidGlass()) {
             if (isDarkMode) {
-                handleBg.setColor(Color.parseColor("#458BA0B8"));
-                handleBg.setStroke(dpToPx(0.8f), Color.parseColor("#35FFFFFF"));
+                // 水滴晶核：顶部高光折射 -> 底部深透蓝灰
+                handleBg.setOrientation(GradientDrawable.Orientation.TOP_BOTTOM);
+                handleBg.setColors(new int[] {
+                        Color.parseColor("#E6FFFFFF"),
+                        Color.parseColor("#708BA0B8")
+                });
+                handleBg.setStroke(dpToPx(1f), Color.parseColor("#CCFFFFFF"));
             } else {
-                handleBg.setColor(Color.parseColor("#5094A3B8"));
-                handleBg.setStroke(dpToPx(0.8f), Color.parseColor("#60FFFFFF"));
+                handleBg.setOrientation(GradientDrawable.Orientation.TOP_BOTTOM);
+                handleBg.setColors(new int[] {
+                        Color.parseColor("#FAFFFFFF"),
+                        Color.parseColor("#8094A3B8")
+                });
+                handleBg.setStroke(dpToPx(1f), Color.parseColor("#EEFFFFFF"));
             }
         } else {
             handleBg.setColor(handleColor);
         }
         return handleBg;
+    }
+
+    /** 顶部 14dp 拖拽区域：液态模式下注入弧面液态倒角折射流光 */
+    private void updateDragAreaBackground(ConfigStore cfg) {
+        if (dragArea == null) return;
+        if (cfg.isSheetLiquidGlass()) {
+            float[] radii = calculateCardCornerRadii(cfg.getSheetMarginLeft(), cfg.getSheetMarginRight());
+            GradientDrawable crest = new GradientDrawable(
+                    GradientDrawable.Orientation.TOP_BOTTOM,
+                    new int[] {
+                            isDarkMode ? Color.argb(0x35, 0xFF, 0xFF, 0xFF) : Color.argb(0x60, 0xFF, 0xFF, 0xFF),
+                            Color.TRANSPARENT
+                    }
+            );
+            crest.setShape(GradientDrawable.RECTANGLE);
+            crest.setCornerRadii(new float[] { radii[0], radii[1], radii[2], radii[3], 0, 0, 0, 0 });
+            dragArea.setBackground(crest);
+        } else {
+            dragArea.setBackground(null);
+        }
     }
 
     private void updateSheetCardShadow(ConfigStore cfg) {
@@ -838,7 +868,8 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             }
         }
 
-        // 2. 顶部拖拽横条颜色
+        // 2. 顶部拖拽横条颜色与顶部流光
+        updateDragAreaBackground(cfg);
         if (dragHandle != null) {
             dragHandle.setBackground(buildDragHandleBackground(cfg, handleColor));
         }
@@ -859,7 +890,19 @@ public class QuickChatSheetActivity extends AppCompatActivity {
 
         // 5. 顶部操作栏底部分割线颜色
         if (headerDivider != null) {
-            headerDivider.setBackgroundColor(lineColor);
+            if (cfg.isSheetLiquidGlass()) {
+                GradientDrawable dividerBg = new GradientDrawable(
+                        GradientDrawable.Orientation.LEFT_RIGHT,
+                        new int[] {
+                                Color.TRANSPARENT,
+                                isDarkMode ? Color.argb(0x50, 0xFF, 0xFF, 0xFF) : Color.argb(0x30, 0x00, 0x00, 0x00),
+                                Color.TRANSPARENT
+                        }
+                );
+                headerDivider.setBackground(dividerBg);
+            } else {
+                headerDivider.setBackgroundColor(lineColor);
+            }
         }
 
         // 6. 错误提示文字颜色
@@ -1134,14 +1177,15 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         sheetCard.setBackground(buildCardBackground(cfg, palette));
         updateSheetCardShadow(cfg);
 
-        // 3. 紧凑拖拽横条区域（Drag Handle）：压缩留白
-        FrameLayout dragArea = new FrameLayout(this);
+        // 3. 紧凑拖拽横条区域（Drag Handle）：压缩留白与水滴高光
+        dragArea = new FrameLayout(this);
         dragArea.setLayoutParams(new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dpToPx(14)));
-        dragArea.setPadding(0, dpToPx(5), 0, dpToPx(2));
+        dragArea.setPadding(0, dpToPx(4), 0, dpToPx(2));
+        updateDragAreaBackground(cfg);
 
         dragHandle = new View(this);
-        FrameLayout.LayoutParams handleLp = new FrameLayout.LayoutParams(dpToPx(36), dpToPx(4));
+        FrameLayout.LayoutParams handleLp = new FrameLayout.LayoutParams(dpToPx(40), dpToPx(5));
         handleLp.gravity = Gravity.CENTER_HORIZONTAL;
         dragHandle.setLayoutParams(handleLp);
         dragHandle.setBackground(buildDragHandleBackground(cfg, handleColor));
@@ -1420,7 +1464,19 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         headerDivider = new View(this);
         headerDivider.setLayoutParams(new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dpToPx(1)));
-        headerDivider.setBackgroundColor(lineColor);
+        if (cfg.isSheetLiquidGlass()) {
+            GradientDrawable dividerBg = new GradientDrawable(
+                    GradientDrawable.Orientation.LEFT_RIGHT,
+                    new int[] {
+                            Color.TRANSPARENT,
+                            isDarkMode ? Color.argb(0x50, 0xFF, 0xFF, 0xFF) : Color.argb(0x30, 0x00, 0x00, 0x00),
+                            Color.TRANSPARENT
+                    }
+            );
+            headerDivider.setBackground(dividerBg);
+        } else {
+            headerDivider.setBackgroundColor(lineColor);
+        }
         sheetCard.addView(headerDivider);
 
         // 5.5 原生安全审批横幅卡片（当模型提权或底层高危拦截时直接在抽屉顶部显现）

@@ -298,6 +298,35 @@
                     android:layout_marginStart="8dp" />
             </LinearLayout>
 
+            <!-- 液态玻璃实机动态质感预览盒 -->
+            <FrameLayout
+                android:id="@+id/sheet_settings_liquid_preview_card"
+                android:layout_width="match_parent"
+                android:layout_height="64dp"
+                android:layout_marginHorizontal="16dp"
+                android:layout_marginTop="2dp"
+                android:layout_marginBottom="12dp"
+                android:padding="10dp">
+
+                <!-- 模拟水滴高光晶核把手 -->
+                <View
+                    android:id="@+id/sheet_settings_liquid_preview_handle"
+                    android:layout_width="42dp"
+                    android:layout_height="5dp"
+                    android:layout_gravity="top|center_horizontal" />
+
+                <!-- 状态文字说明 -->
+                <TextView
+                    android:id="@+id/sheet_settings_liquid_preview_text"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="bottom|center_horizontal"
+                    android:text="✦ 液态玻璃拟态 · 弧面高光脊线与晶莹水滴把手"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+            </FrameLayout>
+
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"

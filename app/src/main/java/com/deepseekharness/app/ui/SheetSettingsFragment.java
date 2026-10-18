@@ -190,12 +190,18 @@ public class SheetSettingsFragment extends Fragment {
             }
         }
 
-        // 4.5 液态玻璃拟态开关（DshaToggle 纯 Skia 自绘）
+        // 4.5 液态玻璃拟态开关与实机动态预览盒（DshaToggle 纯 Skia 自绘）
+        View previewCard = v.findViewById(R.id.sheet_settings_liquid_preview_card);
+        View previewHandle = v.findViewById(R.id.sheet_settings_liquid_preview_handle);
+        TextView previewText = v.findViewById(R.id.sheet_settings_liquid_preview_text);
+        updateLiquidGlassPreview(previewCard, previewHandle, previewText, cfg.isSheetLiquidGlass());
+
         DshaToggle liquidToggle = v.findViewById(R.id.sheet_settings_liquid_glass_toggle);
         if (liquidToggle != null) {
             liquidToggle.setChecked(cfg.isSheetLiquidGlass(), false, false);
             liquidToggle.setOnCheckedChangeListener((toggle, isChecked) -> {
                 cfg.setSheetLiquidGlass(isChecked);
+                updateLiquidGlassPreview(previewCard, previewHandle, previewText, isChecked);
                 QuickChatSheetActivity.refreshThemeFromConfig(requireContext());
                 com.deepseekharness.app.util.ToastHelper.show(requireContext(),
                         isChecked ? "已开启液态玻璃拟态（晶莹高透光折射与高光边缘）" : "已切换为经典平铺半透卡片");
@@ -654,5 +660,60 @@ public class SheetSettingsFragment extends Fragment {
         boolean invert = ConfigStore.get(getContext()).isSheetMonetInvert();
         int[] colors = getStylePreviewColors(style, seedColor, invert);
         dotsContainer.addView(createPaletteDotsView(getContext(), colors));
+    }
+
+    private void updateLiquidGlassPreview(View previewCard, View previewHandle, TextView previewText, boolean isLiquid) {
+        if (previewCard == null || previewHandle == null || previewText == null || getContext() == null) return;
+        boolean dark = ThemeController.isDark(getContext());
+        float density = getResources().getDisplayMetrics().density;
+        int cornerRadius = Math.round(14 * density);
+
+        if (isLiquid) {
+            // 液态玻璃拟态卡片预览：弧面高光脊线 + 水滴晶核 + 晶钻描边
+            GradientDrawable cardBg = new GradientDrawable(
+                    GradientDrawable.Orientation.TOP_BOTTOM,
+                    dark
+                            ? new int[] { 0x4D334466, 0x30182233, 0x1A101724 }
+                            : new int[] { 0x60FFFFFF, 0x38F0F5FA, 0x24E2EAF2 }
+            );
+            cardBg.setShape(GradientDrawable.RECTANGLE);
+            cardBg.setCornerRadius(cornerRadius);
+            // 亮丽清晰的 1.5dp 晶莹反光边缘
+            cardBg.setStroke(Math.max(1, Math.round(1.5f * density)), dark ? 0x99D0E4FF : 0xD9FFFFFF);
+            previewCard.setBackground(cardBg);
+
+            // 水滴高光把手
+            GradientDrawable handleBg = new GradientDrawable(
+                    GradientDrawable.Orientation.TOP_BOTTOM,
+                    dark
+                            ? new int[] { 0xE6FFFFFF, 0x808BA0B8 }
+                            : new int[] { 0xFAFFFFFF, 0x90CBD5E1 }
+            );
+            handleBg.setShape(GradientDrawable.RECTANGLE);
+            handleBg.setCornerRadius(Math.round(2.5f * density));
+            handleBg.setStroke(Math.max(1, Math.round(1f * density)), dark ? 0xCCFFFFFF : 0xEEFFFFFF);
+            previewHandle.setBackground(handleBg);
+
+            previewText.setText("✦ 液态玻璃拟态已开启 · 弧面高光脊线与晶莹水滴把手");
+            previewText.setTextColor(dark ? 0xFF8AA0B8 : 0xFF2A5080);
+        } else {
+            // 经典平铺半透
+            GradientDrawable cardBg = new GradientDrawable();
+            cardBg.setShape(GradientDrawable.RECTANGLE);
+            cardBg.setCornerRadius(cornerRadius);
+            cardBg.setColor(dark ? 0x3010141B : 0x30CBD5E1);
+            cardBg.setStroke(Math.max(1, Math.round(1f * density)), dark ? 0x20FFFFFF : 0x30000000);
+            previewCard.setBackground(cardBg);
+
+            // 平铺灰条把手
+            GradientDrawable handleBg = new GradientDrawable();
+            handleBg.setShape(GradientDrawable.RECTANGLE);
+            handleBg.setCornerRadius(Math.round(2f * density));
+            handleBg.setColor(dark ? 0x608BA0B8 : 0x60CBD5E1);
+            previewHandle.setBackground(handleBg);
+
+            previewText.setText("经典平铺半透 · 无高光折射与边缘流光");
+            previewText.setTextColor(dark ? 0x808BA0B8 : 0x8064748B);
+        }
     }
 }
