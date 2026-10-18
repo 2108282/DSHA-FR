@@ -276,6 +276,28 @@ public class SheetSettingsFragment extends Fragment {
             });
         }
 
+        // 9. 抽屉背景压暗蒙版 (0~100%)
+        EditText dimInput = v.findViewById(R.id.sheet_settings_dim_input);
+        Button dimSave = v.findViewById(R.id.sheet_settings_dim_save);
+        if (dimInput != null) {
+            dimInput.setText(String.valueOf(cfg.getSheetDimPercent()));
+        }
+        if (dimSave != null) {
+            dimSave.setOnClickListener(x -> {
+                int val = 42;
+                try {
+                    val = Integer.parseInt(dimInput.getText().toString().trim());
+                } catch (Exception ignored) {}
+                if (val < 0 || val > 100) {
+                    com.deepseekharness.app.util.ToastHelper.show(requireContext(), "请输入 0 ~ 100 之间的数值");
+                    return;
+                }
+                cfg.setSheetDimPercent(val);
+                QuickChatSheetActivity.refreshThemeFromConfig(requireContext());
+                com.deepseekharness.app.util.ToastHelper.show(requireContext(), "已保存背景压暗为 " + val + "%");
+            });
+        }
+
         return v;
     }
 

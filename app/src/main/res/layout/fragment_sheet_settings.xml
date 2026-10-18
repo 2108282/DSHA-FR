@@ -637,7 +637,60 @@
                     android:textStyle="bold" />
             </LinearLayout>
 
-            <!-- 3. 白天不透明度（30~100%） -->
+            <!-- 3. 背景压暗蒙版（0~100%） -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:text="背景压暗蒙版（0~100%）"
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/sheet_settings_dim_input"
+                    android:layout_width="72dp"
+                    android:layout_height="42dp"
+                    android:background="@drawable/bg_input"
+                    android:gravity="center"
+                    android:hint="42"
+                    android:importantForAutofill="no"
+                    android:inputType="number"
+                    android:maxLength="3"
+                    android:textColor="@color/text"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="%"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="14sp" />
+
+                <Button
+                    android:id="@+id/sheet_settings_dim_save"
+                    android:layout_width="wrap_content"
+                    android:layout_height="38dp"
+                    android:layout_marginStart="16dp"
+                    android:background="@drawable/bg_btn_primary_compact"
+                    android:stateListAnimator="@animator/btn_press_scale"
+                    android:paddingHorizontal="18dp"
+                    android:text="保存"
+                    android:textAllCaps="false"
+                    android:textColor="@color/accent_on"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- 4. 白天不透明度（30~100%） -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -690,7 +743,7 @@
                     android:textStyle="bold" />
             </LinearLayout>
 
-            <!-- 4. 黑夜不透明度（30~100%） -->
+            <!-- 5. 黑夜不透明度（30~100%） -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"

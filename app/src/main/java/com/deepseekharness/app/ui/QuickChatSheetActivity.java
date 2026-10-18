@@ -373,8 +373,14 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 window.setAttributes(lp);
             }
             window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-            window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
-            window.setDimAmount(0.42f);
+            int dimPercent = new ConfigStore(this).getSheetDimPercent();
+            if (dimPercent <= 0) {
+                window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+                window.setDimAmount(0f);
+            } else {
+                window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+                window.setDimAmount(dimPercent / 100.0f);
+            }
             window.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT);
             // 采用 ADJUST_NOTHING：避免 Window 整体与卡片顶边被系统向上顶飞
             window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
@@ -696,6 +702,19 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         int lineColor = palette.lineColor;
         int handleColor = palette.handleColor;
         int borderColor = palette.borderColor;
+
+        // 0. 动态同步窗口背景压暗蒙版
+        Window window = getWindow();
+        if (window != null) {
+            int dimPercent = cfg.getSheetDimPercent();
+            if (dimPercent <= 0) {
+                window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+                window.setDimAmount(0f);
+            } else {
+                window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+                window.setDimAmount(dimPercent / 100.0f);
+            }
+        }
 
         // 1. 卡片圆角背景与描边（自适应不贴边圆角）
         if (sheetCard != null) {

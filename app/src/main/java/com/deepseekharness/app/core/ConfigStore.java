@@ -305,6 +305,15 @@ public class ConfigStore {
         prefs.edit().putBoolean(Constants.KEY_SHEET_AUTO_RESTORE_DEFAULT, enabled).apply();
     }
 
+    public int getSheetDimPercent() {
+        return prefs.getInt(Constants.KEY_SHEET_DIM_PERCENT, 42);
+    }
+
+    public void setSheetDimPercent(int percent) {
+        int clamped = Math.max(0, Math.min(100, percent));
+        prefs.edit().putInt(Constants.KEY_SHEET_DIM_PERCENT, clamped).apply();
+    }
+
     // ================= 远端 DSH 连接（支持多远端动态管理与开关互斥） =================
 
     public static class RemoteDshEntry {
