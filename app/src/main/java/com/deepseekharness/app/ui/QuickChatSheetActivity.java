@@ -725,10 +725,9 @@ public class QuickChatSheetActivity extends AppCompatActivity {
 
         int topHighlightColor;
         int bottomClearColor;
-        int rimStrokeColor;
 
         if (isDarkMode) {
-            // 深曜液态黑晶：顶部泛出冷调蓝灰银反光，底座深邃清澈，边框带有醒目晶钻微冷高光
+            // 深曜液态黑晶：顶部泛出冷调蓝灰银反光，底座深邃清澈
             int topR = Math.min(255, r + 45);
             int topG = Math.min(255, g + 52);
             int topB = Math.min(255, b + 75);
@@ -740,19 +739,13 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             int botB = Math.max(0, b - 4);
             int botAlpha = Math.max(0, (int) (alpha * 0.90f));
             bottomClearColor = Color.argb(botAlpha, botR, botG, botB);
-
-            // 菲涅尔冷调晶体高光外边缘 (1.5dp，高对比晶钻亮白，清晰勾勒晶体倒角)
-            rimStrokeColor = Color.argb(0x99, 0xE0, 0xEE, 0xFF);
         } else {
-            // 清水液态水晶：顶部纯净白皙折射高光，底部极润透光，高透纯白高光边缘
+            // 清水液态水晶：顶部纯净白皙折射高光，底部极润透光
             int topAlpha = Math.min(255, (int) (alpha * 1.10f));
             topHighlightColor = Color.argb(topAlpha, 0xFF, 0xFF, 0xFF);
 
             int botAlpha = Math.max(0, (int) (alpha * 0.88f));
             bottomClearColor = Color.argb(botAlpha, Math.max(0, r - 8), Math.max(0, g - 8), Math.max(0, b - 6));
-
-            // 菲涅尔白皙高光边缘 (1.5dp，92% 纯白反光)
-            rimStrokeColor = Color.argb(0xEA, 0xFF, 0xFF, 0xFF);
         }
 
         GradientDrawable liquidBody = new GradientDrawable(
@@ -761,7 +754,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         );
         liquidBody.setShape(GradientDrawable.RECTANGLE);
         liquidBody.setCornerRadii(radii);
-        liquidBody.setStroke(dpToPx(1.5f), rimStrokeColor);
+        liquidBody.setStroke(dpToPx(1), borderColor);
 
         return liquidBody;
     }
