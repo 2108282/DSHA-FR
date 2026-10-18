@@ -188,6 +188,22 @@ public class SheetSettingsFragment extends Fragment {
             }
         }
 
+        // 4.5 液态玻璃拟态开关（DshaToggle 纯 Skia 自绘）
+        DshaToggle liquidToggle = v.findViewById(R.id.sheet_settings_liquid_glass_toggle);
+        if (liquidToggle != null) {
+            liquidToggle.setChecked(cfg.isSheetLiquidGlass(), false, false);
+            liquidToggle.setOnCheckedChangeListener((toggle, isChecked) -> {
+                cfg.setSheetLiquidGlass(isChecked);
+                QuickChatSheetActivity.refreshThemeFromConfig(requireContext());
+                com.deepseekharness.app.util.ToastHelper.show(requireContext(),
+                        isChecked ? "已开启液态玻璃拟态（晶莹高透光折射与高光边缘）" : "已切换为经典平铺半透卡片");
+            });
+            View liquidRow = v.findViewById(R.id.sheet_settings_liquid_glass_row);
+            if (liquidRow != null) {
+                liquidRow.setOnClickListener(x -> liquidToggle.toggle());
+            }
+        }
+
         // 5. 抽屉白天不透明度
         EditText opacityDayInput = v.findViewById(R.id.sheet_settings_opacity_day_input);
         Button opacityDaySave = v.findViewById(R.id.sheet_settings_opacity_day_save);
@@ -276,25 +292,30 @@ public class SheetSettingsFragment extends Fragment {
             });
         }
 
-        // 9. 抽屉背景压暗蒙版 (0~100%)
-        EditText dimInput = v.findViewById(R.id.sheet_settings_dim_input);
+        // 9. 抽屉背景压暗蒙版 (白天/黑夜独立可调 0~100%)
+        EditText dimDayInput = v.findViewById(R.id.sheet_settings_dim_day_input);
+        EditText dimNightInput = v.findViewById(R.id.sheet_settings_dim_night_input);
         Button dimSave = v.findViewById(R.id.sheet_settings_dim_save);
-        if (dimInput != null) {
-            dimInput.setText(String.valueOf(cfg.getSheetDimPercent()));
+        if (dimDayInput != null && dimNightInput != null) {
+            dimDayInput.setText(String.valueOf(cfg.getSheetDimDay()));
+            dimNightInput.setText(String.valueOf(cfg.getSheetDimNight()));
         }
         if (dimSave != null) {
             dimSave.setOnClickListener(x -> {
-                int val = 42;
+                int day = 0, night = 42;
                 try {
-                    val = Integer.parseInt(dimInput.getText().toString().trim());
+                    day = Integer.parseInt(dimDayInput.getText().toString().trim());
+                    night = Integer.parseInt(dimNightInput.getText().toString().trim());
                 } catch (Exception ignored) {}
-                if (val < 0 || val > 100) {
-                    com.deepseekharness.app.util.ToastHelper.show(requireContext(), "请输入 0 ~ 100 之间的数值");
+                if (day < 0 || day > 100 || night < 0 || night > 100) {
+                    com.deepseekharness.app.util.ToastHelper.show(requireContext(), "压暗百分比需在 0 ~ 100 之间");
                     return;
                 }
-                cfg.setSheetDimPercent(val);
+                cfg.setSheetDimDay(day);
+                cfg.setSheetDimNight(night);
                 QuickChatSheetActivity.refreshThemeFromConfig(requireContext());
-                com.deepseekharness.app.util.ToastHelper.show(requireContext(), "已保存背景压暗为 " + val + "%");
+                com.deepseekharness.app.util.ToastHelper.show(requireContext(),
+                        "背景压暗已保存：白天 " + day + "%，黑夜 " + night + "%");
             });
         }
 

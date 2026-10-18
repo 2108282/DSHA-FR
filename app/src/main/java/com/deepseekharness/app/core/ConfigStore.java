@@ -306,12 +306,37 @@ public class ConfigStore {
     }
 
     public int getSheetDimPercent() {
-        return prefs.getInt(Constants.KEY_SHEET_DIM_PERCENT, 42);
+        return getSheetDimNight();
     }
 
     public void setSheetDimPercent(int percent) {
+        setSheetDimNight(percent);
+    }
+
+    public int getSheetDimDay() {
+        return prefs.getInt(Constants.KEY_SHEET_DIM_DAY, 0);
+    }
+
+    public void setSheetDimDay(int percent) {
         int clamped = Math.max(0, Math.min(100, percent));
-        prefs.edit().putInt(Constants.KEY_SHEET_DIM_PERCENT, clamped).apply();
+        prefs.edit().putInt(Constants.KEY_SHEET_DIM_DAY, clamped).apply();
+    }
+
+    public int getSheetDimNight() {
+        return prefs.getInt(Constants.KEY_SHEET_DIM_NIGHT, prefs.getInt(Constants.KEY_SHEET_DIM_PERCENT, 42));
+    }
+
+    public void setSheetDimNight(int percent) {
+        int clamped = Math.max(0, Math.min(100, percent));
+        prefs.edit().putInt(Constants.KEY_SHEET_DIM_NIGHT, clamped).apply();
+    }
+
+    public boolean isSheetLiquidGlass() {
+        return prefs.getBoolean(Constants.KEY_SHEET_LIQUID_GLASS, true);
+    }
+
+    public void setSheetLiquidGlass(boolean enabled) {
+        prefs.edit().putBoolean(Constants.KEY_SHEET_LIQUID_GLASS, enabled).apply();
     }
 
     // ================= 远端 DSH 连接（支持多远端动态管理与开关互斥） =================

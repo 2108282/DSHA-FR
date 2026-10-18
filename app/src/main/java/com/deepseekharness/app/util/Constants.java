@@ -125,6 +125,12 @@ public final class Constants {
     public static final String KEY_SHEET_AUTO_RESTORE_DEFAULT = "sheet_auto_restore_def";
     /** 快捷抽屉背景压暗蒙版百分比（0~100，默认 42%）。 */
     public static final String KEY_SHEET_DIM_PERCENT = "sheet_dim_percent";
+    /** 快捷抽屉白天背景压暗蒙版百分比（0~100，默认 0%）。 */
+    public static final String KEY_SHEET_DIM_DAY = "sheet_dim_day";
+    /** 快捷抽屉黑夜背景压暗蒙版百分比（0~100，默认 42%）。 */
+    public static final String KEY_SHEET_DIM_NIGHT = "sheet_dim_night";
+    /** 快捷抽屉液态玻璃拟态开关（默认开启）。 */
+    public static final String KEY_SHEET_LIQUID_GLASS = "sheet_liquid_glass";
 
     /** 默认工作目录（容器内路径，直通手机物理存储 Download/DSHA/工作区）。 */
     public static final String DEFAULT_WORKDIR = "/root/内部存储/工作区";

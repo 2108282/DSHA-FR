@@ -239,7 +239,71 @@
                 android:layout_marginStart="66dp"
                 android:background="@color/line_soft" />
 
-            <!-- 1.3 圈定即搜重定向行 -->
+            <!-- 1.3 液态玻璃拟态行 -->
+            <LinearLayout
+                android:id="@+id/sheet_settings_liquid_glass_row"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="14dp">
+
+                <FrameLayout
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:background="@drawable/bg_settings_icon_box">
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="液态玻璃拟态"
+                        android:src="@drawable/ic_sheet_liquid"
+                        app:tint="@color/primary" />
+                </FrameLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="液态玻璃拟态"
+                        android:textColor="@color/text"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="1dp"
+                        android:text="晶莹折射高光与菲涅尔晶钻边缘（非磨砂毛玻璃）"
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <com.deepseekharness.app.ui.DshaToggle
+                    android:id="@+id/sheet_settings_liquid_glass_toggle"
+                    android:layout_width="44dp"
+                    android:layout_height="26dp"
+                    android:layout_marginStart="8dp" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginStart="66dp"
+                android:background="@color/line_soft" />
+
+            <!-- 1.4 圈定即搜重定向行 -->
             <LinearLayout
                 android:id="@+id/sheet_settings_cts_redirect_row"
                 android:layout_width="match_parent"
@@ -655,9 +719,33 @@
                 android:orientation="horizontal">
 
                 <EditText
-                    android:id="@+id/sheet_settings_dim_input"
-                    android:layout_width="72dp"
+                    android:id="@+id/sheet_settings_dim_day_input"
+                    android:layout_width="0dp"
                     android:layout_height="42dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_input"
+                    android:gravity="center"
+                    android:hint="0"
+                    android:importantForAutofill="no"
+                    android:inputType="number"
+                    android:maxLength="3"
+                    android:textColor="@color/text"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:text="白天 %"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp" />
+
+                <EditText
+                    android:id="@+id/sheet_settings_dim_night_input"
+                    android:layout_width="0dp"
+                    android:layout_height="42dp"
+                    android:layout_marginStart="10dp"
+                    android:layout_weight="1"
                     android:background="@drawable/bg_input"
                     android:gravity="center"
                     android:hint="42"
@@ -670,16 +758,16 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:text="%"
+                    android:layout_marginStart="6dp"
+                    android:text="黑夜 %"
                     android:textColor="@color/text_secondary"
-                    android:textSize="14sp" />
+                    android:textSize="12sp" />
 
                 <Button
                     android:id="@+id/sheet_settings_dim_save"
                     android:layout_width="wrap_content"
                     android:layout_height="38dp"
-                    android:layout_marginStart="16dp"
+                    android:layout_marginStart="12dp"
                     android:background="@drawable/bg_btn_primary_compact"
                     android:stateListAnimator="@animator/btn_press_scale"
                     android:paddingHorizontal="18dp"

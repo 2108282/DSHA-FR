@@ -363,6 +363,13 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         setFinishOnTouchOutside(true);
 
+        sCurrentInstance = this;
+        controller = HarnessController.get(this);
+        ConfigStore initCfg = new ConfigStore(this);
+        isDarkMode = initCfg.isSheetInvertColor();
+        isMonetColor = initCfg.isSheetMonetColor();
+        isMonetInvert = initCfg.isSheetMonetInvert();
+
         Window window = getWindow();
         if (window != null) {
             // 显式关闭系统沉浸式框架对 DecorView 的状态栏 Padding 注入，消除顶部多余空白行
@@ -373,7 +380,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 window.setAttributes(lp);
             }
             window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-            int dimPercent = new ConfigStore(this).getSheetDimPercent();
+            int dimPercent = isDarkMode ? initCfg.getSheetDimNight() : initCfg.getSheetDimDay();
             if (dimPercent <= 0) {
                 window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
                 window.setDimAmount(0f);
@@ -394,12 +401,6 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 });
             }
         }
-
-        sCurrentInstance = this;
-        controller = HarnessController.get(this);
-        isDarkMode = new ConfigStore(this).isSheetInvertColor();
-        isMonetColor = new ConfigStore(this).isSheetMonetColor();
-        isMonetInvert = new ConfigStore(this).isSheetMonetInvert();
 
         calculateDimensions();
         setContentView(buildUi());
@@ -693,6 +694,108 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * 构建抽屉卡片背景：支持「液态玻璃（Liquid Glass）」拟态高透光折射与经典平铺半透
+     * 1. 严格杜绝磨砂毛玻璃的发雾发白，确保 100% 晶莹高透光；
+     * 2. 光线由顶部斜入射产生微光折射高光（Specular Refraction Crest）；
+     * 3. 内部晶莹流质渐变自然过渡到清透底色；
+     * 4. 菲涅尔边缘微反光描边（Fresnel Rim Light）勾勒纯净水晶轮廓。
+     */
+    private Drawable buildCardBackground(ConfigStore cfg, MonetThemeHelper.Palette palette) {
+        float[] radii = calculateCardCornerRadii(cfg.getSheetMarginLeft(), cfg.getSheetMarginRight());
+        int cardBgColor = palette.cardBgColor;
+        int borderColor = palette.borderColor;
+
+        if (!cfg.isSheetLiquidGlass()) {
+            GradientDrawable classicBg = new GradientDrawable();
+            classicBg.setShape(GradientDrawable.RECTANGLE);
+            classicBg.setCornerRadii(radii);
+            classicBg.setColor(cardBgColor);
+            classicBg.setStroke(dpToPx(1), borderColor);
+            return classicBg;
+        }
+
+        // ================= 液态玻璃（Liquid Glass）拟态画法 =================
+        int alpha = Color.alpha(cardBgColor);
+        int r = Color.red(cardBgColor);
+        int g = Color.green(cardBgColor);
+        int b = Color.blue(cardBgColor);
+
+        int topHighlightColor;
+        int bottomClearColor;
+        int rimStrokeColor;
+
+        if (isDarkMode) {
+            // 深曜液态黑晶：顶部微光折射（冷调蓝灰银反光），底座深邃清澈，边框带有钻石微冷高光
+            int topR = Math.min(255, r + 24);
+            int topG = Math.min(255, g + 28);
+            int topB = Math.min(255, b + 42);
+            int topAlpha = Math.min(255, (int) (alpha * 1.08f));
+            topHighlightColor = Color.argb(topAlpha, topR, topG, topB);
+
+            int botR = Math.max(0, r - 4);
+            int botG = Math.max(0, g - 4);
+            int botB = Math.max(0, b - 4);
+            int botAlpha = Math.max(0, (int) (alpha * 0.94f));
+            bottomClearColor = Color.argb(botAlpha, botR, botG, botB);
+
+            // 菲涅尔冷调晶体高光外边缘 (1.2dp)
+            rimStrokeColor = Color.argb(0x38, 0x8A, 0xB4, 0xF8);
+        } else {
+            // 清水液态水晶：顶部白皙纯净折射高光，底部极润透光，高透亮白高光边缘
+            int topAlpha = Math.min(255, (int) (alpha * 1.05f));
+            topHighlightColor = Color.argb(topAlpha, 0xFF, 0xFF, 0xFF);
+
+            int botAlpha = Math.max(0, (int) (alpha * 0.92f));
+            bottomClearColor = Color.argb(botAlpha, Math.max(0, r - 6), Math.max(0, g - 6), Math.max(0, b - 4));
+
+            // 菲涅尔白皙高光边缘 (1.2dp)
+            rimStrokeColor = Color.argb(0x75, 0xFF, 0xFF, 0xFF);
+        }
+
+        GradientDrawable liquidBody = new GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[] { topHighlightColor, cardBgColor, bottomClearColor }
+        );
+        liquidBody.setShape(GradientDrawable.RECTANGLE);
+        liquidBody.setCornerRadii(radii);
+        liquidBody.setStroke(dpToPx(1.2f), rimStrokeColor);
+
+        return liquidBody;
+    }
+
+    /** 构建拖拽把手背景：液态模式下带有精致微晶胶囊倒角高光 */
+    private Drawable buildDragHandleBackground(ConfigStore cfg, int handleColor) {
+        GradientDrawable handleBg = new GradientDrawable();
+        handleBg.setShape(GradientDrawable.RECTANGLE);
+        handleBg.setCornerRadius(dpToPx(2.5f));
+        if (cfg.isSheetLiquidGlass()) {
+            if (isDarkMode) {
+                handleBg.setColor(Color.parseColor("#458BA0B8"));
+                handleBg.setStroke(dpToPx(0.8f), Color.parseColor("#35FFFFFF"));
+            } else {
+                handleBg.setColor(Color.parseColor("#5094A3B8"));
+                handleBg.setStroke(dpToPx(0.8f), Color.parseColor("#60FFFFFF"));
+            }
+        } else {
+            handleBg.setColor(handleColor);
+        }
+        return handleBg;
+    }
+
+    private void updateSheetCardShadow(ConfigStore cfg) {
+        if (sheetCard == null) return;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            if (cfg.isSheetLiquidGlass()) {
+                sheetCard.setOutlineAmbientShadowColor(isDarkMode ? Color.parseColor("#4D000000") : Color.parseColor("#203B6590"));
+                sheetCard.setOutlineSpotShadowColor(isDarkMode ? Color.parseColor("#80000000") : Color.parseColor("#383B6590"));
+            } else {
+                sheetCard.setOutlineAmbientShadowColor(Color.BLACK);
+                sheetCard.setOutlineSpotShadowColor(Color.BLACK);
+            }
+        }
+    }
+
     private void updateCardTheme() {
         com.deepseekharness.app.core.ConfigStore cfg = new com.deepseekharness.app.core.ConfigStore(this);
         int opacity = isDarkMode ? cfg.getSheetOpacityNight() : cfg.getSheetOpacityDay();
@@ -703,10 +806,10 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         int handleColor = palette.handleColor;
         int borderColor = palette.borderColor;
 
-        // 0. 动态同步窗口背景压暗蒙版
+        // 0. 动态同步窗口背景压暗蒙版（白天与黑夜模式独立取值）
         Window window = getWindow();
         if (window != null) {
-            int dimPercent = cfg.getSheetDimPercent();
+            int dimPercent = isDarkMode ? cfg.getSheetDimNight() : cfg.getSheetDimDay();
             if (dimPercent <= 0) {
                 window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
                 window.setDimAmount(0f);
@@ -716,14 +819,10 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             }
         }
 
-        // 1. 卡片圆角背景与描边（自适应不贴边圆角）
+        // 1. 卡片圆角背景与描边（自适应液态玻璃与平铺半透）
         if (sheetCard != null) {
-            GradientDrawable cardBg = new GradientDrawable();
-            cardBg.setShape(GradientDrawable.RECTANGLE);
-            cardBg.setCornerRadii(calculateCardCornerRadii(cfg.getSheetMarginLeft(), cfg.getSheetMarginRight()));
-            cardBg.setColor(cardBgColor);
-            cardBg.setStroke(dpToPx(1), borderColor);
-            sheetCard.setBackground(cardBg);
+            sheetCard.setBackground(buildCardBackground(cfg, palette));
+            updateSheetCardShadow(cfg);
 
             // 动态同步左右边距
             if (sheetCard.getLayoutParams() instanceof ViewGroup.MarginLayoutParams) {
@@ -739,8 +838,8 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         }
 
         // 2. 顶部拖拽横条颜色
-        if (dragHandle != null && dragHandle.getBackground() instanceof GradientDrawable) {
-            ((GradientDrawable) dragHandle.getBackground()).setColor(handleColor);
+        if (dragHandle != null) {
+            dragHandle.setBackground(buildDragHandleBackground(cfg, handleColor));
         }
 
         // 3. 顶部操作栏文字颜色
@@ -1030,13 +1129,9 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         sheetCard.setClipChildren(true);
         sheetCard.setFitsSystemWindows(false);
 
-        // 顶部圆角 + 智能底角（贴边为直角，不贴边切圆角）毛玻璃半透背景 + 细微描边
-        GradientDrawable cardBg = new GradientDrawable();
-        cardBg.setShape(GradientDrawable.RECTANGLE);
-        cardBg.setCornerRadii(calculateCardCornerRadii(cfg.getSheetMarginLeft(), cfg.getSheetMarginRight()));
-        cardBg.setColor(cardBgColor);
-        cardBg.setStroke(dpToPx(1), borderColor);
-        sheetCard.setBackground(cardBg);
+        // 顶部圆角 + 智能底角（自适应液态玻璃与平铺半透）
+        sheetCard.setBackground(buildCardBackground(cfg, palette));
+        updateSheetCardShadow(cfg);
 
         // 3. 紧凑拖拽横条区域（Drag Handle）：压缩留白
         FrameLayout dragArea = new FrameLayout(this);
@@ -1048,12 +1143,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         FrameLayout.LayoutParams handleLp = new FrameLayout.LayoutParams(dpToPx(36), dpToPx(4));
         handleLp.gravity = Gravity.CENTER_HORIZONTAL;
         dragHandle.setLayoutParams(handleLp);
-
-        GradientDrawable handleBg = new GradientDrawable();
-        handleBg.setShape(GradientDrawable.RECTANGLE);
-        handleBg.setCornerRadius(dpToPx(2));
-        handleBg.setColor(handleColor);
-        dragHandle.setBackground(handleBg);
+        dragHandle.setBackground(buildDragHandleBackground(cfg, handleColor));
         dragArea.addView(dragHandle);
         sheetCard.addView(dragArea);
 
@@ -2468,8 +2558,6 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                         + "div[class*='_popover'] {\n"
                         + "  background: var(--dsh-menu-bg) !important;\n"
                         + "  background-color: var(--dsh-menu-bg) !important;\n"
-                        + "  backdrop-filter: blur(8px) !important;\n"
-                        + "  -webkit-backdrop-filter: blur(8px) !important;\n"
                         + "  border: 1px solid var(--dsh-menu-border) !important;\n"
                         + "  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;\n"
                         + "  transform: translateZ(0) !important;\n"
