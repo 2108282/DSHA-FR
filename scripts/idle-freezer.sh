@@ -90,6 +90,18 @@ freeze_process_tree() {
             kill -STOP "$cpid" 2>/dev/null || true
         fi
     done
+
+    # 仅放开压缩权限：允许系统内存在紧张时自然将闲置页面压缩进 zram（不主动强行触发）
+    if [ -d "/dev/memcg/dsh" ]; then
+        echo 100 > /dev/memcg/dsh/memory.swappiness 2>/dev/null || true
+        # 兼容 HyperOS / 高通内核一次性置位锁：将进程动态移入系统默认 apps 组以完全放开压缩限制
+        if [ -d "/dev/memcg/apps" ]; then
+            echo "$mpid" > /dev/memcg/apps/cgroup.procs 2>/dev/null || true
+            for cpid in $(pgrep -P "$mpid" 2>/dev/null); do
+                echo "$cpid" > /dev/memcg/apps/cgroup.procs 2>/dev/null || true
+            done
+        fi
+    fi
 }
 
 # 解冻主进程及其直接子进程
@@ -105,6 +117,16 @@ thaw_process_tree() {
     done
 
     kill -CONT "$mpid" 2>/dev/null
+
+    # 唤醒即恢复物理内存锁定：重回 /dev/memcg/dsh 保护组，防止新解压或活跃页面被二次换出
+    if [ -d "/dev/memcg/dsh" ]; then
+        echo 0 > /dev/memcg/dsh/memory.swappiness 2>/dev/null || true
+        echo 1 > /dev/memcg/dsh/memory.anno_writeback_protected 2>/dev/null || true
+        echo "$mpid" > /dev/memcg/dsh/cgroup.procs 2>/dev/null || true
+        for cpid in $(pgrep -P "$mpid" 2>/dev/null); do
+            echo "$cpid" > /dev/memcg/dsh/cgroup.procs 2>/dev/null || true
+        done
+    fi
 }
 
 # 严格检测是否有存活的有效 daemon
