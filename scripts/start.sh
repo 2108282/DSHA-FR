@@ -341,6 +341,39 @@ HCMD_EOF
 chmod 755 "$DSH_BIN/$HCMD"
 done
 
+# pnpm 安全包装器（多工作区白名单放行，非工作区禁止 build / run build）
+cat << 'PNPM_EOF' > "$DSH_BIN/pnpm"
+#!/bin/bash
+# DSHA: 仅允许在工作区执行 pnpm build / pnpm run build，非工作区一律禁止
+
+REAL_PNPM="/usr/local/bin/node /usr/local/lib/dsha-pnpm/bin/pnpm.cjs"
+
+in_workspace() {
+  local p="$(pwd)"
+  local rp
+  rp="$(realpath "$p" 2>/dev/null || pwd -P 2>/dev/null || echo "$p")"
+  case "$p" in
+    /sdcard/Download/DSHA/工作区*|/storage/emulated/0/Download/DSHA/工作区*|/root/workspaces*|/data/adb/dsha/rootfs/root/workspaces*) return 0 ;;
+  esac
+  case "$rp" in
+    /sdcard/Download/DSHA/工作区*|/storage/emulated/0/Download/DSHA/工作区*|/root/workspaces*|/data/adb/dsha/rootfs/root/workspaces*) return 0 ;;
+  esac
+  return 1
+}
+
+# 仅精确判定 build 与 run build
+if [ "$1" = "build" ] || ([ "$1" = "run" ] && [ "$2" = "build" ]); then
+  if ! in_workspace; then
+    echo "❌ [DSHA 拦截] 已禁止运行 pnpm $*：仅允许在工作区执行编译！" >&2
+    exit 1
+  fi
+fi
+
+# 在工作区内的编译命令，以及其他所有命令完全原样放行
+exec $REAL_PNPM "$@"
+PNPM_EOF
+chmod 755 "$DSH_BIN/pnpm"
+
 # 清空旧日志
 > "$LOG_FILE"
 mkdir -p "$ROOTFS/root"
@@ -393,6 +426,7 @@ chroot "$ROOTFS" /usr/bin/setsid /usr/bin/env -i \
     LC_ALL=C.UTF-8 \
     DSH_CONFIRM=1 \
     NODE_PATH=/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules \
+    UV_THREADPOOL_SIZE=3 \
     $PRELOAD_OPT \
     nice -n 10 /usr/local/bin/node --v8-pool-size=2 /usr/local/lib/node_modules/@deepseek-ai/dsh/lib/bin.js web $PATCH_ARG --no-open --port "$PORT" --host 127.0.0.1 $EXTRA_ARGS > "$LOG_FILE" 2>&1 &
 
@@ -405,6 +439,12 @@ echo -800 > "/proc/$NEW_PID/oom_score_adj" 2>/dev/null || true
 if [ -d "/dev/cpuctl/background" ]; then
     echo "$NEW_PID" > /dev/cpuctl/background/cgroup.procs 2>/dev/null || true
 fi
+
+# 纳入系统免压缩 memcg 组（锁定真实物理内存，严禁 ZRAM 压缩换页）
+mkdir -p /dev/memcg/dsh 2>/dev/null || true
+echo 0 > /dev/memcg/dsh/memory.swappiness 2>/dev/null || true
+echo 1 > /dev/memcg/dsh/memory.anno_writeback_protected 2>/dev/null || true
+echo "$NEW_PID" > /dev/memcg/dsh/cgroup.procs 2>/dev/null || true
 
 # 确保进程进入根 cpuset，解除受限核心屏蔽，使后续 taskset 可以自由绑定任意 0-7 核心
 if [ -f "/dev/cpuset/cgroup.procs" ]; then
