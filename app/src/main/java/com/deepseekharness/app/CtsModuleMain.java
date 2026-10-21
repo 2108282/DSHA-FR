@@ -6,6 +6,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
+import android.os.Build;
 import android.util.Log;
 import android.view.WindowManager;
 
@@ -58,17 +59,52 @@ public class CtsModuleMain extends XposedModule {
         super();
     }
 
+    /**
+     * 精准判断系统版本：HyperOS 4 (Android 17, SDK 37) vs HyperOS 3 (Android 16, SDK 36)
+     */
+    private static boolean isHyperOS4() {
+        try {
+            Class<?> spCls = Class.forName("android.os.SystemProperties");
+            Method getM = spCls.getMethod("get", String.class, String.class);
+            String verName = (String) getM.invoke(null, "ro.mi.os.version.name", "");
+            if (verName != null && (verName.contains("OS4") || verName.contains("os4"))) {
+                return true;
+            }
+        } catch (Throwable ignored) {}
+        return Build.VERSION.SDK_INT >= 37;
+    }
+
     @Override
     public void onModuleLoaded(ModuleLoadedParam param) {
         instance = this;
-        log(Log.INFO, TAG, "Voice assist redirect module loaded");
+        log(Log.INFO, TAG, "Module loaded (Target: " + (isHyperOS4() ? "HyperOS 4" : "HyperOS 3") + ")");
     }
 
     @Override
     public void onSystemServerStarting(SystemServerStartingParam param) {
         super.onSystemServerStarting(param);
 
-        // 0. 【系统语音最上游拦截】在 VoiceInteractionManagerService 中前置拦截：
+        boolean isOs4 = isHyperOS4();
+
+        // 0. 【HyperOS 4 专属唤醒】
+        // OS4 国行 OEM 在 framework-res 中清空了 config_defaultContextualSearchPackageName，
+        // 导致 SystemServer 开机时 deviceHasConfigString 为 false 并直接跳过了 ContextualSearchManagerService 的启动。
+        // 此处前置 Hook 强制返回 true，唤醒系统底层的 CTS 服务注册与运行！
+        if (isOs4) {
+            try {
+                Class<?> systemServerCls = param.getClassLoader().loadClass("com.android.server.SystemServer");
+                for (Method m : systemServerCls.getDeclaredMethods()) {
+                    if ("deviceHasConfigString".equals(m.getName())) {
+                        hook(m).intercept(new DeviceHasConfigStringHooker());
+                    }
+                }
+                log(Log.INFO, TAG, "[OS4] hook SystemServer.deviceHasConfigString installed");
+            } catch (Throwable e) {
+                log(Log.WARN, TAG, "[OS4] hook SystemServer.deviceHasConfigString fail", e);
+            }
+        }
+
+        // 1. 【系统语音最上游拦截】在 VoiceInteractionManagerService 中前置拦截：
         // 凡是系统通过手势或按键呼出 Google 语音会话 (showSessionForActiveService) 时，
         // 直接在系统层改写为拉起 DSHA 抽屉，并直接阻断原方法（不向下通知 Google）！
         // 这样 Google 连一次 Session 启动的信号都收不到，100% 杜绝 Google 麦克风被开启！
@@ -94,7 +130,7 @@ public class CtsModuleMain extends XposedModule {
             log(Log.WARN, TAG, "hook VIMS skip", e);
         }
 
-        // 1. 【核心主路径】在 system_server 的 ATMS 中进行前置源头拦截：
+        // 2. 【核心主路径】在 system_server 的 ATMS 中进行前置源头拦截：
         // 凡是系统或进程试图启动 Google 语音助手/FloatyActivity 的 Intent，直接改写为 DSHA 抽屉网关。
         // 从源头彻底阻断 Google 进程的创建与冷启动，实现 0 CPU 消耗与系统级秒开！
         try {
@@ -111,7 +147,7 @@ public class CtsModuleMain extends XposedModule {
             log(Log.ERROR, TAG, "hook ATMS fail", e);
         }
 
-        // 2. CSMS 兜底路径（AOSP 标准圈定即搜）
+        // 3. CSMS 圈定即搜重定向（OS3 原生启动；OS4 经上方 Hook 激活启动）
         try {
             Class<?> csms = param.getClassLoader().loadClass(
                     "com.android.server.contextualsearch.ContextualSearchManagerService");
@@ -128,10 +164,20 @@ public class CtsModuleMain extends XposedModule {
         super.onPackageReady(param);
         if (!param.isFirstPackage()) return;
 
+        boolean isOs4 = isHyperOS4();
+
         if ("com.miui.home".equals(param.getPackageName())) {
-            // 【小米系统桌面全面屏手势解绑】
-            // 解决桌面硬编码校验 googlequicksearchbox 导致非 Google 助理选手势失效的问题：
-            // 1. 强制激活全面屏底角手势
+            // 【HyperOS 4 架构分支】：
+            // OS4 小米系统桌面已全面重构为 Flutter + Rust 原生应用，APK 内部无任何 Java classes.dex，
+            // 侧滑手势直接在原生层通过 Binder 呼叫 contextual_search，直接跳过 Java Hook
+            if (isOs4) {
+                log(Log.INFO, TAG, "[OS4] MiuiHome is native Rust/Flutter, skip Java gesture hook");
+                return;
+            }
+
+            // 【HyperOS 3 专属手势解绑】：
+            // 解决 OS3 桌面 Java 层硬编码校验 googlequicksearchbox 导致非 Google 助理选手势失效的问题：
+            // 1. 强制激活全面屏侧滑/底角手势
             // 2. 在手势触发 startAssistant 时前置兜底秒拉 DSHA 抽屉
             try {
                 ClassLoader cl = param.getClassLoader();
@@ -147,7 +193,7 @@ public class CtsModuleMain extends XposedModule {
                         }
                     }
                 } catch (Throwable t) {
-                    log(Log.DEBUG, TAG, "hook FsGestureAssistEnableHelper skip", t);
+                    log(Log.DEBUG, TAG, "[OS3] hook FsGestureAssistEnableHelper skip", t);
                 }
 
                 try {
@@ -159,7 +205,7 @@ public class CtsModuleMain extends XposedModule {
                         }
                     }
                 } catch (Throwable t) {
-                    log(Log.DEBUG, TAG, "hook AssistManager skip", t);
+                    log(Log.DEBUG, TAG, "[OS3] hook AssistManager skip", t);
                 }
 
                 try {
@@ -171,12 +217,12 @@ public class CtsModuleMain extends XposedModule {
                         }
                     }
                 } catch (Throwable t) {
-                    log(Log.DEBUG, TAG, "hook SystemUiProxyWrapper skip", t);
+                    log(Log.DEBUG, TAG, "[OS3] hook SystemUiProxyWrapper skip", t);
                 }
 
-                log(Log.INFO, TAG, "hook MiuiHome gesture helper installed (count=" + hookedCount + ")");
+                log(Log.INFO, TAG, "[OS3] hook MiuiHome gesture helper installed (count=" + hookedCount + ")");
             } catch (Throwable e) {
-                log(Log.WARN, TAG, "hook MiuiHome fail", e);
+                log(Log.WARN, TAG, "[OS3] hook MiuiHome fail", e);
             }
         }
 
@@ -351,6 +397,31 @@ public class CtsModuleMain extends XposedModule {
             }
         } catch (Throwable t) {
             Log.d(TAG, "dismissActiveVoiceSession skip: " + t.getMessage());
+        }
+    }
+
+    /**
+     * 【HyperOS 4 核心修复】：
+     * OEM 未在 framework-res 中配置 config_defaultContextualSearchPackageName 导致服务不启动。
+     * 拦截 SystemServer.deviceHasConfigString 并始终返回 true，让系统走入 startService(ContextualSearchManagerService)。
+     */
+    private final class DeviceHasConfigStringHooker implements Hooker {
+        @Override
+        public Object intercept(Chain chain) throws Throwable {
+            List<?> args = chain.getArgs();
+            if (args != null && args.size() >= 2 && args.get(0) instanceof Context && args.get(1) instanceof Integer) {
+                Context context = (Context) args.get(0);
+                int resId = (Integer) args.get(1);
+                try {
+                    int targetResId = context.getResources().getIdentifier(
+                            "config_defaultContextualSearchPackageName", "string", "android");
+                    if (targetResId != 0 && resId == targetResId && isEnabled()) {
+                        log(Log.INFO, TAG, "[OS4] Forced deviceHasConfigString=true for CTS");
+                        return true;
+                    }
+                } catch (Throwable ignored) {}
+            }
+            return chain.proceed();
         }
     }
 
