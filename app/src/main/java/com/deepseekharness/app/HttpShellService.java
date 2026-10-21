@@ -2058,9 +2058,10 @@ public final class HttpShellService {
             try { b.setLargeIcon(sCachedWhaleBmp); } catch (Throwable ignored) {}
         }
 
+        android.os.Bundle extras = b.getExtras();
+
         // 样式 2：Google AOSP 16 (API 36) 原生实时活动标准 (Live Updates / Promoted Ongoing)
         if (Constants.NOTIF_STYLE_AOSP.equals(notifStyle)) {
-            android.os.Bundle extras = b.getExtras();
             if (extras != null) {
                 extras.putBoolean("android.requestPromotedOngoing", true);
                 extras.putString("android.shortCriticalText", capsuleText != null ? capsuleText : "正在执行");
