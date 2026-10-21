@@ -343,30 +343,30 @@ public class HarnessController {
         return webAuthUrl;
     }
 
-    /** 同步恢复运行中的鉴权 URL（仅在子线程执行，避免阻塞主线程）。 */
+    /** 同步恢复运行中的鉴权 URL（优先从私有沙盒安全直投文件获取，零 Root 零弹窗）。 */
     public String recoverRunningUrlSync() {
         if (!webAuthUrl.isEmpty()) return webAuthUrl;
         if ("ksu_chroot".equals(proot.runtime().id())) {
-            if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
-                tryRecoverRunningUrl();
-                return webAuthUrl;
-            }
             try {
-                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c",
-                        "grep -o 'http://127\\.0\\.0\\.1:[0-9]*/?token=[^ ]*' /data/adb/dsha/run/dsh-web.log 2>/dev/null | tail -n 1"});
-                String out = new String(Compat.readAllBytes(p.getInputStream()), StandardCharsets.UTF_8).trim();
-                String url = extractAuthUrl(out);
-                if (url == null || url.isEmpty()) {
-                    Process pToken = Runtime.getRuntime().exec(new String[]{"su", "-c",
-                            "cat /data/adb/dsha/rootfs/root/.dsh/.launch_token 2>/dev/null || cat /root/.dsh/.launch_token 2>/dev/null"});
-                    String token = new String(Compat.readAllBytes(pToken.getInputStream()), StandardCharsets.UTF_8).trim();
-                    if (!token.isEmpty() && token.length() >= 20) {
-                        url = "http://127.0.0.1:" + getPort() + "/?token=" + token;
+                java.io.File privateAuthFile = new java.io.File(ctx.getFilesDir(), ".auth_url");
+                if (privateAuthFile.exists() && privateAuthFile.canRead()) {
+                    String u = new String(java.nio.file.Files.readAllBytes(privateAuthFile.toPath()), StandardCharsets.UTF_8).trim();
+                    if (u.startsWith("http://127.0.0.1:")) {
+                        synchronized (lifecycle) {
+                            webAuthUrl = u;
+                        }
+                        return webAuthUrl;
                     }
                 }
-                if (url != null && !url.isEmpty()) {
-                    synchronized (lifecycle) {
-                        webAuthUrl = url;
+                java.io.File privateTokenFile = new java.io.File(ctx.getFilesDir(), ".launch_token");
+                if (privateTokenFile.exists() && privateTokenFile.canRead()) {
+                    String token = new String(java.nio.file.Files.readAllBytes(privateTokenFile.toPath()), StandardCharsets.UTF_8).trim();
+                    if (!token.isEmpty() && token.length() >= 20) {
+                        String u = "http://127.0.0.1:" + getPort() + "/?token=" + token;
+                        synchronized (lifecycle) {
+                            webAuthUrl = u;
+                        }
+                        return webAuthUrl;
                     }
                 }
             } catch (Throwable ignored) {

@@ -214,7 +214,8 @@ public final class HttpShellService {
                 String saved = sp.getString("token", "");
                 if (saved.matches("[A-Za-z0-9_-]{16,64}")) {
                     authToken = saved;
-                    syncTokenToRootfs();
+                    // 仅当 rootfs 侧文件缺失或不匹配时才同步，杜绝每次进入抽屉都反复触发 su
+                    checkAndSyncTokenFile(authToken);
                     return authToken;
                 }
             }
@@ -225,7 +226,6 @@ public final class HttpShellService {
                 if (c != null) {
                     c.getSharedPreferences("dsha_bridge", Context.MODE_PRIVATE).edit().putString("token", authToken).apply();
                 }
-                syncTokenToRootfs();
                 return authToken;
             }
             // 无文件或内容无效 → 轮换
@@ -239,10 +239,29 @@ public final class HttpShellService {
         }
     }
 
+    private static void checkAndSyncTokenFile(String token) {
+        java.io.File target = new java.io.File("/data/adb/dsha/rootfs/root/.dsh/.bridge_token");
+        if (target.exists() && target.canRead()) {
+            try {
+                String existing = new String(Compat.readAllBytes(target), java.nio.charset.StandardCharsets.UTF_8).trim();
+                if (token.equals(existing)) {
+                    return; // 内容一致，无需任何写入与 su 动作
+                }
+            } catch (Throwable ignored) {}
+        }
+        syncTokenToRootfs();
+    }
+
     public static void syncTokenToRootfsSync() {
-        String t = ensureToken();
+        String t = authToken;
         if (t == null || t.isEmpty()) return;
         try {
+            // 优先直接使用普通 Java 文件写（因为 3095 桥和 rootfs 默认将该目录/文件开放 666）
+            java.io.File target = new java.io.File("/data/adb/dsha/rootfs/root/.dsh/.bridge_token");
+            if (target.getParentFile() != null && target.getParentFile().canWrite()) {
+                Compat.write(target, t.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                return;
+            }
             String cmd = "mkdir -p /data/adb/dsha/rootfs/root/.dsh && echo -n '" + t
                     + "' > /data/adb/dsha/rootfs/root/.dsh/.bridge_token && chmod 666 /data/adb/dsha/rootfs/root/.dsh/.bridge_token";
             Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
