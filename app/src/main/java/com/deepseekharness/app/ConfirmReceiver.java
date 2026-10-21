@@ -18,6 +18,7 @@ import androidx.core.app.RemoteInput;
 import com.deepseekharness.app.core.HarnessController;
 import com.deepseekharness.app.ui.MainActivity;
 import com.deepseekharness.app.ui.QuickChatSheetActivity;
+import com.deepseekharness.app.util.Compat;
 import com.deepseekharness.app.util.Constants;
 
 import java.io.File;
