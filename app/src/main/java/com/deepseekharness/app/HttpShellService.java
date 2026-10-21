@@ -2583,6 +2583,17 @@ public final class HttpShellService {
         }
         // 抽屉内部同步展开原生审批条（若抽屉已在前台）
         com.deepseekharness.app.ui.QuickChatSheetActivity.showNativeApprovalBanner(info, epoch);
+
+        // 桌面悬浮条同步就地展开审批按钮（与通知栏、抽屉构成完整联动）
+        OverlayController.askConfirm(ctx, safeDisplay(cmd),
+                () -> {
+                    ConfirmReceiver.triggerVibrate(ctx, 50);
+                    resolveConfirm(true, epoch);
+                },
+                () -> {
+                    ConfirmReceiver.triggerVibrate(ctx, 50);
+                    resolveConfirm(false, epoch);
+                });
     }
 
     private void cancelConfirmNotification() {
