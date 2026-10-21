@@ -78,19 +78,43 @@ public final class ThemeNotifyFragment extends Fragment {
             }
         }
 
-        // ==================== 1.1 Toast 弹窗通知 ====================
-        DshaToggle toastToggle = v.findViewById(R.id.theme_notify_toggle_toast);
-        if (toastToggle != null) {
-            toastToggle.setChecked(cfg.isToastNotificationEnabled(), false, false);
-            toastToggle.setOnCheckedChangeListener((btn, isChecked) -> {
-                cfg.setToastNotificationEnabled(isChecked);
-                if (isChecked) {
-                    com.deepseekharness.app.util.ToastHelper.show(requireContext(), "Toast 消息通知已开启");
-                }
+        // ==================== 1.1 智能体任务通知总开关 ====================
+        DshaToggle taskNotifyToggle = v.findViewById(R.id.theme_notify_toggle_task_notify);
+        if (taskNotifyToggle != null) {
+            taskNotifyToggle.setChecked(cfg.isTaskNotificationEnabled(), false, false);
+            taskNotifyToggle.setOnCheckedChangeListener((btn, isChecked) -> {
+                cfg.setTaskNotificationEnabled(isChecked);
+                com.deepseekharness.app.util.ToastHelper.show(requireContext(),
+                        isChecked ? "智能体任务通知已开启" : "智能体任务通知已关闭");
             });
-            View toastRow = v.findViewById(R.id.theme_notify_row_toast);
-            if (toastRow != null) {
-                toastRow.setOnClickListener(x -> toastToggle.toggle());
+            View taskNotifyRow = v.findViewById(R.id.theme_notify_row_task_notify);
+            if (taskNotifyRow != null) {
+                taskNotifyRow.setOnClickListener(x -> taskNotifyToggle.toggle());
+            }
+        }
+
+        // ==================== 1.2 通知呈现样式 (普通通知 / AOSP / HyperOS 胶囊) ====================
+        TextView styleText = v.findViewById(R.id.theme_notify_text_style);
+        updateStyleLabel(styleText, cfg.getNotificationStyle());
+
+        View styleRow = v.findViewById(R.id.theme_notify_row_notify_style);
+        if (styleRow != null) {
+            styleRow.setOnClickListener(x -> showNotificationStyleDialog(cfg, styleText));
+        }
+
+        // ==================== 1.3 后端独立直发通知 (脱离 App 独立模式) ====================
+        DshaToggle backendNotifyToggle = v.findViewById(R.id.theme_notify_toggle_backend_notify);
+        if (backendNotifyToggle != null) {
+            backendNotifyToggle.setChecked(cfg.isBackendNotifyEnabled(), false, false);
+            backendNotifyToggle.setOnCheckedChangeListener((btn, isChecked) -> {
+                cfg.setBackendNotifyEnabled(isChecked);
+                syncBackendNotifyFlag(isChecked);
+                com.deepseekharness.app.util.ToastHelper.show(requireContext(),
+                        isChecked ? "已开启后端独立直发通知" : "已切换为 App 托管通知通道");
+            });
+            View backendNotifyRow = v.findViewById(R.id.theme_notify_row_backend_notify);
+            if (backendNotifyRow != null) {
+                backendNotifyRow.setOnClickListener(x -> backendNotifyToggle.toggle());
             }
         }
 
@@ -362,6 +386,67 @@ public final class ThemeNotifyFragment extends Fragment {
 
     private interface OnOptionSelectedListener {
         void onSelected(String key);
+    }
+
+    private void updateStyleLabel(TextView view, String style) {
+        if (view == null) return;
+        String label = "经典普通通知";
+        if (Constants.NOTIF_STYLE_AOSP.equals(style)) {
+            label = "AOSP 实时动态";
+        } else if (Constants.NOTIF_STYLE_HYPEROS.equals(style)) {
+            label = "HyperOS 灵动胶囊";
+        }
+        view.setText(label);
+    }
+
+    private void showNotificationStyleDialog(ConfigStore cfg, TextView labelView) {
+        if (!isAdded()) return;
+        final String[] styles = new String[]{
+                Constants.NOTIF_STYLE_NORMAL,
+                Constants.NOTIF_STYLE_AOSP,
+                Constants.NOTIF_STYLE_HYPEROS
+        };
+        final String[] items = new String[]{
+                "经典普通通知 (推荐 · 原生常驻/横幅)",
+                "AOSP 实时动态 (Google 原生药丸)",
+                "HyperOS 灵动胶囊 (小米挖孔小黑条)"
+        };
+
+        String current = cfg.getNotificationStyle();
+        int selected = 0;
+        for (int i = 0; i < styles.length; i++) {
+            if (styles[i].equals(current)) {
+                selected = i;
+                break;
+            }
+        }
+
+        new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setTitle("通知呈现样式")
+                .setSingleChoiceItems(items, selected, (dialog, which) -> {
+                    dialog.dismiss();
+                    if (which >= 0 && which < styles.length) {
+                        cfg.setNotificationStyle(styles[which]);
+                        updateStyleLabel(labelView, styles[which]);
+                        com.deepseekharness.app.util.ToastHelper.show(requireContext(),
+                                "已切换为：" + items[which]);
+                    }
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void syncBackendNotifyFlag(boolean enabled) {
+        new Thread(() -> {
+            try {
+                java.io.File flag = new java.io.File(requireContext().getFilesDir(), ".backend_notify");
+                if (enabled) {
+                    if (!flag.exists()) flag.createNewFile();
+                } else {
+                    if (flag.exists()) flag.delete();
+                }
+            } catch (Throwable ignored) {}
+        }, "sync-backend-notify").start();
     }
 
     @Override

@@ -58,6 +58,17 @@ async function callBridge(endpoint, params = {}) {
       }
     } catch {}
   }
+  // 双轨保险：若 HTTP 端口抖动，直接调用纯原生二进制 dsh-notify 直发系统广播（0 脚本、0 网络依赖）
+  try {
+    const { execFile } = await import('node:child_process')
+    if (endpoint.includes('/task/running')) {
+      execFile('/usr/local/bin/dsh-notify', ['running', params.title || '正在执行', params.text || ''])
+    } else if (endpoint.includes('/notify')) {
+      execFile('/usr/local/bin/dsh-notify', ['done', params.title || '任务完成', params.text || '任务已结束'])
+    } else if (endpoint.includes('/task/cancel')) {
+      execFile('/usr/local/bin/dsh-notify', ['cancel'])
+    }
+  } catch {}
 }
 
 const TOOL_LABELS = [

@@ -113,8 +113,9 @@
                     android:layout_marginEnd="16dp"
                     android:background="@color/line_soft" />
 
+                <!-- 1.2 任务状态通知 (总开关，默认开，基于 Skia 自绘 DshaToggle) -->
                 <LinearLayout
-                    android:id="@+id/theme_notify_row_toast"
+                    android:id="@+id/theme_notify_row_task_notify"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:background="?attr/selectableItemBackground"
@@ -134,8 +135,8 @@
                             android:layout_width="20dp"
                             android:layout_height="20dp"
                             android:layout_gravity="center"
-                            android:contentDescription="Toast 消息通知"
-                            android:src="@drawable/ic_settings_toast"
+                            android:contentDescription="任务状态通知"
+                            android:src="@drawable/ic_alarm_white"
                             app:tint="@color/primary" />
                     </FrameLayout>
 
@@ -149,7 +150,7 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Toast 消息通知"
+                            android:text="智能体任务通知"
                             android:textColor="@color/text"
                             android:textSize="15sp"
                             android:textStyle="bold" />
@@ -158,13 +159,145 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="1dp"
-                            android:text="应用操作反馈与智能体任务的轻量浮层气泡"
+                            android:text="任务执行实时步骤、等待提问与结束提醒"
                             android:textColor="@color/text_muted"
                             android:textSize="12sp" />
                     </LinearLayout>
 
                     <com.deepseekharness.app.ui.DshaToggle
-                        android:id="@+id/theme_notify_toggle_toast"
+                        android:id="@+id/theme_notify_toggle_task_notify"
+                        android:layout_width="44dp"
+                        android:layout_height="26dp"
+                        android:layout_marginStart="8dp" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginEnd="16dp"
+                    android:background="@color/line_soft" />
+
+                <!-- 1.3 通知呈现样式 (普通通知 / AOSP 实时动态 / HyperOS 灵动胶囊) -->
+                <LinearLayout
+                    android:id="@+id/theme_notify_row_notify_style"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="15dp">
+
+                    <FrameLayout
+                        android:layout_width="38dp"
+                        android:layout_height="38dp"
+                        android:background="@drawable/bg_settings_icon_box">
+
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:layout_gravity="center"
+                            android:contentDescription="通知呈现样式"
+                            android:src="@drawable/ic_whale_logo"
+                            app:tint="@color/primary" />
+                    </FrameLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="通知呈现样式"
+                            android:textColor="@color/text"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/theme_notify_text_style"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="1dp"
+                            android:text="经典普通通知"
+                            android:textColor="@color/text_muted"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="›"
+                        android:textColor="@color/text_muted"
+                        android:textSize="20sp" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginEnd="16dp"
+                    android:background="@color/line_soft" />
+
+                <!-- 1.4 后端独立直发通知 (脱离 App 独立模式，基于 Skia 自绘 DshaToggle) -->
+                <LinearLayout
+                    android:id="@+id/theme_notify_row_backend_notify"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="15dp">
+
+                    <FrameLayout
+                        android:layout_width="38dp"
+                        android:layout_height="38dp"
+                        android:background="@drawable/bg_settings_icon_box">
+
+                        <ImageView
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:layout_gravity="center"
+                            android:contentDescription="后端独立直发通知"
+                            android:src="@drawable/ic_cpu"
+                            app:tint="@color/primary" />
+                    </FrameLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="后端独立直发通知"
+                            android:textColor="@color/text"
+                            android:textSize="15sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="1dp"
+                            android:text="脱离 App 进程由底座直接发送，防杀保活"
+                            android:textColor="@color/text_muted"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+
+                    <com.deepseekharness.app.ui.DshaToggle
+                        android:id="@+id/theme_notify_toggle_backend_notify"
                         android:layout_width="44dp"
                         android:layout_height="26dp"
                         android:layout_marginStart="8dp" />

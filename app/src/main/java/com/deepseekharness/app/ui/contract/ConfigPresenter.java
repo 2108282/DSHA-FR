@@ -144,6 +144,16 @@ public class ConfigPresenter implements ConfigActions {
     @Override
     public void onToggleConfirmShell(boolean enabled) {
         config.setConfirmShell(enabled);
+        new Thread(() -> {
+            try {
+                java.io.File flag = new java.io.File(context.getFilesDir(), ".guard_enabled");
+                if (enabled) {
+                    if (!flag.exists()) flag.createNewFile();
+                } else {
+                    if (flag.exists()) flag.delete();
+                }
+            } catch (Throwable ignored) {}
+        }, "sync-guard-flag").start();
         toast(enabled ? "已开启危险 Shell 操作拦截确认" : "已关闭危险 Shell 拦截确认");
         refreshState();
     }

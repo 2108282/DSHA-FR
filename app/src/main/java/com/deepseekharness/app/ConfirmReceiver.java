@@ -245,11 +245,17 @@ public class ConfirmReceiver extends BroadcastReceiver {
     public static void writeApprovalDecision(String decision) {
         new Thread(() -> {
             try {
-                String cmd = "mkdir -p /data/adb/dsha/rootfs/root/.dsh /sdcard/Download/DSHA /data/user/0/com.dsh.client/files/linux/ubuntu/root/.dsh 2>/dev/null; "
+                // 1. 优先普通 Java 写 App 沙盒私有文件（0 提权开销）
+                try {
+                    java.io.File priv = new java.io.File("/data/data/com.dsha.fr/files/.approval_decision");
+                    Compat.write(priv, decision.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                } catch (Throwable ignored) {}
+                // 2. 写入共享存储与 chroot 目录
+                String cmd = "mkdir -p /data/adb/dsha/rootfs/root/.dsh /sdcard/Download/DSHA 2>/dev/null; "
                         + "echo -n '" + decision + "' > /data/adb/dsha/rootfs/root/.dsh/.approval_decision; "
                         + "echo -n '" + decision + "' > /sdcard/Download/DSHA/.approval_decision; "
-                        + "echo -n '" + decision + "' > /data/user/0/com.dsh.client/files/linux/ubuntu/root/.dsh/.approval_decision 2>/dev/null; "
-                        + "chmod 666 /data/adb/dsha/rootfs/root/.dsh/.approval_decision /sdcard/Download/DSHA/.approval_decision /data/user/0/com.dsh.client/files/linux/ubuntu/root/.dsh/.approval_decision 2>/dev/null || true";
+                        + "echo -n '" + decision + "' > /data/data/com.dsha.fr/files/.approval_decision 2>/dev/null; "
+                        + "chmod 666 /data/adb/dsha/rootfs/root/.dsh/.approval_decision /sdcard/Download/DSHA/.approval_decision /data/data/com.dsha.fr/files/.approval_decision 2>/dev/null || true";
                 Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
                 p.waitFor();
             } catch (Throwable ignored) {}

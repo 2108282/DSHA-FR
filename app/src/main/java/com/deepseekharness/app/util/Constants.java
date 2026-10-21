@@ -73,6 +73,21 @@ public final class Constants {
     public static final String DSH_BIN_JS =
             "/usr/local/lib/node_modules/@deepseek-ai/dsh/lib/bin.js";
 
+    // ================= 任务通知解耦与形态配置 =================
+    /** 任务状态通知总开关（默认开启） */
+    public static final String KEY_TASK_NOTIFICATION_ENABLED = "task_notification_enabled";
+    /** 任务通知展示样式（normal / aosp / hyperos，默认 normal 普通通知） */
+    public static final String KEY_NOTIFICATION_STYLE = "notification_style";
+    public static final String NOTIF_STYLE_NORMAL = "normal";
+    public static final String NOTIF_STYLE_AOSP = "aosp";
+    public static final String NOTIF_STYLE_HYPEROS = "hyperos";
+    /** 后端独立直发通知总开关（脱离 App 独立模式，默认关闭） */
+    public static final String KEY_BACKEND_NOTIFY_ENABLED = "backend_notify_enabled";
+
+    /** 统一 Shell 通道广播 Action */
+    public static final String ACTION_TASK_NOTIFY = "com.deepseekharness.app.TASK_NOTIFY";
+    public static final String ACTION_SHELL_CONFIRM_REQUEST = "com.deepseekharness.app.SHELL_CONFIRM_REQUEST";
+
     // ================= SharedPreferences 键（历史键名保持兼容，见 AGENTS.md） =================
     public static final String KEY_API_KEY = "api_key";
     public static final String KEY_PORT = "port";

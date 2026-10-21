@@ -78,6 +78,30 @@ public class ConfigStore {
 
     // ================= 行为 =================
 
+    public boolean isTaskNotificationEnabled() {
+        return prefs.getBoolean(Constants.KEY_TASK_NOTIFICATION_ENABLED, true);
+    }
+
+    public void setTaskNotificationEnabled(boolean v) {
+        prefs.edit().putBoolean(Constants.KEY_TASK_NOTIFICATION_ENABLED, v).apply();
+    }
+
+    public String getNotificationStyle() {
+        return prefs.getString(Constants.KEY_NOTIFICATION_STYLE, Constants.NOTIF_STYLE_NORMAL);
+    }
+
+    public void setNotificationStyle(String style) {
+        prefs.edit().putString(Constants.KEY_NOTIFICATION_STYLE, style).apply();
+    }
+
+    public boolean isBackendNotifyEnabled() {
+        return prefs.getBoolean(Constants.KEY_BACKEND_NOTIFY_ENABLED, false);
+    }
+
+    public void setBackendNotifyEnabled(boolean v) {
+        prefs.edit().putBoolean(Constants.KEY_BACKEND_NOTIFY_ENABLED, v).apply();
+    }
+
     public boolean isConfirmShell() {
         return prefs.getBoolean(Constants.KEY_CONFIRM_SHELL, true);
     }

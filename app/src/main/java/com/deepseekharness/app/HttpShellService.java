@@ -727,9 +727,12 @@ public final class HttpShellService {
                 attachFocusCapsule(ctx, b, title, compactDetail, statusLabel, btnText, capsuleText, actionPi, true);
                 b.setOnlyAlertOnce(false);
 
-                try {
-                    nm.notify(Constants.NOTIF_TASK, b.build());
-                } catch (Throwable ignored) {}
+                com.deepseekharness.app.core.ConfigStore cfg = new com.deepseekharness.app.core.ConfigStore(ctx);
+                if (!cfg.isBackendNotifyEnabled()) {
+                    try {
+                        nm.notify(Constants.NOTIF_TASK, b.build());
+                    } catch (Throwable ignored) {}
+                }
             }
 
             // 前台提示用户
@@ -1941,6 +1944,7 @@ public final class HttpShellService {
         }
 
         pendingAllow = allow;
+        ConfirmReceiver.writeApprovalDecision(allow ? "allowed-once" : "rejected");
 
         // 无论何种触发来源（同步阻塞命令或异步审批通知），立即全通道级联销毁
         dismissAllApprovalUi();
@@ -2035,8 +2039,17 @@ public final class HttpShellService {
         b.setShowWhen(false);
         b.setVisibility(NotificationCompat.VISIBILITY_PUBLIC);
         b.setCategory(NotificationCompat.CATEGORY_STATUS);
-        b.setPriority(enableFloat ? NotificationCompat.PRIORITY_HIGH : NotificationCompat.PRIORITY_DEFAULT);
 
+        com.deepseekharness.app.core.ConfigStore cfg = new com.deepseekharness.app.core.ConfigStore(ctx);
+        String notifStyle = cfg.getNotificationStyle();
+
+        // 样式 1：经典普通通知（默认开启）—— 坚决不注入任何 AOSP 胶囊或 HyperOS 焦点协议，保持纯正 Android 通知
+        if (Constants.NOTIF_STYLE_NORMAL.equals(notifStyle)) {
+            b.setPriority(NotificationCompat.PRIORITY_DEFAULT);
+            return;
+        }
+
+        b.setPriority(enableFloat ? NotificationCompat.PRIORITY_HIGH : NotificationCompat.PRIORITY_DEFAULT);
         ensureCachedIcons(ctx);
         boolean hasDualActions = (secondaryActionPi != null && secondaryActionTitle != null && !secondaryActionTitle.isEmpty());
 
@@ -2044,18 +2057,21 @@ public final class HttpShellService {
             try { b.setLargeIcon(sCachedWhaleBmp); } catch (Throwable ignored) {}
         }
 
-        // 1. Google AOSP 16 (API 36) 原生实时活动标准 (Live Updates / Promoted Ongoing)
-        android.os.Bundle extras = b.getExtras();
-        if (extras != null) {
-            extras.putBoolean("android.requestPromotedOngoing", true);
-            extras.putString("android.shortCriticalText", capsuleText != null ? capsuleText : "正在执行");
+        // 样式 2：Google AOSP 16 (API 36) 原生实时活动标准 (Live Updates / Promoted Ongoing)
+        if (Constants.NOTIF_STYLE_AOSP.equals(notifStyle)) {
+            android.os.Bundle extras = b.getExtras();
+            if (extras != null) {
+                extras.putBoolean("android.requestPromotedOngoing", true);
+                extras.putString("android.shortCriticalText", capsuleText != null ? capsuleText : "正在执行");
+            }
+            try {
+                java.lang.reflect.Method m = b.getClass().getMethod("setRequestPromotedOngoing", boolean.class);
+                m.invoke(b, true);
+            } catch (Throwable ignored) {}
+            return; // AOSP 样式到此即可，不继续注入小米 HyperOS 协议
         }
-        try {
-            java.lang.reflect.Method m = b.getClass().getMethod("setRequestPromotedOngoing", boolean.class);
-            m.invoke(b, true);
-        } catch (Throwable ignored) {}
 
-        // 2. 小米澎湃 OS (HyperOS / HyperIsland 灵动岛) 焦点通知标准协议
+        // 样式 3：小米澎湃 OS (HyperOS / HyperIsland 灵动岛) 焦点通知标准协议
         try {
             org.json.JSONObject paramV2 = new org.json.JSONObject();
             paramV2.put("protocol", 1);
@@ -2500,7 +2516,11 @@ public final class HttpShellService {
 
             attachFocusCapsule(ctx, nb, displayTitle, displayDetail, "实时状态", "停止任务", capsuleText, stopPi, false);
 
-            if (nm != null) nm.notify(Constants.NOTIF_TASK_RUNNING, nb.build());
+            com.deepseekharness.app.core.ConfigStore cfg = new com.deepseekharness.app.core.ConfigStore(ctx);
+            // 互斥控制：若开启了「后端独立直发通知」，App 侧静默抑制以防状态栏出现重复双通知
+            if (!cfg.isBackendNotifyEnabled()) {
+                if (nm != null) nm.notify(Constants.NOTIF_TASK_RUNNING, nb.build());
+            }
         } catch (Throwable ignored) {}
     }
 
@@ -2549,13 +2569,16 @@ public final class HttpShellService {
 
         attachFocusCapsule(ctx, cb, info.title, info.detail, info.statusLabel, info.primaryBtn, info.capsuleText, allowPi, info.secondaryBtn, denyPi, true);
 
-        try {
-            NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
-            if (nm != null) {
-                nm.cancel(CONFIRM_NOTIF_ID);
-                nm.notify(CONFIRM_NOTIF_ID, cb.build());
-            }
-        } catch (Throwable ignored) {}
+        com.deepseekharness.app.core.ConfigStore cfg = new com.deepseekharness.app.core.ConfigStore(ctx);
+        if (!cfg.isBackendNotifyEnabled()) {
+            try {
+                NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+                if (nm != null) {
+                    nm.cancel(CONFIRM_NOTIF_ID);
+                    nm.notify(CONFIRM_NOTIF_ID, cb.build());
+                }
+            } catch (Throwable ignored) {}
+        }
         // 抽屉内部同步展开原生审批条（若抽屉已在前台）
         com.deepseekharness.app.ui.QuickChatSheetActivity.showNativeApprovalBanner(info, epoch);
     }
@@ -2700,6 +2723,26 @@ public final class HttpShellService {
             sb.append("}");
             return sb.toString();
         }
+    }
+
+    public void postTaskRunning(String title, String text) {
+        showRunningNotification(title, text);
+    }
+
+    public void postTaskDone(String title, String text) {
+        appNotify("/app/notify?title=" + Uri.encode(title) + "&text=" + Uri.encode(text));
+    }
+
+    public void postTaskAsk(String text) {
+        appTaskAsk("/app/task/ask?text=" + Uri.encode(text));
+    }
+
+    public void postTaskCancel() {
+        cancelRunningNotification();
+    }
+
+    public void requestApprovalFromShell(String cmd, long epoch) {
+        showConfirmNotification(cmd, epoch);
     }
 
     private static String jsonEscape(String s) {
