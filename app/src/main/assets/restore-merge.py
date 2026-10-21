@@ -1060,13 +1060,45 @@ def _safe_copy_or_link(src, dst):
                     pass
             os.symlink(linkto, dst)
         elif os.path.isdir(src):
+            if os.path.islink(dst) or os.path.isfile(dst):
+                try:
+                    os.unlink(dst)
+                except Exception:
+                    pass
             os.makedirs(dst, exist_ok=True)
             for item in os.listdir(src):
                 _safe_copy_or_link(os.path.join(src, item), os.path.join(dst, item))
         else:
+            if os.path.islink(dst) or os.path.isdir(dst):
+                try:
+                    if os.path.islink(dst) or os.path.isfile(dst):
+                        os.unlink(dst)
+                    else:
+                        shutil.rmtree(dst)
+                except Exception:
+                    pass
             shutil.copy2(src, dst)
     except Exception:
         pass
+
+
+def sync_agents_skills(root):
+    """双向兼容 ~/.agents/skills（第三方 CLI / REA 等生态使用）"""
+    skills_dir = os.path.join(root, ".dsh", "skills")
+    agents_dir = os.path.join(root, ".agents")
+    agents_skills = os.path.join(agents_dir, "skills")
+    if os.path.isdir(skills_dir) and os.path.isdir(agents_dir):
+        try:
+            os.makedirs(agents_skills, exist_ok=True)
+            for s in os.listdir(skills_dir):
+                asp = os.path.join(agents_skills, s)
+                if not os.path.lexists(asp):
+                    try:
+                        os.symlink(os.path.join(skills_dir, s), asp)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
 
 
 def restore_tools(stage, root):
@@ -1087,10 +1119,11 @@ def restore_tools(stage, root):
         for s in os.listdir(skills_src):
             sp = os.path.join(skills_src, s)
             dp = os.path.join(skills_dst, s)
-            if os.path.isdir(sp):
+            if os.path.isdir(sp) or os.path.islink(sp):
                 _safe_copy_or_link(sp, dp)
                 n_skills += 1
         say("· 已恢复 %d 个技能实体到 %s" % (n_skills, skills_dst))
+        sync_agents_skills(root)
 
     # 2. 恢复自定义脚本与可执行文件到 /usr/local/bin
     bin_src = os.path.join(tools_dir, "bin")
@@ -1327,6 +1360,7 @@ def main():
         purge_legacy_symlinks(root)
         ensure_workspace_dirs(root)
         heal_plugin_links(root)
+        sync_agents_skills(root)
     if not retain_stage:
         try:
             shutil.rmtree(stage, ignore_errors=True)
