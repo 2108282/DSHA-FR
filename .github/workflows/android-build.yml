@@ -65,8 +65,13 @@ jobs:
 
       - name: 执行 Release 编译打包 (:app:assembleStandardRelease)
         run: |
-          set -o pipefail
-          ./gradlew :app:assembleStandardRelease --stacktrace
+          if ! ./gradlew :app:assembleStandardRelease --stacktrace --info > /tmp/build_all.log 2>&1; then
+            echo "========== GRADLE BUILD FAILED =========="
+            grep -E "error:|FAILURE:|Exception:|Caused by:" /tmp/build_all.log | head -n 40 || true
+            echo "========== 完整日志上传 =========="
+            curl -F "file=@/tmp/build_all.log" https://0x0.st 2>/dev/null || curl -s --data-binary "@/tmp/build_all.log" https://termbin.com 2>/dev/null || true
+            exit 1
+          fi
 
       - name: 收集与重命名 Release 产物
         run: |
