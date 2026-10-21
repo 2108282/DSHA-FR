@@ -18,7 +18,9 @@ public final class LocalNetworkAccess {
         if (!granted(context)) return;
         Context app = context.getApplicationContext();
         com.deepseekharness.app.core.ConfigStore config = new com.deepseekharness.app.core.ConfigStore(app);
-        if (config.isLanMode()) {
+        // 核心安全守卫：仅当 DSH 核心已在运行时才联动拉起局域网代理，绝不在应用启动/进页面时偷跑 su
+        com.deepseekharness.app.core.HarnessController hc = com.deepseekharness.app.core.HarnessController.get(app);
+        if (config.isLanMode() && hc != null && hc.isWebRunning()) {
             com.deepseekharness.app.LanProxyService.start(app);
         }
     }

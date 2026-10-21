@@ -44,7 +44,6 @@ public interface ContainerRuntime {
     class KsuChroot implements ContainerRuntime {
         private final Context ctx;
         private static volatile Boolean sCachedAvailable = null;
-        private static volatile long sLastCheckTime = 0;
 
         public KsuChroot(Context ctx) {
             this.ctx = ctx;
@@ -84,20 +83,34 @@ public interface ContainerRuntime {
         }
 
         public static boolean checkAvailable() {
-            long now = System.currentTimeMillis();
-            if (sCachedAvailable != null && (now - sLastCheckTime < 4000)) {
-                return sCachedAvailable;
+            // 1. 内存命中：只要本进程此前成功验证过，永久有效，绝对不在生命周期内反复触发 su 弹窗
+            if (sCachedAvailable != null && sCachedAvailable) {
+                return true;
             }
+
+            // 2. 桥状态免 Root 探测：如果 3095 桥已经常驻，环境必然已就绪
+            try (java.net.Socket s = new java.net.Socket()) {
+                s.connect(new java.net.InetSocketAddress("127.0.0.1", 3095), 80);
+                sCachedAvailable = true;
+                return true;
+            } catch (Throwable ignored) {}
+
+            // 3. 宿主模块特征免 Root 探测：如果宿主模块文件/软链存在，直接视为就绪
+            File moduleProp = new File("/data/adb/modules/dsha_native/module.prop");
+            if (moduleProp.exists() && moduleProp.canRead()) {
+                sCachedAvailable = true;
+                return true;
+            }
+
+            // 4. 仅作为最后的冷启动兜底检测，验证成功后永久缓存在内存
             try {
                 String su = findSuBinary();
                 Process p = Runtime.getRuntime().exec(new String[]{su, "-c", "test -f /data/adb/dsha/scripts/start.sh"});
                 boolean ok = (p.waitFor() == 0);
                 sCachedAvailable = ok;
-                sLastCheckTime = now;
                 return ok;
             } catch (Throwable e) {
                 sCachedAvailable = false;
-                sLastCheckTime = now;
                 return false;
             }
         }
