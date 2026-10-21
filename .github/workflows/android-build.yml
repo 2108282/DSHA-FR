@@ -65,11 +65,14 @@ jobs:
 
       - name: 执行 Release 编译打包 (:app:assembleStandardRelease)
         run: |
-          if ! ./gradlew :app:assembleStandardRelease --stacktrace --info > /tmp/build_all.log 2>&1; then
+          if ! ./gradlew :app:assembleStandardRelease --stacktrace > /tmp/build_all.log 2>&1; then
             echo "========== GRADLE BUILD FAILED =========="
-            grep -E "error:|FAILURE:|Exception:|Caused by:" /tmp/build_all.log | head -n 40 || true
-            echo "========== 完整日志上传 =========="
-            curl -F "file=@/tmp/build_all.log" https://0x0.st 2>/dev/null || curl -s --data-binary "@/tmp/build_all.log" https://termbin.com 2>/dev/null || true
+            cat /tmp/build_all.log | grep -A 5 -E "error:|FAILURE:|FAILED" | head -n 30 || true
+            ERR_MSG=$(grep -E "error:" /tmp/build_all.log | head -3 | tr '\n' ' ' | tr '"' "'" || true)
+            if [ -z "$ERR_MSG" ]; then
+              ERR_MSG=$(grep -A 2 -E "FAILURE:" /tmp/build_all.log | head -3 | tr '\n' ' ' | tr '"' "'" || true)
+            fi
+            echo "::error title=GradleBuildFailure::$ERR_MSG"
             exit 1
           fi
 
