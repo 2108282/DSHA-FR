@@ -80,7 +80,8 @@ jobs:
           mkdir -p dist
           VERSION_NAME=$(grep "versionName" app/build.gradle | head -1 | awk -F '"' '{print $2}')
           echo "VERSION_NAME=${VERSION_NAME}" >> $GITHUB_ENV
-          APK_SRC=$(ls app/build/outputs/apk/standard/release/*.apk | head -1)
+          APK_SRC=$(find app/build/outputs/apk -type f -name "*.apk" | grep -i "release" | head -1 || find app/build/outputs/apk -type f -name "*.apk" | head -1)
+          echo "找到构建产物: $APK_SRC"
           cp -f "$APK_SRC" "dist/DSHA-FR-${VERSION_NAME}-release.apk"
           cd dist
           sha256sum "DSHA-FR-${VERSION_NAME}-release.apk" | tee "DSHA-FR-${VERSION_NAME}-release.apk.sha256"
