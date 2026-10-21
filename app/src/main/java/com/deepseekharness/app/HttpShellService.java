@@ -173,6 +173,21 @@ public final class HttpShellService {
         }
         if (c == null) c = tokenCtx;
         if (c == null) return null;
+        // 1. 优先读取底层 start.sh 安全直投到 App 私有沙盒的文件（0 提权、0 功耗）
+        try {
+            java.io.File privateToken = new java.io.File(c.getFilesDir(), ".bridge_token");
+            if (privateToken.isFile() && privateToken.canRead()) {
+                return privateToken;
+            }
+        } catch (Throwable ignored) {}
+        // 2. 次选：直接访问 chroot 底座（若父目录具备检索权限，如 Magisk 宽松通道）
+        try {
+            java.io.File chrootToken = new java.io.File("/data/adb/dsha/rootfs/root/.dsh/.bridge_token");
+            if (chrootToken.isFile() && chrootToken.canRead()) {
+                return chrootToken;
+            }
+        } catch (Throwable ignored) {}
+        // 3. 兜底旧 PRoot 沙盒路径
         try {
             HarnessController hc = HarnessController.get(c);
             if (hc != null && hc.getProot() != null && hc.getProot().getRootfsDir() != null) {
@@ -239,12 +254,37 @@ public final class HttpShellService {
     public static void syncTokenToRootfsSync() {
         String t = authToken;
         if (t == null || t.isEmpty()) return;
+        Context c = instance() != null ? instance().ctx : tokenCtx;
+        // 1. 同步镜像到 App 私有沙盒，确保后续零 Root 秒读
+        if (c != null) {
+            try {
+                java.io.File privateToken = new java.io.File(c.getFilesDir(), ".bridge_token");
+                Compat.write(privateToken, t.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            } catch (Throwable ignored) {}
+        }
+
+        // 2. 检查底座根目录是否可直通进入（如 Magisk 宽松环境，canExecute 耗时 <0.001ms，不抛异常）
+        java.io.File adbDir = new java.io.File("/data/adb");
+        boolean canTraverseAdb = adbDir.canExecute();
+        if (canTraverseAdb) {
+            try {
+                java.io.File target = new java.io.File("/data/adb/dsha/rootfs/root/.dsh/.bridge_token");
+                if (target.exists() && target.canWrite()) {
+                    // 内容一致则跳过写入
+                    String existing = readTokenFromFile(target);
+                    if (t.equals(existing)) return;
+                    Compat.write(target, t.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    return;
+                }
+            } catch (Throwable ignored) {}
+        }
+
+        // 3. 严格隔离通道（如 KernelSU 700 根目录）：明确无法直通时，走已授权的 su 写入
         try {
-            java.io.File target = new java.io.File("/data/adb/dsha/rootfs/root/.dsh/.bridge_token");
-            if (target.exists() && target.canWrite()) {
-                Compat.write(target, t.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-                return;
-            }
+            String cmd = "mkdir -p /data/adb/dsha/rootfs/root/.dsh && echo -n '" + t
+                    + "' > /data/adb/dsha/rootfs/root/.dsh/.bridge_token && chmod 666 /data/adb/dsha/rootfs/root/.dsh/.bridge_token";
+            Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
+            p.waitFor();
         } catch (Throwable ignored) {}
     }
 
@@ -2018,12 +2058,7 @@ public final class HttpShellService {
         // 2. 小米澎湃 OS (HyperOS / HyperIsland 灵动岛) 焦点通知标准协议
         try {
             org.json.JSONObject paramV2 = new org.json.JSONObject();
-            int proto = 1;
-            try {
-                proto = android.provider.Settings.System.getInt(
-                        ctx.getContentResolver(), "notification_focus_protocol", 1);
-            } catch (Throwable ignored) {}
-            paramV2.put("protocol", proto);
+            paramV2.put("protocol", 1);
             paramV2.put("business", "schedule_reminder");
             paramV2.put("enableFloat", enableFloat);
             paramV2.put("islandFirstFloat", islandFirstFloat);
@@ -2423,9 +2458,8 @@ public final class HttpShellService {
             if (Build.VERSION.SDK_INT >= 26 && nm != null) {
                 NotificationChannel ch = new NotificationChannel(
                         Constants.CHANNEL_AGENT_RUNNING, "Agent 运行状态",
-                        NotificationManager.IMPORTANCE_HIGH);
+                        NotificationManager.IMPORTANCE_DEFAULT);
                 ch.setDescription("智能体运行中实时操作步骤通知");
-                ch.setShowBadge(false);
                 nm.createNotificationChannel(ch);
             }
 
