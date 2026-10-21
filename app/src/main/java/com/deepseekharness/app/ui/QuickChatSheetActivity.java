@@ -3323,8 +3323,6 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         }
         return null;
     }
-        return null;
-    }
 
     private void reloadWithLatestToken() {
         forceReloadWithLatestToken();
