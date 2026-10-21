@@ -440,6 +440,8 @@ for i in $(seq 1 300); do
 done
 
 echo "STATUS:STARTED PID:$NEW_PID PORT:$PORT"
+# 核心启动完成：通过 Shell 广播通道通知常驻通知显示「大肥鱼运行中」
+am broadcast -a com.deepseekharness.app.ACTION_CORE_STATE --ei state 1 -p com.dsha.fr >/dev/null 2>&1 || true
 [ -n "$CURRENT_TOKEN" ] && echo "BRIDGE_TOKEN:$CURRENT_TOKEN"
 if [ -f "$RUN_DIR/lan_enabled" ]; then
     if [ -f "/data/adb/dsha/scripts/lan-proxy.sh" ]; then

@@ -22,6 +22,14 @@ public final class Constants {
     /** ADB 传统连接端口（兜底，非可靠路径） */
     public static final int ADB_DEFAULT_CONNECT_PORT = 5555;
 
+    // ================= 核心生命周期状态与 Shell 广播契约 =================
+    public static final String ACTION_CORE_STATE = "com.deepseekharness.app.ACTION_CORE_STATE";
+    public static final String EXTRA_CORE_STATE = "state";
+    public static final int CORE_STATE_RUNNING = 1;
+    public static final int CORE_STATE_FROZEN = 2;
+    public static final int CORE_STATE_STOPPED = 3;
+    public static final int CORE_STATE_ERROR = 4;
+
     // ================= 通知 ID（全局唯一，禁止重复） =================
     /** HarnessService 前台服务通知 */
     public static final int NOTIF_HARNESS_SERVICE = 1001;

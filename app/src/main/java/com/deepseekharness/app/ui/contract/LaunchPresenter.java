@@ -45,16 +45,20 @@ public class LaunchPresenter implements LaunchActions {
     private long currentLogRevision = -1;
     private String currentLogText = "";
 
+    private static final int MAX_POLL_COUNT = 3;
+    private static final long POLL_INTERVAL_MS = 5000L;
+    private int pollCount = 0;
+
     private final Runnable pollStateRunnable = new Runnable() {
         @Override
         public void run() {
             if (isDestroyed) return;
+            pollCount++;
             controller.asyncRefreshStatus();
             recalculateState();
-            boolean running = controller.isWebRunning();
-            boolean hasUrl = !controller.getWebAuthUrl().isEmpty();
-            long delay = (running && hasUrl) ? 2000L : 1000L;
-            uiHandler.postDelayed(this, delay);
+            if (pollCount < MAX_POLL_COUNT) {
+                uiHandler.postDelayed(this, POLL_INTERVAL_MS);
+            }
         }
     };
 
@@ -67,8 +71,10 @@ public class LaunchPresenter implements LaunchActions {
 
     public void start() {
         isDestroyed = false;
+        pollCount = 0;
+        uiHandler.removeCallbacks(pollStateRunnable);
         controller.addStatusListener(statusListener);
-        controller.asyncRefreshStatus();
+        // 立即执行第 1 次检测，随后由 Runnable 在 5s 间隔内执行余下 2 次
         uiHandler.post(pollStateRunnable);
     }
 

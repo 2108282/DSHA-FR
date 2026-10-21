@@ -284,7 +284,7 @@ public class HarnessService extends Service {
             stopForeground(true);
             return;
         }
-        Notification notification = buildNotification("DSHA 运行中", "大肥鱼核心运行中");
+        Notification notification = buildNotification("大肥鱼运行中", "Deepseek Harness核心运行中");
         if (Build.VERSION.SDK_INT >= 34)
             startForeground(NOTIF_ID, notification,
                     android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
@@ -300,7 +300,7 @@ public class HarnessService extends Service {
             }
             NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm != null) {
-                nm.notify(NOTIF_ID, buildNotification("DSHA 运行中", "大肥鱼核心运行中"));
+                nm.notify(NOTIF_ID, buildNotification("大肥鱼运行中", "Deepseek Harness核心运行中"));
             }
         } catch (Throwable ignored) {}
     }
@@ -316,14 +316,14 @@ public class HarnessService extends Service {
     }
 
     private Notification buildNotification(String title, String text) {
-        return buildNotification(this, title, text, false);
+        return buildNotification(this, title, text, true);
     }
 
-    private Notification buildNotification(String title, String text, boolean isFrozen) {
-        return buildNotification(this, title, text, isFrozen);
+    private Notification buildNotification(String title, String text, boolean ongoing) {
+        return buildNotification(this, title, text, ongoing);
     }
 
-    public static Notification buildNotification(Context ctx, String title, String text, boolean isFrozen) {
+    public static Notification buildNotification(Context ctx, String title, String text, boolean ongoing) {
         Intent sheetIntent = new Intent(ctx, com.deepseekharness.app.ui.QuickChatSheetActivity.class)
                 .setAction("com.deepseekharness.app.OPEN_SHEET")
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS);
@@ -335,7 +335,7 @@ public class HarnessService extends Service {
                 .setContentTitle(title)
                 .setContentText(text)
                 .setContentIntent(sheetPi)
-                .setOngoing(true)
+                .setOngoing(ongoing)
                 .setOnlyAlertOnce(true);
 
         try {
@@ -347,10 +347,25 @@ public class HarnessService extends Service {
     }
 
     public static void updateFreezeState(boolean frozen) {
-        updateFreezeState(null, frozen, false);
+        updateCoreState(null, frozen ? Constants.CORE_STATE_FROZEN : Constants.CORE_STATE_RUNNING);
     }
 
     public static void updateFreezeState(Context callerCtx, boolean frozen, boolean dead) {
+        if (dead) {
+            updateCoreState(callerCtx, Constants.CORE_STATE_ERROR);
+        } else {
+            updateCoreState(callerCtx, frozen ? Constants.CORE_STATE_FROZEN : Constants.CORE_STATE_RUNNING);
+        }
+    }
+
+    /**
+     * 核心生命周期统一入口（由 Shell 广播或系统内部直接驱动）
+     * 运行时: 标题「大肥鱼运行中」，副标题「Deepseek Harness核心运行中」
+     * 休眠时: 标题「大肥鱼休眠」，副标题「Deepseek Harness已冻结」
+     * 关闭时: 标题「大肥鱼已关闭」，副标题「Deepseek Harness未运行」
+     * 异常时: 标题「大肥鱼异常」，副标题「Deepseek Harness未运行」
+     */
+    public static void updateCoreState(Context callerCtx, int state) {
         Context ctx = callerCtx;
         if (ctx == null && currentInstance != null) {
             ctx = currentInstance;
@@ -361,31 +376,74 @@ public class HarnessService extends Service {
         if (ctx == null) return;
 
         try {
+            ConfigStore cfg = new ConfigStore(ctx);
             NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
-            if (dead) {
-                // 核心进程死亡事件：彻底收尸，撤销常驻通知并退出服务
-                if (nm != null) {
-                    nm.cancel(NOTIF_ID);
-                }
-                if (currentInstance != null) {
-                    currentInstance.stopForeground(true);
-                    currentInstance.stopSelf();
-                }
-                android.util.Log.i("DSHA", "[常驻通知] 收到核心死亡事件，已就地撤销常驻通知并退出服务");
+
+            // 开关门禁：如果常驻通知开关已关闭，绝不显示任何通知并清除残留
+            if (!cfg.isPersistentNotificationEnabled()) {
+                if (nm != null) nm.cancel(NOTIF_ID);
                 return;
             }
 
-            ConfigStore cfg = new ConfigStore(ctx);
-            if (!cfg.isPersistentNotificationEnabled()) return;
+            String title;
+            String text;
+            boolean ongoing = true;
+
+            switch (state) {
+                case Constants.CORE_STATE_RUNNING:
+                    title = "大肥鱼运行中";
+                    text = "Deepseek Harness核心运行中";
+                    ongoing = true;
+                    // 同步内存休眠状态
+                    try {
+                        HarnessController hc = HarnessController.get(ctx);
+                        if (hc != null) hc.setFrozenState(false);
+                    } catch (Throwable ignored) {}
+                    break;
+                case Constants.CORE_STATE_FROZEN:
+                    title = "大肥鱼休眠";
+                    text = "Deepseek Harness已冻结";
+                    ongoing = true;
+                    try {
+                        HarnessController hc = HarnessController.get(ctx);
+                        if (hc != null) hc.setFrozenState(true);
+                    } catch (Throwable ignored) {}
+                    break;
+                case Constants.CORE_STATE_STOPPED:
+                    title = "大肥鱼已关闭";
+                    text = "Deepseek Harness未运行";
+                    ongoing = false; // 允许用户划掉关闭状态通知
+                    try {
+                        HarnessController hc = HarnessController.get(ctx);
+                        if (hc != null) hc.setFrozenState(false);
+                    } catch (Throwable ignored) {}
+                    if (currentInstance != null) {
+                        currentInstance.stopForeground(false);
+                    }
+                    break;
+                case Constants.CORE_STATE_ERROR:
+                default:
+                    title = "大肥鱼异常";
+                    text = "Deepseek Harness未运行";
+                    ongoing = false;
+                    try {
+                        HarnessController hc = HarnessController.get(ctx);
+                        if (hc != null) hc.setFrozenState(false);
+                    } catch (Throwable ignored) {}
+                    if (currentInstance != null) {
+                        currentInstance.stopForeground(false);
+                    }
+                    break;
+            }
 
             if (nm != null) {
-                if (frozen) {
-                    nm.notify(NOTIF_ID, buildNotification(ctx, "DSH 休眠中", "DSH 休眠中", true));
-                } else {
-                    nm.notify(NOTIF_ID, buildNotification(ctx, "DSHA 运行中", "大肥鱼核心运行中", false));
-                }
+                Notification notif = buildNotification(ctx, title, text, ongoing);
+                nm.notify(NOTIF_ID, notif);
+                android.util.Log.i("DSHA", "[常驻通知] 状态已原子切换至: state=" + state + ", title=" + title);
             }
-        } catch (Throwable ignored) {}
+        } catch (Throwable t) {
+            android.util.Log.w("DSHA", "[常驻通知] 状态切换异常: " + t.getMessage());
+        }
     }
 
     // ================= 核心运转与常驻通知联动管理 =================

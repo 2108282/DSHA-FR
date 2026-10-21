@@ -38,6 +38,22 @@ log_msg() {
     echo "[$NOW_STR] [$ACTION] $MSG" >> "$FREEZER_LOG" 2>/dev/null
 }
 
+notify_core_state() {
+    STATE="$1" # 1=RUNNING, 2=FROZEN, 3=STOPPED, 4=ERROR
+    REASON="$2"
+    am broadcast -a com.deepseekharness.app.ACTION_CORE_STATE --ei state "$STATE" --es reason "$REASON" -p com.dsha.fr >/dev/null 2>&1 || true
+    TOKEN=$(cat "$DSH_DIR/.bridge_token" 2>/dev/null)
+    if [ -n "$TOKEN" ]; then
+        if [ "$STATE" = "2" ]; then
+            curl -s -m 2 "http://127.0.0.1:3095/app/freeze/state?token=$TOKEN&frozen=1" >/dev/null 2>&1 || true
+        elif [ "$STATE" = "1" ]; then
+            curl -s -m 2 "http://127.0.0.1:3095/app/freeze/state?token=$TOKEN&frozen=0" >/dev/null 2>&1 || true
+        elif [ "$STATE" = "4" ]; then
+            curl -s -m 2 "http://127.0.0.1:3095/app/freeze/state?token=$TOKEN&dead=1" >/dev/null 2>&1 || true
+        fi
+    fi
+}
+
 # 严格检测是否有存活的有效 daemon
 is_daemon_alive() {
     if [ -f "$FREEZER_PID_FILE" ]; then
@@ -60,10 +76,7 @@ do_wake() {
         if [ -f "$STATE_FILE" ] || [ -f "$DSH_DIR/freezer.state" ]; then
             rm -f "$STATE_FILE" "$DSH_DIR/freezer.state" 2>/dev/null
             log_msg "DEAD" "唤醒失败：主进程 (PID: $MAIN_PID) 已不存在/死亡 | 唤醒源: [$TRIGGER]"
-            TOKEN=$(cat "$DSH_DIR/.bridge_token" 2>/dev/null)
-            if [ -n "$TOKEN" ]; then
-                curl -s -m 2 "http://127.0.0.1:3095/app/freeze/state?token=$TOKEN&dead=1" >/dev/null 2>&1 &
-            fi
+            notify_core_state 4 "主进程已死亡"
         fi
         return 0
     fi
@@ -93,11 +106,8 @@ do_wake() {
         rm -f "$STATE_FILE" "$DSH_DIR/freezer.state" 2>/dev/null
         log_msg "WAKE" "主进程已原地解冻恢复 (PID: $MAIN_PID) | 唤醒源: [$TRIGGER]"
         
-        # 原地恢复常驻通知为运行状态 (走常驻通道，绝不弹窗打扰)
-        TOKEN=$(cat "$DSH_DIR/.bridge_token" 2>/dev/null)
-        if [ -n "$TOKEN" ]; then
-            curl -s -m 2 "http://127.0.0.1:3095/app/freeze/state?token=$TOKEN&frozen=0" >/dev/null 2>&1 &
-        fi
+        # 原地恢复常驻通知为运行状态 (走 Shell 广播通道通知「大肥鱼运行中」)
+        notify_core_state 1 "解冻恢复"
         
         # 唤醒后，若前端开关仍处于开启状态，重新拉起守护扫描开启新一轮计时
         if [ -f "$ENABLED_FILE" ]; then
@@ -151,15 +161,13 @@ do_daemon() {
         
         # 2. 检查主进程是否存在
         if [ ! -f "$PID_FILE" ]; then
-            TOKEN=$(cat "$DSH_DIR/.bridge_token" 2>/dev/null)
-            [ -n "$TOKEN" ] && curl -s -m 2 "http://127.0.0.1:3095/app/freeze/state?token=$TOKEN&dead=1" >/dev/null 2>&1
+            notify_core_state 4 "PID文件不存在/主进程异常终止"
             rm -f "$FREEZER_PID_FILE" 2>/dev/null
             exit 0
         fi
         MAIN_PID=$(cat "$PID_FILE" 2>/dev/null)
         if [ -z "$MAIN_PID" ] || ! kill -0 "$MAIN_PID" 2>/dev/null; then
-            TOKEN=$(cat "$DSH_DIR/.bridge_token" 2>/dev/null)
-            [ -n "$TOKEN" ] && curl -s -m 2 "http://127.0.0.1:3095/app/freeze/state?token=$TOKEN&dead=1" >/dev/null 2>&1
+            notify_core_state 4 "主进程已死亡/意外关闭"
             rm -f "$FREEZER_PID_FILE" 2>/dev/null
             exit 0
         fi
@@ -210,11 +218,8 @@ do_daemon() {
             rm -f "$FREEZER_PID_FILE" 2>/dev/null
             log_msg "FREEZE" "闲置检测: 会话已闲置 $IDLE_SEC 秒 (满30分钟)，满足冻结条件，已执行 SIGSTOP 深度休眠冻结 (PID: $MAIN_PID)"
             
-            # 原地更新常驻通知为休眠状态 (绝不弹窗打扰、不亮屏，走同一通知通道)
-            TOKEN=$(cat "$DSH_DIR/.bridge_token" 2>/dev/null)
-            if [ -n "$TOKEN" ]; then
-                curl -s -m 2 "http://127.0.0.1:3095/app/freeze/state?token=$TOKEN&frozen=1" >/dev/null 2>&1
-            fi
+            # 原地更新常驻通知为休眠状态 (走 Shell 广播通道通知「大肥鱼休眠」)
+            notify_core_state 2 "会话闲置满30分钟冻结"
             
             # 关键设计：冻结后自身立即退出，后台 0 轮询 0 唤醒！
             exit 0
@@ -240,10 +245,7 @@ do_freeze_now() {
     echo "FROZEN" > "$DSH_DIR/freezer.state" 2>/dev/null || true
     log_msg "FREEZE_TEST" "主进程已执行 SIGSTOP 冻结 (PID: $MAIN_PID) | 触发源: [$TRIGGER]"
 
-    TOKEN=$(cat "$DSH_DIR/.bridge_token" 2>/dev/null)
-    if [ -n "$TOKEN" ]; then
-        curl -s -m 2 "http://127.0.0.1:3095/app/freeze/state?token=$TOKEN&frozen=1" >/dev/null 2>&1
-    fi
+    notify_core_state 2 "测试冻结触发源: $TRIGGER"
     echo "OK: Frozen PID $MAIN_PID"
 }
 

@@ -207,6 +207,14 @@
             android:exported="false" />
 
         <receiver
+            android:name=".CoreStateReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.deepseekharness.app.ACTION_CORE_STATE" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
             android:name=".BootReceiver"
             android:exported="false">
             <intent-filter>
