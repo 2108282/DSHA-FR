@@ -958,18 +958,32 @@ public class HarnessController {
         }, "dsha-idle-freeze-toggle").start();
     }
 
+    private static final java.util.concurrent.atomic.AtomicBoolean isWaking = new java.util.concurrent.atomic.AtomicBoolean(false);
+
     public void resumeIfFrozen() {
         resumeIfFrozen("App界面交互唤醒");
     }
 
     public void resumeIfFrozen(String trigger) {
+        // 核心铁律守卫 1：如果未处于休眠冻结状态，坚决直接返回，绝对禁止执行 su！
+        if (!isFrozen) {
+            return;
+        }
+        // 核心铁律守卫 2：防抖并发锁，同一时刻仅允许一个线程发起唤醒，杜绝抽屉进场并发 4 次 su
+        if (!isWaking.compareAndSet(false, true)) {
+            return;
+        }
         String safeTrigger = (trigger != null && !trigger.isEmpty()) ? trigger.replace("\"", "") : "App交互";
         new Thread(() -> {
             try {
                 execRootCmd("sh /data/adb/dsha/scripts/idle-freezer.sh wake \"" + safeTrigger + "\"");
                 isFrozen = false;
                 uiHandler.post(this::notifyStatusChanged);
-            } catch (Throwable ignored) {}
+            } catch (Throwable ignored) {
+            } finally {
+                // 唤醒完成 2 秒后释放锁
+                io.schedule(() -> isWaking.set(false), 2000, TimeUnit.MILLISECONDS);
+            }
         }, "dsha-idle-wake").start();
     }
 

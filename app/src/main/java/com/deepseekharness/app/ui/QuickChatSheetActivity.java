@@ -2863,7 +2863,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
      * 3. 派发 visibilitychange 与 focus，让页面组件与框架立即感知前台活跃。
      */
     private void triggerForegroundWakeup() {
-        if (controller != null) {
+        if (controller != null && controller.isFrozen()) {
             controller.resumeIfFrozen("快捷抽屉拉出");
         }
         if (sCachedWebView == null) return;
