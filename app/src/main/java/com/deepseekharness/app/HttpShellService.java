@@ -669,6 +669,10 @@ public final class HttpShellService {
     /** /app/notify?title=&text= ：发通知栏提醒（三轨灵动胶囊接力与前台 Toast） */
     private String appNotify(String path) {
         try {
+            com.deepseekharness.app.core.ConfigStore cfg = new com.deepseekharness.app.core.ConfigStore(ctx);
+            if (cfg.isBackendNotifyEnabled()) {
+                return "OK";
+            }
             String q = queryOf(path);
             String title = getParam(q, "title", "任务完成");
             String text = getParam(q, "text", "");
@@ -728,12 +732,9 @@ public final class HttpShellService {
                 attachFocusCapsule(ctx, b, title, compactDetail, statusLabel, btnText, capsuleText, actionPi, true);
                 b.setOnlyAlertOnce(false);
 
-                com.deepseekharness.app.core.ConfigStore cfg = new com.deepseekharness.app.core.ConfigStore(ctx);
-                if (!cfg.isBackendNotifyEnabled()) {
-                    try {
-                        nm.notify(Constants.NOTIF_TASK, b.build());
-                    } catch (Throwable ignored) {}
-                }
+                try {
+                    nm.notify(Constants.NOTIF_TASK, b.build());
+                } catch (Throwable ignored) {}
             }
 
             // 前台提示用户
@@ -2228,6 +2229,11 @@ public final class HttpShellService {
 
     private String appTaskRunning(String path) {
         try {
+            com.deepseekharness.app.core.ConfigStore cfg = new com.deepseekharness.app.core.ConfigStore(ctx);
+            // 互斥控制：若开启了「后端独立直发通知」，关闭 HTTP 3095 这一条 App 通道，交由后端直发
+            if (cfg.isBackendNotifyEnabled()) {
+                return "OK";
+            }
             String q = queryOf(path);
             String title = getParam(q, "title", "正在执行");
             String text = getParam(q, "text", "智能体正在执行自动化任务...");
@@ -2518,11 +2524,7 @@ public final class HttpShellService {
 
             attachFocusCapsule(ctx, nb, displayTitle, displayDetail, "实时状态", "停止任务", capsuleText, stopPi, false);
 
-            com.deepseekharness.app.core.ConfigStore cfg = new com.deepseekharness.app.core.ConfigStore(ctx);
-            // 互斥控制：若开启了「后端独立直发通知」，App 侧静默抑制以防状态栏出现重复双通知
-            if (!cfg.isBackendNotifyEnabled()) {
-                if (nm != null) nm.notify(Constants.NOTIF_TASK_RUNNING, nb.build());
-            }
+            if (nm != null) nm.notify(Constants.NOTIF_TASK_RUNNING, nb.build());
         } catch (Throwable ignored) {}
     }
 
@@ -2571,16 +2573,13 @@ public final class HttpShellService {
 
         attachFocusCapsule(ctx, cb, info.title, info.detail, info.statusLabel, info.primaryBtn, info.capsuleText, allowPi, info.secondaryBtn, denyPi, true);
 
-        com.deepseekharness.app.core.ConfigStore cfg = new com.deepseekharness.app.core.ConfigStore(ctx);
-        if (!cfg.isBackendNotifyEnabled()) {
-            try {
-                NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
-                if (nm != null) {
-                    nm.cancel(CONFIRM_NOTIF_ID);
-                    nm.notify(CONFIRM_NOTIF_ID, cb.build());
-                }
-            } catch (Throwable ignored) {}
-        }
+        try {
+            NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (nm != null) {
+                nm.cancel(CONFIRM_NOTIF_ID);
+                nm.notify(CONFIRM_NOTIF_ID, cb.build());
+            }
+        } catch (Throwable ignored) {}
         // 抽屉内部同步展开原生审批条（若抽屉已在前台）
         com.deepseekharness.app.ui.QuickChatSheetActivity.showNativeApprovalBanner(info, epoch);
 

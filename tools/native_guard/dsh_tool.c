@@ -7,31 +7,21 @@
 #include <sys/stat.h>
 #include <time.h>
 
-#define GUARD_FLAG "/data/data/com.dsha.fr/files/.guard_enabled"
-#define BACKEND_NOTIFY_FLAG "/data/data/com.dsha.fr/files/.backend_notify"
+static int check_flag(const char *name) {
+    char p1[256], p2[256], p3[256];
+    snprintf(p1, sizeof(p1), "/root/.dsh/%s", name);
+    snprintf(p2, sizeof(p2), "/sdcard/Download/DSHA/%s", name);
+    snprintf(p3, sizeof(p3), "/data/data/com.dsha.fr/files/%s", name);
+    return (access(p1, F_OK) == 0 || access(p2, F_OK) == 0 || access(p3, F_OK) == 0);
+}
+
 #define LEASE_FILE "/root/.dsh/.auth_lease"
 #define DECISION_FILE "/data/data/com.dsha.fr/files/.approval_decision"
 #define BACKUP_DECISION_FILE "/data/adb/dsha/rootfs/root/.dsh/.approval_decision"
 
 static void broadcast_task(const char *type, const char *title, const char *text) {
-    // 1. 若用户在主题与通知页面开启了「后端独立直发通知」，由底层直发系统通知（脱离 App 独立模式）
-    if (access(BACKEND_NOTIFY_FLAG, F_OK) == 0) {
-        char sys_cmd[1024];
-        if (strcmp(type, "cancel") == 0) {
-            // 系统命令行直接清理该通知
-            system("cmd notification post dsha_backend_task '' >/dev/null 2>&1 || true");
-        } else {
-            snprintf(sys_cmd, sizeof(sys_cmd),
-                     "cmd notification post -S bigtext -t '%s' dsha_backend_task '%s' >/dev/null 2>&1",
-                     title ? title : "DSHA",
-                     text ? text : "任务运行中");
-            system(sys_cmd);
-        }
-    }
-
-    // 2. 发送系统显式广播通知 App 调度中心：
-    //    - 若为 App 默认模式：App 原地构建发出 3 种通知形态（普通/AOSP/HyperOS）；
-    //    - 若已开启后端直发：App 自动抑制通知发送，但悬浮条、抽屉、网页小黄窗这 3 条通道依然照常同显！
+    // 无论是默认模式还是后端模式，通过 am broadcast 将事件送达 TaskNotifyReceiver
+    // 在 Android 17 上，由 App 组件向系统发出通知，既合法又支持按钮、样式与四端同显
     char cmd[1024];
     snprintf(cmd, sizeof(cmd),
              "am broadcast -a com.deepseekharness.app.TASK_NOTIFY -n com.dsha.fr/.TaskNotifyReceiver "
@@ -106,7 +96,7 @@ static int wait_decision(long long epoch) {
 
 static void handle_guard_wrapper(const char *prog, int argc, char **argv) {
     // 1. 微秒级判定：若 App 设置中未开启“危险 Shell 操作需确认”，0 额外进程，直接放行！
-    if (access(GUARD_FLAG, F_OK) != 0 && getenv("DSH_CONFIRM") == NULL) {
+    if (!check_flag(".guard_enabled") && getenv("DSH_CONFIRM") == NULL) {
         // 放行
     } else if (check_lease() || is_safe_cleanup(prog, argc, argv)) {
         // 临时清理免审放行
@@ -123,17 +113,7 @@ static void handle_guard_wrapper(const char *prog, int argc, char **argv) {
         unlink(DECISION_FILE);
         unlink(BACKUP_DECISION_FILE);
 
-        // 1. 若开启了后端独立直发通知，后端直接向系统发射确认通知（原地替换运行状态）
-        int is_backend = (access(BACKEND_NOTIFY_FLAG, F_OK) == 0);
-        if (is_backend) {
-            char sys_confirm[1280];
-            snprintf(sys_confirm, sizeof(sys_confirm),
-                     "cmd notification post -S bigtext -t '⚠️ 危险命令确认' dsha_backend_task '模型请求执行高危命令: %s' >/dev/null 2>&1",
-                     full_cmd);
-            system(sys_confirm);
-        }
-
-        // 2. 发送四端统一唤起广播（唤起悬浮条、抽屉横幅、网页小黄窗）
+        // 发送四端统一唤起广播（唤起通知栏、悬浮条、抽屉横幅、网页小黄窗）
         char bcmd[1280];
         snprintf(bcmd, sizeof(bcmd),
                  "am broadcast -a com.deepseekharness.app.SHELL_CONFIRM_REQUEST -n com.dsha.fr/.TaskNotifyReceiver "
@@ -141,11 +121,6 @@ static void handle_guard_wrapper(const char *prog, int argc, char **argv) {
         system(bcmd);
 
         int ok = wait_decision(epoch);
-
-        // 3. 决断完成后，清理后端直发的确认通知
-        if (is_backend) {
-            system("cmd notification post dsha_backend_task '' >/dev/null 2>&1 || true");
-        }
 
         if (!ok) {
             fprintf(stderr, "已拒绝执行高危命令: %s (用户拒绝或超时)\n", full_cmd);

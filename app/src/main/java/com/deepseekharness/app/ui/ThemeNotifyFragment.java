@@ -439,12 +439,20 @@ public final class ThemeNotifyFragment extends Fragment {
     private void syncBackendNotifyFlag(boolean enabled) {
         new Thread(() -> {
             try {
-                java.io.File flag = new java.io.File(requireContext().getFilesDir(), ".backend_notify");
+                java.io.File flagPriv = new java.io.File(requireContext().getFilesDir(), ".backend_notify");
+                java.io.File flagSdcard = new java.io.File("/sdcard/Download/DSHA/.backend_notify");
                 if (enabled) {
-                    if (!flag.exists()) flag.createNewFile();
+                    if (!flagPriv.exists()) flagPriv.createNewFile();
+                    if (!flagSdcard.exists()) flagSdcard.createNewFile();
                 } else {
-                    if (flag.exists()) flag.delete();
+                    if (flagPriv.exists()) flagPriv.delete();
+                    if (flagSdcard.exists()) flagSdcard.delete();
                 }
+                String cmd = enabled
+                        ? "mkdir -p /data/adb/dsha/rootfs/root/.dsh /sdcard/Download/DSHA; touch /data/adb/dsha/rootfs/root/.dsh/.backend_notify /sdcard/Download/DSHA/.backend_notify; chmod 666 /data/adb/dsha/rootfs/root/.dsh/.backend_notify /sdcard/Download/DSHA/.backend_notify 2>/dev/null || true"
+                        : "rm -f /data/adb/dsha/rootfs/root/.dsh/.backend_notify /sdcard/Download/DSHA/.backend_notify 2>/dev/null || true";
+                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
+                p.waitFor();
             } catch (Throwable ignored) {}
         }, "sync-backend-notify").start();
     }
