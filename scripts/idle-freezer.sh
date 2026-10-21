@@ -12,33 +12,21 @@
 # 8. POSIX 原子排他锁 (mkdir) 杜绝并发穿透，精准进程单例保障。
 # ============================================================
 
-# 路径自适应：检测宿主视角 vs 容器视角
-if [ -d "/data/adb/dsha/rootfs" ]; then
-    # 宿主视角
-    RUN_DIR="/data/adb/dsha/run"
-    DSH_DIR="/data/adb/dsha/rootfs/root/.dsh"
-else
-    # 容器视角
-    RUN_DIR="/data/adb/dsha/run"
-    [ -d "$RUN_DIR" ] || RUN_DIR="/root/.dsh"
-    DSH_DIR="/root/.dsh"
-fi
-
+RUN_DIR="/data/adb/dsha/run"
 ENABLED_FILE="$RUN_DIR/idle_freeze_enabled"
-[ -f "$ENABLED_FILE" ] || ENABLED_FILE="$DSH_DIR/idle_freeze_enabled"
-
 PID_FILE="$RUN_DIR/dsh.pid"
-[ -f "$PID_FILE" ] || PID_FILE="$DSH_DIR/dsh.pid"
-
 FREEZER_PID_FILE="$RUN_DIR/idle-freezer.pid"
 FREEZER_LOG="$RUN_DIR/idle-freezer.log"
 STATE_FILE="$RUN_DIR/freezer.state"
 START_LOCK="$RUN_DIR/freezer_start.lock"
 WAKE_LOCK="$RUN_DIR/freezer_wake.lock"
 
-# 脚本自身路径自适应（宿主标准路径优先，回退真实自身路径）
-SCRIPT_PATH="/data/adb/dsha/scripts/idle-freezer.sh"
-[ -f "$SCRIPT_PATH" ] || SCRIPT_PATH="$(readlink -f "$0" 2>/dev/null || echo "$0")"
+# 路径自适应：检测宿主视角 vs 容器视角
+if [ -d "/data/adb/dsha/rootfs/root/.dsh" ]; then
+    DSH_DIR="/data/adb/dsha/rootfs/root/.dsh"
+else
+    DSH_DIR="/root/.dsh"
+fi
 
 IDLE_THRESHOLD=1800 # 30 分钟 (秒)
 CHECK_INTERVAL=600 # 10 分钟检查一次 (秒)
@@ -50,82 +38,19 @@ log_msg() {
     echo "[$NOW_STR] [$ACTION] $MSG" >> "$FREEZER_LOG" 2>/dev/null
 }
 
-# 检测主进程是否有活跃的工作子进程（排除僵尸进程 Z 与自身白名单）
-has_active_workers() {
-    local mpid="$1"
-    [ -z "$mpid" ] && return 1
-    local lan_pid=""
-    [ -f "$RUN_DIR/lan-proxy.pid" ] && lan_pid=$(cat "$RUN_DIR/lan-proxy.pid" 2>/dev/null)
-    local freezer_pid=""
-    [ -f "$FREEZER_PID_FILE" ] && freezer_pid=$(cat "$FREEZER_PID_FILE" 2>/dev/null)
-
-    for cpid in $(pgrep -P "$mpid" 2>/dev/null); do
-        if [ "$cpid" = "$lan_pid" ] || [ "$cpid" = "$freezer_pid" ] || [ "$cpid" = "$$" ] || [ "$cpid" = "$PPID" ]; then
-            continue
+notify_core_state() {
+    STATE="$1" # 1=RUNNING, 2=FROZEN, 3=STOPPED, 4=ERROR
+    REASON="$2"
+    am broadcast -a com.deepseekharness.app.ACTION_CORE_STATE --ei state "$STATE" --es reason "$REASON" -p com.dsha.fr >/dev/null 2>&1 || true
+    TOKEN=$(cat "$DSH_DIR/.bridge_token" 2>/dev/null)
+    if [ -n "$TOKEN" ]; then
+        if [ "$STATE" = "2" ]; then
+            curl -s -m 2 "http://127.0.0.1:3095/app/freeze/state?token=$TOKEN&frozen=1" >/dev/null 2>&1 || true
+        elif [ "$STATE" = "1" ]; then
+            curl -s -m 2 "http://127.0.0.1:3095/app/freeze/state?token=$TOKEN&frozen=0" >/dev/null 2>&1 || true
+        elif [ "$STATE" = "4" ]; then
+            curl -s -m 2 "http://127.0.0.1:3095/app/freeze/state?token=$TOKEN&dead=1" >/dev/null 2>&1 || true
         fi
-        local cstat=$(awk '{print $3}' "/proc/$cpid/stat" 2>/dev/null)
-        # 排除僵尸进程 (Z)，若存在有效运行或等待态子进程则视为忙碌
-        if [ -n "$cstat" ] && [ "$cstat" != "Z" ]; then
-            return 0
-        fi
-    done
-    return 1
-}
-
-# 挂起主进程及其残留休眠子进程（严格排除 3081 代理与守护自身白名单）
-freeze_process_tree() {
-    local mpid="$1"
-    [ -z "$mpid" ] && return 0
-    local lan_pid=""
-    [ -f "$RUN_DIR/lan-proxy.pid" ] && lan_pid=$(cat "$RUN_DIR/lan-proxy.pid" 2>/dev/null)
-    local freezer_pid=""
-    [ -f "$FREEZER_PID_FILE" ] && freezer_pid=$(cat "$FREEZER_PID_FILE" 2>/dev/null)
-
-    # 优先挂起主进程
-    kill -STOP "$mpid" 2>/dev/null
-
-    # 同步挂起直接子进程，防止偷跑唤醒或通信断裂 (严格排除白名单)
-    for cpid in $(pgrep -P "$mpid" 2>/dev/null); do
-        if [ "$cpid" != "$lan_pid" ] && [ "$cpid" != "$freezer_pid" ] && [ "$cpid" != "$$" ] && [ "$cpid" != "$PPID" ]; then
-            kill -STOP "$cpid" 2>/dev/null || true
-        fi
-    done
-
-    # 仅放开压缩权限：允许系统内存在紧张时自然将闲置页面压缩进 zram（不主动强行触发）
-    if [ -d "/dev/memcg/dsh" ]; then
-        echo 100 > /dev/memcg/dsh/memory.swappiness 2>/dev/null || true
-        # 兼容 HyperOS / 高通内核一次性置位锁：将进程动态移入系统默认 apps 组以完全放开压缩限制
-        if [ -d "/dev/memcg/apps" ]; then
-            echo "$mpid" > /dev/memcg/apps/cgroup.procs 2>/dev/null || true
-            for cpid in $(pgrep -P "$mpid" 2>/dev/null); do
-                echo "$cpid" > /dev/memcg/apps/cgroup.procs 2>/dev/null || true
-            done
-        fi
-    fi
-}
-
-# 解冻主进程及其直接子进程
-thaw_process_tree() {
-    local mpid="$1"
-    [ -z "$mpid" ] && return 0
-
-    for cpid in $(pgrep -P "$mpid" 2>/dev/null); do
-        local cstat=$(awk '{print $3}' "/proc/$cpid/stat" 2>/dev/null)
-        if [ "$cstat" = "T" ]; then
-            kill -CONT "$cpid" 2>/dev/null || true
-        fi
-    done
-
-    kill -CONT "$mpid" 2>/dev/null
-
-    # 唤醒即恢复物理内存锁定：重回 /dev/memcg/dsh 保护组，防止新解压或活跃页面被二次换出
-    if [ -d "/dev/memcg/dsh" ]; then
-        echo 0 > /dev/memcg/dsh/memory.swappiness 2>/dev/null || true
-        echo 1 > /dev/memcg/dsh/memory.anno_writeback_protected 2>/dev/null || true
-        echo "$mpid" > /dev/memcg/dsh/cgroup.procs 2>/dev/null || true
-        for cpid in $(pgrep -P "$mpid" 2>/dev/null); do
-            echo "$cpid" > /dev/memcg/dsh/cgroup.procs 2>/dev/null || true
-        done
     fi
 }
 
@@ -151,10 +76,7 @@ do_wake() {
         if [ -f "$STATE_FILE" ] || [ -f "$DSH_DIR/freezer.state" ]; then
             rm -f "$STATE_FILE" "$DSH_DIR/freezer.state" 2>/dev/null
             log_msg "DEAD" "唤醒失败：主进程 (PID: $MAIN_PID) 已不存在/死亡 | 唤醒源: [$TRIGGER]"
-            TOKEN=$(cat "$DSH_DIR/.bridge_token" 2>/dev/null)
-            if [ -n "$TOKEN" ]; then
-                curl -s -m 2 "http://127.0.0.1:3095/app/freeze/state?token=$TOKEN&dead=1" >/dev/null 2>&1 &
-            fi
+            notify_core_state 4 "主进程已死亡"
         fi
         return 0
     fi
@@ -180,19 +102,16 @@ do_wake() {
             return 0
         fi
 
-        thaw_process_tree "$MAIN_PID"
+        kill -CONT "$MAIN_PID" 2>/dev/null
         rm -f "$STATE_FILE" "$DSH_DIR/freezer.state" 2>/dev/null
         log_msg "WAKE" "主进程已原地解冻恢复 (PID: $MAIN_PID) | 唤醒源: [$TRIGGER]"
         
-        # 原地恢复常驻通知为运行状态 (走常驻通道，绝不弹窗打扰)
-        TOKEN=$(cat "$DSH_DIR/.bridge_token" 2>/dev/null)
-        if [ -n "$TOKEN" ]; then
-            curl -s -m 2 "http://127.0.0.1:3095/app/freeze/state?token=$TOKEN&frozen=0" >/dev/null 2>&1 &
-        fi
+        # 原地恢复常驻通知为运行状态 (走 Shell 广播通道通知「大肥鱼运行中」)
+        notify_core_state 1 "解冻恢复"
         
         # 唤醒后，若前端开关仍处于开启状态，重新拉起守护扫描开启新一轮计时
         if [ -f "$ENABLED_FILE" ]; then
-            sh "$SCRIPT_PATH" start >/dev/null 2>&1 &
+            sh "/data/adb/dsha/scripts/idle-freezer.sh" start >/dev/null 2>&1 &
         fi
 
         rm -rf "$WAKE_LOCK" 2>/dev/null
@@ -220,7 +139,7 @@ do_stop() {
         if [ -n "$MAIN_PID" ] && kill -0 "$MAIN_PID" 2>/dev/null; then
             PROC_STAT=$(awk '{print $3}' "/proc/$MAIN_PID/stat" 2>/dev/null)
             if [ "$PROC_STAT" = "T" ]; then
-                thaw_process_tree "$MAIN_PID"
+                kill -CONT "$MAIN_PID" 2>/dev/null
             fi
         fi
     fi
@@ -242,15 +161,13 @@ do_daemon() {
         
         # 2. 检查主进程是否存在
         if [ ! -f "$PID_FILE" ]; then
-            TOKEN=$(cat "$DSH_DIR/.bridge_token" 2>/dev/null)
-            [ -n "$TOKEN" ] && curl -s -m 2 "http://127.0.0.1:3095/app/freeze/state?token=$TOKEN&dead=1" >/dev/null 2>&1
+            notify_core_state 4 "PID文件不存在/主进程异常终止"
             rm -f "$FREEZER_PID_FILE" 2>/dev/null
             exit 0
         fi
         MAIN_PID=$(cat "$PID_FILE" 2>/dev/null)
         if [ -z "$MAIN_PID" ] || ! kill -0 "$MAIN_PID" 2>/dev/null; then
-            TOKEN=$(cat "$DSH_DIR/.bridge_token" 2>/dev/null)
-            [ -n "$TOKEN" ] && curl -s -m 2 "http://127.0.0.1:3095/app/freeze/state?token=$TOKEN&dead=1" >/dev/null 2>&1
+            notify_core_state 4 "主进程已死亡/意外关闭"
             rm -f "$FREEZER_PID_FILE" 2>/dev/null
             exit 0
         fi
@@ -269,12 +186,6 @@ do_daemon() {
                 log_msg "CHECK" "闲置检测: 检测到活跃审批任务挂起，跳过冻结避让中"
                 continue
             fi
-        fi
-        
-        # 4.5 长任务活跃保护：检测是否有正在执行的工作子进程（如编译、代码生成、脚本任务）
-        if has_active_workers "$MAIN_PID"; then
-            log_msg "CHECK" "闲置检测: 检测到主进程有活跃工作子进程正在执行，跳过冻结避让中"
-            continue
         fi
         
         # 5. 精准提取 session-*.json 与会话文件的最新写入时间戳
@@ -301,17 +212,14 @@ do_daemon() {
         
         # 6. 判断是否达到 30 分钟 (1800秒) 闲置阈值
         if [ $IDLE_SEC -ge $IDLE_THRESHOLD ]; then
-            freeze_process_tree "$MAIN_PID"
+            kill -STOP "$MAIN_PID" 2>/dev/null
             echo "FROZEN" > "$STATE_FILE"
             echo "FROZEN" > "$DSH_DIR/freezer.state" 2>/dev/null || true
             rm -f "$FREEZER_PID_FILE" 2>/dev/null
-            log_msg "FREEZE" "闲置检测: 会话已闲置 $IDLE_SEC 秒 (满30分钟)，满足冻结条件，已执行深度休眠冻结 (PID: $MAIN_PID)"
+            log_msg "FREEZE" "闲置检测: 会话已闲置 $IDLE_SEC 秒 (满30分钟)，满足冻结条件，已执行 SIGSTOP 深度休眠冻结 (PID: $MAIN_PID)"
             
-            # 原地更新常驻通知为休眠状态 (绝不弹窗打扰、不亮屏，走同一通知通道)
-            TOKEN=$(cat "$DSH_DIR/.bridge_token" 2>/dev/null)
-            if [ -n "$TOKEN" ]; then
-                curl -s -m 2 "http://127.0.0.1:3095/app/freeze/state?token=$TOKEN&frozen=1" >/dev/null 2>&1
-            fi
+            # 原地更新常驻通知为休眠状态 (走 Shell 广播通道通知「大肥鱼休眠」)
+            notify_core_state 2 "会话闲置满30分钟冻结"
             
             # 关键设计：冻结后自身立即退出，后台 0 轮询 0 唤醒！
             exit 0
@@ -332,15 +240,12 @@ do_freeze_now() {
         echo "ERR: Process $MAIN_PID is not alive"
         exit 1
     fi
-    freeze_process_tree "$MAIN_PID"
+    kill -STOP "$MAIN_PID" 2>/dev/null
     echo "FROZEN" > "$STATE_FILE"
     echo "FROZEN" > "$DSH_DIR/freezer.state" 2>/dev/null || true
-    log_msg "FREEZE_TEST" "主进程已执行深度休眠冻结 (PID: $MAIN_PID) | 触发源: [$TRIGGER]"
+    log_msg "FREEZE_TEST" "主进程已执行 SIGSTOP 冻结 (PID: $MAIN_PID) | 触发源: [$TRIGGER]"
 
-    TOKEN=$(cat "$DSH_DIR/.bridge_token" 2>/dev/null)
-    if [ -n "$TOKEN" ]; then
-        curl -s -m 2 "http://127.0.0.1:3095/app/freeze/state?token=$TOKEN&frozen=1" >/dev/null 2>&1
-    fi
+    notify_core_state 2 "测试冻结触发源: $TRIGGER"
     echo "OK: Frozen PID $MAIN_PID"
 }
 
@@ -373,7 +278,7 @@ case "$1" in
         done
 
         log_msg "START" "闲置冻结守护已拉起 (检测周期: 10分钟, 闲置阈值: 30分钟)"
-        sh "$SCRIPT_PATH" daemon >/dev/null 2>&1 &
+        sh "/data/adb/dsha/scripts/idle-freezer.sh" daemon >/dev/null 2>&1 &
         # 立即把新后台进程的 PID 写入，消除任何时间窗
         echo "$!" > "$FREEZER_PID_FILE"
 

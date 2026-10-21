@@ -68,4 +68,6 @@ for p_mod in "/data/adb/modules/dsha_native/module.prop" \
 done
 
 echo "STATUS:STOPPED"
+# 核心正常关闭：通过 Shell 广播通道通知常驻通知替换为「大肥鱼已关闭」
+am broadcast -a com.deepseekharness.app.ACTION_CORE_STATE --ei state 3 -p com.dsha.fr >/dev/null 2>&1 || true
 exit 0
