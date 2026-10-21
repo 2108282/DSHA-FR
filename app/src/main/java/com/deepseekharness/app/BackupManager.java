@@ -119,12 +119,12 @@ public final class BackupManager {
     }
 
     private static String manifestJson(int scope, boolean includeApiKey, boolean includeSshKey) {
-        return "{\\\"formatVersion\\\":1,\\\"scope\\\":\\\"" + BackupScope.id(scope)
-                + "\\\",\\\"includeApiKey\\\":" + includeApiKey
-                + ",\\\"includeSshKey\\\":" + includeSshKey
-                + ",\\\"appVersion\\\":\\\"1.2.0-native\\\",\\\"dshVersion\\\":\\\"0.1.5-rc.2\\\","
-                + "\\\"createdAt\\\":\\\"" + new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).format(new Date())
-                + "\\\"}";
+        return "{\"formatVersion\":1,\"scope\":\"" + BackupScope.id(scope)
+                + "\",\"includeApiKey\":" + includeApiKey
+                + ",\"includeSshKey\":" + includeSshKey
+                + ",\"appVersion\":\"1.2.0-native\",\"dshVersion\":\"0.1.5-rc.2\","
+                + "\"createdAt\":\"" + new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).format(new Date())
+                + "\"}";
     }
 
     private static String buildTarScript(int scope, boolean includeApiKey, String apiKey, boolean includeSshKey) {
@@ -517,11 +517,14 @@ public final class BackupManager {
 
             String wd = c.config().getWorkdir();
             if (wd == null || wd.isEmpty()) wd = "/root/内部存储/工作区";
+            String fileName = resolveFileName(ctx, backupUri);
+            int inferredScope = BackupScope.fromFileName(fileName);
+            String scopeArg = " --scope " + ShellQuote.arg(BackupScope.id(inferredScope));
             String runCmd = "set -e; cd /root; "
                     + "rm -rf .dsha-restore-stage; mkdir -p .dsha-restore-stage; "
                     + "tar -xzf /sdcard/Download/DSHA/.dsha-restore-stage.tar.gz -C .dsha-restore-stage --ignore-failed-read; "
                     + "rm -f /sdcard/Download/DSHA/.dsha-restore-stage.tar.gz; "
-                    + "python3 /root/.dsha-restore-merge.py --stage /root/.dsha-restore-stage --root /root --workdir " + ShellQuote.arg(wd) + " 2>&1";
+                    + "python3 /root/.dsha-restore-merge.py --stage /root/.dsha-restore-stage --root /root --workdir " + ShellQuote.arg(wd) + scopeArg + " 2>&1";
             String out = c.proot().execChecked(runCmd);
 
             // 恢复后的原生环境轻量自愈（原子覆盖，避免 rm 误触命令守卫）
@@ -655,6 +658,26 @@ public final class BackupManager {
         } catch (Throwable e) {
             return 0;
         }
+    }
+
+    private static String resolveFileName(Context ctx, Uri uri) {
+        if (uri == null) return "";
+        if ("file".equalsIgnoreCase(uri.getScheme())) {
+            return uri.getLastPathSegment() != null ? uri.getLastPathSegment() : "";
+        }
+        try (android.database.Cursor c = ctx.getContentResolver().query(uri,
+                new String[]{android.provider.OpenableColumns.DISPLAY_NAME}, null, null, null)) {
+            if (c != null && c.moveToFirst()) {
+                String name = c.getString(0);
+                if (name != null && !name.trim().isEmpty()) return name.trim();
+            }
+        } catch (Throwable ignored) {}
+        String path = uri.getPath();
+        if (path != null) {
+            int slash = path.lastIndexOf('/');
+            return slash >= 0 ? path.substring(slash + 1) : path;
+        }
+        return "";
     }
 
     private static void deleteRecursively(File f) {

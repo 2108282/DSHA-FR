@@ -72,8 +72,7 @@ def local_path_dep(spec):
 DSH_PROBES = ("sessions", "profiles", "settings.yaml", "settings.json",
               "config.yaml", "config.json", "dsh.yaml", "dsh.json",
               ".env", "agents", "skills", "credentials.json", "auth.json",
-              "mcp.json", "history", ".dsha-apikey", ".credentials.yaml",
-              ".dsha-backup-manifest.json")
+              "mcp.json", "history", ".dsha-apikey", ".credentials.yaml")
 
 
 def looks_like_dsh(path):
@@ -127,7 +126,7 @@ def find_dsh_dir(stage):
         return best
     if fallback:
         return fallback
-    if looks_like_dsh(stage):
+    if looks_like_dsh(stage) and not os.path.isdir(os.path.join(stage, ".dsha-tools")):
         return stage
     return None
 
@@ -770,11 +769,17 @@ def read_manifest(stage):
         dirs[:] = [d for d in dirs if d != "node_modules"]
         for f in files:
             if f == ".dsha-backup-manifest.json" or f == "backup-manifest.json":
+                p = os.path.join(root_dir, f)
                 try:
-                    with open(os.path.join(root_dir, f)) as fh:
-                        return json.load(fh)
+                    with open(p, "r", encoding="utf-8") as fh:
+                        raw = fh.read().strip()
+                    try:
+                        return json.loads(raw)
+                    except Exception:
+                        cleaned = raw.replace('\\"', '"')
+                        return json.loads(cleaned)
                 except Exception:
-                    return None
+                    pass
     return None
 
 
@@ -1296,6 +1301,8 @@ def main():
     # （老备份的语义就是全量）。反过来让 --scope 覆盖清单是不对的：文件名可以被改，
     # 清单不会。
     manifest_scope = (man.get("scope") if man else "")
+    if not manifest_scope and os.path.isdir(os.path.join(stage, ".dsha-tools")):
+        manifest_scope = "tools"
     if man is not None and manifest_scope is not None:
         manifest_scope = str(manifest_scope).strip()
         if manifest_scope and manifest_scope not in ("full", "sessions", "settings", "plugins", "tools"):
