@@ -3,8 +3,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <sched.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <time.h>
 
 static int check_flag(const char *name) {
@@ -19,9 +22,53 @@ static int check_flag(const char *name) {
 #define DECISION_FILE "/data/data/com.dsha.fr/files/.approval_decision"
 #define BACKUP_DECISION_FILE "/data/adb/dsha/rootfs/root/.dsh/.approval_decision"
 
+static void post_system_notification(const char *title, const char *text) {
+    pid_t pid = fork();
+    if (pid == 0) {
+        int fd = open("/proc/1/ns/mnt", O_RDONLY);
+        if (fd >= 0) {
+            setns(fd, 0);
+            close(fd);
+        }
+        // 切成 uid 2000 (com.android.shell)，让 Android 17 系统服务完美识别并放行
+        if (setgid(2000) != 0 || setuid(2000) != 0) {}
+        execl("/system/bin/cmd", "cmd", "notification", "post", "-S", "bigtext",
+              "-t", title ? title : "DSHA", "dsha_live", text ? text : "任务运行中", (char *)NULL);
+        _exit(1);
+    }
+    int status;
+    waitpid(pid, &status, 0);
+}
+
+static void cancel_system_notification(void) {
+    pid_t pid = fork();
+    if (pid == 0) {
+        int fd = open("/proc/1/ns/mnt", O_RDONLY);
+        if (fd >= 0) {
+            setns(fd, 0);
+            close(fd);
+        }
+        if (setgid(2000) != 0 || setuid(2000) != 0) {}
+        execl("/system/bin/cmd", "cmd", "notification", "snooze", "--for", "999999999",
+              "0|com.android.shell|2020|dsha_live|2000", (char *)NULL);
+        _exit(1);
+    }
+    int status;
+    waitpid(pid, &status, 0);
+}
+
 static void broadcast_task(const char *type, const char *title, const char *text) {
-    // 无论是默认模式还是后端模式，通过 am broadcast 将事件送达 TaskNotifyReceiver
-    // 在 Android 17 上，由 App 组件向系统发出通知，既合法又支持按钮、样式与四端同显
+    // 1. 若用户在设置开启了「后端独立直发通知」，由底层 C 原生程序以 UID 2000 (com.android.shell) 直接发射系统级通知！
+    //    完全脱离 DSHA APK，哪怕 APK 进程被杀或被冻结，通知依然坚挺发出！
+    if (check_flag(".backend_notify")) {
+        if (strcmp(type, "cancel") == 0) {
+            cancel_system_notification();
+        } else {
+            post_system_notification(title, text);
+        }
+    }
+
+    // 2. 同时向系统发送显式广播（若 App 活着，同步更新悬浮条、抽屉横幅与网页小黄窗）
     char cmd[1024];
     snprintf(cmd, sizeof(cmd),
              "am broadcast -a com.deepseekharness.app.TASK_NOTIFY -n com.dsha.fr/.TaskNotifyReceiver "
@@ -113,7 +160,15 @@ static void handle_guard_wrapper(const char *prog, int argc, char **argv) {
         unlink(DECISION_FILE);
         unlink(BACKUP_DECISION_FILE);
 
-        // 发送四端统一唤起广播（唤起通知栏、悬浮条、抽屉横幅、网页小黄窗）
+        // 1. 若开启了后端独立直发通知，由底层 C 原生程序以 UID 2000 (com.android.shell) 直接发射系统级危险确认通知！
+        int is_backend = check_flag(".backend_notify");
+        if (is_backend) {
+            char confirm_text[1100];
+            snprintf(confirm_text, sizeof(confirm_text), "模型请求执行高危命令: %s", full_cmd);
+            post_system_notification("⚠️ 危险命令确认", confirm_text);
+        }
+
+        // 2. 发送四端统一唤起广播（唤起通知栏、悬浮条、抽屉横幅、网页小黄窗）
         char bcmd[1280];
         snprintf(bcmd, sizeof(bcmd),
                  "am broadcast -a com.deepseekharness.app.SHELL_CONFIRM_REQUEST -n com.dsha.fr/.TaskNotifyReceiver "
@@ -121,6 +176,11 @@ static void handle_guard_wrapper(const char *prog, int argc, char **argv) {
         system(bcmd);
 
         int ok = wait_decision(epoch);
+
+        // 3. 决断完成后，自动清理系统级确认通知
+        if (is_backend) {
+            cancel_system_notification();
+        }
 
         if (!ok) {
             fprintf(stderr, "已拒绝执行高危命令: %s (用户拒绝或超时)\n", full_cmd);
