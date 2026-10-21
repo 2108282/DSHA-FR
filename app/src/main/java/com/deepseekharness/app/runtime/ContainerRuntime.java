@@ -83,36 +83,9 @@ public interface ContainerRuntime {
         }
 
         public static boolean checkAvailable() {
-            // 1. 内存命中：只要本进程此前成功验证过，永久有效，绝对不在生命周期内反复触发 su 弹窗
-            if (sCachedAvailable != null && sCachedAvailable) {
-                return true;
-            }
-
-            // 2. 桥状态免 Root 探测：如果 3095 桥已经常驻，环境必然已就绪
-            try (java.net.Socket s = new java.net.Socket()) {
-                s.connect(new java.net.InetSocketAddress("127.0.0.1", 3095), 80);
-                sCachedAvailable = true;
-                return true;
-            } catch (Throwable ignored) {}
-
-            // 3. 宿主模块特征免 Root 探测：如果宿主模块文件/软链存在，直接视为就绪
-            File moduleProp = new File("/data/adb/modules/dsha_native/module.prop");
-            if (moduleProp.exists() && moduleProp.canRead()) {
-                sCachedAvailable = true;
-                return true;
-            }
-
-            // 4. 仅作为最后的冷启动兜底检测，验证成功后永久缓存在内存
-            try {
-                String su = findSuBinary();
-                Process p = Runtime.getRuntime().exec(new String[]{su, "-c", "test -f /data/adb/dsha/scripts/start.sh"});
-                boolean ok = (p.waitFor() == 0);
-                sCachedAvailable = ok;
-                return ok;
-            } catch (Throwable e) {
-                sCachedAvailable = false;
-                return false;
-            }
+            // 原生 chroot 模式下环境由底层 Magisk/KernelSU 模块保证，默认常驻就绪
+            // 严禁在此处调用任何 su 进程命令，彻底杜绝冷启动与页面刷新时疯狂弹出 Root 权限申请
+            return true;
         }
 
         @Override public boolean available() {
@@ -136,16 +109,7 @@ public interface ContainerRuntime {
         }
 
         @Override public void prepare() throws Exception {
-            try {
-                String su = findSuBinary();
-                String syncCmd = "if [ -d /sdcard/Download/DSHA/scripts ]; then "
-                        + "cp -f /sdcard/Download/DSHA/scripts/*.sh /data/adb/dsha/scripts/ 2>/dev/null; "
-                        + "fi; "
-                        + "chmod 755 /data/adb/dsha/scripts/*.sh 2>/dev/null";
-                Process p = Runtime.getRuntime().exec(new String[]{su, "-c", syncCmd});
-                p.waitFor();
-            } catch (Throwable ignored) {
-            }
+            // 原生环境由模块统一管理，免去每次 prepare 过程中的冗余 su 拷脚本开销
         }
     }
 

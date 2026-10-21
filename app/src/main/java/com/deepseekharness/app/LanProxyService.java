@@ -55,8 +55,15 @@ public final class LanProxyService {
         });
     }
 
-    /** 启动核心模块 3081 局域网反向代理 */
+    /** 启动核心模块 3081 局域网反向代理（严格门禁：仅在核心真正运行时才执行） */
     public static void start(Context ctx) {
+        if (ctx == null) return;
+        try {
+            com.deepseekharness.app.core.HarnessController hc = com.deepseekharness.app.core.HarnessController.get(ctx);
+            if (hc != null && !hc.isWebRunning()) {
+                return; // 核心未运行，坚决不偷跑 su 进程
+            }
+        } catch (Throwable ignored) {}
         execRootCmd(LAN_SCRIPT + " start");
     }
 
