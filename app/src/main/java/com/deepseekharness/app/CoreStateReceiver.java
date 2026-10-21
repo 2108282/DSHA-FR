@@ -27,6 +27,22 @@ public class CoreStateReceiver extends BroadcastReceiver {
         Log.i(TAG, "收到 Shell 核心状态广播: state=" + state + ", reason=" + reason);
 
         if (state >= Constants.CORE_STATE_RUNNING && state <= Constants.CORE_STATE_ERROR) {
+            // 收到核心运行广播时，顺手加载私有沙盒直投的 URL 注入内存
+            if (state == Constants.CORE_STATE_RUNNING) {
+                try {
+                    com.deepseekharness.app.core.HarnessController hc = com.deepseekharness.app.core.HarnessController.get(context);
+                    if (hc != null) {
+                        hc.tryRecoverRunningUrl();
+                    }
+                } catch (Throwable ignored) {}
+            } else if (state == Constants.CORE_STATE_STOPPED || state == Constants.CORE_STATE_ERROR) {
+                try {
+                    com.deepseekharness.app.core.HarnessController hc = com.deepseekharness.app.core.HarnessController.get(context);
+                    if (hc != null) {
+                        hc.clearWebAuthUrl();
+                    }
+                } catch (Throwable ignored) {}
+            }
             HarnessService.updateCoreState(context, state);
         }
     }

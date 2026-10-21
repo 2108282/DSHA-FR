@@ -143,31 +143,46 @@ public class HarnessController {
         });
     }
 
-    /** 异步执行 status.sh 并刷新后台状态、休眠状态与鉴权链接（纯正主动扫描 Pull 模型）。 */
+    /** 异步刷新后台状态：优先使用非 Root 原生 Socket 探活与私有沙盒凭据，零弹窗零干扰。 */
     public void asyncRefreshStatus() {
         if (!"ksu_chroot".equals(proot.runtime().id())) return;
         long now = android.os.SystemClock.elapsedRealtime();
         if (isStarting() || isStopping()) return;
-        if (now - lastStatusCheckMs < 800L) return;
+        if (now - lastStatusCheckMs < 1200L) return;
         lastStatusCheckMs = now;
         io.execute(() -> {
             boolean running = false;
-            boolean frozen = false;
+            boolean frozen = isFrozen;
             String foundUrl = null;
 
+            // 1. 优先读取私有沙盒中的 .auth_url 文件（零 Root）
             try {
-                Process p = Runtime.getRuntime().exec(new String[]{"su", "-mm", "-c", "/data/adb/dsha/scripts/status.sh"});
-                String out = new String(Compat.readAllBytes(p.getInputStream()), StandardCharsets.UTF_8).trim();
-                if (out.contains("STATUS:FROZEN")) {
-                    running = true;
-                    frozen = true;
-                    foundUrl = extractAuthUrl(out);
-                } else if (out.contains("STATUS:RUNNING")) {
-                    running = true;
-                    frozen = false;
-                    foundUrl = extractAuthUrl(out);
+                java.io.File privateAuthFile = new java.io.File(ctx.getFilesDir(), ".auth_url");
+                if (privateAuthFile.exists() && privateAuthFile.canRead()) {
+                    String u = new String(java.nio.file.Files.readAllBytes(privateAuthFile.toPath()), StandardCharsets.UTF_8).trim();
+                    if (u.startsWith("http://127.0.0.1:")) {
+                        foundUrl = u;
+                    }
                 }
             } catch (Throwable ignored) {}
+
+            // 2. 原生 Socket 毫秒级极速探活（零 Root）
+            int currentPort = getPort();
+            boolean socketAlive = false;
+            try (java.net.Socket s = new java.net.Socket()) {
+                s.connect(new java.net.InetSocketAddress("127.0.0.1", currentPort), 120);
+                socketAlive = true;
+            } catch (Throwable ignored) {}
+
+            if (socketAlive) {
+                running = true;
+                frozen = false;
+            } else if (frozen) {
+                // 处于休眠冻结态，进程被 SIGSTOP 挂起，端口不通属于正常现象
+                running = true;
+            } else if (foundUrl != null && !foundUrl.isEmpty()) {
+                running = false;
+            }
 
             boolean changed = false;
             if (isFrozen != frozen) {
@@ -189,7 +204,6 @@ public class HarnessController {
                     }
                 }
             } else {
-                // 后端未运行，彻底清空旧鉴权 URL，杜绝 UI 残留
                 synchronized (lifecycle) {
                     if (!webAuthUrl.isEmpty()) {
                         webAuthUrl = "";
@@ -253,36 +267,26 @@ public class HarnessController {
         }
     }
 
-    /** 若服务已在后台运行但内存中鉴权链接丢失，尝试从模块运行日志中恢复鉴权链接（带 2s 防抖）。 */
+    /** 若服务已在后台运行但内存中鉴权链接丢失，尝试从本地私有沙盒恢复鉴权链接（纯本地读，零 Root 零弹窗）。 */
     public void tryRecoverRunningUrl() {
         if (!webAuthUrl.isEmpty()) return;
         long now = android.os.SystemClock.elapsedRealtime();
         if (now - lastRecoverAttemptMs < 2000L) return;
         lastRecoverAttemptMs = now;
-        if ("ksu_chroot".equals(proot.runtime().id())) {
-            asyncRefreshStatus();
-            io.execute(() -> {
-                try {
-                    Process p = Runtime.getRuntime().exec(new String[]{"su", "-c",
-                            "grep -o 'http://127\\.0\\.0\\.1:[0-9]*/?token=[^ ]*' /data/adb/dsha/run/dsh-web.log 2>/dev/null | tail -n 1"});
-                    String out = new String(Compat.readAllBytes(p.getInputStream()), StandardCharsets.UTF_8).trim();
-                    String url = extractAuthUrl(out);
-                    if (url != null && !url.isEmpty()) {
-                        boolean updated = false;
-                        synchronized (lifecycle) {
-                            if (webAuthUrl.isEmpty()) {
-                                webAuthUrl = url;
-                                updated = true;
-                            }
-                        }
-                        if (updated) {
-                            notifyStatusChanged();
+        try {
+            java.io.File privateAuthFile = new java.io.File(ctx.getFilesDir(), ".auth_url");
+            if (privateAuthFile.exists() && privateAuthFile.canRead()) {
+                String u = new String(java.nio.file.Files.readAllBytes(privateAuthFile.toPath()), StandardCharsets.UTF_8).trim();
+                if (u.startsWith("http://127.0.0.1:")) {
+                    synchronized (lifecycle) {
+                        if (webAuthUrl.isEmpty()) {
+                            webAuthUrl = u;
                         }
                     }
-                } catch (Throwable ignored) {
+                    notifyStatusChanged();
                 }
-            });
-        }
+            }
+        } catch (Throwable ignored) {}
     }
 
     /** 进程级单例（3090 桥、保活服务等共享同一实例）。 */

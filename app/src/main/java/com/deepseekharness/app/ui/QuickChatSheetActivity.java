@@ -3217,12 +3217,12 @@ public class QuickChatSheetActivity extends AppCompatActivity {
     }
 
     /**
-     * 重新从后端获取 Token 并刷新抽屉 Web 进入 DSH：
-     * 1. 彻底解决抽屉比后端提前启动导致无法进入的问题；
-     * 2. 强制清空陈旧缓存，在子线程直接从宿主日志或 .launch_token 抽取带最新 Token 的 URL；
-     * 3. 轮询等待后端启动就绪（最多 32 轮 * 250ms = 8 秒）；
-     * 4. 成功获取后同步 Cookie 并调用 WebView 加载进入 DSH；
-     * 5. 若超时或后端未运行，给予用户清晰明确的 Toast 提示。
+     * 重新从后端获取 Token 并刷新抽屉 Web 进入 DSH（零 Root 纯原生架构）：
+     * 1. 优先从 controller 内存与 App 私有沙盒文件 (.auth_url) 极速秒级获取鉴权 URL；
+     * 2. 彻底移除原先 32 轮高频 su 循环调用，根除频繁申请 Root 权限的严重系统弹窗与卡顿；
+     * 3. 采用原生 Java Socket 毫秒级探测后端端口，零权限无感完成探活；
+     * 4. 成功获取后同步 Cookie 并驱动 WebView 载入 DSH；
+     * 5. 若核心未运行或未获取到 Token，给予用户清晰准确的 Toast 提示。
      */
     private void forceReloadWithLatestToken() {
         if (sCachedWebView == null) return;
@@ -3232,37 +3232,15 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         sWebLoaded = false;
         authRetried = false;
 
-        if (controller != null) {
-            controller.clearWebAuthUrl();
-        }
-
         final int port = controller != null ? controller.getPort() : 3080;
         sLoadedPort = port;
 
         new Thread(() -> {
-            String targetUrl = null;
+            String targetUrl = queryLatestBackendAuthUrl(port);
 
-            // 1. 轮询检索后端真实 token（最多等待 32 轮 * 250ms = 8 秒，适应后端开机初始化慢的场景）
-            for (int step = 0; step < 32; step++) {
-                targetUrl = queryLatestBackendAuthUrl(port);
-                if (targetUrl != null && !targetUrl.isEmpty()) {
-                    break;
-                }
-                if (step % 4 == 0 && controller != null) {
-                    controller.asyncRefreshStatus();
-                }
-                try {
-                    Thread.sleep(250);
-                } catch (InterruptedException ignored) {
-                    break;
-                }
-            }
-
-            // 2. 若轮询未果，尝试从 controller 中获取最后已记录的 URL
-            if (targetUrl == null || targetUrl.isEmpty()) {
-                if (controller != null) {
-                    targetUrl = controller.getWebAuthUrl();
-                }
+            // 若依然为空，尝试从 controller 内存中拿取
+            if ((targetUrl == null || targetUrl.isEmpty()) && controller != null) {
+                targetUrl = controller.getWebAuthUrl();
             }
 
             final String finalUrl = targetUrl;
@@ -3281,13 +3259,13 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 return;
             }
 
-            // 3. 成功获取到最新鉴权 URL，更新 controller 状态
+            // 成功获取到最新鉴权 URL，更新 controller 状态
             if (controller != null) {
                 controller.updateWebAuthUrl(finalUrl);
                 sLoadedGeneration = controller.getWebGeneration();
             }
 
-            // 4. 重新与后端交换 dsh-auth-* Cookie 并注入 CookieManager，同步注入 3095 桥凭据
+            // 重新与后端交换 dsh-auth-* Cookie 并注入 CookieManager，同步注入 3095 桥凭据
             try {
                 android.webkit.CookieManager cookies = android.webkit.CookieManager.getInstance();
                 String base = "http://127.0.0.1:" + port + "/";
@@ -3306,7 +3284,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 cookies.flush();
             } catch (Throwable ignored) {}
 
-            // 5. 在主线程加载 WebView
+            // 在主线程加载 WebView
             runOnUiThread(() -> {
                 if (sCachedWebView != null && !isFinishing() && !isDestroyed()) {
                     sCachedWebView.loadUrl(finalUrl);
@@ -3317,36 +3295,34 @@ public class QuickChatSheetActivity extends AppCompatActivity {
     }
 
     /**
-     * 从宿主运行目录直接读取最新的鉴权 URL。
-     * 双轨校验：
-     * 1. 优先提取 /data/adb/dsha/run/dsh-web.log 尾部的最新 URL
-     * 2. 若日志尚未落盘，直接从 /data/adb/dsha/rootfs/root/.dsh/.launch_token 拼合
+     * 安全高效读取最新的鉴权 URL（完全摒弃 su，零权限零弹窗）：
+     * 1. 优先读取 start.sh 安全直投到 App 私有沙盒目录的 .auth_url 文件（UID/SELinux 物理防护）；
+     * 2. 回退读取私有目录的 .launch_token 拼装；
+     * 3. 内存兜底，彻底杜绝调用 Runtime.exec("su")。
      */
     private String queryLatestBackendAuthUrl(int port) {
         try {
-            String cmd = "URL=$(grep -o 'http://127\\.0\\.0\\.1:[0-9]*/?token=[^ ]*' /data/adb/dsha/run/dsh-web.log 2>/dev/null | tail -n 1)\n" +
-                         "if [ -z \"$URL\" ]; then\n" +
-                         "  TOK=$(cat /data/adb/dsha/rootfs/root/.dsh/.launch_token 2>/dev/null | tr -d '\\r\\n')\n" +
-                         "  if [ -n \"$TOK\" ]; then\n" +
-                         "    P=$(cat /data/adb/dsha/run/port 2>/dev/null | tr -d '\\r\\n')\n" +
-                         "    [ -z \"$P\" ] && P=" + port + "\n" +
-                         "    URL=\"http://127.0.0.1:$P/?token=$TOK\"\n" +
-                         "  fi\n" +
-                         "fi\n" +
-                         "echo \"$URL\"";
-            Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
-            java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
-            byte[] buf = new byte[1024];
-            int n;
-            java.io.InputStream in = p.getInputStream();
-            while ((n = in.read(buf)) != -1) {
-                bos.write(buf, 0, n);
+            java.io.File privateAuthFile = new java.io.File(getFilesDir(), ".auth_url");
+            if (privateAuthFile.exists() && privateAuthFile.canRead()) {
+                String content = new String(java.nio.file.Files.readAllBytes(privateAuthFile.toPath()), java.nio.charset.StandardCharsets.UTF_8).trim();
+                if (content.startsWith("http://127.0.0.1:")) {
+                    return content;
+                }
             }
-            String out = bos.toString("UTF-8").trim();
-            if (out.startsWith("http://127.0.0.1:")) {
-                return out;
+            java.io.File privateTokenFile = new java.io.File(getFilesDir(), ".launch_token");
+            if (privateTokenFile.exists() && privateTokenFile.canRead()) {
+                String tok = new String(java.nio.file.Files.readAllBytes(privateTokenFile.toPath()), java.nio.charset.StandardCharsets.UTF_8).trim();
+                if (!tok.isEmpty()) {
+                    return "http://127.0.0.1:" + port + "/?token=" + tok;
+                }
             }
         } catch (Throwable ignored) {}
+        if (controller != null) {
+            String mem = controller.getWebAuthUrl();
+            if (mem != null && !mem.isEmpty()) return mem;
+        }
+        return null;
+    }
         return null;
     }
 
