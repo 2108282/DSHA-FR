@@ -45,6 +45,7 @@ if [ -f "$PID_FILE" ]; then
     rm -f "$ROOTFS/root/.dsh/dsh.pid" 2>/dev/null || true
 fi
 rm -f "$RUN_DIR/port" 2>/dev/null || true
+rm -f "/data/data/com.dsha.fr/files/.auth_url" "/data/data/com.dsha.fr/files/.launch_token" 2>/dev/null || true
 
 # 3. 仅在显式传入 --umount 时卸载内核挂载点（普通停止服务绝不卸载挂载，保证其他操作与环境稳定）
 if [ "$1" = "--umount" ]; then

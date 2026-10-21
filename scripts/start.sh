@@ -471,6 +471,18 @@ if [ -n "$AUTH_URL" ]; then
         echo -n "$LAUNCH_TOKEN" > "$ROOTFS/root/.dsh/.launch_token" 2>/dev/null || true
         chmod 600 "$ROOTFS/root/.dsh/.launch_token" 2>/dev/null || true
     fi
+
+    # 安全直投：将完整的鉴权 URL 与 Token 写入 DSHA 专属私有沙盒目录
+    # 设为 600 权限并赋予 App 自身 UID，Android 内核 UID/SELinux 物理防御，其他任何 App 绝对无法越界访问
+    APP_FILES="/data/data/com.dsha.fr/files"
+    if [ -d "$APP_FILES" ]; then
+        echo -n "$AUTH_URL" > "$APP_FILES/.auth_url" 2>/dev/null || true
+        [ -n "$LAUNCH_TOKEN" ] && echo -n "$LAUNCH_TOKEN" > "$APP_FILES/.launch_token" 2>/dev/null || true
+        chmod 600 "$APP_FILES/.auth_url" "$APP_FILES/.launch_token" 2>/dev/null || true
+        APP_UID=$(stat -c '%u:%g' "$APP_FILES" 2>/dev/null)
+        [ -n "$APP_UID" ] && chown "$APP_UID" "$APP_FILES/.auth_url" "$APP_FILES/.launch_token" 2>/dev/null || true
+    fi
+
     echo "=========================================================="
     echo "进入 Web 鉴权链接 (直接在手机浏览器打开):"
     echo "$AUTH_URL"
