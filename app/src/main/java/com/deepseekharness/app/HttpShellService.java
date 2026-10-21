@@ -2018,7 +2018,12 @@ public final class HttpShellService {
         // 2. 小米澎湃 OS (HyperOS / HyperIsland 灵动岛) 焦点通知标准协议
         try {
             org.json.JSONObject paramV2 = new org.json.JSONObject();
-            paramV2.put("protocol", 1);
+            int proto = 1;
+            try {
+                proto = android.provider.Settings.System.getInt(
+                        ctx.getContentResolver(), "notification_focus_protocol", 1);
+            } catch (Throwable ignored) {}
+            paramV2.put("protocol", proto);
             paramV2.put("business", "schedule_reminder");
             paramV2.put("enableFloat", enableFloat);
             paramV2.put("islandFirstFloat", islandFirstFloat);
@@ -2027,6 +2032,8 @@ public final class HttpShellService {
             paramV2.put("aodPic", "miui.focus.pic_big_island");
 
             org.json.JSONObject island = new org.json.JSONObject();
+            island.put("islandProperty", 1);
+            island.put("islandPriority", 2);
             island.put("highlightColor", "#58A6FF");
 
             org.json.JSONObject bigIslandArea = new org.json.JSONObject();
@@ -2416,8 +2423,9 @@ public final class HttpShellService {
             if (Build.VERSION.SDK_INT >= 26 && nm != null) {
                 NotificationChannel ch = new NotificationChannel(
                         Constants.CHANNEL_AGENT_RUNNING, "Agent 运行状态",
-                        NotificationManager.IMPORTANCE_DEFAULT);
+                        NotificationManager.IMPORTANCE_HIGH);
                 ch.setDescription("智能体运行中实时操作步骤通知");
+                ch.setShowBadge(false);
                 nm.createNotificationChannel(ch);
             }
 
