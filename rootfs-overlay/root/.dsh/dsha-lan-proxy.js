@@ -697,4 +697,67 @@ server.listen(LAN_PORT, '0.0.0.0', () => {
   const cookieState = getBackendDshAuthCookie(true) ? '官方凭据已自愈就绪' : '官方凭据待生成';
   console.log(`[DSHA LAN Proxy] 已启动，监听 0.0.0.0:${LAN_PORT}，转发至 127.0.0.1:${BACKEND_PORT} (${cookieState})`);
   console.log(`[DSHA LAN Proxy] 当前鉴权 Token: ${lastKnownToken ? '已加载' : '未设置(公开模式)'}`);
+
+  // ------------------------------------------------------------
+  // 3080 本地内核网络敲门侦测看门狗 (Zero-Overhead TCP Backlog Snooper)
+  // 当 DSH 主进程处于 SIGSTOP (T) 冻结态时，内核在底层仍然会完成 TCP 握手。
+  // 此时 /proc/net/tcp 中 3080 的 rx_queue > 0。
+  // 侦测到敲门信号瞬间原地唤醒，浏览器访问 3080 无感透明秒开！
+  // 扫描周期按规范设为 1.5s 一次，兼顾秒开响应与零底噪。
+  // ------------------------------------------------------------
+  let isBacklogChecking = false;
+  const hexPort3080 = ':' + BACKEND_PORT.toString(16).toUpperCase().padStart(4, '0');
+
+  function checkBacklogLoop() {
+    try {
+      const pid = getBackendPid();
+      if (!pid) {
+        setTimeout(checkBacklogLoop, 1500);
+        return;
+      }
+      const statPath = `/proc/${pid}/stat`;
+      if (!fs.existsSync(statPath)) {
+        setTimeout(checkBacklogLoop, 1500);
+        return;
+      }
+      const pstat = fs.readFileSync(statPath, 'utf8');
+      const pparts = pstat.split(' ');
+      const isFrozen = (pparts[2] === 'T');
+
+      if (!isFrozen) {
+        // 未休眠时 1.5 秒检测一次，CPU 占用完全为 0
+        setTimeout(checkBacklogLoop, 1500);
+        return;
+      }
+
+      // 休眠状态下：检查 /proc/net/tcp 队列
+      const tcpContent = fs.readFileSync('/proc/net/tcp', 'utf8');
+      let incomingCount = 0;
+      for (const line of tcpContent.split('\n')) {
+        if (line.includes(hexPort3080) && line.includes(' 0A ')) {
+          const parts = line.trim().split(/\s+/);
+          if (parts[4]) {
+            const q = parts[4].split(':');
+            incomingCount = parseInt(q[1] || '0', 16);
+          }
+          break;
+        }
+      }
+
+      if (incomingCount > 0) {
+        // 发现浏览器在敲门！立即解冻！
+        ensureBackendAwake(`浏览器访问3080(${incomingCount}个请求敲门)`);
+        setTimeout(checkBacklogLoop, 1500);
+        return;
+      }
+
+      // 处于休眠中但尚无请求：1.5s 周期轮询
+      setTimeout(checkBacklogLoop, 1500);
+    } catch (e) {
+      setTimeout(checkBacklogLoop, 1500);
+    }
+  }
+
+  // 延后启动看门狗循环 (1.5s)
+  setTimeout(checkBacklogLoop, 1500);
 });
