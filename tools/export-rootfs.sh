@@ -256,7 +256,7 @@ EOF_CORDIS
         fi
     done
 
-    # 3. 收集并过滤技能打包列表 (显式维护官方标准技能白名单，确保 external-device-mesh 打入底包并脱敏排除私有技能)
+    # 3. 收集并过滤技能打包列表 (显式维护官方标准技能白名单，确保 external-device-mesh 与 REA 等打入底包并脱敏排除私有技能)
     OFFICIAL_SKILLS=(
         "android-device-agent"
         "boxproxy-support"
@@ -264,6 +264,8 @@ EOF_CORDIS
         "open-code-review-delegate"
         "penpot-mcp"
         "external-device-mesh"
+        "reverse-engineer-anything"
+        "rea"
     )
     SKILL_EXCLUDES=()
     if [ -d "/root/.dsh/skills" ]; then
@@ -320,10 +322,6 @@ EOF_CORDIS
         # 排除工作区与个人工程文件 (严禁将用户工作区数据打入公开底包)
         "--exclude=./root/workspaces/*"
         "--exclude=./root/.dsha-workspaces*"
-        # 排除后装全局工具与可执行文件 (对齐 BackupScope.TOOLS，不属于底座)
-        "--exclude=./usr/local/lib/node_modules/rea-agents"
-        "--exclude=./usr/local/lib/node_modules/rea-agents/*"
-        "--exclude=./usr/local/bin/rea*"
         "--exclude=./root/.dsha-tools*"
         # 排除后装第三方插件实体、依赖与管理配置 (彻底排除 react-icons/mermaid 等 220MB 冗余依赖)
         "--exclude=./root/.dsh/profiles/web/node_modules/*"
@@ -439,6 +437,11 @@ EOF_CORDIS
     STAGE_WORKSPACES="$STAGE_DIR/root/workspaces"
     mkdir -p "$STAGE_PROFILE_NM" "$STAGE_GLOBAL_NM" "$STAGE_AGENTS_SKILLS" "$STAGE_WORKSPACES"
     touch "$STAGE_AGENTS_SKILLS/.gitkeep" "$STAGE_WORKSPACES/.gitkeep"
+    EXTRA_STAGE_INJECTS=()
+    if [ -d "/root/.dsh/skills/reverse-engineer-anything" ]; then
+        ln -sfn "/root/.dsh/skills/reverse-engineer-anything" "$STAGE_AGENTS_SKILLS/reverse-engineer-anything"
+        EXTRA_STAGE_INJECTS+=("./root/.agents/skills/reverse-engineer-anything")
+    fi
     for p in dsh-device-shell-guide dsh-task-notifier dsh-status-overlay dsh-web-mobile; do
         if [ "$p" = "dsh-web-mobile" ]; then
             tgt="/root/dsh-web-mobile"
@@ -460,6 +463,7 @@ EOF_CORDIS
         ./usr/local/lib/node_modules/dsh-status-overlay \
         ./usr/local/lib/node_modules/dsh-web-mobile \
         ./root/.agents/skills/.gitkeep \
+        ${EXTRA_STAGE_INJECTS[@]+"${EXTRA_STAGE_INJECTS[@]}"} \
         ./root/workspaces/.gitkeep
 
     echo "==> [3/3] 正在执行多线程高效压缩..."
