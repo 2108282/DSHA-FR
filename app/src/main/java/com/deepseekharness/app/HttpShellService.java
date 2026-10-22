@@ -2102,9 +2102,14 @@ public final class HttpShellService {
             leftImgText.put("textInfo", leftTextInfo);
             bigIslandArea.put("imageTextInfoLeft", leftImgText);
 
+            org.json.JSONObject imageTextInfoRight = new org.json.JSONObject();
+            imageTextInfoRight.put("type", 2);
             org.json.JSONObject rightTextInfo = new org.json.JSONObject();
             rightTextInfo.put("title", capsuleText != null ? capsuleText : "正在执行");
             rightTextInfo.put("showHighlightColor", false);
+            imageTextInfoRight.put("textInfo", rightTextInfo);
+
+            bigIslandArea.put("imageTextInfoRight", imageTextInfoRight);
             bigIslandArea.put("textInfo", rightTextInfo);
             bigIslandArea.put("islandTimeout", 900);
 

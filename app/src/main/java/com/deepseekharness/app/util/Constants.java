@@ -53,8 +53,8 @@ public final class Constants {
     public static final int NOTIF_ADB_CARD = 3006;
 
     // ================= 通知渠道 =================
-    /** 智能体运行状态通知渠道（带停止任务按钮） */
-    public static final String CHANNEL_AGENT_RUNNING = "dsh_agent_channel";
+    /** 智能体运行状态通知渠道（保持 IMPORTANCE_DEFAULT 避免触发大岛悬浮，直达收缩态胶囊） */
+    public static final String CHANNEL_AGENT_RUNNING = "dsh_agent_channel_v3";
     /** 智能体任务结果与交互渠道（完成/报错/终止，带 RemoteInput 继续对话） */
     public static final String CHANNEL_TASK_RESULT = "dsh_task_result_v2";
     public static final String CHANNEL_TASK = "dsh_task_channel";

@@ -38,11 +38,14 @@ public class DshaApp extends Application {
                 chService.setDescription("保持 DeepSeek Harness 原生守护与硬件桥后台运行");
                 nm.createNotificationChannel(chService);
 
-                // 2. 运行状态实时胶囊渠道
+                // 2. 运行状态实时胶囊渠道（保持 IMPORTANCE_DEFAULT 规避 Heads-Up 展开大岛，直通 InitToBigIsland 收缩态胶囊）
                 NotificationChannel chRunning = new NotificationChannel(
                         Constants.CHANNEL_AGENT_RUNNING, "Agent 运行状态", NotificationManager.IMPORTANCE_DEFAULT);
                 chRunning.setDescription("智能体运行中实时操作步骤通知");
                 nm.createNotificationChannel(chRunning);
+                try {
+                    nm.deleteNotificationChannel("dsh_agent_channel_v2");
+                } catch (Throwable ignored) {}
 
                 // 3. 任务结果与交付卡片渠道
                 NotificationChannel chResult = new NotificationChannel(
