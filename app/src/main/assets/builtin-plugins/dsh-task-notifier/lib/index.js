@@ -17,7 +17,6 @@ export const name = 'dsh-task-notifier'
 export const inject = []
 
 const CANCEL_FLAG = '/root/.dsh/.cancel_requested'
-const PENDING_PROMPT = '/root/.dsh/.pending_prompt'
 const DECISION_FLAGS = [
   '/root/.dsh/.approval_decision',
   '/sdcard/Download/DSHA/.approval_decision',
@@ -457,7 +456,7 @@ export function apply(ctx) {
   ctx.inject(['agents'], (agentScope) => {
     let timer = setInterval(async () => {
       try {
-        // A. 处理用户点击通知栏「🛑 停止任务」紧急制动
+        // 处理用户点击通知栏「🛑 停止任务」紧急制动
         if (existsSync(CANCEL_FLAG)) {
           lastCancelByNotification = Date.now()
           try { unlinkSync(CANCEL_FLAG) } catch {}
@@ -476,47 +475,8 @@ export function apply(ctx) {
             text: '已按指令停止操作，点击查看或继续对话'
           })
         }
-
-        // B. 处理用户在通知栏输入文字「💬 继续对话 / 重新输入」
-        if (existsSync(PENDING_PROMPT)) {
-          let raw = ''
-          try {
-            raw = (await readFile(PENDING_PROMPT, 'utf-8')).trim()
-            await unlink(PENDING_PROMPT).catch(() => {})
-          } catch {}
-
-          if (raw) {
-            try {
-              let targetAgent = null
-              if (lastActiveSessionId) {
-                targetAgent = agentScope.agents.get(lastActiveSessionId)
-              }
-              if (!targetAgent) {
-                const roots = typeof agentScope.agents.roots === 'function' ? agentScope.agents.roots() : []
-                if (roots && roots.length > 0) {
-                  targetAgent = roots[0]
-                } else {
-                  const list = agentScope.agents.list()
-                  if (list && list.length > 0) {
-                    targetAgent = list[list.length - 1]
-                  }
-                }
-              }
-
-              if (targetAgent && typeof targetAgent.followup === 'function') {
-                const msg = {
-                  id: randomUUID(),
-                  role: 'user',
-                  content: [{ type: 'text', text: raw }],
-                  source: { kind: 'user' }
-                }
-                targetAgent.followup(msg)
-              }
-            } catch {}
-          }
-        }
       } catch {}
-    }, 400)
+    }, 3000)
 
     if (timer && typeof timer.unref === 'function') {
       timer.unref()
