@@ -284,7 +284,10 @@ public class HarnessService extends Service {
             stopForeground(true);
             return;
         }
-        Notification notification = buildNotification("大肥鱼运行中", "Deepseek Harness核心运行中");
+        boolean isFrozen = (c != null && c.isFrozen()) || new java.io.File("/data/adb/dsha/run/freezer.state").exists();
+        String title = isFrozen ? "大肥鱼休眠" : "大肥鱼运行中";
+        String text = isFrozen ? "Deepseek Harness已冻结" : "Deepseek Harness核心运行中";
+        Notification notification = buildNotification(title, text);
         if (Build.VERSION.SDK_INT >= 34)
             startForeground(NOTIF_ID, notification,
                     android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
@@ -298,9 +301,12 @@ public class HarnessService extends Service {
                 stopForeground(true);
                 return;
             }
+            boolean isFrozen = (c != null && c.isFrozen()) || new java.io.File("/data/adb/dsha/run/freezer.state").exists();
+            String title = isFrozen ? "大肥鱼休眠" : "大肥鱼运行中";
+            String text = isFrozen ? "Deepseek Harness已冻结" : "Deepseek Harness核心运行中";
             NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm != null) {
-                nm.notify(NOTIF_ID, buildNotification("大肥鱼运行中", "Deepseek Harness核心运行中"));
+                nm.notify(NOTIF_ID, buildNotification(title, text));
             }
         } catch (Throwable ignored) {}
     }

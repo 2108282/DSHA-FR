@@ -155,6 +155,24 @@ public class HarnessController {
             boolean frozen = isFrozen;
             String foundUrl = null;
 
+            // 0. 休眠冻结铁律守卫：若内存已标记为休眠态，或底层 freezer.state 存在
+            // 严禁主动发起向 3080 端口的 Socket 探活连接，坚决杜绝自己抹杀休眠状态！
+            boolean stateFileFrozen = false;
+            try {
+                java.io.File sf1 = new java.io.File("/data/adb/dsha/run/freezer.state");
+                java.io.File sf2 = new java.io.File(ctx.getFilesDir(), "freezer.state");
+                stateFileFrozen = (sf1.exists() && sf1.canRead()) || (sf2.exists() && sf2.canRead());
+            } catch (Throwable ignored) {}
+
+            if (frozen || stateFileFrozen) {
+                if (!isFrozen) {
+                    isFrozen = true;
+                    notifyStatusChanged();
+                }
+                lastKnownWebRunning = true;
+                return;
+            }
+
             // 1. 优先读取私有沙盒中的 .auth_url 文件（零 Root）
             try {
                 java.io.File privateAuthFile = new java.io.File(ctx.getFilesDir(), ".auth_url");
@@ -176,10 +194,13 @@ public class HarnessController {
 
             if (socketAlive) {
                 running = true;
-                frozen = false;
-            } else if (frozen) {
+                if (!isFrozen && !stateFileFrozen) {
+                    frozen = false;
+                }
+            } else if (frozen || isFrozen || stateFileFrozen) {
                 // 处于休眠冻结态，进程被 SIGSTOP 挂起，端口不通属于正常现象
                 running = true;
+                frozen = true;
             } else if (foundUrl != null && !foundUrl.isEmpty()) {
                 running = false;
             }
@@ -222,7 +243,8 @@ public class HarnessController {
     public boolean isWebRunning() {
         if ("ksu_chroot".equals(proot.runtime().id())) {
             // 0. 休眠冻结判定：若处于休眠中，主进程只是被 SIGSTOP 挂起，绝对视为运行态
-            if (isFrozen) {
+            if (isFrozen || new java.io.File("/data/adb/dsha/run/freezer.state").exists()) {
+                if (!isFrozen) isFrozen = true;
                 return true;
             }
 
