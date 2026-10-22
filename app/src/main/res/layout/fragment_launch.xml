@@ -76,7 +76,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="6dp"
-                    android:text="正在解压内置环境并拉起 DSH 核心…"
+                    android:text="点击「启动」开启 DSH 核心服务"
                     android:textColor="@color/text_muted"
                     android:textSize="13sp" />
 

@@ -99,7 +99,7 @@ public final class ThemeNotifyFragment extends Fragment {
 
         View styleRow = v.findViewById(R.id.theme_notify_row_notify_style);
         if (styleRow != null) {
-            styleRow.setOnClickListener(x -> showNotificationStyleDialog(cfg, styleText));
+            styleRow.setOnClickListener(anchor -> showNotificationStyleDropdown(anchor, cfg, styleText));
         }
 
         // ==================== 2. 莫奈取色开关 (只做开关，不做功能) ====================
@@ -263,7 +263,7 @@ public final class ThemeNotifyFragment extends Fragment {
                 .getString(PREF_KEY_PALETTE_STYLE, "tonal_spot");
         int seedColor = MonetThemeHelper.getWallpaperSeedColor(context);
 
-        showModernDropdown(anchor, styles, currentKey, seedColor, key -> {
+        showModernDropdown(anchor, styles, currentKey, true, seedColor, key -> {
             context.getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE).edit()
                     .putString(PREF_KEY_PALETTE_STYLE, key).apply();
             if (paletteStyleValueText != null) {
@@ -276,9 +276,28 @@ public final class ThemeNotifyFragment extends Fragment {
         });
     }
 
-    private void showModernDropdown(View anchor, Map<String, String> options, String selectedKey, int seedColor, OnOptionSelectedListener listener) {
+    private void showNotificationStyleDropdown(View anchor, ConfigStore cfg, TextView labelView) {
         Context context = requireContext();
-        int popupWidth = dp(240);
+        Map<String, String> styles = new LinkedHashMap<>();
+        styles.put(Constants.NOTIF_STYLE_NORMAL, "普通通知样式");
+        styles.put(Constants.NOTIF_STYLE_AOSP, "AOSP实时动态");
+        styles.put(Constants.NOTIF_STYLE_HYPEROS, "HyperOS灵动胶囊");
+
+        String current = cfg.getNotificationStyle();
+
+        showModernDropdown(anchor, styles, current, false, 0, key -> {
+            cfg.setNotificationStyle(key);
+            updateStyleLabel(labelView, key);
+            com.deepseekharness.app.util.ToastHelper.show(context,
+                    "已切换为：" + styles.get(key));
+        });
+    }
+
+    private void showModernDropdown(View anchor, Map<String, String> options, String selectedKey,
+                                    boolean showPaletteDots, int seedColor,
+                                    OnOptionSelectedListener listener) {
+        Context context = requireContext();
+        int popupWidth = showPaletteDots ? dp(240) : dp(210);
         int maxMenuHeight = dp(320);
 
         ScrollView scrollView = new ScrollView(context);
@@ -305,7 +324,7 @@ public final class ThemeNotifyFragment extends Fragment {
         for (Map.Entry<String, String> entry : options.entrySet()) {
             final String key = entry.getKey();
             final String label = entry.getValue();
-            boolean isSelected = key.equals(selectedKey);
+            boolean isSelected = key.equalsIgnoreCase(selectedKey);
 
             LinearLayout item = new LinearLayout(context);
             item.setOrientation(LinearLayout.HORIZONTAL);
@@ -317,6 +336,18 @@ public final class ThemeNotifyFragment extends Fragment {
             item.setClickable(true);
             item.setFocusable(true);
 
+            if (showPaletteDots) {
+                // ★ 核心功能：3 个主色小圆圈放在最左侧（支持取反倒序）！
+                boolean inverted = ThemeController.isMonetInverted(context);
+                int[] previewColors = SheetSettingsFragment.getStylePreviewColors(key, seedColor, inverted);
+                View dotsView = createDotsView(context, previewColors);
+                LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                dlp.setMarginEnd(dp(12));
+                dotsView.setLayoutParams(dlp);
+                item.addView(dotsView);
+            }
+
             TextView tv = new TextView(context);
             tv.setText(label);
             tv.setTextSize(14);
@@ -324,15 +355,6 @@ public final class ThemeNotifyFragment extends Fragment {
             if (isSelected) {
                 tv.setTypeface(null, android.graphics.Typeface.BOLD);
             }
-            // ★ 核心功能：3 个主色小圆圈放在最左侧（支持取反倒序）！
-            boolean inverted = ThemeController.isMonetInverted(context);
-            int[] previewColors = SheetSettingsFragment.getStylePreviewColors(key, seedColor, inverted);
-            View dotsView = createDotsView(context, previewColors);
-            LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            dlp.setMarginEnd(dp(12));
-            dotsView.setLayoutParams(dlp);
-            item.addView(dotsView);
 
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
             item.addView(tv, lp);
@@ -374,50 +396,13 @@ public final class ThemeNotifyFragment extends Fragment {
 
     private void updateStyleLabel(TextView view, String style) {
         if (view == null) return;
-        String label = "经典普通通知";
+        String label = "普通通知样式";
         if (Constants.NOTIF_STYLE_AOSP.equals(style)) {
-            label = "AOSP 实时动态";
+            label = "AOSP实时动态";
         } else if (Constants.NOTIF_STYLE_HYPEROS.equals(style)) {
-            label = "HyperOS 灵动胶囊";
+            label = "HyperOS灵动胶囊";
         }
         view.setText(label);
-    }
-
-    private void showNotificationStyleDialog(ConfigStore cfg, TextView labelView) {
-        if (!isAdded()) return;
-        final String[] styles = new String[]{
-                Constants.NOTIF_STYLE_NORMAL,
-                Constants.NOTIF_STYLE_AOSP,
-                Constants.NOTIF_STYLE_HYPEROS
-        };
-        final String[] items = new String[]{
-                "经典普通通知 (推荐 · 原生常驻/横幅)",
-                "AOSP 实时动态 (Google 原生药丸)",
-                "HyperOS 灵动胶囊 (小米挖孔小黑条)"
-        };
-
-        String current = cfg.getNotificationStyle();
-        int selected = 0;
-        for (int i = 0; i < styles.length; i++) {
-            if (styles[i].equals(current)) {
-                selected = i;
-                break;
-            }
-        }
-
-        new androidx.appcompat.app.AlertDialog.Builder(requireContext())
-                .setTitle("通知呈现样式")
-                .setSingleChoiceItems(items, selected, (dialog, which) -> {
-                    dialog.dismiss();
-                    if (which >= 0 && which < styles.length) {
-                        cfg.setNotificationStyle(styles[which]);
-                        updateStyleLabel(labelView, styles[which]);
-                        com.deepseekharness.app.util.ToastHelper.show(requireContext(),
-                                "已切换为：" + items[which]);
-                    }
-                })
-                .setNegativeButton("取消", null)
-                .show();
     }
 
     @Override

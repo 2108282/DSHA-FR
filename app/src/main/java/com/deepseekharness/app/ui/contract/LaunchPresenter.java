@@ -207,7 +207,7 @@ public class LaunchPresenter implements LaunchActions {
         } else if (stopping) {
             statusDesc = "正在停止后台进程与网络桥接…";
         } else if (starting) {
-            statusDesc = "正在解压内置环境并拉起 DSH 核心…";
+            statusDesc = "正在拉起 DSH 核心守护进程…";
         } else {
             statusDesc = "点击「启动」开启 DSH 核心服务";
         }

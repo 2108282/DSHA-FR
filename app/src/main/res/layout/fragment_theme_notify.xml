@@ -225,17 +225,15 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="1dp"
-                            android:text="经典普通通知"
+                            android:text="普通通知样式"
                             android:textColor="@color/text_muted"
                             android:textSize="12sp" />
                     </LinearLayout>
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="›"
-                        android:textColor="@color/text_muted"
-                        android:textSize="20sp" />
+                    <ImageView
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:src="@drawable/ic_chevron_expand" />
                 </LinearLayout>
             </com.deepseekharness.app.ui.ModernCardView>
 
