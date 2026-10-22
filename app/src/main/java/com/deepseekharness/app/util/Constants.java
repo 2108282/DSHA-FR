@@ -81,12 +81,6 @@ public final class Constants {
     public static final String NOTIF_STYLE_NORMAL = "normal";
     public static final String NOTIF_STYLE_AOSP = "aosp";
     public static final String NOTIF_STYLE_HYPEROS = "hyperos";
-    /** 后端独立直发通知总开关（脱离 App 独立模式，默认关闭） */
-    public static final String KEY_BACKEND_NOTIFY_ENABLED = "backend_notify_enabled";
-
-    /** 统一 Shell 通道广播 Action */
-    public static final String ACTION_TASK_NOTIFY = "com.deepseekharness.app.TASK_NOTIFY";
-    public static final String ACTION_SHELL_CONFIRM_REQUEST = "com.deepseekharness.app.SHELL_CONFIRM_REQUEST";
 
     // ================= SharedPreferences 键（历史键名保持兼容，见 AGENTS.md） =================
     public static final String KEY_API_KEY = "api_key";

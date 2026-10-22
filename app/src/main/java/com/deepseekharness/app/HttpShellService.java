@@ -2437,35 +2437,9 @@ public final class HttpShellService {
         } catch (Throwable ignored) {}
     }
 
-    private void showRunningNotification(String title, String text) {
+    public static void postRunning(Context ctx, String title, String text) {
+        if (ctx == null) return;
         try {
-            if (isApprovalWaiting) {
-                // 如果是转为了真正的运行状态（非审批态），说明审批已通过，解除审批等待
-                if (!"⚠️ 等待审批".equals(title) && !"等待审批".equals(title) && !"安全确认".equals(title) &&
-                    (text == null || (!text.contains("等待审批") && !text.contains("等待安全审批") && !text.contains("等待授权"))) &&
-                    (title == null || (!title.contains("审批") && !title.contains("授权")))) {
-                    dismissAllApprovalUi();
-                } else {
-                    return;
-                }
-            }
-            isTaskActive = true;
-            HarnessService.onTaskStateChanged(ctx, true);
-            if ("⚠️ 等待审批".equals(title) || "等待审批".equals(title) || "安全确认".equals(title) ||
-                (text != null && (text.contains("等待审批") || text.contains("等待安全审批") || text.contains("等待授权"))) ||
-                (title != null && (title.contains("审批") || title.contains("授权")))) {
-                cancelRunningNotification();
-                showApprovalWaitingNotification(title, text);
-                return;
-            }
-            if ("💬 助手提问".equals(title) || "等待回答".equals(title) ||
-                (text != null && (text.contains("ask_user") || text.contains("ask_question"))) ||
-                (title != null && (title.contains("ask_user") || title.contains("ask_question")))) {
-                cancelRunningNotification();
-                showAskWaitingNotification(text);
-                return;
-            }
-
             long nowTime = System.currentTimeMillis();
             if (nowTime - sLastRunningNotifTime < 800L) return;
             sLastRunningNotifTime = nowTime;
@@ -2519,13 +2493,22 @@ public final class HttpShellService {
         } catch (Throwable ignored) {}
     }
 
-    private void cancelRunningNotification() {
+    public static void cancelRunning(Context ctx) {
+        if (ctx == null) return;
         try {
             isTaskActive = false;
             HarnessService.onTaskStateChanged(ctx, false);
             NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm != null) nm.cancel(Constants.NOTIF_TASK_RUNNING);
         } catch (Throwable ignored) {}
+    }
+
+    private void showRunningNotification(String title, String text) {
+        postRunning(ctx, title, text);
+    }
+
+    private void cancelRunningNotification() {
+        cancelRunning(ctx);
     }
 
     private void showConfirmNotification(String cmd, long epoch) {

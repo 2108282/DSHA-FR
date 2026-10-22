@@ -38,37 +38,8 @@ function bridgeToken() {
 
 const BRIDGE_PORTS = [3095, 3090]
 
-const BACKEND_NOTIFY_FLAGS = [
-  '/root/.dsh/.backend_notify',
-  '/sdcard/Download/DSHA/.backend_notify',
-  '/data/data/com.dsha.fr/files/.backend_notify'
-]
-
-function isBackendNotifyEnabled() {
-  for (const f of BACKEND_NOTIFY_FLAGS) {
-    if (existsSync(f)) return true
-  }
-  return false
-}
-
-/** 通过硬件桥或后端独立通道发送通知请求 */
+/** 通过硬件桥发送 HTTP 请求（Native 3095 优先，3090 兜底） */
 async function callBridge(endpoint, params = {}) {
-  // 1. 若用户在设置中开启了「后端独立直发通知」，直接关闭 HTTP 3095 这一条通道，走后端 Shell 直发！
-  if (isBackendNotifyEnabled()) {
-    try {
-      const { execFile } = await import('node:child_process')
-      if (endpoint.includes('/task/running')) {
-        execFile('/usr/local/bin/dsh-notify', ['running', params.title || '正在执行', params.text || ''])
-      } else if (endpoint.includes('/notify')) {
-        execFile('/usr/local/bin/dsh-notify', ['done', params.title || '任务完成', params.text || '任务已结束'])
-      } else if (endpoint.includes('/task/cancel')) {
-        execFile('/usr/local/bin/dsh-notify', ['cancel'])
-      }
-      return
-    } catch {}
-  }
-
-  // 2. 默认模式：走原生的 HTTP 3095 桥接通道
   const token = bridgeToken()
   if (!token) return
   for (const port of BRIDGE_PORTS) {
@@ -87,17 +58,6 @@ async function callBridge(endpoint, params = {}) {
       }
     } catch {}
   }
-  // 兜底：若 HTTP 端口异常，调用 dsh-notify 直发系统广播
-  try {
-    const { execFile } = await import('node:child_process')
-    if (endpoint.includes('/task/running')) {
-      execFile('/usr/local/bin/dsh-notify', ['running', params.title || '正在执行', params.text || ''])
-    } else if (endpoint.includes('/notify')) {
-      execFile('/usr/local/bin/dsh-notify', ['done', params.title || '任务完成', params.text || '任务已结束'])
-    } else if (endpoint.includes('/task/cancel')) {
-      execFile('/usr/local/bin/dsh-notify', ['cancel'])
-    }
-  } catch {}
 }
 
 const TOOL_LABELS = [

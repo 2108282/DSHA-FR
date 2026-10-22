@@ -102,22 +102,6 @@ public final class ThemeNotifyFragment extends Fragment {
             styleRow.setOnClickListener(x -> showNotificationStyleDialog(cfg, styleText));
         }
 
-        // ==================== 1.3 后端独立直发通知 (脱离 App 独立模式) ====================
-        DshaToggle backendNotifyToggle = v.findViewById(R.id.theme_notify_toggle_backend_notify);
-        if (backendNotifyToggle != null) {
-            backendNotifyToggle.setChecked(cfg.isBackendNotifyEnabled(), false, false);
-            backendNotifyToggle.setOnCheckedChangeListener((btn, isChecked) -> {
-                cfg.setBackendNotifyEnabled(isChecked);
-                syncBackendNotifyFlag(isChecked);
-                com.deepseekharness.app.util.ToastHelper.show(requireContext(),
-                        isChecked ? "已开启后端独立直发通知" : "已切换为 App 托管通知通道");
-            });
-            View backendNotifyRow = v.findViewById(R.id.theme_notify_row_backend_notify);
-            if (backendNotifyRow != null) {
-                backendNotifyRow.setOnClickListener(x -> backendNotifyToggle.toggle());
-            }
-        }
-
         // ==================== 2. 莫奈取色开关 (只做开关，不做功能) ====================
         DshaToggle monetToggle = v.findViewById(R.id.theme_notify_toggle_monet);
         View monetInvertRow = v.findViewById(R.id.theme_notify_row_monet_invert);
@@ -434,27 +418,6 @@ public final class ThemeNotifyFragment extends Fragment {
                 })
                 .setNegativeButton("取消", null)
                 .show();
-    }
-
-    private void syncBackendNotifyFlag(boolean enabled) {
-        new Thread(() -> {
-            try {
-                java.io.File flagPriv = new java.io.File(requireContext().getFilesDir(), ".backend_notify");
-                java.io.File flagSdcard = new java.io.File("/sdcard/Download/DSHA/.backend_notify");
-                if (enabled) {
-                    if (!flagPriv.exists()) flagPriv.createNewFile();
-                    if (!flagSdcard.exists()) flagSdcard.createNewFile();
-                } else {
-                    if (flagPriv.exists()) flagPriv.delete();
-                    if (flagSdcard.exists()) flagSdcard.delete();
-                }
-                String cmd = enabled
-                        ? "mkdir -p /data/adb/dsha/rootfs/root/.dsh /sdcard/Download/DSHA; touch /data/adb/dsha/rootfs/root/.dsh/.backend_notify /sdcard/Download/DSHA/.backend_notify; chmod 666 /data/adb/dsha/rootfs/root/.dsh/.backend_notify /sdcard/Download/DSHA/.backend_notify 2>/dev/null || true"
-                        : "rm -f /data/adb/dsha/rootfs/root/.dsh/.backend_notify /sdcard/Download/DSHA/.backend_notify 2>/dev/null || true";
-                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
-                p.waitFor();
-            } catch (Throwable ignored) {}
-        }, "sync-backend-notify").start();
     }
 
     @Override

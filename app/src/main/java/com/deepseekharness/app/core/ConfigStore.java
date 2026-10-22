@@ -94,14 +94,6 @@ public class ConfigStore {
         prefs.edit().putString(Constants.KEY_NOTIFICATION_STYLE, style).apply();
     }
 
-    public boolean isBackendNotifyEnabled() {
-        return prefs.getBoolean(Constants.KEY_BACKEND_NOTIFY_ENABLED, false);
-    }
-
-    public void setBackendNotifyEnabled(boolean v) {
-        prefs.edit().putBoolean(Constants.KEY_BACKEND_NOTIFY_ENABLED, v).apply();
-    }
-
     public boolean isConfirmShell() {
         return prefs.getBoolean(Constants.KEY_CONFIRM_SHELL, true);
     }

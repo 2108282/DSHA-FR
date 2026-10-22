@@ -215,15 +215,6 @@
         </receiver>
 
         <receiver
-            android:name=".TaskNotifyReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="com.deepseekharness.app.TASK_NOTIFY" />
-                <action android:name="com.deepseekharness.app.SHELL_CONFIRM_REQUEST" />
-            </intent-filter>
-        </receiver>
-
-        <receiver
             android:name=".BootReceiver"
             android:exported="false">
             <intent-filter>
