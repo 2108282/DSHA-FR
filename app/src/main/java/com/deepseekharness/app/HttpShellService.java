@@ -669,14 +669,15 @@ public final class HttpShellService {
     /** /app/notify?title=&text= ：发通知栏提醒（三轨灵动胶囊接力与前台 Toast） */
     private String appNotify(String path) {
         try {
-            com.deepseekharness.app.core.ConfigStore cfg = new com.deepseekharness.app.core.ConfigStore(ctx);
-            if (cfg.isBackendNotifyEnabled()) {
-                return "OK";
-            }
             String q = queryOf(path);
             String title = getParam(q, "title", "任务完成");
             String text = getParam(q, "text", "");
             if (text.isEmpty()) text = "智能体已结束任务，点击查看结果";
+            com.deepseekharness.app.core.ConfigStore cfg = new com.deepseekharness.app.core.ConfigStore(ctx);
+            if (cfg.isBackendNotifyEnabled()) {
+                postViaBackendDirect("done", title, text);
+                return "OK";
+            }
             title = safeDisplay(title);
             text = safeDisplay(text);
             String compactDetail = text.replaceAll("[\\r\\n]+", " ").trim();
@@ -2229,14 +2230,15 @@ public final class HttpShellService {
 
     private String appTaskRunning(String path) {
         try {
-            com.deepseekharness.app.core.ConfigStore cfg = new com.deepseekharness.app.core.ConfigStore(ctx);
-            // 互斥控制：若开启了「后端独立直发通知」，关闭 HTTP 3095 这一条 App 通道，交由后端直发
-            if (cfg.isBackendNotifyEnabled()) {
-                return "OK";
-            }
             String q = queryOf(path);
             String title = getParam(q, "title", "正在执行");
             String text = getParam(q, "text", "智能体正在执行自动化任务...");
+            com.deepseekharness.app.core.ConfigStore cfg = new com.deepseekharness.app.core.ConfigStore(ctx);
+            // 若开启了「后端独立直发通知」，通过底层原生 dsh-notify 直发系统通知
+            if (cfg.isBackendNotifyEnabled()) {
+                postViaBackendDirect("running", title, text);
+                return "OK";
+            }
             showRunningNotification(title, text);
             return "OK";
         } catch (Throwable e) {
@@ -2246,11 +2248,28 @@ public final class HttpShellService {
 
     private String appTaskCancel() {
         try {
+            com.deepseekharness.app.core.ConfigStore cfg = new com.deepseekharness.app.core.ConfigStore(ctx);
+            if (cfg.isBackendNotifyEnabled()) {
+                postViaBackendDirect("cancel", "", "");
+                return "OK";
+            }
             cancelRunningNotification();
             return "OK";
         } catch (Throwable e) {
             return "ERROR: " + safeError(e);
         }
+    }
+
+    private void postViaBackendDirect(String type, String title, String text) {
+        new Thread(() -> {
+            try {
+                String cmd = "chroot /data/adb/dsha/rootfs /usr/local/bin/dsh-notify " + type + " "
+                        + com.deepseekharness.app.util.ShellQuote.arg(title != null ? title : "") + " "
+                        + com.deepseekharness.app.util.ShellQuote.arg(text != null ? text : "");
+                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
+                p.waitFor();
+            } catch (Throwable ignored) {}
+        }, "backend-direct-notifier").start();
     }
 
     private static String compactActionDetail(String raw) {
