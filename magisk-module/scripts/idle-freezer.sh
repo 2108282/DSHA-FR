@@ -2,12 +2,13 @@
 # ============================================================
 # DSHA 闲置深度冻结守护程序 (DSHA Idle Freezer Daemon - Turbo Edition)
 # 
-# 核心特性：
-# 1. 毫秒级极速唤醒：所有广播与远程通知全面后台异步化 (&)，唤醒耗时 < 15ms；
-# 2. 杜绝回调死循环：移除冗余的 frozen=0 反向循环调用，切断自我触发；
-# 3. 动态双模阈值：息屏 5 分钟加速冻结，亮屏 30 分钟避让；
-# 4. 亮屏防背刺：硬件挂起唤醒后若处于亮屏，自动避让重置计时；
-# 5. 内存换页保护与 ZRAM 自然压缩无缝协同。
+# 特性：
+# 1. 动态双模阈值：息屏加速至 5 分钟 (300秒) 冻结；亮屏维持 30 分钟 (1800秒) 冻结；
+# 2. 息屏内核电源锁：息屏期间临时持有 wake_lock，确保 5 分钟走时不被 CPU 挂起打断；
+# 3. 达标即冻结：达到闲置阈值立即执行 freeze_process_tree，释放唤醒锁并退出自身；
+# 4. 毫秒级极速唤醒：所有广播通知全面后台异步化 (&)，解冻主进程耗时 < 0.2s；
+# 5. 内存换页与 ZRAM 压缩协同，唤醒时自动恢复物理内存保护；
+# 6. 精确记录北京时间操作日志。
 # ============================================================
 
 # 路径自适应：检测宿主视角 vs 容器视角
@@ -35,8 +36,8 @@ WAKE_LOCK="$RUN_DIR/freezer_wake.lock"
 SCRIPT_PATH="/data/adb/dsha/scripts/idle-freezer.sh"
 [ -f "$SCRIPT_PATH" ] || SCRIPT_PATH="$(readlink -f "$0" 2>/dev/null || echo "$0")"
 
-IDLE_THRESHOLD_SCREEN_ON=1800    # 亮屏使用中：30 分钟
-IDLE_THRESHOLD_SCREEN_OFF=300    # 息屏锁屏后：5 分钟
+IDLE_THRESHOLD_SCREEN_ON=1800    # 亮屏闲置阈值：30 分钟 (秒)
+IDLE_THRESHOLD_SCREEN_OFF=300    # 息屏闲置阈值：5 分钟 (秒)
 CHECK_INTERVAL_SCREEN_ON=60      # 亮屏心跳：60 秒
 CHECK_INTERVAL_SCREEN_OFF=30     # 息屏心跳：30 秒
 WAKELOCK_NAME="dsha_freezer"
@@ -63,7 +64,6 @@ log_msg() {
     echo "[$NOW_STR] [$ACTION] $MSG" >> "$FREEZER_LOG" 2>/dev/null
 }
 
-# 异步无阻塞通知，消除 3.5s+ 的 am 跨进程开销
 notify_core_state() {
     local STATE="$1" # 1=RUNNING, 2=FROZEN, 3=STOPPED, 4=ERROR
     local REASON="$2"
@@ -72,6 +72,7 @@ notify_core_state() {
     ) &
 }
 
+# 检测主进程是否有活跃的工作子进程（排除僵尸进程 Z 与自身白名单）
 has_active_workers() {
     local mpid="$1"
     [ -z "$mpid" ] && return 1
@@ -92,6 +93,7 @@ has_active_workers() {
     return 1
 }
 
+# 挂起主进程及其残留休眠子进程
 freeze_process_tree() {
     local mpid="$1"
     [ -z "$mpid" ] && return 0
@@ -108,6 +110,7 @@ freeze_process_tree() {
         fi
     done
 
+    # 放开压缩权限：允许系统在内存紧张时将闲置页面压缩进 zram
     if [ -d "/dev/memcg/dsh" ]; then
         echo 100 > /dev/memcg/dsh/memory.swappiness 2>/dev/null || true
         if [ -d "/dev/memcg/apps" ]; then
@@ -119,11 +122,11 @@ freeze_process_tree() {
     fi
 }
 
+# 解冻主进程及其直接子进程
 thaw_process_tree() {
     local mpid="$1"
     [ -z "$mpid" ] && return 0
 
-    # 优先最速恢复主进程执行！
     kill -CONT "$mpid" 2>/dev/null
 
     for cpid in $(pgrep -P "$mpid" 2>/dev/null); do
@@ -133,7 +136,7 @@ thaw_process_tree() {
         fi
     done
 
-    # 异步恢复物理内存保护，避免阻塞解冻主链路
+    # 异步恢复物理内存保护
     (
         if [ -d "/dev/memcg/dsh" ]; then
             echo 0 > /dev/memcg/dsh/memory.swappiness 2>/dev/null || true
@@ -184,12 +187,10 @@ do_wake() {
             fi
         fi
 
-        # 毫秒级原地解冻！
         thaw_process_tree "$MAIN_PID"
         rm -f "$STATE_FILE" "$DSH_DIR/freezer.state" 2>/dev/null
         log_msg "WAKE" "主进程已原地解冻恢复 (PID: $MAIN_PID) | 唤醒源: [$TRIGGER]"
         
-        # 异步广播状态切回运行中 (0ms 阻塞)
         notify_core_state 1 "解冻恢复"
         
         if [ -f "$ENABLED_FILE" ]; then
@@ -231,7 +232,6 @@ do_daemon() {
     trap 'release_wakelock' EXIT INT TERM
 
     local last_check_log=0
-    local touch_offset=0
 
     while true; do
         local screen_on=1
@@ -242,26 +242,17 @@ do_daemon() {
             screen_on=1
             check_interval=$CHECK_INTERVAL_SCREEN_ON
             idle_threshold=$IDLE_THRESHOLD_SCREEN_ON
+            # 亮屏正常使用，不持锁
             release_wakelock
         else
             screen_on=0
             check_interval=$CHECK_INTERVAL_SCREEN_OFF
             idle_threshold=$IDLE_THRESHOLD_SCREEN_OFF
+            # 息屏持锁，保障 5 分钟走时不被系统硬件挂起打断
             acquire_wakelock
         fi
 
-        local sleep_start=$(date +%s)
         sleep $check_interval
-        local sleep_end=$(date +%s)
-        local sleep_delta=$((sleep_end - sleep_start))
-
-        # 亮屏防背刺：硬件挂起唤醒且处于亮屏，自动避让
-        if [ "$sleep_delta" -gt $((check_interval + 60)) ] && is_screen_on; then
-            log_msg "RESUME" "检测到从系统硬件挂起唤醒且屏幕已亮起 (休眠跳变: ${sleep_delta}s)，重置闲置计时，避让前台使用"
-            touch_offset=$sleep_end
-            release_wakelock
-            continue
-        fi
 
         if [ ! -f "$ENABLED_FILE" ]; then
             rm -f "$FREEZER_PID_FILE" 2>/dev/null
@@ -293,23 +284,23 @@ do_daemon() {
 
         if [ -f "$DSH_DIR/.approval_status.json" ]; then
             if grep -q '"active":true' "$DSH_DIR/.approval_status.json" 2>/dev/null; then
-                if [ $((sleep_end - last_check_log)) -ge 300 ]; then
+                if [ $(( $(date +%s) - last_check_log )) -ge 300 ]; then
                     log_msg "CHECK" "闲置检测: 检测到活跃审批任务挂起，跳过冻结避让中"
-                    last_check_log=$sleep_end
+                    last_check_log=$(date +%s)
                 fi
                 continue
             fi
         fi
 
         if has_active_workers "$MAIN_PID"; then
-            if [ $((sleep_end - last_check_log)) -ge 300 ]; then
+            if [ $(( $(date +%s) - last_check_log )) -ge 300 ]; then
                 log_msg "CHECK" "闲置检测: 检测到主进程有活跃工作子进程正在执行，跳过冻结避让中"
-                last_check_log=$sleep_end
+                last_check_log=$(date +%s)
             fi
             continue
         fi
 
-        local NOW=$sleep_end
+        local NOW=$(date +%s)
         local LAST_WRITE=0
 
         local LATEST_SESSION=$(ls -t "$DSH_DIR/storages/session_projcache/sessions/session-"*.json \
@@ -326,12 +317,9 @@ do_daemon() {
             LAST_WRITE=$NOW
         fi
 
-        if [ "$touch_offset" -gt "$LAST_WRITE" ]; then
-            LAST_WRITE=$touch_offset
-        fi
-
         local IDLE_SEC=$((NOW - LAST_WRITE))
 
+        # 只要达到对应闲置阈值（息屏 5 分钟 / 亮屏 30 分钟），坚决执行冻结！不做任何多余拦截！
         if [ $IDLE_SEC -ge $idle_threshold ]; then
             freeze_process_tree "$MAIN_PID"
             echo "FROZEN" > "$STATE_FILE"
