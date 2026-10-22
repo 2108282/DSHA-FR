@@ -66,6 +66,28 @@ const FREEZER_LOG_FILES = [
   '/data/adb/dsha/rootfs/root/.dsh/idle-freezer.log'
 ];
 
+const APP_UID_FILES = [
+  '/data/adb/dsha/run/app.uid',
+  '/root/.dsh/app.uid',
+  '/data/adb/dsha/rootfs/root/.dsh/app.uid'
+];
+
+function getAppUid() {
+  if (process.env.DSHA_APP_UID) {
+    const envUid = parseInt(process.env.DSHA_APP_UID, 10);
+    if (!isNaN(envUid) && envUid > 0) return envUid;
+  }
+  for (const f of APP_UID_FILES) {
+    try {
+      if (fs.existsSync(f)) {
+        const u = parseInt(fs.readFileSync(f, 'utf8').trim(), 10);
+        if (!isNaN(u) && u > 0) return u;
+      }
+    } catch (e) {}
+  }
+  return -1;
+}
+
 function getLocalTimeString() {
   const d = new Date();
   const local = new Date(d.getTime() - d.getTimezoneOffset() * 60 * 1000);
@@ -702,7 +724,8 @@ server.listen(LAN_PORT, '0.0.0.0', () => {
   // 3080 本地内核网络敲门侦测看门狗 (Zero-Overhead TCP Backlog Snooper)
   // 当 DSH 主进程处于 SIGSTOP (T) 冻结态时，内核在底层仍然会完成 TCP 握手。
   // 此时 /proc/net/tcp 中 3080 的 rx_queue > 0。
-  // 侦测到敲门信号瞬间原地唤醒，浏览器访问 3080 无感透明秒开！
+  // 仅在检测到外部浏览器/客户端访问（非 App 自身内部探活 UID）时瞬间原地唤醒，
+  // 扫描周期设定为 1.5s 一次，既保证秒开，又杜绝误唤醒。
   // ------------------------------------------------------------
   let isBacklogChecking = false;
   const hexPort3080 = ':' + BACKEND_PORT.toString(16).toUpperCase().padStart(4, '0');
@@ -711,12 +734,12 @@ server.listen(LAN_PORT, '0.0.0.0', () => {
     try {
       const pid = getBackendPid();
       if (!pid) {
-        setTimeout(checkBacklogLoop, 1000);
+        setTimeout(checkBacklogLoop, 1500);
         return;
       }
       const statPath = `/proc/${pid}/stat`;
       if (!fs.existsSync(statPath)) {
-        setTimeout(checkBacklogLoop, 1000);
+        setTimeout(checkBacklogLoop, 1500);
         return;
       }
       const pstat = fs.readFileSync(statPath, 'utf8');
@@ -724,8 +747,8 @@ server.listen(LAN_PORT, '0.0.0.0', () => {
       const isFrozen = (pparts[2] === 'T');
 
       if (!isFrozen) {
-        // 未休眠时 1 秒检测一次，CPU 占用完全为 0
-        setTimeout(checkBacklogLoop, 1000);
+        // 未休眠时 1.5 秒检测一次，CPU 占用完全为 0
+        setTimeout(checkBacklogLoop, 1500);
         return;
       }
 
@@ -744,19 +767,45 @@ server.listen(LAN_PORT, '0.0.0.0', () => {
       }
 
       if (incomingCount > 0) {
-        // 发现浏览器或客户端在敲门！立即解冻！
-        ensureBackendAwake(`浏览器访问3080(${incomingCount}个请求敲门)`);
-        setTimeout(checkBacklogLoop, 500);
-        return;
+        // 发现 3080 端口有连接！检查连接发起方的 UID，过滤掉 App 自身内部探活
+        const appUid = getAppUid();
+        let isBrowserOrExternal = false;
+        let externalCount = 0;
+
+        for (const line of tcpContent.split('\n')) {
+          const parts = line.trim().split(/\s+/);
+          if (parts.length < 8) continue;
+          const remAddr = parts[2];
+          const st = parts[3];
+          if (remAddr && remAddr.endsWith(hexPort3080)) {
+            const connUid = parseInt(parts[7], 10);
+            // 只要 UID 与 App 自身 UID 一致，判定为 App 内部心跳/探活，忽略避让
+            if (appUid > 0 && connUid === appUid) {
+              continue;
+            }
+            // 外部浏览器或第三方客户端建立的连接（或者来自非 App 的 UID）
+            if (st === '01' || connUid !== appUid) {
+              isBrowserOrExternal = true;
+              externalCount++;
+            }
+          }
+        }
+
+        if (isBrowserOrExternal) {
+          // 真正的外部浏览器或客户端访问！立即解冻！
+          ensureBackendAwake(`浏览器访问3080(${externalCount}个有效请求敲门)`);
+          setTimeout(checkBacklogLoop, 1500);
+          return;
+        }
       }
 
-      // 处于休眠中但尚无请求：50ms 低延迟轮询
-      setTimeout(checkBacklogLoop, 50);
+      // 处于休眠中但尚无外部有效敲门：1.5s 周期轮询
+      setTimeout(checkBacklogLoop, 1500);
     } catch (e) {
-      setTimeout(checkBacklogLoop, 1000);
+      setTimeout(checkBacklogLoop, 1500);
     }
   }
 
-  // 延后启动看门狗循环
-  setTimeout(checkBacklogLoop, 1000);
+  // 延后启动看门狗循环 (1.5s)
+  setTimeout(checkBacklogLoop, 1500);
 });

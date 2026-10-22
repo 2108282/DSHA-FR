@@ -141,6 +141,21 @@ do_start() {
         exit 1
     fi
 
+    # 动态获取并写入宿主 App 真实 UID (自动替换旧的，自适应任何机型与重装)
+    APP_UID=""
+    if [ -d "/data/data/com.dsha.fr" ]; then
+        APP_UID=$(stat -c "%u" /data/data/com.dsha.fr 2>/dev/null || echo "")
+    fi
+    if [ -z "$APP_UID" ]; then
+        APP_UID=$(pm list packages -U 2>/dev/null | grep "package:com.dsha.fr " | cut -d: -f3 2>/dev/null || echo "")
+    fi
+    if [ -n "$APP_UID" ]; then
+        echo -n "$APP_UID" > "$RUN_DIR/app.uid" 2>/dev/null || true
+        [ "$IN_CONTAINER" = "0" ] && echo -n "$APP_UID" > "$ROOTFS/root/.dsh/app.uid" 2>/dev/null || true
+        chmod 666 "$RUN_DIR/app.uid" 2>/dev/null || true
+        [ "$IN_CONTAINER" = "0" ] && chmod 666 "$ROOTFS/root/.dsh/app.uid" 2>/dev/null || true
+    fi
+
     # 清空或初始化日志
     > "$LAN_LOG" 2>/dev/null || true
 
@@ -156,11 +171,12 @@ do_start() {
             LC_ALL=C.UTF-8 \
             LAN_PORT=3081 \
             DSH_PORT="$DSH_PORT" \
+            DSHA_APP_UID="$APP_UID" \
             nice -n 10 /usr/local/bin/node /root/.dsh/dsha-lan-proxy.js > "$LAN_LOG" 2>&1 &
         NEW_PID=$!
     else
         # 容器内直接拉起
-        LAN_PORT=3081 DSH_PORT="$DSH_PORT" nice -n 10 /usr/local/bin/node /root/.dsh/dsha-lan-proxy.js > "$LAN_LOG" 2>&1 &
+        LAN_PORT=3081 DSH_PORT="$DSH_PORT" DSHA_APP_UID="$APP_UID" nice -n 10 /usr/local/bin/node /root/.dsh/dsha-lan-proxy.js > "$LAN_LOG" 2>&1 &
         NEW_PID=$!
     fi
 
