@@ -408,7 +408,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="物理块设备防砖隔离"
-                        android:textColor="@color/text_primary"
+                        android:textColor="@color/text"
                         android:textSize="15sp"
                         android:textStyle="bold" />
 
@@ -432,7 +432,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="0.6dp"
                 android:layout_marginStart="66dp"
-                android:background="@color/divider" />
+                android:background="@color/line" />
 
             <!-- 2. 全局穿透隔离 (整机生效开关) -->
             <LinearLayout
@@ -457,7 +457,7 @@
                         android:layout_height="20dp"
                         android:layout_gravity="center"
                         android:contentDescription="全局穿透隔离"
-                        android:src="@drawable/ic_settings_root"
+                        android:src="@drawable/ic_settings_database"
                         app:tint="#E53935" />
                 </FrameLayout>
 
@@ -472,7 +472,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="全局穿透隔离 (整机生效)"
-                        android:textColor="@color/text_primary"
+                        android:textColor="@color/text"
                         android:textSize="15sp"
                         android:textStyle="bold" />
 
