@@ -332,14 +332,22 @@ public final class ExternalConnectFragment extends Fragment {
         }
         if (etSshKey != null) {
             etSshKey.setOnClickListener(x -> {
-                try {
-                    sshKeyPicker.launch(PluginFilePicker.intent(requireContext(), false));
-                } catch (Throwable t) {
-                    try {
-                        sshKeyPicker.launch(PluginFilePicker.intent(requireContext(), true));
-                    } catch (Throwable t2) {
-                        ToastHelper.show(requireContext(), "无法呼起文件选择器: " + t2.getMessage());
-                    }
+                String current = etSshKey.getText().toString().trim();
+                if (!TextUtils.isEmpty(current)) {
+                    new DshaDialogBuilder(requireContext())
+                            .setTitle("私钥文件")
+                            .setMessage("当前已选择：\n" + current + "\n\n是否重新选择文件，或清除以使用本机默认公钥？")
+                            .setPositiveButton("重新选择", (d, w) -> launchSshKeyPicker())
+                            .setNeutralButton("清除 (默认公钥)", (d, w) -> {
+                                etSshKey.setText("");
+                                pendingImportedKeyBytes = null;
+                                if (etSshKeyContent != null) etSshKeyContent.setText("");
+                                ToastHelper.show(requireContext(), "已清除私钥，将使用本机默认公钥");
+                            })
+                            .setNegativeButton("取消", null)
+                            .show();
+                } else {
+                    launchSshKeyPicker();
                 }
             });
         }
@@ -475,6 +483,19 @@ public final class ExternalConnectFragment extends Fragment {
                 ToastHelper.show(requireContext(), ok ? "密钥对已生成" : "密钥生成失败");
             });
         });
+    }
+
+    private void launchSshKeyPicker() {
+        if (!isAdded()) return;
+        try {
+            sshKeyPicker.launch(PluginFilePicker.intent(requireContext(), false));
+        } catch (Throwable t) {
+            try {
+                sshKeyPicker.launch(PluginFilePicker.intent(requireContext(), true));
+            } catch (Throwable t2) {
+                ToastHelper.show(requireContext(), "无法呼起文件选择器: " + t2.getMessage());
+            }
+        }
     }
 
     private void handleSelectedSshKey(Uri uri) {
