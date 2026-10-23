@@ -24,6 +24,8 @@ public final class SshManager {
     public static final String SSH_CONFIG_PATH = "/data/adb/dsha/rootfs/root/.ssh/config";
     public static final String PUBKEY_PATH = "/data/adb/dsha/rootfs/root/.ssh/id_ed25519.pub";
     public static final String PASSWORDS_JSON_PATH = "/data/adb/dsha/rootfs/root/.ssh/passwords.json";
+    public static final String SSH_KEYS_DIR = "/data/adb/dsha/rootfs/root/.ssh/keys";
+    public static final String CONTAINER_KEYS_DIR = "/root/.ssh/keys";
 
     private static volatile SshManager sInstance;
     private final Context context;
@@ -88,7 +90,7 @@ public final class SshManager {
     }
 
     private void ensureConfigFileExists() {
-        execRoot("mkdir -p /data/adb/dsha/rootfs/root/.ssh && chmod 700 /data/adb/dsha/rootfs/root/.ssh");
+        execRoot("mkdir -p " + SSH_KEYS_DIR + " && chmod 700 /data/adb/dsha/rootfs/root/.ssh && chmod 700 " + SSH_KEYS_DIR);
         String check = execRoot("test -f " + SSH_CONFIG_PATH + " && echo 1 || echo 0").trim();
         if (!"1".equals(check)) {
             String initContent = "# DSHA 外部连接配置文件\nHost *\n    StrictHostKeyChecking no\n    UserKnownHostsFile /dev/null\n";
@@ -333,13 +335,15 @@ public final class SshManager {
     }
 
     /**
-     * 物理删除一个远程主机配置 (从 ~/.ssh/config 与 passwords.json 中彻底抹除)
+     * 物理删除一个远程主机配置 (从 ~/.ssh/config 与 passwords.json 中彻底抹除，并清理专属私钥)
      */
     public synchronized void deleteHost(String hostName) {
         if (TextUtils.isEmpty(hostName)) return;
         List<HostProfile> hosts = getSavedHosts();
+        String keyToDelete = null;
         for (int i = 0; i < hosts.size(); i++) {
             if (hosts.get(i).name.equals(hostName)) {
+                keyToDelete = hosts.get(i).identityFile;
                 hosts.remove(i);
                 break;
             }
@@ -349,6 +353,72 @@ public final class SshManager {
         JSONObject pwdMap = loadPasswordMap();
         pwdMap.remove(hostName);
         savePasswordMap(pwdMap);
+
+        // 如果该主机使用的是专属托管私钥 (位于 CONTAINER_KEYS_DIR)，同步删除物理文件及关联公钥
+        if (!TextUtils.isEmpty(keyToDelete) && keyToDelete.startsWith(CONTAINER_KEYS_DIR)) {
+            String cmd = "chroot /data/adb/dsha/rootfs /bin/bash -c '"
+                    + "export PATH=/usr/local/bin:/usr/bin:/bin:$PATH; "
+                    + "rm -f \"" + keyToDelete + "\" \"" + keyToDelete + ".pub\"' 2>&1";
+            execRoot(cmd);
+        }
+    }
+
+    /**
+     * 生成安全的主机私钥文件名
+     */
+    public static String getSafeKeyFileName(String hostName) {
+        if (TextUtils.isEmpty(hostName)) {
+            return "id_custom_" + System.currentTimeMillis();
+        }
+        String safe = hostName.trim().replaceAll("[^a-zA-Z0-9_\\-]", "_");
+        if (safe.isEmpty()) {
+            safe = "custom_" + System.currentTimeMillis();
+        }
+        return "id_" + safe;
+    }
+
+    /**
+     * 将第三方私钥文本安全落盘至容器内 /root/.ssh/keys/ 目录，赋予严格的 600 权限
+     * @return 容器内的绝对路径 (例如 /root/.ssh/keys/id_aliyun)
+     */
+    public synchronized String saveCustomPrivateKey(String hostName, String keyContent) {
+        if (TextUtils.isEmpty(keyContent)) return "";
+        String fileName = getSafeKeyFileName(hostName);
+        String containerTarget = CONTAINER_KEYS_DIR + "/" + fileName;
+
+        String normalized = keyContent.trim() + "\n";
+        String b64 = Base64.encodeToString(normalized.getBytes(StandardCharsets.UTF_8), Base64.NO_WRAP);
+
+        // 统一在 chroot 原生 Linux 环境内完成目录创建、base64解码写入与权限修正，确保 Magisk/KernelSU 零差异
+        String cmd = "chroot /data/adb/dsha/rootfs /bin/bash -c '"
+                + "export HOME=/root USER=root PATH=/usr/local/bin:/usr/bin:/bin:$PATH; "
+                + "mkdir -p /root/.ssh/keys && chmod 700 /root/.ssh && chmod 700 /root/.ssh/keys; "
+                + "printf \"%s\" \"" + b64 + "\" | base64 -d > \"" + containerTarget + "\" && chmod 600 \"" + containerTarget + "\"; "
+                + "ssh-keygen -y -f \"" + containerTarget + "\" > \"" + containerTarget + ".pub\" 2>/dev/null && chmod 644 \"" + containerTarget + ".pub\" 2>/dev/null || true' 2>&1";
+        execRoot(cmd);
+
+        return containerTarget;
+    }
+
+    /**
+     * 将选择的文件字节流安全落盘至容器内 /root/.ssh/keys/ 目录，赋予严格的 600 权限
+     * @return 容器内的绝对路径 (例如 /root/.ssh/keys/id_aliyun)
+     */
+    public synchronized String importPrivateKeyFromBytes(String hostName, byte[] keyBytes) {
+        if (keyBytes == null || keyBytes.length == 0) return "";
+        String fileName = getSafeKeyFileName(hostName);
+        String containerTarget = CONTAINER_KEYS_DIR + "/" + fileName;
+
+        String b64 = Base64.encodeToString(keyBytes, Base64.NO_WRAP);
+
+        String cmd = "chroot /data/adb/dsha/rootfs /bin/bash -c '"
+                + "export HOME=/root USER=root PATH=/usr/local/bin:/usr/bin:/bin:$PATH; "
+                + "mkdir -p /root/.ssh/keys && chmod 700 /root/.ssh && chmod 700 /root/.ssh/keys; "
+                + "printf \"%s\" \"" + b64 + "\" | base64 -d > \"" + containerTarget + "\" && chmod 600 \"" + containerTarget + "\"; "
+                + "ssh-keygen -y -f \"" + containerTarget + "\" > \"" + containerTarget + ".pub\" 2>/dev/null && chmod 644 \"" + containerTarget + ".pub\" 2>/dev/null || true' 2>&1";
+        execRoot(cmd);
+
+        return containerTarget;
     }
 
     private JSONObject loadPasswordMap() {

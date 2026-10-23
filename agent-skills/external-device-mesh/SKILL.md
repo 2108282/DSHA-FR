@@ -27,6 +27,7 @@ description: 跨设备自动化互联中枢技能：当用户需要操控局域�
 | **已连接/已知 Android 清单** | `/root/.dsh/connected_devices.json` | App 实时同步的设备列表（`address` IP:端口、`state` 连接状态、`extra` 备注）。 |
 | **SSH 远程主机配置** | `/root/.ssh/config` | 标准 OpenSSH 配置文件，每个节点以 `Host <别名>` 声明目标 IP、端口、用户。 |
 | **SSH 伴生密码托管池** | `/root/.ssh/passwords.json` | 权限 `600`，JSON 字典 `{"<Host别名>": "明文密码"}`。App 设置页自动同步写入。 |
+| **第三方专属私钥池** | `/root/.ssh/keys/id_<别名>` | 权限 `600`，由 App「外部连接 - SSH 管理」选择文件导入或手动填写的私钥。`/root/.ssh/config` 中以 `IdentityFile` 映射绑定。 |
 | **本机 Ed25519 凭据** | `/root/.ssh/id_ed25519` (.pub) | 本机公私钥对，用于公钥免密登录。 |
 
 ---
@@ -59,6 +60,13 @@ description: 跨设备自动化互联中枢技能：当用户需要操控局域�
 mesh-scp /root/backup.tar.gz 家:/home/qyh/
 mesh-scp fnos:/var/log/syslog /tmp/fnos.log
 ```
+
+### 3. 私钥认证与专属密钥加载机制
+1. **自动挂载认证**：只要 `/root/.ssh/config` 中包含 `IdentityFile` 声明（如 `IdentityFile /root/.ssh/keys/id_<别名>`），执行 `mesh-ssh <别名>` 或原生 `ssh <别名>` 时，OpenSSH 客户端会自动加载该专属私钥握手认证，**智能体无需手动拼接 `-i` 参数**。
+2. **私钥凭据读取与定位**：
+   - 若需定位某主机的专属私钥：先查阅 `/root/.ssh/config` 对应 `Host` 块下的 `IdentityFile` 字段；
+   - 专属私钥默认统一落盘于 `/root/.ssh/keys/id_<别名>`；
+   - 若遇到连接或权限报错，确认私钥文件权限是否为 `chmod 600 /root/.ssh/keys/id_<别名>`（外层目录权限为 `chmod 700 /root/.ssh/keys`），避免权限过大（如 644/777）被 OpenSSH 拒绝。
 
 ---
 

@@ -17,12 +17,17 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.CheckBox;
+import android.app.Activity;
+import android.content.Intent;
+import android.net.Uri;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.activity.OnBackPressedCallback;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
@@ -32,7 +37,10 @@ import com.deepseekharness.app.core.AdbManager;
 import com.deepseekharness.app.core.SshManager;
 import com.deepseekharness.app.util.ToastHelper;
 
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.net.InetAddress;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -98,7 +106,23 @@ public final class ExternalConnectFragment extends Fragment {
     private EditText etSshPort;
     private EditText etSshPassword;
     private EditText etSshKey;
+    private EditText etSshKeyContent;
     private TextView btnSaveHost;
+    private byte[] pendingImportedKeyBytes = null;
+
+    private final ActivityResultLauncher<Intent> sshKeyPicker = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(), result -> {
+                if (!isAdded()) return;
+                Intent data = result.getData();
+                Uri uri = data == null ? null : data.getData();
+                if (uri == null && data != null && data.getClipData() != null && data.getClipData().getItemCount() > 0) {
+                    uri = data.getClipData().getItemAt(0).getUri();
+                }
+                if (result.getResultCode() != Activity.RESULT_OK || uri == null) {
+                    return;
+                }
+                handleSelectedSshKey(uri);
+            });
 
     private TextView tvEmptyHosts;
     private LinearLayout layoutHosts;
@@ -205,8 +229,9 @@ public final class ExternalConnectFragment extends Fragment {
         etSshPort = v.findViewById(R.id.ssh_et_port);
         etSshPassword = v.findViewById(R.id.ssh_et_password);
         etSshKey = v.findViewById(R.id.ssh_et_key);
+        etSshKeyContent = v.findViewById(R.id.ssh_et_key_content);
         btnSaveHost = v.findViewById(R.id.ssh_btn_save_host);
-
+ 
         tvEmptyHosts = v.findViewById(R.id.ssh_tv_empty_hosts);
         layoutHosts = v.findViewById(R.id.ssh_layout_hosts);
         btnOpenSshConfig = v.findViewById(R.id.ssh_btn_open_config);
@@ -304,6 +329,19 @@ public final class ExternalConnectFragment extends Fragment {
         }
         if (btnRegenKey != null) {
             btnRegenKey.setOnClickListener(x -> showRegenKeyConfirmDialog());
+        }
+        if (etSshKey != null) {
+            etSshKey.setOnClickListener(x -> {
+                try {
+                    sshKeyPicker.launch(PluginFilePicker.intent(requireContext(), false));
+                } catch (Throwable t) {
+                    try {
+                        sshKeyPicker.launch(PluginFilePicker.intent(requireContext(), true));
+                    } catch (Throwable t2) {
+                        ToastHelper.show(requireContext(), "无法呼起文件选择器: " + t2.getMessage());
+                    }
+                }
+            });
         }
         if (btnSaveHost != null) {
             btnSaveHost.setOnClickListener(x -> saveSshHost());
@@ -439,6 +477,71 @@ public final class ExternalConnectFragment extends Fragment {
         });
     }
 
+    private void handleSelectedSshKey(Uri uri) {
+        if (uri == null || !isAdded()) return;
+        executor.execute(() -> {
+            String displayName = null;
+            byte[] bytes = null;
+            try {
+                try (android.database.Cursor cursor = requireContext().getContentResolver()
+                        .query(uri, null, null, null, null)) {
+                    if (cursor != null && cursor.moveToFirst()) {
+                        int nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME);
+                        if (nameIndex != -1) {
+                            displayName = cursor.getString(nameIndex);
+                        }
+                    }
+                }
+            } catch (Throwable ignored) {}
+
+            if (TextUtils.isEmpty(displayName)) {
+                displayName = uri.getLastPathSegment();
+            }
+            if (TextUtils.isEmpty(displayName)) {
+                displayName = "id_custom_key";
+            }
+
+            try (InputStream is = requireContext().getContentResolver().openInputStream(uri);
+                 ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
+                if (is != null) {
+                    byte[] buf = new byte[8192];
+                    int len;
+                    while ((len = is.read(buf)) != -1) {
+                        bos.write(buf, 0, len);
+                    }
+                    bytes = bos.toByteArray();
+                }
+            } catch (Throwable t) {
+                final String errMsg = t.getMessage();
+                mainHandler.post(() -> {
+                    if (isAdded()) ToastHelper.show(requireContext(), "读取私钥文件失败: " + errMsg);
+                });
+                return;
+            }
+
+            final String finalName = displayName;
+            final byte[] finalBytes = bytes;
+            mainHandler.post(() -> {
+                if (!isAdded()) return;
+                pendingImportedKeyBytes = finalBytes;
+                if (etSshKey != null) {
+                    etSshKey.setText(finalName);
+                }
+                if (finalBytes != null && finalBytes.length > 0) {
+                    try {
+                        String text = new String(finalBytes, StandardCharsets.UTF_8);
+                        if (text.contains("BEGIN ") || text.contains("PRIVATE KEY")) {
+                            if (etSshKeyContent != null) {
+                                etSshKeyContent.setText(text.trim());
+                            }
+                        }
+                    } catch (Throwable ignored) {}
+                }
+                ToastHelper.show(requireContext(), "已选择私钥文件: " + finalName);
+            });
+        });
+    }
+
     private void saveSshHost() {
         String name = etSshName != null ? etSshName.getText().toString().trim() : "";
         String host = etSshHost != null ? etSshHost.getText().toString().trim() : "";
@@ -446,6 +549,7 @@ public final class ExternalConnectFragment extends Fragment {
         String portStr = etSshPort != null ? etSshPort.getText().toString().trim() : "22";
         String pwd = etSshPassword != null ? etSshPassword.getText().toString().trim() : "";
         String keyPath = etSshKey != null ? etSshKey.getText().toString().trim() : "";
+        String keyContent = etSshKeyContent != null ? etSshKeyContent.getText().toString().trim() : "";
 
         if (TextUtils.isEmpty(host)) {
             ToastHelper.show(requireContext(), "主机地址不能为空");
@@ -462,13 +566,27 @@ public final class ExternalConnectFragment extends Fragment {
             port = Integer.parseInt(portStr);
         } catch (Throwable ignored) {}
 
-        SshManager.HostProfile profile = new SshManager.HostProfile(name, host, port, user, keyPath, pwd);
+        String identityFile = "";
+        if (!TextUtils.isEmpty(keyContent)) {
+            // 用户在文本框内直接粘贴/输入了私钥
+            identityFile = sshManager.saveCustomPrivateKey(name, keyContent);
+        } else if (pendingImportedKeyBytes != null && pendingImportedKeyBytes.length > 0) {
+            // 用户通过文件选择器导入了私钥
+            identityFile = sshManager.importPrivateKeyFromBytes(name, pendingImportedKeyBytes);
+        } else if (!TextUtils.isEmpty(keyPath)) {
+            // 用户填写的现存路径
+            identityFile = keyPath;
+        }
+
+        SshManager.HostProfile profile = new SshManager.HostProfile(name, host, port, user, identityFile, pwd);
         sshManager.saveHost(profile);
 
+        pendingImportedKeyBytes = null;
         if (etSshName != null) etSshName.setText("");
         if (etSshHost != null) etSshHost.setText("");
         if (etSshPassword != null) etSshPassword.setText("");
         if (etSshKey != null) etSshKey.setText("");
+        if (etSshKeyContent != null) etSshKeyContent.setText("");
         ToastHelper.show(requireContext(), "已保存远程主机：" + name);
         renderHostList(sshManager.getSavedHosts());
     }
