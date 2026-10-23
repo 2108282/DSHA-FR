@@ -33,6 +33,9 @@ public class ConfigPresenter implements ConfigActions {
     private final ConfigStore config;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private String currentRootStatus = "正在检测 Root 权限…";
+    private volatile boolean realRootIsolated = true;
+    private volatile boolean realHostPenetrated = false;
+    private volatile boolean hasScannedRealMount = false;
 
     public ConfigPresenter(Activity activity, ViewCallback callback) {
         this.activity = activity;
@@ -43,6 +46,7 @@ public class ConfigPresenter implements ConfigActions {
 
     public void init() {
         refreshRootStatus();
+        scanRealBlockGuardStatus();
         refreshState();
     }
 
@@ -101,8 +105,13 @@ public class ConfigPresenter implements ConfigActions {
             freezeStatusText = "DSH 核心未启动";
         }
 
-        String blockGuardStatusText = "隔离模块:" + (isBlockGuardActive ? "开" : "关")
-                + "  全局穿透:" + (isBlockGuardGlobal ? "开" : "关");
+        String blockGuardStatusText;
+        if (!hasScannedRealMount) {
+            blockGuardStatusText = "隔离模块:检测中…  全局穿透:检测中…";
+        } else {
+            blockGuardStatusText = "隔离模块:" + (realRootIsolated ? "开" : "关")
+                    + "  全局穿透:" + (realHostPenetrated ? "开" : "关");
+        }
 
         ConfigUiState state = new ConfigUiState(
                 port, taskset, confirmShell, isIdleFreeze, overlayStream, capSensors,
@@ -216,16 +225,39 @@ public class ConfigPresenter implements ConfigActions {
         refreshState();
     }
 
+    private void scanRealBlockGuardStatus() {
+        new Thread(() -> {
+            boolean rootM = false;
+            boolean hostM = false;
+            try {
+                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "sh /data/adb/dsha/scripts/block-guard.sh status"});
+                java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(p.getInputStream()));
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (line.contains("ROOT:") && line.contains("HOST:")) {
+                        rootM = line.contains("ROOT:1");
+                        hostM = line.contains("HOST:1");
+                        break;
+                    }
+                }
+                p.waitFor();
+            } catch (Throwable ignored) {
+            }
+            realRootIsolated = rootM;
+            realHostPenetrated = hostM;
+            hasScannedRealMount = true;
+            mainHandler.post(this::refreshState);
+        }, "scan-block-guard-real").start();
+    }
+
     private boolean checkBlockGuardActive() {
         try {
-            // 检查应用私有目录中的临时禁用标记（若存在则表示用户已临时手动关闭保护）
             java.io.File disabledFlag = new java.io.File(context.getFilesDir(), ".block_guard_disabled");
             if (disabledFlag.exists()) {
                 return false;
             }
         } catch (Throwable ignored) {
         }
-        // 核心未运行、或刚启动、或未临时关闭时，默认均为开启保护态
         return true;
     }
 
@@ -246,6 +278,7 @@ public class ConfigPresenter implements ConfigActions {
             } catch (Throwable e) {
                 android.util.Log.w("DSHA", "切换物理块设备隔离状态失败: " + e.getMessage());
             }
+            scanRealBlockGuardStatus();
             mainHandler.post(() -> {
                 toast(enabled ? "已开启物理块设备防砖隔离 (保护中)" : "已临时关闭物理块设备隔离 (放行底层访问)");
                 refreshState();
@@ -258,14 +291,15 @@ public class ConfigPresenter implements ConfigActions {
         config.setBlockGuardGlobal(enabled);
         new Thread(() -> {
             try {
-                String cmd = "mkdir -p /data/adb/dsha/run 2>/dev/null; echo '" + (enabled ? "1" : "0") + "' > /data/adb/dsha/run/block_guard_global";
+                String cmd = "sh /data/adb/dsha/scripts/block-guard.sh " + (enabled ? "global-on" : "global-off");
                 Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
                 p.waitFor();
             } catch (Throwable e) {
-                android.util.Log.w("DSHA", "更新全局穿透隔离标记失败: " + e.getMessage());
+                android.util.Log.w("DSHA", "更新全局穿透隔离状态失败: " + e.getMessage());
             }
+            scanRealBlockGuardStatus();
             mainHandler.post(() -> {
-                toast(enabled ? "已开启全局穿透隔离（下次启动容器时整机生效）" : "已恢复默认不穿透（仅隔离容器内部，宿主不受影响）");
+                toast(enabled ? "已即时开启全局穿透隔离（整机生效）" : "已即时关闭全局穿透隔离（释放宿主）");
                 refreshState();
             });
         }, "toggle-block-guard-global").start();
