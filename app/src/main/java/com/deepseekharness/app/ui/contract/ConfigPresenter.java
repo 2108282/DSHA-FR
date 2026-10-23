@@ -218,18 +218,14 @@ public class ConfigPresenter implements ConfigActions {
 
     private boolean checkBlockGuardActive() {
         try {
-            java.io.File stateFile = new java.io.File("/data/adb/dsha/run/block_guard_state");
-            if (stateFile.exists() && stateFile.canRead()) {
-                java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(stateFile));
-                String line = reader.readLine();
-                reader.close();
-                if (line != null && "0".equals(line.trim())) {
-                    return false;
-                }
+            // 检查应用私有目录中的临时禁用标记（若存在则表示用户已临时手动关闭保护）
+            java.io.File disabledFlag = new java.io.File(context.getFilesDir(), ".block_guard_disabled");
+            if (disabledFlag.exists()) {
+                return false;
             }
         } catch (Throwable ignored) {
         }
-        // 核心未运行或处于正常保护时，默认均为开启保护态
+        // 核心未运行、或刚启动、或未临时关闭时，默认均为开启保护态
         return true;
     }
 
@@ -237,8 +233,15 @@ public class ConfigPresenter implements ConfigActions {
     public void onToggleBlockGuardActive(boolean enabled) {
         new Thread(() -> {
             try {
+                java.io.File disabledFlag = new java.io.File(context.getFilesDir(), ".block_guard_disabled");
+                if (enabled) {
+                    if (disabledFlag.exists()) disabledFlag.delete();
+                } else {
+                    if (!disabledFlag.exists()) disabledFlag.createNewFile();
+                }
+
                 String cmd = "sh /data/adb/dsha/scripts/block-guard.sh " + (enabled ? "on" : "off");
-                Process p = Runtime.getRuntime().exec(new String[]{"su", "-mm", "-c", cmd});
+                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
                 p.waitFor();
             } catch (Throwable e) {
                 android.util.Log.w("DSHA", "切换物理块设备隔离状态失败: " + e.getMessage());
@@ -256,7 +259,7 @@ public class ConfigPresenter implements ConfigActions {
         new Thread(() -> {
             try {
                 String cmd = "mkdir -p /data/adb/dsha/run 2>/dev/null; echo '" + (enabled ? "1" : "0") + "' > /data/adb/dsha/run/block_guard_global";
-                Process p = Runtime.getRuntime().exec(new String[]{"su", "-mm", "-c", cmd});
+                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
                 p.waitFor();
             } catch (Throwable e) {
                 android.util.Log.w("DSHA", "更新全局穿透隔离标记失败: " + e.getMessage());
