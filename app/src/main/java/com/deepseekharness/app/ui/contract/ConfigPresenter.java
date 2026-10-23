@@ -76,8 +76,8 @@ public class ConfigPresenter implements ConfigActions {
         boolean capLocation = sp.getBoolean("cap_location", false);
         boolean chromiumFlags = sp.getBoolean(Constants.KEY_CHROMIUM_FLAGS, false);
         boolean asrContinuous = sp.getBoolean("asr_continuous", false);
-        boolean isBlockGuardActive = checkBlockGuardActive();
-        boolean isBlockGuardGlobal = config.isBlockGuardGlobal();
+        boolean isBlockGuardActive = hasScannedRealMount ? realRootIsolated : checkBlockGuardActive();
+        boolean isBlockGuardGlobal = hasScannedRealMount ? realHostPenetrated : config.isBlockGuardGlobal();
 
         boolean allFilesGranted;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
