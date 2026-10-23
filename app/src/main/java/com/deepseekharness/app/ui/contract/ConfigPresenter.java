@@ -72,6 +72,8 @@ public class ConfigPresenter implements ConfigActions {
         boolean capLocation = sp.getBoolean("cap_location", false);
         boolean chromiumFlags = sp.getBoolean(Constants.KEY_CHROMIUM_FLAGS, false);
         boolean asrContinuous = sp.getBoolean("asr_continuous", false);
+        boolean isBlockGuardActive = config.isBlockGuardActive();
+        boolean isBlockGuardGlobal = config.isBlockGuardGlobal();
 
         boolean allFilesGranted;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -101,7 +103,9 @@ public class ConfigPresenter implements ConfigActions {
 
         ConfigUiState state = new ConfigUiState(
                 port, taskset, confirmShell, isIdleFreeze, overlayStream, capSensors,
-                capLocation, chromiumFlags, asrContinuous, allFilesStatus, a11yStatus, asrStatus, currentRootStatus,
+                capLocation, chromiumFlags, asrContinuous,
+                isBlockGuardActive, isBlockGuardGlobal,
+                allFilesStatus, a11yStatus, asrStatus, currentRootStatus,
                 freezeCode, freezeStatusText
         );
         mainHandler.post(() -> callback.onRender(state));
@@ -206,6 +210,42 @@ public class ConfigPresenter implements ConfigActions {
                 .edit().putBoolean("asr_continuous", enabled).apply();
         toast(enabled ? "已开启长语音连续接力模式" : "已恢复短语音模式（默认）");
         refreshState();
+    }
+
+    @Override
+    public void onToggleBlockGuardActive(boolean enabled) {
+        config.setBlockGuardActive(enabled);
+        new Thread(() -> {
+            try {
+                String cmd = "sh /data/adb/dsha/scripts/block-guard.sh " + (enabled ? "on" : "off");
+                Process p = Runtime.getRuntime().exec(new String[]{"su", "-mm", "-c", cmd});
+                p.waitFor();
+            } catch (Throwable e) {
+                android.util.Log.w("DSHA", "切换物理块设备隔离状态失败: " + e.getMessage());
+            }
+            mainHandler.post(() -> {
+                toast(enabled ? "已开启物理块设备防砖隔离 (保护中)" : "已临时关闭物理块设备隔离 (放行底层访问)");
+                refreshState();
+            });
+        }, "toggle-block-guard-active").start();
+    }
+
+    @Override
+    public void onToggleBlockGuardGlobal(boolean enabled) {
+        config.setBlockGuardGlobal(enabled);
+        new Thread(() -> {
+            try {
+                String cmd = "mkdir -p /data/adb/dsha/run 2>/dev/null; echo '" + (enabled ? "1" : "0") + "' > /data/adb/dsha/run/block_guard_global";
+                Process p = Runtime.getRuntime().exec(new String[]{"su", "-mm", "-c", cmd});
+                p.waitFor();
+            } catch (Throwable e) {
+                android.util.Log.w("DSHA", "更新全局穿透隔离标记失败: " + e.getMessage());
+            }
+            mainHandler.post(() -> {
+                toast(enabled ? "已开启全局穿透隔离（下次启动容器时整机生效）" : "已恢复默认不穿透（仅隔离容器内部，宿主不受影响）");
+                refreshState();
+            });
+        }, "toggle-block-guard-global").start();
     }
 
     private void applyTasksetImmediately(String cpus) {

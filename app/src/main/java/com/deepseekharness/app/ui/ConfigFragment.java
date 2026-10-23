@@ -37,6 +37,8 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
     private DshaToggle sensorsToggle;
     private DshaToggle locationToggle;
     private DshaToggle chromiumFlagsToggle;
+    private DshaToggle blockGuardActiveToggle;
+    private DshaToggle blockGuardGlobalToggle;
 
     private View translateBtn;
     private View allFilesBtn;
@@ -132,6 +134,28 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
             });
             View row = view.findViewById(R.id.config_row_chromium_flags);
             if (row != null) row.setOnClickListener(v -> chromiumFlagsToggle.toggle());
+        }
+
+        // 高危操作：物理块设备防砖隔离即时控制 (临时开关)
+        blockGuardActiveToggle = view.findViewById(R.id.config_toggle_block_guard_active);
+        if (blockGuardActiveToggle != null) {
+            blockGuardActiveToggle.setOnCheckedChangeListener((toggle, isChecked) -> {
+                if (isBinding) return;
+                actions.onToggleBlockGuardActive(isChecked);
+            });
+            View row = view.findViewById(R.id.config_row_block_guard_active);
+            if (row != null) row.setOnClickListener(v -> blockGuardActiveToggle.toggle());
+        }
+
+        // 高危操作：全局穿透隔离 (整机生效开关)
+        blockGuardGlobalToggle = view.findViewById(R.id.config_toggle_block_guard_global);
+        if (blockGuardGlobalToggle != null) {
+            blockGuardGlobalToggle.setOnCheckedChangeListener((toggle, isChecked) -> {
+                if (isBinding) return;
+                actions.onToggleBlockGuardGlobal(isChecked);
+            });
+            View row = view.findViewById(R.id.config_row_block_guard_global);
+            if (row != null) row.setOnClickListener(v -> blockGuardGlobalToggle.toggle());
         }
 
         // 3. 扩展功能与系统保活权限入口
@@ -252,6 +276,12 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         }
         if (chromiumFlagsToggle != null && chromiumFlagsToggle.isChecked() != state.isChromiumFlags) {
             chromiumFlagsToggle.setChecked(state.isChromiumFlags, false, false);
+        }
+        if (blockGuardActiveToggle != null && blockGuardActiveToggle.isChecked() != state.isBlockGuardActive) {
+            blockGuardActiveToggle.setChecked(state.isBlockGuardActive, false, false);
+        }
+        if (blockGuardGlobalToggle != null && blockGuardGlobalToggle.isChecked() != state.isBlockGuardGlobal) {
+            blockGuardGlobalToggle.setChecked(state.isBlockGuardGlobal, false, false);
         }
         isBinding = false;
 

@@ -10,6 +10,8 @@ public class ConfigUiState {
     public final boolean isCapLocation;
     public final boolean isChromiumFlags;
     public final boolean isAsrContinuous;
+    public final boolean isBlockGuardActive;
+    public final boolean isBlockGuardGlobal;
     public final String allFilesStatusText;
     public final String a11yStatusText;
     public final String asrStatusText;
@@ -19,7 +21,23 @@ public class ConfigUiState {
 
     public ConfigUiState(String port, String taskset, boolean isConfirmShell, boolean isIdleFreeze,
                          boolean isOverlayStream, boolean isCapSensors, boolean isCapLocation,
-                         boolean isChromiumFlags, boolean isAsrContinuous, String allFilesStatusText,
+                         boolean isChromiumFlags, boolean isAsrContinuous,
+                         boolean isBlockGuardActive, boolean isBlockGuardGlobal,
+                         String allFilesStatusText,
+                         String a11yStatusText, String asrStatusText, String rootStatusText,
+                         int freezeStateCode, String freezeStatusText) {
+        this.port = port;
+        this.taskset = taskset;
+        this.isConfirmShell = isConfirmShell;
+        this.isIdleFreeze = isIdleFreeze;
+        this.isOverlayStream = isOverlayStream;
+        this.isCapSensors = isCapSensors;
+        this.isCapLocation = isCapLocation;
+        this.isChromiumFlags = isChromiumFlags;
+        this.isAsrContinuous = isAsrContinuous;
+        this.isBlockGuardActive = isBlockGuardActive;
+        this.isBlockGuardGlobal = isBlockGuardGlobal;
+        this.allFilesStatusText = allFilesStatusText;
                          String a11yStatusText, String asrStatusText, String rootStatusText,
                          int freezeStateCode, String freezeStatusText) {
         this.port = port;

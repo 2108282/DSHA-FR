@@ -15,6 +15,8 @@ public interface ConfigActions {
     void onCheckAsrStatus();
     void onFixAsrConfig();
     void onToggleAsrContinuous(boolean enabled);
+    void onToggleBlockGuardActive(boolean enabled);
+    void onToggleBlockGuardGlobal(boolean enabled);
     void onTestFreeze();
     void onTestWake();
 }

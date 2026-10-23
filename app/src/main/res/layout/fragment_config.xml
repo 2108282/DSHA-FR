@@ -349,6 +349,151 @@
 
         </com.deepseekharness.app.ui.ModernCardView>
 
+        <!-- ========== 卡片: 高危操作 (物理块设备防砖隔离即时控制 & 全局穿透开关) ========== -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="4dp"
+            android:letterSpacing="0.09"
+            android:text="高危操作"
+            android:textAllCaps="true"
+            android:textColor="#E53935"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <com.deepseekharness.app.ui.ModernCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:clipToOutline="true"
+            android:orientation="vertical"
+            app:cardRadius="18dp">
+
+            <!-- 1. 物理块设备防砖隔离即时开关 (临时按钮) -->
+            <LinearLayout
+                android:id="@+id/config_row_block_guard_active"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="14dp">
+
+                <FrameLayout
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:background="@drawable/bg_settings_icon_box">
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="防砖隔离即时开关"
+                        android:src="@drawable/ic_settings_shield"
+                        app:tint="#E53935" />
+                </FrameLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="物理块设备防砖隔离"
+                        android:textColor="@color/text_primary"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="即时开闭 /dev/block 屏蔽，无需启停核心，毫秒级生效"
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <com.deepseekharness.app.ui.DshaToggle
+                    android:id="@+id/config_toggle_block_guard_active"
+                    android:layout_width="44dp"
+                    android:layout_height="26dp"
+                    android:layout_marginStart="8dp" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="0.6dp"
+                android:layout_marginStart="66dp"
+                android:background="@color/divider" />
+
+            <!-- 2. 全局穿透隔离 (整机生效开关) -->
+            <LinearLayout
+                android:id="@+id/config_row_block_guard_global"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="14dp">
+
+                <FrameLayout
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:background="@drawable/bg_settings_icon_box">
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="全局穿透隔离"
+                        android:src="@drawable/ic_settings_root"
+                        app:tint="#E53935" />
+                </FrameLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="全局穿透隔离 (整机生效)"
+                        android:textColor="@color/text_primary"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="默认关闭（仅隔离容器）；打开后启动将屏蔽穿透至宿主整机"
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <com.deepseekharness.app.ui.DshaToggle
+                    android:id="@+id/config_toggle_block_guard_global"
+                    android:layout_width="44dp"
+                    android:layout_height="26dp"
+                    android:layout_marginStart="8dp" />
+            </LinearLayout>
+
+        </com.deepseekharness.app.ui.ModernCardView>
+
         <!-- ========== 卡片 2: CPU 核心绑定 (常驻展开显示 + 保存按钮) ========== -->
         <TextView
             android:layout_width="wrap_content"

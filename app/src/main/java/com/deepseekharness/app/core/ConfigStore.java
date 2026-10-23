@@ -489,4 +489,29 @@ public class ConfigStore {
     public void setCtsRedirectEnabled(boolean v) {
         ctsPrefs().edit().putBoolean("enabled", v).apply();
     }
+
+    // ================= 高危操作：物理块设备防砖隔离 =================
+
+    /**
+     * 物理块设备即时防砖隔离状态（默认开启保护）。
+     */
+    public boolean isBlockGuardActive() {
+        return prefs.getBoolean("block_guard_active", true);
+    }
+
+    public void setBlockGuardActive(boolean active) {
+        prefs.edit().putBoolean("block_guard_active", active).apply();
+    }
+
+    /**
+     * 全局穿透隔离（默认关闭，即默认启用 mount --make-rslave 阻断反向穿透）。
+     * 打开后，容器启动时不设 rslave，将屏蔽扩散至宿主整机。
+     */
+    public boolean isBlockGuardGlobal() {
+        return prefs.getBoolean("block_guard_global", false);
+    }
+
+    public void setBlockGuardGlobal(boolean global) {
+        prefs.edit().putBoolean("block_guard_global", global).apply();
+    }
 }
