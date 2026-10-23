@@ -78,7 +78,23 @@ public final class ThemeNotifyFragment extends Fragment {
             }
         }
 
-        // ==================== 1.1 智能体任务通知总开关 ====================
+        // ==================== 1.1 Toast 弹窗通知 ====================
+        DshaToggle toastToggle = v.findViewById(R.id.theme_notify_toggle_toast);
+        if (toastToggle != null) {
+            toastToggle.setChecked(cfg.isToastNotificationEnabled(), false, false);
+            toastToggle.setOnCheckedChangeListener((btn, isChecked) -> {
+                cfg.setToastNotificationEnabled(isChecked);
+                if (isChecked) {
+                    com.deepseekharness.app.util.ToastHelper.show(requireContext(), "Toast 消息通知已开启");
+                }
+            });
+            View toastRow = v.findViewById(R.id.theme_notify_row_toast);
+            if (toastRow != null) {
+                toastRow.setOnClickListener(x -> toastToggle.toggle());
+            }
+        }
+
+        // ==================== 1.2 智能体任务通知总开关 ====================
         DshaToggle taskNotifyToggle = v.findViewById(R.id.theme_notify_toggle_task_notify);
         if (taskNotifyToggle != null) {
             taskNotifyToggle.setChecked(cfg.isTaskNotificationEnabled(), false, false);
@@ -93,7 +109,7 @@ public final class ThemeNotifyFragment extends Fragment {
             }
         }
 
-        // ==================== 1.2 通知呈现样式 (普通通知 / AOSP / HyperOS 胶囊) ====================
+        // ==================== 1.3 通知呈现样式 (普通通知 / AOSP / HyperOS 胶囊) ====================
         TextView styleText = v.findViewById(R.id.theme_notify_text_style);
         updateStyleLabel(styleText, cfg.getNotificationStyle());
 
