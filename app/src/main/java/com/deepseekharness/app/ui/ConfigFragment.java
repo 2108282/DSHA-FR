@@ -39,6 +39,8 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
     private DshaToggle chromiumFlagsToggle;
     private DshaToggle blockGuardActiveToggle;
     private DshaToggle blockGuardGlobalToggle;
+    private TextView blockGuardStatusText;
+    private View blockGuardDotView;
 
     private View translateBtn;
     private View allFilesBtn;
@@ -157,6 +159,9 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
             View row = view.findViewById(R.id.config_row_block_guard_global);
             if (row != null) row.setOnClickListener(v -> blockGuardGlobalToggle.toggle());
         }
+
+        blockGuardStatusText = view.findViewById(R.id.config_block_guard_status);
+        blockGuardDotView = view.findViewById(R.id.config_block_guard_dot);
 
         // 3. 扩展功能与系统保活权限入口
         translateBtn = view.findViewById(R.id.config_translate);
@@ -294,6 +299,12 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         }
 
         if (allFilesStatusText != null) allFilesStatusText.setText(state.allFilesStatusText);
+        if (blockGuardStatusText != null && state.blockGuardStatusText != null) {
+            blockGuardStatusText.setText(state.blockGuardStatusText);
+        }
+        if (blockGuardDotView != null) {
+            blockGuardDotView.setBackgroundResource(state.isBlockGuardActive ? R.drawable.dot_active : R.drawable.dot_inactive);
+        }
         if (a11yStatusText != null) a11yStatusText.setText(state.a11yStatusText);
         if (asrStatusText != null) asrStatusText.setText(state.asrStatusText);
         if (rootStatusView != null && state.rootStatusText != null) {

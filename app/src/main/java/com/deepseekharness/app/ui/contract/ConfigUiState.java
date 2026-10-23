@@ -12,6 +12,7 @@ public class ConfigUiState {
     public final boolean isAsrContinuous;
     public final boolean isBlockGuardActive;
     public final boolean isBlockGuardGlobal;
+    public final String blockGuardStatusText;
     public final String allFilesStatusText;
     public final String a11yStatusText;
     public final String asrStatusText;
@@ -23,6 +24,7 @@ public class ConfigUiState {
                          boolean isOverlayStream, boolean isCapSensors, boolean isCapLocation,
                          boolean isChromiumFlags, boolean isAsrContinuous,
                          boolean isBlockGuardActive, boolean isBlockGuardGlobal,
+                         String blockGuardStatusText,
                          String allFilesStatusText,
                          String a11yStatusText, String asrStatusText, String rootStatusText,
                          int freezeStateCode, String freezeStatusText) {
@@ -37,6 +39,7 @@ public class ConfigUiState {
         this.isAsrContinuous = isAsrContinuous;
         this.isBlockGuardActive = isBlockGuardActive;
         this.isBlockGuardGlobal = isBlockGuardGlobal;
+        this.blockGuardStatusText = blockGuardStatusText;
         this.allFilesStatusText = allFilesStatusText;
         this.a11yStatusText = a11yStatusText;
         this.asrStatusText = asrStatusText;

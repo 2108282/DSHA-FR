@@ -101,10 +101,14 @@ public class ConfigPresenter implements ConfigActions {
             freezeStatusText = "DSH 核心未启动";
         }
 
+        String blockGuardStatusText = "隔离模块:" + (isBlockGuardActive ? "开" : "关")
+                + "  全局穿透:" + (isBlockGuardGlobal ? "开" : "关");
+
         ConfigUiState state = new ConfigUiState(
                 port, taskset, confirmShell, isIdleFreeze, overlayStream, capSensors,
                 capLocation, chromiumFlags, asrContinuous,
                 isBlockGuardActive, isBlockGuardGlobal,
+                blockGuardStatusText,
                 allFilesStatus, a11yStatus, asrStatus, currentRootStatus,
                 freezeCode, freezeStatusText
         );

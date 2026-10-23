@@ -492,6 +492,40 @@
                     android:layout_marginStart="8dp" />
             </LinearLayout>
 
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="0.6dp"
+                android:layout_marginStart="66dp"
+                android:background="@color/line" />
+
+            <!-- 实时检测防砖隔离情况状态行 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="11dp">
+
+                <View
+                    android:id="@+id/config_block_guard_dot"
+                    android:layout_width="8dp"
+                    android:layout_height="8dp"
+                    android:layout_marginStart="14dp"
+                    android:background="@drawable/dot_active" />
+
+                <TextView
+                    android:id="@+id/config_block_guard_status"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:layout_weight="1"
+                    android:text="隔离模块: 检测中…  全局穿透: 检测中…"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12.5sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
         </com.deepseekharness.app.ui.ModernCardView>
 
         <!-- ========== 卡片 2: CPU 核心绑定 (常驻展开显示 + 保存按钮) ========== -->
