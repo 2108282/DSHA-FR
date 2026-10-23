@@ -47,6 +47,13 @@ fi
 rm -f "$RUN_DIR/port" 2>/dev/null || true
 rm -f "/data/data/com.dsha.fr/files/.auth_url" "/data/data/com.dsha.fr/files/.launch_token" 2>/dev/null || true
 
+# 无论是否传入 --umount，停止核心时必须自动释放宿主与容器的物理块设备隔离，
+# 确保外部底层调优工具（KonaBess、Scene、备份工具等）完全恢复正常访问！
+clean_umount "$ROOTFS/dev/block"
+clean_umount "/dev/block"
+rm -f "$RUN_DIR/block_guard_state" 2>/dev/null || true
+rm -f "/data/data/com.dsha.fr/files/.block_guard_disabled" 2>/dev/null || true
+
 # 3. 仅在显式传入 --umount 时卸载内核挂载点（普通停止服务绝不卸载挂载，保证其他操作与环境稳定）
 if [ "$1" = "--umount" ]; then
     clean_umount "$ROOTFS/usr/share/fonts/android"
