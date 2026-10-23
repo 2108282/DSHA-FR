@@ -72,7 +72,7 @@ public class ConfigPresenter implements ConfigActions {
         boolean capLocation = sp.getBoolean("cap_location", false);
         boolean chromiumFlags = sp.getBoolean(Constants.KEY_CHROMIUM_FLAGS, false);
         boolean asrContinuous = sp.getBoolean("asr_continuous", false);
-        boolean isBlockGuardActive = config.isBlockGuardActive();
+        boolean isBlockGuardActive = checkBlockGuardActive();
         boolean isBlockGuardGlobal = config.isBlockGuardGlobal();
 
         boolean allFilesGranted;
@@ -212,9 +212,25 @@ public class ConfigPresenter implements ConfigActions {
         refreshState();
     }
 
+    private boolean checkBlockGuardActive() {
+        try {
+            java.io.File stateFile = new java.io.File("/data/adb/dsha/run/block_guard_state");
+            if (stateFile.exists() && stateFile.canRead()) {
+                java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(stateFile));
+                String line = reader.readLine();
+                reader.close();
+                if (line != null && "0".equals(line.trim())) {
+                    return false;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        // 核心未运行或处于正常保护时，默认均为开启保护态
+        return true;
+    }
+
     @Override
     public void onToggleBlockGuardActive(boolean enabled) {
-        config.setBlockGuardActive(enabled);
         new Thread(() -> {
             try {
                 String cmd = "sh /data/adb/dsha/scripts/block-guard.sh " + (enabled ? "on" : "off");
