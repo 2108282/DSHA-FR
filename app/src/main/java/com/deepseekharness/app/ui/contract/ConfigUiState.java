@@ -38,18 +38,6 @@ public class ConfigUiState {
         this.isBlockGuardActive = isBlockGuardActive;
         this.isBlockGuardGlobal = isBlockGuardGlobal;
         this.allFilesStatusText = allFilesStatusText;
-                         String a11yStatusText, String asrStatusText, String rootStatusText,
-                         int freezeStateCode, String freezeStatusText) {
-        this.port = port;
-        this.taskset = taskset;
-        this.isConfirmShell = isConfirmShell;
-        this.isIdleFreeze = isIdleFreeze;
-        this.isOverlayStream = isOverlayStream;
-        this.isCapSensors = isCapSensors;
-        this.isCapLocation = isCapLocation;
-        this.isChromiumFlags = isChromiumFlags;
-        this.isAsrContinuous = isAsrContinuous;
-        this.allFilesStatusText = allFilesStatusText;
         this.a11yStatusText = a11yStatusText;
         this.asrStatusText = asrStatusText;
         this.rootStatusText = rootStatusText;
