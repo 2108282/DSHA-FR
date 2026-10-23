@@ -297,7 +297,7 @@ public class ConfigPresenter implements ConfigActions {
             }
             scanRealBlockGuardStatus();
             mainHandler.post(() -> {
-                toast(enabled ? "已开启物理块设备防砖隔离 (保护中)" : "已临时关闭物理块设备隔离 (放行底层访问)");
+                toast(enabled ? "已开启底层分区隔离 (保护中)" : "已临时关闭底层分区隔离 (放行底层访问，重启后失效)");
                 refreshState();
             });
         }, "toggle-block-guard-active").start();

@@ -407,7 +407,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="物理块设备防砖隔离"
+                        android:text="底层分区隔离（默认开启）"
                         android:textColor="@color/text"
                         android:textSize="15sp"
                         android:textStyle="bold" />
@@ -416,7 +416,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
-                        android:text="即时开闭 /dev/block 屏蔽，无需启停核心，毫秒级生效"
+                        android:text="临时关闭 /dev/block屏蔽，重启后失效"
                         android:textColor="@color/text_muted"
                         android:textSize="12sp" />
                 </LinearLayout>
@@ -480,7 +480,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
-                        android:text="默认关闭（仅隔离容器）；打开后启动将屏蔽穿透至宿主整机"
+                        android:text="默认只隔离容器,开启后整机屏蔽（包括其他模块）"
                         android:textColor="@color/text_muted"
                         android:textSize="12sp" />
                 </LinearLayout>
