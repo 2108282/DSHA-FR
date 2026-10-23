@@ -9,7 +9,6 @@ public interface ConfigActions {
     void onToggleChromiumFlags(boolean enabled);
     void onBack();
     void onOpenAllFilesSettings();
-    void onOpenBatteryOptimization();
     void onOpenA11ySettings();
     void onCheckRootClick();
     void onCheckAsrStatus();

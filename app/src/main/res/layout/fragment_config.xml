@@ -892,19 +892,6 @@
                 android:textStyle="bold" />
 
             <Button
-                android:id="@+id/config_battery_opt"
-                android:layout_width="match_parent"
-                android:layout_height="46dp"
-                android:layout_marginTop="10dp"
-                android:background="@drawable/m3_btn_tonal_expressive"
-                android:stateListAnimator="@animator/btn_press_scale"
-                android:text="关闭电池优化（后台稳定保活必做）"
-                android:textAllCaps="false"
-                android:textColor="@color/primary"
-                android:textSize="14sp"
-                android:textStyle="bold" />
-
-            <Button
                 android:id="@+id/config_a11y"
                 android:layout_width="match_parent"
                 android:layout_height="46dp"

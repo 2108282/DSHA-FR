@@ -212,7 +212,6 @@ public class ConfigPresenter implements ConfigActions {
 
     @Override public void onBack() { callback.onGoBack(); }
     @Override public void onOpenAllFilesSettings() { openAllFilesAccess(); }
-    @Override public void onOpenBatteryOptimization() { openBatteryOptimization(); }
     @Override public void onOpenA11ySettings() { openA11ySettings(); }
     @Override public void onCheckAsrStatus() { refreshState(); toast("ASR 状态检测已更新"); }
     @Override public void onFixAsrConfig() { applyAsrConfig(); }
@@ -415,18 +414,6 @@ public class ConfigPresenter implements ConfigActions {
             }
         } catch (Throwable t) {
             toast("无法打开设置：" + t.getMessage());
-        }
-    }
-
-    private void openBatteryOptimization() {
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                Intent i = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
-                i.setData(Uri.parse("package:" + context.getPackageName()));
-                activity.startActivity(i);
-            }
-        } catch (Throwable t) {
-            toast("无法打开电池优化设置");
         }
     }
 
