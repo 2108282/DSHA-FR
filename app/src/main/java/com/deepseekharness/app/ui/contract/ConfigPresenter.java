@@ -225,12 +225,30 @@ public class ConfigPresenter implements ConfigActions {
         refreshState();
     }
 
+    private void execRootMm(String cmd) {
+        try {
+            Process p = Runtime.getRuntime().exec(new String[]{"su", "-mm", "-c", cmd});
+            p.waitFor();
+        } catch (Throwable e) {
+            try {
+                Process p2 = Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
+                p2.waitFor();
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
     private void scanRealBlockGuardStatus() {
         new Thread(() -> {
             boolean rootM = false;
             boolean hostM = false;
             try {
-                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", "sh /data/adb/dsha/scripts/block-guard.sh status"});
+                Process p;
+                try {
+                    p = Runtime.getRuntime().exec(new String[]{"su", "-mm", "-c", "sh /data/adb/dsha/scripts/block-guard.sh status"});
+                } catch (Throwable t) {
+                    p = Runtime.getRuntime().exec(new String[]{"su", "-c", "sh /data/adb/dsha/scripts/block-guard.sh status"});
+                }
                 java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(p.getInputStream()));
                 String line;
                 while ((line = reader.readLine()) != null) {
@@ -273,8 +291,7 @@ public class ConfigPresenter implements ConfigActions {
                 }
 
                 String cmd = "sh /data/adb/dsha/scripts/block-guard.sh " + (enabled ? "on" : "off");
-                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
-                p.waitFor();
+                execRootMm(cmd);
             } catch (Throwable e) {
                 android.util.Log.w("DSHA", "切换物理块设备隔离状态失败: " + e.getMessage());
             }
@@ -292,8 +309,7 @@ public class ConfigPresenter implements ConfigActions {
         new Thread(() -> {
             try {
                 String cmd = "sh /data/adb/dsha/scripts/block-guard.sh " + (enabled ? "global-on" : "global-off");
-                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
-                p.waitFor();
+                execRootMm(cmd);
             } catch (Throwable e) {
                 android.util.Log.w("DSHA", "更新全局穿透隔离状态失败: " + e.getMessage());
             }
