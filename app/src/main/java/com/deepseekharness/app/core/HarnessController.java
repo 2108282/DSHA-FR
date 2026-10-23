@@ -563,8 +563,11 @@ public class HarnessController {
                 ensureHeartbeatPatch();
 
                 String tasksetVal = config.getTaskset();
+                boolean isGlobal = config.isBlockGuardGlobal();
                 try {
-                    String tsCmd = "mkdir -p /data/adb/dsha/run 2>/dev/null && echo '" + tasksetVal + "' > /data/adb/dsha/run/taskset 2>/dev/null";
+                    String tsCmd = "mkdir -p /data/adb/dsha/run 2>/dev/null; "
+                            + "echo '" + tasksetVal + "' > /data/adb/dsha/run/taskset 2>/dev/null; "
+                            + "echo '" + (isGlobal ? "1" : "0") + "' > /data/adb/dsha/run/block_guard_global 2>/dev/null";
                     Runtime.getRuntime().exec(new String[]{"su", "-c", tsCmd}).waitFor();
                 } catch (Throwable ignored) {}
 
