@@ -2081,10 +2081,21 @@ public final class HttpShellService {
             paramV2.put("aodTitle", title != null ? title : "DSHA");
             paramV2.put("aodPic", "miui.focus.pic_big_island");
 
+            String highlightColor = "#58A6FF"; // 默认科技蓝（运行态）
+            if (capsuleText != null) {
+                if (capsuleText.contains("完成") || capsuleText.contains("成功")) {
+                    highlightColor = "#34C759"; // 经典绿（成功终态）
+                } else if (capsuleText.contains("终止") || capsuleText.contains("失败") || capsuleText.contains("中断")) {
+                    highlightColor = "#FF453A"; // 警示红（异常/终止）
+                } else if (capsuleText.contains("确认") || capsuleText.contains("授权") || capsuleText.contains("回答") || capsuleText.contains("提问") || capsuleText.contains("挂起") || capsuleText.contains("超限")) {
+                    highlightColor = "#FF9F0A"; // 琥珀橙（交互态/挂起/超限）
+                }
+            }
+
             org.json.JSONObject island = new org.json.JSONObject();
             island.put("islandProperty", 1);
             island.put("islandPriority", 2);
-            island.put("highlightColor", "#58A6FF");
+            island.put("highlightColor", highlightColor);
 
             org.json.JSONObject bigIslandArea = new org.json.JSONObject();
             org.json.JSONObject leftImgText = new org.json.JSONObject();
@@ -2165,8 +2176,8 @@ public final class HttpShellService {
                 hintInfo.put("title", detail != null ? detail : "");
                 hintInfo.put("content", statusLabel != null ? statusLabel : "实时状态");
                 hintInfo.put("type", 2);
-                hintInfo.put("colorContent", "#58A6FF");
-                hintInfo.put("colorContentDark", "#58A6FF");
+                hintInfo.put("colorContent", highlightColor);
+                hintInfo.put("colorContentDark", highlightColor);
 
                 if (primaryActionPi != null && actionTitle != null && !actionTitle.isEmpty()) {
                     org.json.JSONObject actionInfo = new org.json.JSONObject();
@@ -2261,10 +2272,20 @@ public final class HttpShellService {
             "⚙ 正在修改文件: ", "正在修改文件: ",
             "⚙ 正在读取文件: ", "正在读取文件: ",
             "⚙ 正在搜索文件: ", "正在搜索文件: ", "⚙ 正在搜索: ", "正在搜索: ",
+            "⚙ 正在浏览网页: ", "正在浏览网页: ", "⚙ 正在浏览: ", "正在浏览: ",
             "⚙ 正在联网查资料: ", "正在联网查资料: ",
             "⚙ 正在分析画面: ", "正在分析画面: ", "⚙ 正在看图: ", "正在看图: ",
             "⚙ 正在规划任务清单: ", "正在规划任务清单: ", "⚙ 正在整理任务清单: ", "正在整理任务清单: ",
             "⚙ 正在调度子任务: ", "正在调度子任务: ", "⚙ 正在派子任务: ", "正在派子任务: ",
+            "⚙ 正在团队协作: ", "正在团队协作: ",
+            "⚙ 正在团队任务: ", "正在团队任务: ",
+            "⚙ 正在管理目标: ", "正在管理目标: ",
+            "⚙ 正在管理日程: ", "正在管理日程: ",
+            "⚙ 正在切换工作区: ", "正在切换工作区: ", "⚙ 正在切换目录: ", "正在切换目录: ",
+            "⚙ 正在管理作业: ", "正在管理作业: ",
+            "⚙ 正在交付文件: ", "正在交付文件: ",
+            "⚙ 正在人工审阅: ", "正在人工审阅: ",
+            "⚙ 正在侧栏打开: ", "正在侧栏打开: ",
             "⚙ 正在执行屏幕操作: ", "正在执行屏幕操作: ",
             "⚙ 正在调用手机功能: ", "正在调用手机功能: ", "⚙ 正在调用手机系统功能: ", "正在调用手机系统功能: ",
             "⚙ 正在加载技能: ", "正在加载技能: "
@@ -2275,13 +2296,24 @@ public final class HttpShellService {
                 if (p.contains("修改")) return "修改: " + remain;
                 if (p.contains("读取")) return "读取: " + remain;
                 if (p.contains("搜索")) return "搜索: " + remain;
+                if (p.contains("网页") || p.contains("浏览")) return "网页: " + remain;
                 if (p.contains("联网")) return "联网: " + remain;
                 if (p.contains("画面") || p.contains("看图")) return "看图: " + remain;
                 if (p.contains("清单") || p.contains("规划")) return "清单: " + remain;
-                if (p.contains("子任务")) return "子任务: " + remain;
+                if (p.contains("协作")) return "协作: " + remain;
+                if (p.contains("团队")) return "团队: " + remain;
+                if (p.contains("子任务") || p.contains("调度")) return "调度: " + remain;
+                if (p.contains("目标")) return "目标: " + remain;
+                if (p.contains("日程")) return "日程: " + remain;
+                if (p.contains("工作区") || p.contains("目录")) return "目录: " + remain;
+                if (p.contains("作业")) return "作业: " + remain;
+                if (p.contains("交付")) return "交付: " + remain;
+                if (p.contains("审阅")) return "审阅: " + remain;
+                if (p.contains("侧栏")) return "侧栏: " + remain;
                 if (p.contains("屏幕")) return "屏幕: " + remain;
-                if (p.contains("手机")) return "系统: " + remain;
+                if (p.contains("手机") || p.contains("系统")) return "系统: " + remain;
                 if (p.contains("技能")) return "技能: " + remain;
+                if (p.contains("命令")) return "命令: " + remain;
                 return remain;
             }
         }
@@ -2289,28 +2321,62 @@ public final class HttpShellService {
     }
 
     private static String compactCapsuleText(String detail) {
-        if (detail == null || detail.trim().isEmpty()) return "正在执行";
+        if (detail == null || detail.trim().isEmpty()) return "分析执行中";
         String s = detail.trim();
-        if (s.contains("安全确认") || s.contains("危险操作") || s.contains("特权执行") || s.contains("请求特权") || s.contains("敏感操作")) return "安全确认";
-        if (s.contains("等待回答") || s.contains("等待选择") || s.contains("助手提问") || s.contains("ask_user") || s.contains("ask_question")) return "等待回答";
-        if (s.contains("未完成")) return "⚠️未完成";
-        if (s.contains("终止") || s.contains("中断") || s.contains("停止") || s.contains("cancel") || s.contains("abort")) return "⚠️任务终止";
-        if (s.contains("失败") || s.contains("错误") || s.contains("503") || s.contains("400") || s.contains("error")) return "❌执行失败";
-        if (s.contains("最大长度") || s.contains("max-tokens")) return "📏长度超限";
+
+        // 1. 优先提取冒号前的动作标签，彻底杜绝文件名/命令参数包含“完成”或“error”导致的严重误判！
+        String prefix = s;
+        int colonIdx = s.indexOf(':');
+        if (colonIdx > 0) {
+            prefix = s.substring(0, colonIdx).trim();
+        } else {
+            int spaceIdx = s.indexOf(' ');
+            if (spaceIdx > 0 && spaceIdx < 12) {
+                prefix = s.substring(0, spaceIdx).trim();
+            }
+        }
+
+        // 2. 针对动作前缀进行严格 5 字上限匹配（运行态）
+        if (prefix.contains("修改") || prefix.contains("编辑") || prefix.contains("write") || prefix.contains("edit") || prefix.contains("patch")) return "修改文件中";
+        if (prefix.contains("读取") || prefix.contains("查看") || prefix.contains("read") || prefix.contains("cat")) return "读取文件中";
+        if (prefix.contains("搜索") || prefix.contains("glob") || prefix.contains("grep") || prefix.contains("find")) return "搜索文件中";
+        if (prefix.contains("网页") || prefix.contains("浏览") || prefix.contains("browser")) return "浏览网页中";
+        if (prefix.contains("联网") || prefix.contains("查资料") || prefix.contains("fetch") || prefix.contains("http") || prefix.contains("url")) return "联网搜索中";
+        if (prefix.contains("画面") || prefix.contains("看图") || prefix.contains("截图") || prefix.contains("image") || prefix.contains("vision")) return "分析画面中";
+        if (prefix.contains("团队协作") || prefix.contains("队友") || prefix.contains("teammate")) return "团队协作中";
+        if (prefix.contains("团队任务") || prefix.contains("team_task")) return "团队任务中";
+        if (prefix.contains("目标") || prefix.contains("goal")) return "管理目标中";
+        if (prefix.contains("日程") || prefix.contains("提醒") || prefix.contains("schedule")) return "管理日程中";
+        if (prefix.contains("工作区") || prefix.contains("目录") || prefix.contains("worktree")) return "切换目录中";
+        if (prefix.contains("作业") || prefix.contains("job")) return "管理作业中";
+        if (prefix.contains("交付") || prefix.contains("present")) return "交付结果中";
+        if (prefix.contains("审阅") || prefix.contains("review")) return "人工审阅中";
+        if (prefix.contains("侧栏") || prefix.contains("sidebar")) return "打开预览中";
+        if (prefix.contains("技能") || prefix.contains("skill")) return "加载技能中";
+        if (prefix.contains("清单") || prefix.contains("规划") || prefix.contains("todo")) return "规划清单中";
+        if (prefix.contains("子任务") || prefix.contains("调度") || prefix.contains("subagent") || prefix.contains("workflow") || prefix.contains("ralph")) return "调度任务中";
+        if (prefix.contains("屏幕") || prefix.contains("tap") || prefix.contains("swipe") || prefix.contains("dump") || prefix.contains("launch")) return "操作屏幕中";
+        if (prefix.contains("手机") || prefix.contains("系统") || prefix.contains("toast") || prefix.contains("clip") || prefix.contains("vibrate")) return "调用系统中";
+        if (prefix.contains("命令") || prefix.contains("bash") || prefix.contains("shell") || prefix.contains("exec") || prefix.contains("terminal")) return "执行命令中";
+        if (prefix.contains("思考") || prefix.contains("think") || prefix.contains("reason")) return "深度思考中";
+        if (prefix.contains("智能体") || prefix.contains("分析执行") || prefix.contains("执行任务")) return "分析执行中";
+
+        // 3. 终态/交互态匹配（方案 C：纯 5 字中文字符，无彩色 Emoji 干扰，由 HyperOS 高亮色呈现状态）
+        if (s.contains("安全确认") || s.contains("危险操作") || s.contains("特权执行") || s.contains("请求特权") || s.contains("敏感操作") || s.contains("授权")) return "等待授权中";
+        if (s.contains("等待回答") || s.contains("等待选择") || s.contains("助手提问") || s.contains("ask_user") || s.contains("ask_question")) return "等待回答中";
+        if (s.contains("未完成") || s.contains("尚未完成")) return "尚未完成中";
+        if (s.contains("终止") || s.contains("中断") || s.contains("停止") || s.contains("cancel") || s.contains("abort") || s.contains("aborted")) return "任务已终止";
+        if (s.contains("失败") || s.contains("错误") || s.contains("error") || s.contains("503") || s.contains("400")) return "任务已失败";
+        if (s.contains("最大长度") || s.contains("max-tokens") || s.contains("超限")) return "长度已超限";
+        if (s.contains("挂起") || s.contains("blocked")) return "任务已挂起";
+        if (s.contains("断开") || s.contains("interrupted")) return "连接已中断";
         if (s.contains("完成") || s.contains("成功") || s.contains("done")) return "任务已完成";
-        if (s.contains("智能体") || s.contains("分析执行") || s.contains("执行任务")) return "分析执行中";
-        if (s.contains("清单") || s.contains("规划") || s.contains("todo") || s.contains("goal")) return "规划清单中";
-        if (s.contains("子任务") || s.contains("subagent") || s.contains("workflow") || s.contains("ralph")) return "调度任务中";
-        if (s.contains("read_image") || s.contains("看图") || s.contains("图") || s.contains("截屏") || s.contains("vision") || s.contains("画面")) return "分析画面中";
-        if (s.contains("写") || s.contains("修改") || s.contains("创建") || s.contains("write") || s.contains("edit") || s.contains("patch") || s.contains("apply")) return "修改文件中";
-        if (s.contains("读") || s.contains("cat") || s.contains("查看") || s.contains("read")) return "读取文件中";
-        if (s.contains("搜") || s.contains("find") || s.contains("grep") || s.contains("glob")) return "搜索文件中";
-        if (s.contains("网") || s.contains("联网") || s.contains("http") || s.contains("fetch") || s.contains("查资料") || s.contains("web_search") || s.contains("browse")) return "联网搜索中";
-        if (s.contains("屏幕") || s.contains("tap") || s.contains("swipe") || s.contains("dump") || s.contains("launch")) return "操作屏幕中";
-        if (s.contains("思考") || s.contains("think") || s.contains("reason")) return "深度思考中";
-        if (s.contains("命令") || s.contains("bash") || s.contains("shell") || s.contains("exec") || s.contains("git") || s.contains("curl") || s.contains("python") || s.contains("npm") || s.contains("pnpm") || s.contains("node") || s.contains("adb") || s.contains("rm ") || s.contains("ls ")) return "执行命令中";
-        String clean = s.replaceAll("^[\\p{P}\\p{S}\\s]+", "").trim();  if (clean.length() <= 5) return clean;
-        return clean.substring(0, 4) + "…";
+
+        // 4. 兜底截断：过滤特殊字符和残缺 Emoji，严格保证最多 5 个字符
+        String clean = s.replaceAll("[\\p{P}\\p{S}\\p{M}\\s]+", "").trim();
+        if (clean.isEmpty()) return "正在执行中";
+        if (clean.length() <= 5) return clean;
+        return clean.substring(0, 5);
     }
 
     private void showAskWaitingNotification(String customQuestion) {
