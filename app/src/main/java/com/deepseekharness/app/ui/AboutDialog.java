@@ -13,7 +13,6 @@ public final class AboutDialog {
 
     public static final String GITHUB_URL = "https://github.com/DSH-APP/DSHA";
     public static final String GITHUB_ROOT_URL = "https://github.com/2108282/DSHA-FR";
-    public static final String QQ_GROUP = "975836806";
 
     private AboutDialog() {
     }
@@ -28,8 +27,7 @@ public final class AboutDialog {
                 .setTitle("DSHA-FR")
                 .setMessage("DeepSeek Harness 安卓启动器\n" + ctx.getString(com.deepseekharness.app.R.string.edition_description) + "\n\n"
                         + "1. 本仓库地址：" + GITHUB_ROOT_URL + "\n"
-                        + "2. 非root仓库地址（其他作者）：" + GITHUB_URL + "\n"
-                        + "3. qq交流群（其他作者）：" + QQ_GROUP)
+                        + "2. 非root仓库地址（其他作者）：" + GITHUB_URL)
                 .setPositiveButton("Root仓库", (d, w) -> openBrowser(ctx, GITHUB_ROOT_URL))
                 .setNeutralButton("原版DSHA仓库", (d, w) -> openBrowser(ctx, GITHUB_URL))
                 .setNegativeButton("关闭", null)

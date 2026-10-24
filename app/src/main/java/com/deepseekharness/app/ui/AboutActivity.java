@@ -23,7 +23,6 @@ public final class AboutActivity extends AppCompatActivity {
 
     public static final String GITHUB_URL = "https://github.com/DSH-APP/DSHA";
     public static final String GITHUB_ROOT_URL = "https://github.com/2108282/DSHA-FR";
-    public static final String QQ_GROUP = "975836806";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -63,10 +62,6 @@ public final class AboutActivity extends AppCompatActivity {
         // 链接跳转与点击事件
         findViewById(R.id.about_row_root_repo).setOnClickListener(v -> openUrl(GITHUB_ROOT_URL));
         findViewById(R.id.about_row_upstream_repo).setOnClickListener(v -> openUrl(GITHUB_URL));
-        findViewById(R.id.about_row_qq_group).setOnClickListener(v -> {
-            copyToClipboard("QQ群号", QQ_GROUP);
-            ToastHelper.makeText(this, "QQ 群号已复制：" + QQ_GROUP, Toast.LENGTH_SHORT).show();
-        });
     }
 
     @Override
