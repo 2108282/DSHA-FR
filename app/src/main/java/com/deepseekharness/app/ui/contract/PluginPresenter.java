@@ -258,6 +258,7 @@ public class PluginPresenter implements PluginActions {
 
         TextView dialogExportSub = dialogView.findViewById(R.id.dialogExportSub);
         TextView dialogExportToggleAll = dialogView.findViewById(R.id.dialogExportToggleAll);
+        View exportScrollView = dialogView.findViewById(R.id.dialogExportScrollView);
         LinearLayout listContainer = dialogView.findViewById(R.id.dialogExportListContainer);
         Button btnCancel = dialogView.findViewById(R.id.btnDialogCancel);
         Button btnConfirm = dialogView.findViewById(R.id.btnDialogConfirm);
@@ -273,6 +274,17 @@ public class PluginPresenter implements PluginActions {
         final int dp10 = (int) (10 * density + 0.5f);
         final int dp1 = Math.max(1, (int) (1 * density + 0.5f));
         final int badgeHeight = (int) (20 * density + 0.5f);
+
+        // 约束列表滚动容器高度，彻底根治插件过多（如15个）撑爆弹窗导致底部确认按钮被挤出屏幕外的缺陷
+        if (exportScrollView != null && totalCount > 4) {
+            int screenHeight = activity.getResources().getDisplayMetrics().heightPixels;
+            int maxAllowedHeight = Math.min((int) (260 * density + 0.5f), (int) (screenHeight * 0.42f));
+            ViewGroup.LayoutParams lp = exportScrollView.getLayoutParams();
+            if (lp != null) {
+                lp.height = maxAllowedHeight;
+                exportScrollView.setLayoutParams(lp);
+            }
+        }
 
         final List<CheckBox> checkBoxes = new ArrayList<>();
         if (listContainer != null) {

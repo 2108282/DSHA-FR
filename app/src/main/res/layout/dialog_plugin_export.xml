@@ -80,10 +80,10 @@
 
         <!-- 3. 插件列表容器 (限制最大高度可滚动，内嵌 bg_input 容器) -->
         <androidx.core.widget.NestedScrollView
+            android:id="@+id/dialogExportScrollView"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:maxHeight="240dp"
             android:background="@drawable/bg_input"
             android:paddingHorizontal="10dp"
             android:paddingVertical="6dp"
@@ -140,7 +140,7 @@
                 android:outlineProvider="background"
                 android:outlineSpotShadowColor="#3847699F"
                 android:stateListAnimator="@animator/btn_press_scale"
-                android:text="选择保存位置"
+                android:text="确认导出"
                 android:textAllCaps="false"
                 android:textColor="@color/accent_on"
                 android:textSize="15sp"
