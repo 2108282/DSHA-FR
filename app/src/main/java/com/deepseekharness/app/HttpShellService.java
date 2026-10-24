@@ -1564,14 +1564,14 @@ public final class HttpShellService {
             }
             if (detail.length() > 60) detail = detail.substring(0, 59) + "…";
             if (detail.isEmpty()) detail = "模型申请提升沙箱特权，等待你的审批";
-            return new AuthPromptInfo("⚠️ 危险权限授权申请", detail, "权限申请", "危险授权", btn0, btn1);
+            return new AuthPromptInfo("危险权限授权申请", detail, "权限申请", "等待授权中", btn0, btn1);
         }
 
         // 2. 高危系统破坏性指令
         if (s.contains("reboot") || s.contains("shutdown") || s.contains("mkfs") || s.contains("wipe") || s.contains("dd if=") || s.contains("toybox") || s.contains("fdisk")) {
             String cmd = s.replace("模型试图在设备上执行：", "").replace("模型试图在设备上执行:", "").replace("是否允许？", "").trim();
             if (cmd.startsWith("`") && cmd.endsWith("`") && cmd.length() > 2) cmd = cmd.substring(1, cmd.length() - 1);
-            return new AuthPromptInfo("⚠️ 高危系统指令确认", cmd, "指令确认", "高危确认", btn0, btn1);
+            return new AuthPromptInfo("高危系统指令确认", cmd, "指令确认", "等待确认中", btn0, btn1);
         }
 
         // 3. 模型执行命令确认（支持 rm, node, curl, python, su, pm, am, cmd, chmod, 等全部特权与宿主命令）
@@ -1594,7 +1594,7 @@ public final class HttpShellService {
             if (cmd.startsWith("`") && cmd.endsWith("`") && cmd.length() > 2) {
                 cmd = cmd.substring(1, cmd.length() - 1);
             }
-            return new AuthPromptInfo("⚠️ 特权命令执行确认", cmd, "命令确认", "命令确认", btn0, btn1);
+            return new AuthPromptInfo("特权命令执行确认", cmd, "命令确认", "等待确认中", btn0, btn1);
         }
 
         // 4. 敏感应用与支付环境
@@ -1604,7 +1604,7 @@ public final class HttpShellService {
             if (target.startsWith("在【当前界面】里：")) target = target.substring("在【当前界面】里：".length()).trim();
             else if (target.startsWith("在【") && target.contains("】里：")) target = target.replace("在【", "").replace("】里：", ": ");
             target = target.replace("读取当前屏幕上的文字与控件", "读取当前屏幕文字与控件").trim();
-            return new AuthPromptInfo("🔒 敏感操作确认", target, "敏感操作", "敏感确认", btn0, btn1);
+            return new AuthPromptInfo("敏感操作确认", target, "敏感操作", "等待确认中", btn0, btn1);
         }
 
         // 5. 危险权限、免打扰租约与审批
@@ -1623,7 +1623,7 @@ public final class HttpShellService {
             if (target.endsWith("，") || target.endsWith(",")) target = target.substring(0, target.length() - 1).trim();
             target = target.replace("读取当前屏幕上的文字与控件", "读取当前屏幕文字与控件").trim();
             if (target.isEmpty()) target = "模型申请高危执行权限，等待你的审批";
-            return new AuthPromptInfo("⚠️ 危险权限授权申请", target, "权限请求", "危险授权", btn0, btn1);
+            return new AuthPromptInfo("危险权限授权申请", target, "权限请求", "等待授权中", btn0, btn1);
         }
 
         // 6. 屏幕操作授权
@@ -1631,7 +1631,7 @@ public final class HttpShellService {
             String target = s;
             if (target.contains("#")) target = target.substring(0, target.indexOf("#")).trim();
             target = target.replace("【屏幕操作】", "").replace("在【当前界面】里：", "").replace("读取当前屏幕上的文字与控件", "读取当前屏幕文字与控件").trim();
-            return new AuthPromptInfo("📱 屏幕操作授权申请", target, "权限请求", "屏幕授权", btn0, btn1);
+            return new AuthPromptInfo("屏幕操作授权申请", target, "权限请求", "等待授权中", btn0, btn1);
         }
 
         // 7. 助手提问场景（明确带有提问/询问特征）
@@ -2088,7 +2088,7 @@ public final class HttpShellService {
                 } else if (capsuleText.contains("终止") || capsuleText.contains("失败") || capsuleText.contains("中断")) {
                     highlightColor = "#FF453A"; // 警示红（异常/终止）
                 } else if (capsuleText.contains("确认") || capsuleText.contains("授权") || capsuleText.contains("回答") || capsuleText.contains("提问") || capsuleText.contains("挂起") || capsuleText.contains("超限")) {
-                    highlightColor = "#FF9F0A"; // 琥珀橙（交互态/挂起/超限）
+                    highlightColor = "#FFB800"; // 纯正警示琥珀金黄（交互确认/授权审批）
                 }
             }
 
@@ -2422,7 +2422,7 @@ public final class HttpShellService {
         try {
             cancelRunningNotification();
             String q = queryOf(path);
-            String title = getParam(q, "title", "⚠️ 危险权限授权申请");
+            String title = getParam(q, "title", "危险权限授权申请");
             String text = getParam(q, "text", "模型请求执行敏感操作，请确认是否允许");
             showApprovalWaitingNotification(title, text);
             return "OK";
@@ -2449,7 +2449,7 @@ public final class HttpShellService {
             confirmResolved.set(false);
             pendingAllow = false;
             String rawPrompt = (reason != null && !reason.trim().isEmpty()) ? reason : title;
-            AuthPromptInfo info = parseAuthPrompt(rawPrompt, "⚠️ 危险权限授权申请", new String[]{"允许", "拒绝"});
+            AuthPromptInfo info = parseAuthPrompt(rawPrompt, "危险权限授权申请", new String[]{"允许", "拒绝"});
 
             createConfirmChannel();
             NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);

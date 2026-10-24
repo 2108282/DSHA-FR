@@ -179,7 +179,7 @@ public class ConfigPresenter implements ConfigActions {
                 p.waitFor();
             } catch (Throwable ignored) {}
         }, "sync-guard-flag").start();
-        toast(enabled ? "已开启危险 Shell 操作拦截确认" : "已关闭危险 Shell 拦截确认");
+        toast(enabled ? "已开启危险命令拦截确认" : "已关闭危险命令拦截确认");
         refreshState();
     }
 

@@ -44,7 +44,7 @@
             android:orientation="vertical"
             app:cardRadius="18dp">
 
-            <!-- 1.1 危险 Shell 操作需确认 -->
+            <!-- 1.1 危险命令拦截 -->
             <LinearLayout
                 android:id="@+id/config_row_confirm_shell"
                 android:layout_width="match_parent"
@@ -66,7 +66,7 @@
                         android:layout_width="20dp"
                         android:layout_height="20dp"
                         android:layout_gravity="center"
-                        android:contentDescription="危险 Shell 拦截"
+                        android:contentDescription="危险命令拦截"
                         android:src="@drawable/ic_settings_shield"
                         app:tint="@color/primary" />
                 </FrameLayout>
@@ -81,7 +81,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="危险 Shell 操作需确认"
+                        android:text="危险命令拦截"
                         android:textColor="@color/text"
                         android:textSize="15sp"
                         android:textStyle="bold" />
