@@ -3,6 +3,8 @@ ui_print "*****************************************"
 ui_print "      DSHA Native 极速热更新补丁包       "
 ui_print "      增量热更新 · 无需重装完整底包      "
 ui_print "*****************************************"
+ui_print "- 当前补丁版本: 0.2.1-rc-u6"
+ui_print "*****************************************"
 
 DATA_DIR="/data/adb/dsha"
 ROOTFS_DIR="$DATA_DIR/rootfs"
