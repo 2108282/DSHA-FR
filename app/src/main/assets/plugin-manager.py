@@ -389,39 +389,55 @@ def cmd_export(names, out):
     out = local(out)
     os.makedirs(os.path.dirname(out), exist_ok=True)
     total, count = 0, 0
+    EXCLUDE_DIRS = {"node_modules", ".git", ".cache", "__pycache__", ".DS_Store", ".npm", ".pnpm-store"}
 
-    def add_tree(archive, path, arc, ancestors):
+    def add_tree(archive, path, arc, root_real):
         nonlocal total, count
-        real = os.path.realpath(path)
-        if real in ancestors:
-            raise ValueError("插件依赖含循环链接，无法导出：" + arc)
-        if not os.path.exists(real):
-            raise ValueError("插件存在失效链接：" + arc)
-        info = archive.gettarinfo(real, arcname=arc)
-        if not (info.isdir() or info.isfile()):
-            raise ValueError("插件包含不可导出的特殊文件：" + arc)
-        count += 1
-        total += info.size
-        if total > MAX_EXPANDED or count > MAX_FILES:
-            raise ValueError("导出内容过大，请减少所选插件")
-        if info.isfile():
-            with open(real, "rb") as stream:
-                archive.addfile(info, stream)
-        else:
-            archive.addfile(info)
-            for child in sorted(os.listdir(real)):
-                if child not in (".git", ".cache", "__pycache__", ".DS_Store"):
-                    add_tree(archive, os.path.join(real, child), arc + "/" + child, ancestors | {real})
+        if not os.path.exists(path):
+            return
+
+        for child in sorted(os.listdir(path)):
+            if child in EXCLUDE_DIRS:
+                continue
+            child_path = os.path.join(path, child)
+            child_arc = arc + "/" + child
+
+            # 遇到软链接：若指向插件外部或循环指向自身，坚决不解引用展开，直接安全跳过！
+            if os.path.islink(child_path):
+                resolved = os.path.realpath(child_path)
+                if resolved == root_real or not resolved.startswith(root_real):
+                    continue
+                info = archive.gettarinfo(child_path, arcname=child_arc)
+                archive.addfile(info)
+                continue
+
+            info = archive.gettarinfo(child_path, arcname=child_arc)
+            if not (info.isdir() or info.isfile()):
+                continue
+            count += 1
+            total += info.size
+            if total > MAX_EXPANDED or count > MAX_FILES:
+                raise ValueError("导出内容过大，请减少所选插件")
+
+            if info.isfile():
+                with open(child_path, "rb") as stream:
+                    archive.addfile(info, stream)
+            elif info.isdir():
+                archive.addfile(info)
+                add_tree(archive, child_path, child_arc, root_real)
 
     try:
-        with tarfile.open(out, "w:gz", dereference=True) as archive:
+        with tarfile.open(out, "w:gz", dereference=False) as archive:
             for name in dict.fromkeys(names):
                 if builtin.is_official_bundle(name):
                     raise ValueError("官方核心不提供独立导出")
                 directory = resolve_plugin_dir(name)
                 if not directory:
                     raise ValueError("找不到插件实体：" + str(name))
-                add_tree(archive, directory, "plugins/" + name, set())
+                real_root = os.path.realpath(directory)
+                arc_root = "plugins/" + name
+                archive.addfile(archive.gettarinfo(real_root, arcname=arc_root))
+                add_tree(archive, real_root, arc_root, real_root)
         if os.path.getsize(out) > MAX_DOWNLOAD:
             raise ValueError("导出包超过 256 MiB，请减少插件数量")
     except Exception:
