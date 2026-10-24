@@ -52,7 +52,7 @@ jobs:
           elif [ -n "${{ inputs.release_tag }}" ]; then
             V="${{ inputs.release_tag }}"
           else
-            V="0.2.1-alpha.1-u1"
+            V="0.2.1-rc-ux"
           fi
           echo "VERSION=$V" >> "$GITHUB_ENV"
           echo "VERSION=$V" >> "$GITHUB_OUTPUT"
@@ -200,7 +200,7 @@ jobs:
       # ============================================================
       - name: 计算发布版本 Tag
         id: release_tag
-        if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.publish_release)
+        if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/dsha-for-root.x' || (github.event_name == 'workflow_dispatch' && inputs.publish_release)
         run: |
           set -euo pipefail
           echo "tag=${VERSION}" >> "$GITHUB_OUTPUT"
