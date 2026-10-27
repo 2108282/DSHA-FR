@@ -1,6 +1,6 @@
 id=dsha_native
 name=DSHA Native Chroot Core
-version=0.2.1-rc-u6
-versionCode=151
+version=0.2.1-rc-u7
+versionCode=152
 author=21082
 description=DSHA 原生 Linux chroot 极速运行时，按需启停。
