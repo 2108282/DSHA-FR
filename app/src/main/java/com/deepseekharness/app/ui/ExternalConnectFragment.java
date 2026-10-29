@@ -691,6 +691,27 @@ public final class ExternalConnectFragment extends Fragment {
             btnCopy.setOnClickListener(x -> copyToClipboard(h.getSshCommand()));
             rowBtns.addView(btnCopy);
 
+            TextView btnPush = new TextView(ctx);
+            btnPush.setText("推送公钥");
+            btnPush.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+            btnPush.setTextColor(ctx.getColor(R.color.primary));
+            btnPush.setBackgroundResource(R.drawable.m3_btn_tonal_small);
+            btnPush.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams lpPush = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, btnH);
+            lpPush.setMarginStart(Math.round(8f * density));
+            btnPush.setLayoutParams(lpPush);
+            btnPush.setPadding(px, 0, px, 0);
+            btnPush.setClickable(true);
+            btnPush.setFocusable(true);
+            btnPush.setOnClickListener(x -> {
+                if (h.hasPassword()) {
+                    pushKeyToHostAsync(h, null);
+                } else {
+                    showSshPasswordDialog(h);
+                }
+            });
+            rowBtns.addView(btnPush);
+
             View spacer = new View(ctx);
             rowBtns.addView(spacer, new LinearLayout.LayoutParams(0, 0, 1f));
 
@@ -1039,10 +1060,10 @@ public final class ExternalConnectFragment extends Fragment {
         });
     }
 
-    private void pushKeyToHostAsync(SshManager.HostProfile h) {
-        ToastHelper.show(requireContext(), "正在向 " + h.name + " 推送本机公钥...");
+    private void pushKeyToHostAsync(SshManager.HostProfile h, String overridePassword) {
+        ToastHelper.show(requireContext(), "正在向 " + h.name + " 推送本机公钥并配对...");
         executor.execute(() -> {
-            String res = sshManager.pushPublicKeyToHost(h);
+            String res = sshManager.pushPublicKeyToHost(h, overridePassword);
             mainHandler.post(() -> {
                 if (!isAdded()) return;
                 ToastHelper.show(requireContext(), res);
@@ -1080,7 +1101,7 @@ public final class ExternalConnectFragment extends Fragment {
         layout.setPadding(p, p, p, p);
 
         TextView tvTitle = new TextView(ctx);
-        tvTitle.setText("SSH 密码验证: " + h.name);
+        tvTitle.setText("SSH 密码验证与配对: " + h.name);
         tvTitle.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
         tvTitle.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
         tvTitle.setTextColor(ctx.getColor(R.color.text));
@@ -1088,7 +1109,7 @@ public final class ExternalConnectFragment extends Fragment {
 
         TextView tvSub = new TextView(ctx);
         String targetUser = TextUtils.isEmpty(h.user) ? "root" : h.user;
-        tvSub.setText("目标地址: " + targetUser + "@" + h.host + ":" + h.port + "\n公钥验证未通过或该主机需要密码登录，请输入远程主机密码：");
+        tvSub.setText("目标地址: " + targetUser + "@" + h.host + ":" + h.port + "\n公钥免密未通过或该主机需要密码验证，请输入密码：");
         tvSub.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
         tvSub.setTextColor(ctx.getColor(R.color.text_muted));
         tvSub.setPadding(0, Math.round(6f * density), 0, Math.round(12f * density));
@@ -1105,12 +1126,20 @@ public final class ExternalConnectFragment extends Fragment {
         etPassword.setPadding(padH, padV, padH, padV);
         layout.addView(etPassword);
 
+        CheckBox cbPushKey = new CheckBox(ctx);
+        cbPushKey.setText("同时推送公钥到该主机（实现后续免密直连）");
+        cbPushKey.setChecked(true);
+        cbPushKey.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        cbPushKey.setTextColor(ctx.getColor(R.color.text_muted));
+        cbPushKey.setPadding(Math.round(4f * density), Math.round(8f * density), 0, Math.round(2f * density));
+        layout.addView(cbPushKey);
+
         CheckBox cbSave = new CheckBox(ctx);
         cbSave.setText("保存此密码（后续直连与免输）");
         cbSave.setChecked(true);
         cbSave.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
         cbSave.setTextColor(ctx.getColor(R.color.text_muted));
-        cbSave.setPadding(Math.round(4f * density), Math.round(8f * density), 0, Math.round(4f * density));
+        cbSave.setPadding(Math.round(4f * density), Math.round(4f * density), 0, Math.round(4f * density));
         layout.addView(cbSave);
 
         android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(ctx)
@@ -1128,20 +1157,25 @@ public final class ExternalConnectFragment extends Fragment {
                 return;
             }
             dialog.dismiss();
-            ToastHelper.show(ctx, "正在验证 " + h.name + " 密码...");
+            ToastHelper.show(ctx, "正在验证 " + h.name + " 连接...");
             executor.execute(() -> {
                 SshManager.TestResult res = sshManager.testConnection(h, password);
                 mainHandler.post(() -> {
                     if (!isAdded()) return;
                     if (res.isSuccess()) {
+                        String pushNotice = "";
+                        if (cbPushKey.isChecked()) {
+                            String pushResult = sshManager.pushPublicKeyToHost(h, password);
+                            if (pushResult.contains("成功") || pushResult.contains("已完成") || pushResult.contains("已存在")) {
+                                pushNotice = "，且已完成公钥免密配对！";
+                            }
+                        }
                         if (cbSave.isChecked()) {
                             h.password = password;
                             sshManager.saveHost(h);
-                            refreshSshAllAsync();
-                            ToastHelper.show(requireContext(), "连接测试成功！密码已自动保存");
-                        } else {
-                            ToastHelper.show(requireContext(), "连接测试成功！密码验证正确");
                         }
+                        refreshSshAllAsync();
+                        ToastHelper.show(requireContext(), "连接测试成功！" + (cbSave.isChecked() ? "密码已保存" : "") + pushNotice);
                     } else {
                         ToastHelper.show(requireContext(), res.message);
                     }

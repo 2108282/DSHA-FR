@@ -26,6 +26,8 @@ public final class SshManager {
     public static final String PASSWORDS_JSON_PATH = "/data/adb/dsha/rootfs/root/.ssh/passwords.json";
     public static final String SSH_KEYS_DIR = "/data/adb/dsha/rootfs/root/.ssh/keys";
     public static final String CONTAINER_KEYS_DIR = "/root/.ssh/keys";
+    public static final String SSH_ASKPASS_PATH = "/data/adb/dsha/rootfs/root/.ssh/askpass.sh";
+    public static final String CONTAINER_ASKPASS = "/root/.ssh/askpass.sh";
 
     private static volatile SshManager sInstance;
     private final Context context;
@@ -100,6 +102,11 @@ public final class SshManager {
         if (!"1".equals(checkPwd)) {
             execRoot("echo '{}' > " + PASSWORDS_JSON_PATH + " && chmod 600 " + PASSWORDS_JSON_PATH);
         }
+        // 初始化轻量级原生 SSH_ASKPASS 注入脚本，彻底脱离 PTY / /dev/pts 约束
+        String checkAskpass = execRoot("test -f " + SSH_ASKPASS_PATH + " && echo 1 || echo 0").trim();
+        if (!"1".equals(checkAskpass)) {
+            execRoot("printf '#!/bin/sh\\nprintf \"%%s\\\\n\" \"$SSHPASS\"\\n' > " + SSH_ASKPASS_PATH + " && chmod 700 " + SSH_ASKPASS_PATH);
+        }
     }
 
     /**
@@ -127,36 +134,78 @@ public final class SshManager {
     }
 
     /**
-     * 使用已存密码自动向远程主机推送本机公钥 (ssh-copy-id)
+     * 使用已存密码自动向远程主机推送本机公钥
      */
     public String pushPublicKeyToHost(HostProfile host) {
-        if (host == null || !host.hasPassword()) {
+        return pushPublicKeyToHost(host, null);
+    }
+
+    /**
+     * 向远程主机推送本机公钥 (自适应兼容 Linux 与 Windows OpenSSH)
+     */
+    public String pushPublicKeyToHost(HostProfile host, String overridePassword) {
+        if (host == null || TextUtils.isEmpty(host.host)) {
+            return "目标主机配置无效";
+        }
+        String pwd = (overridePassword != null) ? overridePassword.trim() : host.password;
+        if (TextUtils.isEmpty(pwd)) {
             return "该主机未设置密码，无法自动推送公钥";
         }
         if (TextUtils.isEmpty(getPublicKey())) {
             generateKeyPair();
         }
-        String keyPath = "/root/.ssh/id_ed25519.pub";
+        String pubKey = getPublicKey();
+        if (TextUtils.isEmpty(pubKey)) {
+            return "本地公钥不存在且生成失败";
+        }
         if (!TextUtils.isEmpty(host.identityFile)) {
-            keyPath = host.identityFile.endsWith(".pub") ? host.identityFile : (host.identityFile + ".pub");
+            String customPubPath = host.identityFile.endsWith(".pub") ? host.identityFile : (host.identityFile + ".pub");
+            String customPub = execRoot("cat " + customPubPath + " 2>/dev/null").trim();
+            if (!TextUtils.isEmpty(customPub) && (customPub.startsWith("ssh-") || customPub.startsWith("ecdsa-"))) {
+                pubKey = customPub;
+            }
         }
-        String safePwd = host.password.replace("'", "'\\''");
-        String cmd = "chroot /data/adb/dsha/rootfs /bin/bash -c '"
+
+        String b64Pwd = Base64.encodeToString(pwd.getBytes(StandardCharsets.UTF_8), Base64.NO_WRAP);
+        String b64Key = Base64.encodeToString(pubKey.getBytes(StandardCharsets.UTF_8), Base64.NO_WRAP);
+        String user = TextUtils.isEmpty(host.user) ? "root" : host.user;
+        int port = host.port > 0 ? host.port : 22;
+
+        // 阶段 1: 优先尝试 Windows OpenSSH (PowerShell 无侵入写入与管理员 ACL 继承修复)
+        String winCmd = "chroot /data/adb/dsha/rootfs /bin/bash -c '"
                 + "export HOME=/root USER=root PATH=/usr/local/bin:/usr/bin:/bin:$PATH; "
-                + "export SSHPASS=\\'" + safePwd + "\\'; "
-                + "sshpass -e ssh-copy-id -i \"" + keyPath + "\" -p " + host.port + " -o StrictHostKeyChecking=no "
-                + host.user + "@" + host.host + " 2>&1'";
-        String out = execRoot(cmd).trim();
-        if (out.contains("Number of key(s) added") || out.contains("Now try logging into the machine")) {
-            return "公钥推送成功！目标主机已支持免密直连";
-        } else if (out.contains("already installed") || out.contains("already exist")) {
-            return "公钥已存在于目标主机，已支持免密直连";
-        } else if (out.contains("Permission denied")) {
-            return "推送失败：密码错误或被远程主机拒绝";
-        } else if (out.contains("Connection refused")) {
-            return "推送失败：连接被拒绝，请检查主机地址与端口";
+                + "export SSH_ASKPASS_REQUIRE=force DISPLAY=:0 SSH_ASKPASS=/root/.ssh/askpass.sh; "
+                + "export SSHPASS=$(printf \"%s\" \"" + b64Pwd + "\" | base64 -d); "
+                + "PUB=$(printf \"%s\" \"" + b64Key + "\" | base64 -d); "
+                + "ssh -o BatchMode=no -o ConnectTimeout=8 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p " + port + " " + user + "@" + host.host + " "
+                + "\"powershell -NoProfile -Command \\\"\\$k = '\\$PUB'; \\$u = \\\\\\\"\\$HOME\\\\.ssh\\\\authorized_keys\\\\\\\"; \\$a = 'C:\\\\ProgramData\\\\ssh\\\\administrators_authorized_keys'; New-Item -ItemType Directory -Force -Path \\\\\\\"\\$HOME\\\\.ssh\\\\\\\" | Out-Null; Add-Content -Force -Path \\$u -Value \\$k; Add-Content -Force -Path \\$a -Value \\$k; & icacls.exe \\$a /inheritance:r /grant 'Administrators:F' /grant 'SYSTEM:F' | Out-Null; Write-Output __DSHA_KEY_DEPLOY_OK__\\\"\" 2>&1'";
+
+        String winOut = execRoot(winCmd).trim();
+        if (winOut.contains("__DSHA_KEY_DEPLOY_OK__")) {
+            return "公钥推送成功！目标主机 (Windows) 已完成免密配对";
         }
-        return out.isEmpty() ? "公钥推送完成" : out;
+
+        // 阶段 2: 回退至 Linux/Unix 标准 Shell 追加模式
+        String linuxCmd = "chroot /data/adb/dsha/rootfs /bin/bash -c '"
+                + "export HOME=/root USER=root PATH=/usr/local/bin:/usr/bin:/bin:$PATH; "
+                + "export SSH_ASKPASS_REQUIRE=force DISPLAY=:0 SSH_ASKPASS=/root/.ssh/askpass.sh; "
+                + "export SSHPASS=$(printf \"%s\" \"" + b64Pwd + "\" | base64 -d); "
+                + "PUB=$(printf \"%s\" \"" + b64Key + "\" | base64 -d); "
+                + "ssh -o BatchMode=no -o ConnectTimeout=8 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p " + port + " " + user + "@" + host.host + " "
+                + "\"sh -c \\\"mkdir -p ~/.ssh && chmod 700 ~/.ssh && echo '\\$PUB' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys && echo __DSHA_KEY_DEPLOY_OK__\\\"\" 2>&1'";
+
+        String linuxOut = execRoot(linuxCmd).trim();
+        if (linuxOut.contains("__DSHA_KEY_DEPLOY_OK__")) {
+            return "公钥推送成功！目标主机 (Linux) 已完成免密配对";
+        } else if (linuxOut.contains("Permission denied")) {
+            return "推送失败：密码错误或被远程主机拒绝";
+        } else if (linuxOut.contains("Connection refused")) {
+            return "推送失败：连接被拒绝，请检查主机地址与端口";
+        } else if (linuxOut.contains("timed out")) {
+            return "推送失败：连接超时，请检查主机网络连通性";
+        }
+
+        return linuxOut.isEmpty() ? (winOut.isEmpty() ? "公钥推送完成" : winOut) : linuxOut;
     }
 
     /**
@@ -188,7 +237,7 @@ public final class SshManager {
     }
 
     /**
-     * 测试与远程主机的 SSH 连通性
+     * 测试与远程主机的 SSH 连通性 (采用 OpenSSH 原生 SSH_ASKPASS 注入，完全规避 PTY 与伪终端依赖)
      * @param host 目标主机配置
      * @param overridePassword 可选传入的临时密码（若为 null 则使用 host 自身保存的密码或公钥免密）
      */
@@ -206,8 +255,9 @@ public final class SshManager {
 
         if (hasPwd) {
             String b64 = Base64.encodeToString(pwd.getBytes(StandardCharsets.UTF_8), Base64.NO_WRAP);
+            sb.append("export SSH_ASKPASS_REQUIRE=force DISPLAY=:0 SSH_ASKPASS=/root/.ssh/askpass.sh; ");
             sb.append("export SSHPASS=$(printf \"%s\" \"").append(b64).append("\" | base64 -d); ");
-            sb.append("sshpass -e ssh -o BatchMode=no -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ");
+            sb.append("ssh -o BatchMode=no -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ");
         } else {
             sb.append("ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null ");
         }
