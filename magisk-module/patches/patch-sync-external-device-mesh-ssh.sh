@@ -12,9 +12,11 @@ DATA_DIR="${2:-/data/adb/dsha}"
 
 echo "==> [增量补丁] 正在同步 SSH 专属私钥池与 external-device-mesh 技能规范 ..."
 
-# 1. 确保专属私钥池目录权限为 700
+# 1. 确保专属私钥池目录权限为 700，并注入轻量级 askpass.sh 脚本
 mkdir -p "$ROOTFS/root/.ssh/keys" 2>/dev/null || true
 chmod 700 "$ROOTFS/root/.ssh" "$ROOTFS/root/.ssh/keys" 2>/dev/null || true
+printf '#!/bin/sh\nprintf "%%s\\n" "$SSHPASS"\n' > "$ROOTFS/root/.ssh/askpass.sh" 2>/dev/null || true
+chmod 700 "$ROOTFS/root/.ssh/askpass.sh" 2>/dev/null || true
 
 # 2. 同步 external-device-mesh 技能文档
 SKILL_DST="$ROOTFS/root/.dsh/skills/external-device-mesh"
