@@ -91,6 +91,39 @@ is_mounted() {
     grep -q " $target " /proc/mounts 2>/dev/null || mountpoint -q "$target" 2>/dev/null
 }
 
+clean_umount() {
+    local target="${1%/}"
+    while grep -q " $target " /proc/mounts 2>/dev/null || mountpoint -q "$target" 2>/dev/null; do
+        umount -l "$target" 2>/dev/null || break
+    done
+}
+
+# 专用于 FUSE/外部存储的安全探活：严格加入 1 秒超时，防范 FUSE 假死导致脚本永久卡在内核 D 状态
+is_storage_alive() {
+    local target="${1%/}"
+    if ! grep -q " $target " /proc/mounts 2>/dev/null; then
+        return 1
+    fi
+    timeout 1 stat -t "$target" >/dev/null 2>&1
+}
+
+# 外部存储自愈挂载闭环：断开时自动解挂重建，健康时绝不重复挂载
+mount_storage_safe() {
+    local target="$1"
+    local source="$2"
+
+    if grep -q " $target " /proc/mounts 2>/dev/null; then
+        if is_storage_alive "$target"; then
+            return 0
+        fi
+        # 探测到 FUSE Socket 断开或假死，强制解挂清理现场
+        clean_umount "$target"
+    fi
+
+    mkdir -p "$target" 2>/dev/null
+    mount -o bind "$source" "$target"
+}
+
 mount_if_needed() {
     local target="$1"
     shift
@@ -116,21 +149,44 @@ mount_if_needed() {
 mount -o remount,noatime,nodiratime "$ROOTFS" 2>/dev/null || true
 
 mount_if_needed "$ROOTFS/dev" -o bind /dev
+
+# 物理块设备隔离与挂载传播控制：
+# 默认不穿透（mount --make-rslave）：阻断容器内部的 tmpfs 屏蔽反向传播至 Android 宿主，确保 KonaBess 等宿主工具正常工作；
+# 若开启全局穿透标志（$RUN_DIR/block_guard_global == 1），则不执行 rslave，将屏蔽同步扩散至宿主全局。
+GLOBAL_BLOCK_FLAG="$RUN_DIR/block_guard_global"
+if [ -f "$GLOBAL_BLOCK_FLAG" ] && [ "$(cat "$GLOBAL_BLOCK_FLAG" 2>/dev/null)" = "1" ]; then
+    # 全局穿透模式：保持 shared，不设 rslave
+    :
+else
+    # 默认模式：阻断反向穿透，容器为从属挂载（适配 Android Toybox 与 Busybox 双语法）
+    mount -o rslave none "$ROOTFS/dev" 2>/dev/null || /data/adb/ksu/bin/busybox mount --make-rslave "$ROOTFS/dev" 2>/dev/null || true
+fi
+
 mount_if_needed "$ROOTFS/dev/pts" -o bind /dev/pts
 mkdir -p "$ROOTFS/dev/shm"
 mount_if_needed "$ROOTFS/dev/shm" -t tmpfs tmpfs -o mode=1777,noatime,nodiratime
-# 屏蔽物理块设备：只读且mode 000空tmpfs，从内核层彻底杜绝误写分区物理变砖
+
+# 物理块设备防砖隔离（核心每次启动强制开启防护并重置状态，保障防砖安全）
 mkdir -p "$ROOTFS/dev/block"
 mount_if_needed "$ROOTFS/dev/block" -t tmpfs tmpfs -o ro,mode=000
+if [ -f "$GLOBAL_BLOCK_FLAG" ] && [ "$(cat "$GLOBAL_BLOCK_FLAG" 2>/dev/null)" = "1" ]; then
+    mkdir -p "/dev/block"
+    mount_if_needed "/dev/block" -t tmpfs tmpfs -o ro,mode=000
+else
+    # 默认模式：阻断反向穿透，并确保宿主物理块设备完全解挂放行（彻底根治重启复发）
+    clean_umount "/dev/block"
+fi
+echo "1" > "$RUN_DIR/block_guard_state" 2>/dev/null || true
+rm -f "/data/data/com.dsha.fr/files/.block_guard_disabled" 2>/dev/null || true
 mount_if_needed "$ROOTFS/proc" -t proc proc
 mount_if_needed "$ROOTFS/sys" -t sysfs sysfs
 
-# 挂载存储卡 (启用 noatime,nodiratime)
+# 挂载存储卡 (启用安全探活与超时熔断，杜绝 ENOTCONN 与卡死)
 if [ -d "/storage/emulated/0" ]; then
-    mount_if_needed "$ROOTFS/sdcard" -o bind /storage/emulated/0
-    mount_if_needed "$ROOTFS/storage/emulated/0" -o bind /storage/emulated/0
+    mount_storage_safe "$ROOTFS/sdcard" /storage/emulated/0
+    mount_storage_safe "$ROOTFS/storage/emulated/0" /storage/emulated/0
 elif [ -d "/sdcard" ]; then
-    mount_if_needed "$ROOTFS/sdcard" -o bind /sdcard
+    mount_storage_safe "$ROOTFS/sdcard" /sdcard
 fi
 
 # 挂载宿主字体目录至容器内，供给 DSH LibreOfficeKit WASM 引擎完整系统字库
