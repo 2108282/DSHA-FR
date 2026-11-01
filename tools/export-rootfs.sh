@@ -92,10 +92,10 @@ BASE_EXCLUDES=(
     "--exclude=.gitattributes"
 )
 
-# 压缩引擎选择 (优先多线程 pigz)
-COMPRESS_CMD="gzip -1"
+# 压缩引擎选择 (优先多线程 pigz，最高压缩等级 -9)
+COMPRESS_CMD="gzip -9"
 if command -v pigz >/dev/null 2>&1; then
-    COMPRESS_CMD="pigz -p 6 -7"
+    COMPRESS_CMD="pigz -p 6 -9"
 fi
 
 if [ "$MODE" = "clone" ]; then
@@ -339,6 +339,13 @@ EOF_CORDIS
         "--exclude=./usr/bin/aarch64-linux-gnu-*"
         "--exclude=./usr/lib/aarch64-linux-gnu/lib*san*"
         "--exclude=./usr/lib/aarch64-linux-gnu/*.a"
+        "--exclude=*.a"
+        "--exclude=./usr/lib/android-sdk/platforms*"
+        "--exclude=./usr/lib/android-sdk/build-tools*"
+        "--exclude=./usr/lib/android-sdk/.temp*"
+        "--exclude=./usr/lib/android-sdk/.knownPackages*"
+        "--exclude=./usr/lib/llvm*"
+        "--exclude=./usr/include/llvm*"
         "--exclude=./root/.gradle"
         "--exclude=./root/.gradle/*"
         # 排除后装第三方插件实体、依赖与管理配置 (彻底排除 react-icons/mermaid 等 220MB 冗余依赖)
