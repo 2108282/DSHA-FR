@@ -457,6 +457,82 @@ if [ -f "$ROOTFS/root/.dsh/heartbeat-patch.yml" ]; then
     PATCH_ARG="--patch /root/.dsh/heartbeat-patch.yml"
 fi
 
+# 5.8 部署手机操控 MCP 转发器 (relay.cjs) 与 Cordis 叠加补丁 (phone.patch.yml)
+mkdir -p "$ROOTFS/opt/dsh-app/phone" "$ROOTFS/var/lib/dsh-app/phone" 2>/dev/null || true
+chmod 700 "$ROOTFS/var/lib/dsh-app/phone" 2>/dev/null || true
+cat << 'PHONE_RELAY_EOF' > "$ROOTFS/opt/dsh-app/phone/relay.cjs"
+#!/usr/bin/env node
+'use strict'
+const fs = require('fs')
+const net = require('net')
+
+const CONFIG = process.argv[2] || '/var/lib/dsh-app/phone/bridge.json'
+function say (line) { try { process.stderr.write('[phone-relay] ' + line + '\n') } catch (e) {} }
+
+let cfg
+try {
+  cfg = JSON.parse(fs.readFileSync(CONFIG, 'utf8'))
+} catch (e) {
+  say('phone control is not available (' + CONFIG + ': ' + (e.code || e.message) + ')')
+  process.exit(1)
+}
+const targets = []
+if (typeof cfg.abstract === 'string' && cfg.abstract) targets.push({ path: '\0' + cfg.abstract, what: 'unix @' + cfg.abstract })
+if (Number.isInteger(cfg.tcpPort) && cfg.tcpPort > 0) targets.push({ host: '127.0.0.1', port: cfg.tcpPort, what: 'tcp 127.0.0.1:' + cfg.tcpPort })
+
+process.stdout.on('error', function (e) { process.exit(e.code === 'EPIPE' ? 0 : 1) })
+
+function attempt (i) {
+  if (i >= targets.length) { say('phone bridge unreachable'); process.exit(1) }
+  const t = targets[i]
+  const sock = net.connect(t.port ? { host: t.host, port: t.port } : { path: t.path })
+  let up = false
+  const timer = setTimeout(function () { sock.destroy(new Error('connect timeout')) }, 3000)
+  sock.once('connect', function () {
+    up = true
+    clearTimeout(timer)
+    if (sock.setNoDelay) sock.setNoDelay(true)
+    sock.write(JSON.stringify({ dshPhone: 1, token: String(cfg.token || '') }) + '\n')
+    process.stdin.pipe(sock)
+    sock.pipe(process.stdout)
+  })
+  sock.on('error', function (e) {
+    clearTimeout(timer)
+    if (!up) { say(t.what + ': ' + (e.code || e.message)); attempt(i + 1); return }
+    say('bridge connection error: ' + (e.code || e.message))
+    process.exit(1)
+  })
+  sock.on('close', function () { if (up) process.exit(0) })
+}
+attempt(0)
+PHONE_RELAY_EOF
+chmod 644 "$ROOTFS/opt/dsh-app/phone/relay.cjs" 2>/dev/null || true
+
+cat << 'PHONE_PATCH_EOF' > "$ROOTFS/opt/dsh-app/phone/phone.patch.yml"
+- insert:
+    - id: dsh-app-phone
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: phone
+        transport: stdio
+        command: !!js process.execPath
+        args:
+          - /opt/dsh-app/phone/relay.cjs
+          - /var/lib/dsh-app/phone/bridge.json
+        toolCallTimeoutMs: 660000
+        failOnStartupError: false
+PHONE_PATCH_EOF
+chmod 644 "$ROOTFS/opt/dsh-app/phone/phone.patch.yml" 2>/dev/null || true
+
+if [ -f "/data/data/com.dsha.fr/files/phone/bridge.json" ] && [ ! -f "$RUN_DIR/phone_control_disabled" ]; then
+    cp -f "/data/data/com.dsha.fr/files/phone/bridge.json" "$ROOTFS/var/lib/dsh-app/phone/bridge.json" 2>/dev/null || true
+    chmod 600 "$ROOTFS/var/lib/dsh-app/phone/bridge.json" 2>/dev/null || true
+fi
+
+if [ ! -f "$RUN_DIR/phone_control_disabled" ] && [ -f "$ROOTFS/opt/dsh-app/phone/phone.patch.yml" ]; then
+    PATCH_ARG="$PATCH_ARG --patch /opt/dsh-app/phone/phone.patch.yml"
+fi
+
 # 内存防碎片治理：自适应检测 jemalloc，存在则定向注入 Node 主进程压制长时间挂机内存碎片
 PRELOAD_OPT=""
 if [ -f "$ROOTFS/usr/lib/aarch64-linux-gnu/libjemalloc.so.2" ]; then

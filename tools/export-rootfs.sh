@@ -258,7 +258,6 @@ EOF_CORDIS
 
     # 3. 收集并过滤技能打包列表 (显式维护官方标准技能白名单，确保 external-device-mesh 与 REA 等打入底包并脱敏排除私有技能)
     OFFICIAL_SKILLS=(
-        "android-device-agent"
         "boxproxy-support"
         "open-code-review"
         "open-code-review-delegate"
