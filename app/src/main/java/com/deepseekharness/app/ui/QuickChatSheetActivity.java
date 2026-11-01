@@ -2403,10 +2403,31 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 String dialogBg = palette.dialogBg;
                 String menuBorder = palette.menuBorder;
 
+                // 动态计算跟随设置中白天/黑夜不透明度参数（30~100%）的气泡与卡片底色
+                float alphaRatio = Math.max(0.30f, Math.min(1.0f, opacity / 100.0f));
+                int cardR = Color.red(palette.cardBgColor);
+                int cardG = Color.green(palette.cardBgColor);
+                int cardB = Color.blue(palette.cardBgColor);
+
+                int bubbleR = dark ? Math.min(255, cardR + 20) : Math.max(0, cardR - 12);
+                int bubbleG = dark ? Math.min(255, cardG + 22) : Math.max(0, cardG - 10);
+                int bubbleB = dark ? Math.min(255, cardB + 30) : Math.max(0, cardB - 6);
+                String bubbleBg = String.format(Locale.US, "rgba(%d, %d, %d, %.2f)", bubbleR, bubbleG, bubbleB, alphaRatio);
+
+                int cardFillR = dark ? Math.min(255, cardR + 12) : Math.max(0, cardR - 8);
+                int cardFillG = dark ? Math.min(255, cardG + 14) : Math.max(0, cardR - 6);
+                int cardFillB = dark ? Math.min(255, cardB + 20) : Math.max(0, cardG - 4);
+                String changesFill = String.format(Locale.US, "rgba(%d, %d, %d, %.2f)", cardFillR, cardFillG, cardFillB, alphaRatio);
+
                 String commonVars = "  --dsw-alias-bg-base: transparent !important;\n"
                         + "  --dsh-boot-bg: transparent !important;\n"
                         + "  /* 任务完成横幅彻底透明透光 */\n"
                         + "  --dsw-specific-tip: transparent !important;\n"
+                        + "  /* 用户消息气泡动态跟随设置不透明度 */\n"
+                        + "  --dsw-specific-bubble: " + bubbleBg + " !important;\n"
+                        + "  /* 变更文件与交付物卡片动态跟随设置不透明度 */\n"
+                        + "  --changes-fill: " + changesFill + " !important;\n"
+                        + "  --deliverable-fill: " + changesFill + " !important;\n"
                         + "  /* 二层菜单、抽屉与选择器恢复防穿透实体底色与毛玻璃变量 */\n"
                         + "  --dsh-drawer-bg: " + drawerBg + " !important;\n"
                         + "  --dsh-menu-bg: " + menuBg + " !important;\n"
@@ -2464,6 +2485,24 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                         + "  background: rgba(128, 128, 128, 0.06) !important;\n"
                         + "  background-color: rgba(128, 128, 128, 0.06) !important;\n"
                         + "  border-color: rgba(128, 128, 128, 0.18) !important;\n"
+                        + "}\n"
+                        + "/* 变更文件卡片与交付物卡片动态跟随抽屉透明度 */\n"
+                        + "div[class*='hz8-rW_card'],\n"
+                        + "div[class*='nyYjTG_file'],\n"
+                        + "div[class*='k74WwW_card'],\n"
+                        + "div[class*='Ww4dvW_card'] {\n"
+                        + "  background: " + changesFill + " !important;\n"
+                        + "}\n"
+                        + "button[class*='hz8-rW_header'] {\n"
+                        + "  background: transparent !important;\n"
+                        + "}\n"
+                        + "div[class*='hz8-rW_tile'], div[class*='nyYjTG_fileIcon'], div[class*='k74WwW_cardIcon'] {\n"
+                        + "  background: rgba(128, 128, 128, 0.12) !important;\n"
+                        + "}\n"
+                        + "/* 用户消息气泡动态跟随抽屉透明度 */\n"
+                        + "div[class*='_userStack'] div[class*='_bubble'],\n"
+                        + "div[class*='_bubble'] {\n"
+                        + "  background: " + bubbleBg + " !important;\n"
                         + "}\n"
                         + "/* 消息视口：底部边界精确止于输入框上方物理截断，绝不设置包含块 transform 防止破坏贴底定位 */\n"
                         + "div[class*='_scrollBody'] {\n"
