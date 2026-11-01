@@ -13,9 +13,11 @@
 
 # 路径自适应：检测宿主视角 vs 容器视角
 if [ -d "/data/adb/dsha/rootfs" ]; then
+    ROOTFS="/data/adb/dsha/rootfs"
     RUN_DIR="/data/adb/dsha/run"
     DSH_DIR="/data/adb/dsha/rootfs/root/.dsh"
 else
+    ROOTFS=""
     RUN_DIR="/data/adb/dsha/run"
     [ -d "$RUN_DIR" ] || RUN_DIR="/root/.dsh"
     DSH_DIR="/root/.dsh"
@@ -161,6 +163,50 @@ is_daemon_alive() {
     return 1
 }
 
+# 专用于外部存储/FUSE健康检查与无感自愈 (防范 Thanox/双开/MediaProvider 重置导致的 ENOTCONN)
+heal_storage_if_broken() {
+    local rootfs="${ROOTFS:-/data/adb/dsha/rootfs}"
+    local target_sdcard="${rootfs}/sdcard"
+    local target_storage="${rootfs}/storage/emulated/0"
+    local host_source="/storage/emulated/0"
+
+    [ -d "$host_source" ] || return 0
+    # 宿主存储自身不可用时避让（如手机关机卸载流程中）
+    if ! timeout 1 stat -t "$host_source" >/dev/null 2>&1; then
+        return 0
+    fi
+
+    # 探测容器内存储是否断开 (未挂载、ENOTCONN、超时或 FUSE 设备号脱节)
+    local broken=0
+    local host_dev=$(stat -c %d "$host_source" 2>/dev/null)
+    local target_dev=$(stat -c %d "$target_sdcard" 2>/dev/null)
+    if [ -z "$host_dev" ] || [ -z "$target_dev" ] || [ "$host_dev" != "$target_dev" ]; then
+        broken=1
+    elif ! timeout 1 ls -d "$target_sdcard/Download" >/dev/null 2>&1; then
+        broken=1
+    elif ! timeout 1 ls -d "$target_storage/Download" >/dev/null 2>&1; then
+        broken=1
+    fi
+
+    if [ "$broken" = "1" ]; then
+        log_msg "HEAL" "检测到容器外部存储脱机断联 (ENOTCONN/设备号脱节)，正在自愈重挂..."
+        while grep -q " ${target_sdcard%/} " /proc/mounts 2>/dev/null; do
+            umount -l "$target_sdcard" 2>/dev/null || break
+        done
+        while grep -q " ${target_storage%/} " /proc/mounts 2>/dev/null; do
+            umount -l "$target_storage" 2>/dev/null || break
+        done
+        mkdir -p "$target_sdcard" "$target_storage" 2>/dev/null || true
+        mount -o bind "$host_source" "$target_sdcard" 2>/dev/null || true
+        mount -o bind "$host_source" "$target_storage" 2>/dev/null || true
+        if timeout 1 ls -d "$target_sdcard/Download" >/dev/null 2>&1; then
+            log_msg "HEAL" "外部存储自愈成功，已无感重新接驳健康宿主 FUSE 存储"
+        else
+            log_msg "HEAL_FAIL" "外部存储自愈失败：重新绑定后探活仍超时或异常"
+        fi
+    fi
+}
+
 do_wake() {
     local TRIGGER="${1:-手动执行或未指定来源}"
     release_wakelock
@@ -199,6 +245,9 @@ do_wake() {
 
         rm -rf "$WAKE_LOCK" 2>/dev/null
     fi
+
+    # 唤醒时无感自愈外部存储（即使未深睡唤醒，也能即时拦截修复系统重置导致的断联）
+    heal_storage_if_broken
     return 0
 }
 
