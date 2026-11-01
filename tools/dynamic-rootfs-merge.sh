@@ -29,7 +29,7 @@ echo "=========================================================="
 echo "==> [1/4] 解压基准底包: $BASE_TAR"
 tar -xzf "$BASE_TAR" -C "$STAGE_DIR" --no-same-owner
 
-echo "==> [2/4] 通用规则净化 (根据通配符模式清理旧系统痕迹)..."
+echo "==> [2/4] 通用规则净化 (根据通配符模式清理旧系统痕迹与废弃技能)..."
 # 仅根据模式匹配清理，不绑定特定业务名
 find "$STAGE_DIR/tmp" -mindepth 1 -delete 2>/dev/null || true
 find "$STAGE_DIR/root/.cache" -mindepth 1 -delete 2>/dev/null || true
@@ -37,16 +37,24 @@ find "$STAGE_DIR" -name "*proroot*" -exec rm -rf {} + 2>/dev/null || true
 find "$STAGE_DIR" -name "*.l2s*" -exec rm -rf {} + 2>/dev/null || true
 find "$STAGE_DIR/root/.dsh" -name "*patch*.sh" -exec rm -f {} + 2>/dev/null || true
 find "$STAGE_DIR/root/.dsh" -name "*heal*.sh" -exec rm -f {} + 2>/dev/null || true
+rm -rf "$STAGE_DIR/root/.dsh/skills/android-device-agent" \
+       "$STAGE_DIR/root/.dsh/scripts/android_agent.py" \
+       "$STAGE_DIR/usr/local/bin/android-agent" \
+       "$STAGE_DIR/usr/local/lib/python3.12/dist-packages/android_agent.py" \
+       "$STAGE_DIR/var/lib/dsh-app/phone/bridge.json" 2>/dev/null || true
 
 echo "==> [3/4] 【动态反射注入】递归扫描并叠加镜像补丁层: $OVERLAY_DIR"
 if [ -d "$OVERLAY_DIR" ]; then
     # 递归覆盖所有文件，保持相对路径 1:1 精准映射 (包括隐藏文件)
     cp -a "$OVERLAY_DIR/." "$STAGE_DIR/"
     
-    # 准备软链接目录
+    # 准备软链接目录与手机操控 MCP 客户端双层软链
     PROFILE_NM="$STAGE_DIR/root/.dsh/profiles/web/node_modules"
     GLOBAL_NM="$STAGE_DIR/usr/local/lib/node_modules"
-    mkdir -p "$PROFILE_NM" "$GLOBAL_NM"
+    mkdir -p "$PROFILE_NM/@deepseek-ai" "$GLOBAL_NM/@deepseek-ai"
+    ln -sfn "/usr/local/lib/node_modules/@deepseek-ai/dsh" "$PROFILE_NM/@deepseek-ai/dsh"
+    ln -sfn "/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-mcp-client" "$PROFILE_NM/@deepseek-ai/dsh-mcp-client"
+    ln -sfn "/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-mcp-client" "$GLOBAL_NM/@deepseek-ai/dsh-mcp-client"
 
     # 动态扫描注入的插件实体，自动完成安装凭证立牌与语法检测
     for pdir in "$STAGE_DIR/root/dsha-"* "$STAGE_DIR/root/dsh-web-mobile"; do

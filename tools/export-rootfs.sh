@@ -286,14 +286,14 @@ EOF_CORDIS
     fi
     echo "    ✓ 官方技能打包列表已就绪: ${OFFICIAL_SKILLS[*]}"
 
-    # 4. 收集后装第三方 Python 包排除项 (保留底座基础脚本 android_agent.py，排除后装 pip 依赖，对齐 BackupScope.TOOLS)
+    # 4. 收集后装第三方 Python 包排除项 (排除所有后装 pip 依赖及废弃的 android_agent.py)
     PYTHON_EXCLUDES=()
     for py_dist in "/usr/local/lib/python3.12/dist-packages" "/usr/local/lib/python3/dist-packages"; do
         if [ -d "$py_dist" ]; then
             for pyd in "$py_dist"/*; do
                 [ -e "$pyd" ] || continue
                 pyb=$(basename "$pyd")
-                if [[ "$pyb" != "android_agent"* ]] && [[ "$pyb" != "__pycache__" ]]; then
+                if [[ "$pyb" != "__pycache__" ]]; then
                     PYTHON_EXCLUDES+=("--exclude=.${py_dist}/$pyb")
                 fi
             done
@@ -306,6 +306,11 @@ EOF_CORDIS
         "${SYMLINK_EXCLUDES[@]}"
         "${SKILL_EXCLUDES[@]}"
         "${PYTHON_EXCLUDES[@]}"
+        "--exclude=./root/.dsh/skills/android-device-agent"
+        "--exclude=./root/.dsh/skills/android-device-agent/*"
+        "--exclude=./root/.dsh/scripts/android_agent.py"
+        "--exclude=./usr/local/bin/android-agent"
+        "--exclude=./var/lib/dsh-app/phone/bridge.json"
         "--exclude=./root/.dsh/skills/*/*.bak"
         "--exclude=./root/.dsh/skills/*/*~"
         # 排除 dsh-web-mobile 源码开发依赖与文档 (生产底座仅需 lib/ 与 package.json)
@@ -448,8 +453,11 @@ EOF_CORDIS
     STAGE_GLOBAL_NM="$STAGE_DIR/usr/local/lib/node_modules"
     STAGE_AGENTS_SKILLS="$STAGE_DIR/root/.agents/skills"
     STAGE_WORKSPACES="$STAGE_DIR/root/workspaces"
-    mkdir -p "$STAGE_PROFILE_NM" "$STAGE_GLOBAL_NM" "$STAGE_AGENTS_SKILLS" "$STAGE_WORKSPACES"
+    mkdir -p "$STAGE_PROFILE_NM/@deepseek-ai" "$STAGE_GLOBAL_NM/@deepseek-ai" "$STAGE_AGENTS_SKILLS" "$STAGE_WORKSPACES"
     touch "$STAGE_AGENTS_SKILLS/.gitkeep" "$STAGE_WORKSPACES/.gitkeep"
+    ln -sfn "/usr/local/lib/node_modules/@deepseek-ai/dsh" "$STAGE_PROFILE_NM/@deepseek-ai/dsh"
+    ln -sfn "/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-mcp-client" "$STAGE_PROFILE_NM/@deepseek-ai/dsh-mcp-client"
+    ln -sfn "/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-mcp-client" "$STAGE_GLOBAL_NM/@deepseek-ai/dsh-mcp-client"
     EXTRA_STAGE_INJECTS=()
     if [ -d "/root/.dsh/skills/reverse-engineer-anything" ]; then
         ln -sfn "/root/.dsh/skills/reverse-engineer-anything" "$STAGE_AGENTS_SKILLS/reverse-engineer-anything"
@@ -467,6 +475,9 @@ EOF_CORDIS
     tar --numeric-owner -rf "$TMP_RAW_TAR" -C "$STAGE_DIR" \
         ./root/.dsh/profiles/web/package.json \
         ./root/.dsh/profiles/web/cordis.patch.yml \
+        ./root/.dsh/profiles/web/node_modules/@deepseek-ai/dsh \
+        ./root/.dsh/profiles/web/node_modules/@deepseek-ai/dsh-mcp-client \
+        ./usr/local/lib/node_modules/@deepseek-ai/dsh-mcp-client \
         ./root/.dsh/profiles/web/node_modules/dsh-device-shell-guide \
         ./root/.dsh/profiles/web/node_modules/dsh-task-notifier \
         ./root/.dsh/profiles/web/node_modules/dsh-status-overlay \

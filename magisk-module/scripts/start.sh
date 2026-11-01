@@ -458,7 +458,9 @@ if [ -f "$ROOTFS/root/.dsh/heartbeat-patch.yml" ]; then
 fi
 
 # 5.8 部署手机操控 MCP 转发器 (relay.cjs) 与 Cordis 叠加补丁 (phone.patch.yml)
-mkdir -p "$ROOTFS/opt/dsh-app/phone" "$ROOTFS/var/lib/dsh-app/phone" 2>/dev/null || true
+mkdir -p "$ROOTFS/opt/dsh-app/phone" "$ROOTFS/var/lib/dsh-app/phone" "$ROOTFS/root/.dsh/profiles/web/node_modules/@deepseek-ai" "$ROOTFS/usr/local/lib/node_modules/@deepseek-ai" 2>/dev/null || true
+ln -sfn /usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-mcp-client "$ROOTFS/root/.dsh/profiles/web/node_modules/@deepseek-ai/dsh-mcp-client" 2>/dev/null || true
+ln -sfn /usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-mcp-client "$ROOTFS/usr/local/lib/node_modules/@deepseek-ai/dsh-mcp-client" 2>/dev/null || true
 chmod 700 "$ROOTFS/var/lib/dsh-app/phone" 2>/dev/null || true
 cat << 'PHONE_RELAY_EOF' > "$ROOTFS/opt/dsh-app/phone/relay.cjs"
 #!/usr/bin/env node
