@@ -172,11 +172,20 @@ public class MainActivity extends AppCompatActivity {
                 targetId = R.id.nav_terminal;
             } else if (getIntent().getBooleanExtra("open_plugins", false)) {
                 targetId = R.id.nav_plugins;
+            } else if (getIntent().getBooleanExtra("open_phone_unlocks", false)) {
+                targetId = R.id.nav_settings;
             }
             nav.setSelectedItemId(targetId);
             // 核心修复：显式确保冷启动时初始 Fragment 立即加载挂载，杜绝 setSelectedItemId 同 ID 未触发监听导致的白板
             if (getSupportFragmentManager().findFragmentById(R.id.fragment_container) == null) {
                 switchTab(targetId);
+            }
+            if (getIntent().getBooleanExtra("open_phone_unlocks", false)) {
+                getIntent().removeExtra("open_phone_unlocks");
+                nav.post(() -> getSupportFragmentManager().beginTransaction()
+                        .replace(R.id.fragment_container, new PhoneControlFragment())
+                        .addToBackStack("settings")
+                        .commitAllowingStateLoss());
             }
         } else {
             // 重建时（如切换主题），根据当前恢复的 tab 状态同步更新标题，避免错乱停留在“启动”
@@ -231,6 +240,13 @@ public class MainActivity extends AppCompatActivity {
                 nav.setSelectedItemId(R.id.nav_terminal);
             } else if (intent.getBooleanExtra("open_plugins", false)) {
                 nav.setSelectedItemId(R.id.nav_plugins);
+            } else if (intent.getBooleanExtra("open_phone_unlocks", false)) {
+                intent.removeExtra("open_phone_unlocks");
+                nav.setSelectedItemId(R.id.nav_settings);
+                nav.post(() -> getSupportFragmentManager().beginTransaction()
+                        .replace(R.id.fragment_container, new PhoneControlFragment())
+                        .addToBackStack("settings")
+                        .commitAllowingStateLoss());
             }
         }
     }

@@ -14,40 +14,17 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 无障碍服务：目前只做一件事 —— 在用户主动开启的短暂窗口内，从系统「无线调试」
- * 的配对弹窗里读出 6 位配对码与端口，免去手抄（配对码 2 分钟就失效，抄错一位
- * 就得重来，这是整个 ADB 通道里最劝退的一步）。
- *
- * 隐私边界（三层，缺一层都不该上线）：
- *  1. 清单里 android:packageNames 限定 com.android.settings —— 系统层面就只把
- *     设置应用的事件投给我们，别的应用的屏幕内容连事件都收不到；
- *  2. 代码里平时第一行就 return，只有用户点过「自动读配对码」之后的 120 秒内才扫描；
- *  3. 读到配对码立刻关闭窗口（一次性），不写文件、不进日志、不出设备。
+ * DSHA 统一无障碍服务：
+ * 1. 继承自 {@link com.deepseekharness.app.phone.a11y.PhoneA11yService}，为 mcp__phone__* 提供
+ *    MainScreenDriver（元素指纹校验、身份证/银行卡脱敏、回读校验、长列表 collect）与
+ *    ControlOverlay（胶囊 / 卡片 / 贴边小球三态控制条 + 底部确认卡）；
+ * 2. 同时保留 3095 桥 (/app/ui/*) 的静态兼容方法与 Root 自动开启能力。
  */
-public class DshaAccessibilityService extends AccessibilityService {
+public class DshaAccessibilityService extends com.deepseekharness.app.phone.a11y.PhoneA11yService {
 
     private static final String TAG = "DSHA";
-    private static final String SETTINGS_PKG = "com.android.settings";
-    /** 与配对码本身的有效期对齐：Android 的配对弹窗约 2 分钟失效 */
-    private static final long WATCH_MS = 120_000L;
-    /** 无线调试配对码固定 6 位；前后加边界避免从长数字里截一段 */
-    private static final Pattern CODE = Pattern.compile("(?<!\\d)(\\d{6})(?!\\d)");
-    /** 弹窗里的「IP 地址和端口」，端口是随机高位 */
-    private static final Pattern ADDR = Pattern.compile("(\\d{1,3}(?:\\.\\d{1,3}){3}):(\\d{2,5})");
 
-    /** 读到配对信息后的回调（在无障碍服务线程上调用，实现方自己切主线程） */
-    public interface PairInfoListener {
-        void onPairInfo(String code, String ip, String port);
-    }
-
-    private static volatile long watchUntil = 0L;
-    private static volatile PairInfoListener listener;
-
-    /** 三态：YES 确认已开 / NO 确认未开 / UNKNOWN 读不到设置（别当成未开）。
-     *
-     *  服务实例存在是最硬的证据 —— 系统能把它连起来，就一定是开着的。
-     *  只在拿不到实例时才去解析 Settings 字符串，而那串在各家 ROM 上格式不一，
-     *  解析失败时必须承认「不知道」，不能报「未开启」害用户反复去开。 */
+    /** 三态：YES 确认已开 / NO 确认未开 / UNKNOWN 读不到设置（别当成未开）。 */
     public static String enabledState(Context ctx) {
         if (instance != null) return "YES";
         try {
@@ -55,8 +32,8 @@ public class DshaAccessibilityService extends AccessibilityService {
             String want = ctx.getPackageName() + "/" + cls;
             String on = Settings.Secure.getString(ctx.getContentResolver(),
                     Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
-            if (on == null) return "UNKNOWN";   // 读不到这一项，不代表用户没开
-            if (on.isEmpty()) return "NO";      // 明确是空串 = 一个无障碍服务都没开
+            if (on == null) return "UNKNOWN";
+            if (on.isEmpty()) return "NO";
             for (String e0 : on.split(":")) {
                 String e = e0.trim();
                 if (e.equalsIgnoreCase(want)) return "YES";
@@ -82,7 +59,6 @@ public class DshaAccessibilityService extends AccessibilityService {
             for (String s : on.split(":")) {
                 String e = s.trim();
                 if (e.equalsIgnoreCase(want)) return true;
-                // 部分机型存的是 包名/.类简名 的简写形式
                 if (e.startsWith(ctx.getPackageName() + "/") && cls.endsWith(e.substring(e.indexOf('/') + 1))) {
                     return true;
                 }
@@ -93,94 +69,12 @@ public class DshaAccessibilityService extends AccessibilityService {
         }
     }
 
-    /** 打开监听窗口（120 秒，一次性）。只有这段时间内才会去读设置页的内容。 */
-    public static void startWatch(PairInfoListener l) {
-        listener = l;
-        watchUntil = System.currentTimeMillis() + WATCH_MS;
-    }
-
-    public static void stopWatch() {
-        watchUntil = 0L;
-        listener = null;
-    }
-
-    public static boolean watching() {
-        return System.currentTimeMillis() <= watchUntil;
-    }
-
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
-        // 平时一律不读屏幕：没有用户主动开的窗口，这里立刻返回
-        if (System.currentTimeMillis() > watchUntil) return;
-        if (event == null) return;
-        CharSequence pkg = event.getPackageName();
-        if (pkg == null || !SETTINGS_PKG.contentEquals(pkg)) return;
-
-        AccessibilityNodeInfo root = null;
-        try {
-            root = getRootInActiveWindow();
-            if (root == null) return;
-            StringBuilder sb = new StringBuilder();
-            collectText(root, sb, 0);
-            String all = sb.toString();
-            // 必须出现「配对码」字样才继续 —— 否则设置页里任何 6 位数字
-            // （流量、时长、序列号片段）都可能被误当成配对码
-            if (!all.contains("配对码") && !all.toLowerCase().contains("pairing code")) return;
-            Matcher mc = CODE.matcher(all);
-            if (!mc.find()) return;
-            String code = mc.group(1);
-            String ip = "";
-            String port = "";
-            Matcher ma = ADDR.matcher(all);
-            if (ma.find()) {
-                ip = ma.group(1);
-                port = ma.group(2);
-            }
-            PairInfoListener l = listener;
-            stopWatch(); // 一次性：读到就收工，不再继续读屏
-            Log.i(TAG, "已从配对弹窗读到配对码（端口 " + (port.isEmpty() ? "未识别" : port) + "）");
-            if (l != null) l.onPairInfo(code, ip, port);
-        } catch (Throwable t) {
-            Log.w(TAG, "读配对码失败：" + SensitiveData.redact(String.valueOf(t)));
-        } finally {
-            if (root != null) {
-                try {
-                    root.recycle();
-                } catch (Throwable ignored) {
-                }
-            }
-        }
-    }
-
-    /** 收集节点树上的可见文本。限深度与总长，避免深树递归过深或把内存吃爆。 */
-    private static void collectText(AccessibilityNodeInfo node, StringBuilder sb, int depth) {
-        if (node == null || depth > 24 || sb.length() > 8000) return;
-        CharSequence t = node.getText();
-        if (!TextUtils.isEmpty(t)) sb.append(t).append('\n');
-        CharSequence d = node.getContentDescription();
-        if (!TextUtils.isEmpty(d)) sb.append(d).append('\n');
-        int n = node.getChildCount();
-        for (int i = 0; i < n; i++) {
-            AccessibilityNodeInfo ch = node.getChild(i);
-            if (ch == null) continue;
-            try {
-                collectText(ch, sb, depth + 1);
-            } finally {
-                try {
-                    ch.recycle();
-                } catch (Throwable ignored) {
-                }
-            }
-        }
+        super.onAccessibilityEvent(event);
     }
 
     // ==================== 给 agent 用的屏幕操作能力 ====================
-    //
-    // 这一层让 agent 不依赖 ADB / Shizuku 就能读屏、点按、输入、按键 —— 对多数
-    // 用户来说 ADB 无线调试根本没开，Shizuku 也没装，而无障碍是一次授权永久可用。
-    //
-    // 隐私：这里全部是「按需拉取」——只有 agent 调用时才去 getRootInActiveWindow()，
-    // 服务自身不做任何持续记录（onAccessibilityEvent 里除了配对窗口一律直接返回）。
 
     private static volatile DshaAccessibilityService instance;
 
@@ -188,7 +82,7 @@ public class DshaAccessibilityService extends AccessibilityService {
         return instance != null;
     }
 
-    /** 自动静默自愈无障碍服务（Root 环境下自动解除 A13~A17 受限设置并挂载服务） */
+    /** 自动静默自愈无障碍服务（Root 环境下自动授予 WRITE_SECURE_SETTINGS、解除 A13~A17 受限设置并挂载服务） */
     public static boolean ensureConnected(Context ctx) {
         if (instance != null) return true;
         if (ctx == null) return false;
@@ -196,7 +90,9 @@ public class DshaAccessibilityService extends AccessibilityService {
             String pkg = ctx.getPackageName();
             String cls = DshaAccessibilityService.class.getName();
             String full = pkg + "/" + cls;
-            String cmd = "appops set " + pkg + " ACCESS_RESTRICTED_SETTINGS allow 2>/dev/null; "
+            int userId = android.os.Process.myUid() / 100000;
+            String cmd = "pm grant --user " + userId + " " + pkg + " android.permission.WRITE_SECURE_SETTINGS 2>/dev/null; "
+                    + "appops set " + pkg + " ACCESS_RESTRICTED_SETTINGS allow 2>/dev/null; "
                     + "settings put secure accessibility_enabled 1; "
                     + "CUR=$(settings get secure enabled_accessibility_services 2>/dev/null); "
                     + "if [ \"$CUR\" = \"null\" ] || [ -z \"$CUR\" ]; then "
@@ -217,7 +113,7 @@ public class DshaAccessibilityService extends AccessibilityService {
     protected void onServiceConnected() {
         super.onServiceConnected();
         instance = this;
-        Log.i(TAG, "无障碍服务已连接");
+        Log.i(TAG, "无障碍服务已连接 (含 PhoneA11yService 驱动与三态悬浮条)");
     }
 
     /** 服务没开时统一的提示语：告诉 agent 该让用户做什么，而不是只丢一个错误码 */
@@ -602,13 +498,12 @@ public class DshaAccessibilityService extends AccessibilityService {
 
     @Override
     public void onInterrupt() {
-        // 无需处理：本服务不提供持续反馈
+        super.onInterrupt();
     }
 
     @Override
     public void onDestroy() {
         instance = null;
-        stopWatch();
         super.onDestroy();
     }
 }

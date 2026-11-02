@@ -79,6 +79,11 @@ public class SettingsFragment extends Fragment implements SettingsPresenter.View
             rowThemeNotify.setOnClickListener(x -> openSubFragment(new ThemeNotifyFragment()));
         }
 
+        View rowPhoneControl = v.findViewById(R.id.settings_row_phone_control);
+        if (rowPhoneControl != null) {
+            rowPhoneControl.setOnClickListener(x -> openSubFragment(new PhoneControlFragment()));
+        }
+
         View rowExternalConnect = v.findViewById(R.id.settings_row_external_connect);
         if (rowExternalConnect != null) {
             rowExternalConnect.setOnClickListener(x -> openSubFragment(new ExternalConnectFragment()));

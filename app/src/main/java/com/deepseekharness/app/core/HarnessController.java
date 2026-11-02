@@ -548,6 +548,9 @@ public class HarnessController {
                 // 确保 3090 设备桥 Token 同步到 rootfs
                 com.deepseekharness.app.HttpShellService.syncTokenToRootfsSync();
                 try {
+                    com.deepseekharness.app.phone.PhoneControl.get(ctx).ensureChrootBridge();
+                } catch (Throwable ignored) {}
+                try {
                     if (com.deepseekharness.app.HttpShellService.instance() == null) {
                         new com.deepseekharness.app.HttpShellService(ctx).start();
                     }

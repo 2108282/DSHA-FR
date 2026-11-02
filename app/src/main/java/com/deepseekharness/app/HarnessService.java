@@ -256,6 +256,19 @@ public class HarnessService extends Service {
                 s.checkAndReleaseLocksIfIdle();
             }
         }
+        if (!running && ctx != null) {
+            try {
+                com.deepseekharness.app.phone.PhoneControl pc =
+                        com.deepseekharness.app.phone.PhoneControl.peek();
+                if (pc != null) {
+                    boolean wasActive = pc.getTasks().isActive();
+                    if (pc.finishTask(null) && wasActive
+                            && com.deepseekharness.app.phone.a11y.OverlayPrefs.returnToApp(ctx)) {
+                        pc.reopen(null, null);
+                    }
+                }
+            } catch (Throwable ignored) {}
+        }
     }
 
     @Override

@@ -67,8 +67,8 @@ jobs:
         run: |
           if ! ./gradlew :app:assembleStandardRelease --stacktrace > /tmp/build_all.log 2>&1; then
             echo "========== GRADLE BUILD FAILED =========="
-            cat /tmp/build_all.log | grep -A 5 -E "error:|FAILURE:|FAILED" | head -n 30 || true
-            ERR_MSG=$(grep -E "error:" /tmp/build_all.log | head -3 | tr '\n' ' ' | tr '"' "'" || true)
+            cat /tmp/build_all.log | grep -A 5 -E "^e: |error:|FAILURE:|FAILED" | head -n 45 || true
+            ERR_MSG=$(grep -E "^e: |error:" /tmp/build_all.log | head -5 | tr '\n' ' ' | tr '"' "'" || true)
             if [ -z "$ERR_MSG" ]; then
               ERR_MSG=$(grep -A 2 -E "FAILURE:" /tmp/build_all.log | head -3 | tr '\n' ' ' | tr '"' "'" || true)
             fi
