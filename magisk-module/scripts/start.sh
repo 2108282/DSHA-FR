@@ -98,13 +98,19 @@ clean_umount() {
     done
 }
 
-# 专用于 FUSE/外部存储的安全探活：严格加入 1 秒超时，防范 FUSE 假死导致脚本永久卡在内核 D 状态
+# 专用于 FUSE/外部存储的安全探活：同时校验内核设备号与子目录读取，防范挂载点缓存误判
 is_storage_alive() {
     local target="${1%/}"
+    local source="${2:-/storage/emulated/0}"
     if ! grep -q " $target " /proc/mounts 2>/dev/null; then
         return 1
     fi
-    timeout 1 stat -t "$target" >/dev/null 2>&1
+    local host_dev=$(stat -c %d "$source" 2>/dev/null)
+    local target_dev=$(stat -c %d "$target" 2>/dev/null)
+    if [ -z "$host_dev" ] || [ -z "$target_dev" ] || [ "$host_dev" != "$target_dev" ]; then
+        return 1
+    fi
+    timeout 1 ls -d "$target/Download" >/dev/null 2>&1
 }
 
 # 外部存储自愈挂载闭环：断开时自动解挂重建，健康时绝不重复挂载
@@ -113,10 +119,10 @@ mount_storage_safe() {
     local source="$2"
 
     if grep -q " $target " /proc/mounts 2>/dev/null; then
-        if is_storage_alive "$target"; then
+        if is_storage_alive "$target" "$source"; then
             return 0
         fi
-        # 探测到 FUSE Socket 断开或假死，强制解挂清理现场
+        # 探测到 FUSE Socket 断开、设备号脱节或子目录打不开，强制解挂清理现场
         clean_umount "$target"
     fi
 

@@ -91,6 +91,45 @@ is_mounted() {
     grep -q " $target " /proc/mounts 2>/dev/null || mountpoint -q "$target" 2>/dev/null
 }
 
+clean_umount() {
+    local target="${1%/}"
+    while grep -q " $target " /proc/mounts 2>/dev/null || mountpoint -q "$target" 2>/dev/null; do
+        umount -l "$target" 2>/dev/null || break
+    done
+}
+
+# 专用于 FUSE/外部存储的安全探活：同时校验内核设备号与子目录读取，防范挂载点缓存误判
+is_storage_alive() {
+    local target="${1%/}"
+    local source="${2:-/storage/emulated/0}"
+    if ! grep -q " $target " /proc/mounts 2>/dev/null; then
+        return 1
+    fi
+    local host_dev=$(stat -c %d "$source" 2>/dev/null)
+    local target_dev=$(stat -c %d "$target" 2>/dev/null)
+    if [ -z "$host_dev" ] || [ -z "$target_dev" ] || [ "$host_dev" != "$target_dev" ]; then
+        return 1
+    fi
+    timeout 1 ls -d "$target/Download" >/dev/null 2>&1
+}
+
+# 外部存储自愈挂载闭环：断开时自动解挂重建，健康时绝不重复挂载
+mount_storage_safe() {
+    local target="$1"
+    local source="$2"
+
+    if grep -q " $target " /proc/mounts 2>/dev/null; then
+        if is_storage_alive "$target" "$source"; then
+            return 0
+        fi
+        # 探测到 FUSE Socket 断开、设备号脱节或子目录打不开，强制解挂清理现场
+        clean_umount "$target"
+    fi
+
+    mkdir -p "$target" 2>/dev/null
+    mount -o bind "$source" "$target"
+}
+
 mount_if_needed() {
     local target="$1"
     shift
@@ -148,12 +187,12 @@ rm -f "/data/data/com.dsha.fr/files/.block_guard_disabled" 2>/dev/null || true
 mount_if_needed "$ROOTFS/proc" -t proc proc
 mount_if_needed "$ROOTFS/sys" -t sysfs sysfs
 
-# 挂载存储卡 (启用 noatime,nodiratime)
+# 挂载存储卡 (启用安全探活与超时熔断，杜绝 ENOTCONN 与卡死)
 if [ -d "/storage/emulated/0" ]; then
-    mount_if_needed "$ROOTFS/sdcard" -o bind /storage/emulated/0
-    mount_if_needed "$ROOTFS/storage/emulated/0" -o bind /storage/emulated/0
+    mount_storage_safe "$ROOTFS/sdcard" /storage/emulated/0
+    mount_storage_safe "$ROOTFS/storage/emulated/0" /storage/emulated/0
 elif [ -d "/sdcard" ]; then
-    mount_if_needed "$ROOTFS/sdcard" -o bind /sdcard
+    mount_storage_safe "$ROOTFS/sdcard" /sdcard
 fi
 
 # 挂载宿主字体目录至容器内，供给 DSH LibreOfficeKit WASM 引擎完整系统字库
