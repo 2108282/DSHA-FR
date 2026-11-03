@@ -148,8 +148,9 @@ object DangerConfirmOverlay {
             return false
         }
 
-        // 2. 准备主题与调色板（复刻手机操控 OverlayPalette 莫奈动态取色）
-        val isDark = (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        // 2. 准备主题与调色板（完整跟随 DSHA 内部主题选择、系统深浅色以及 MonetEngine 莫奈动态取色）
+        val isDark = runCatching { com.deepseekharness.app.ui.ThemeController.isDark(context) }
+            .getOrDefault((context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES)
         val c = OverlayPalette.resolve(context, isDark)
 
         // 3. 构造窗口参数
