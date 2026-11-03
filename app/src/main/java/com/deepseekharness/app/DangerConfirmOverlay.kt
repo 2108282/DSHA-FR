@@ -69,7 +69,7 @@ object DangerConfirmOverlay {
         context: Context,
         cmd: String,
         epoch: Long,
-        timeoutSeconds: Int = 60,
+        timeoutSeconds: Long = 60L,
         onDecision: (ShellDecision, Long) -> Unit
     ): Boolean {
         dismiss()
@@ -104,7 +104,7 @@ object DangerConfirmOverlay {
         context: Context,
         cmd: String,
         epoch: Long,
-        timeoutSeconds: Int,
+        timeoutSeconds: Long,
         onDecision: (ShellDecision, Long) -> Unit
     ): Boolean {
         // 1. 获取 WindowManager 与 WindowType（优先无障碍，Root 形式兜底）
