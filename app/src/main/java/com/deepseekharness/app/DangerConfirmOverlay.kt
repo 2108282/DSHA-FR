@@ -114,11 +114,11 @@ object DangerConfirmOverlay {
         val a11y = DshaAccessibilityService.getInstance()
         if (a11y != null && DshaAccessibilityService.isConnected()) {
             wm = a11y.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
-                windowType = WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
+            windowType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
+                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY
             } else {
                 @Suppress("DEPRECATION")
-                windowType = WindowManager.LayoutParams.TYPE_PHONE
+                WindowManager.LayoutParams.TYPE_PHONE
             }
         }
 
@@ -132,7 +132,7 @@ object DangerConfirmOverlay {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
             } else {
                 @Suppress("DEPRECATION")
-                windowType = WindowManager.LayoutParams.TYPE_PHONE
+                WindowManager.LayoutParams.TYPE_PHONE
             }
         }
 
