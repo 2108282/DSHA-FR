@@ -538,7 +538,11 @@ class PhoneControlFragment : Fragment() {
         }
         val b1 = ModernBadgeView(ctx).apply {
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(20))
-            setBadge(true, badge1Text)
+            if (isDangerConfirm) {
+                setDangerBadge(badge1Text)
+            } else {
+                setBadge(true, badge1Text)
+            }
         }
         badgeRow.addView(b1)
         if (!badge2Text.isNullOrEmpty()) {
@@ -614,7 +618,7 @@ class PhoneControlFragment : Fragment() {
             if (isDangerConfirm) {
                 elevation = 0f
                 setBackgroundResource(R.drawable.bg_btn_danger)
-                setTextColor(ContextCompat.getColor(ctx, R.color.err))
+                setTextColor(Color.WHITE)
             } else {
                 elevation = dp(2).toFloat()
                 outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
@@ -1011,8 +1015,14 @@ class PhoneControlFragment : Fragment() {
             else -> "开启后，AI 可以在 DSHA 自身界面中点击和修改配置。"
         }
 
+        val iconRes = when (key) {
+            "systemPages" -> R.drawable.ic_settings_sliders
+            "secretFields" -> R.drawable.ic_key
+            else -> R.drawable.ic_about
+        }
+
         val holder = createPluginStyleDialog(
-            iconRes = R.drawable.ic_key,
+            iconRes = iconRes,
             titleText = "解除高危限制",
             subTitleText = title,
             badge1Text = "高风险操作",
@@ -1041,6 +1051,7 @@ class PhoneControlFragment : Fragment() {
                 val elapsed = SystemClock.uptimeMillis() - downAt
                 if (elapsed >= holdDurationMs) {
                     holding = false
+                    holder.btnConfirm.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
                     val next = pc.policies().unlocks.toMap().toMutableMap().apply { put(key, true) }
                     pc.setPolicies(mapOf("unlocks" to next))
                     ToastHelper.show(ctx, "已解除限制：$title")
@@ -1063,10 +1074,14 @@ class PhoneControlFragment : Fragment() {
                     true
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    val elapsed = SystemClock.uptimeMillis() - downAt
                     if (holding) {
                         holding = false
                         mainHandler.removeCallbacks(tickRunnable)
                         holder.btnConfirm.text = "按住 1.5 秒开启"
+                        if (elapsed in 60 until holdDurationMs) {
+                            ToastHelper.show(ctx, "⚠️ 请持续长按住按钮 1.5 秒以确认开启")
+                        }
                     }
                     true
                 }

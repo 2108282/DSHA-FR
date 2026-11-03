@@ -76,6 +76,14 @@ public class ModernBadgeView extends View {
         invalidate();
     }
 
+    public void setDangerBadge(String text) {
+        this.text = text != null ? text : "";
+        bgPaint.setColor(ContextCompat.getColor(getContext(), R.color.err_bg));
+        textPaint.setColor(ContextCompat.getColor(getContext(), R.color.err));
+        requestLayout();
+        invalidate();
+    }
+
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         int h = Math.round(20f * density);
