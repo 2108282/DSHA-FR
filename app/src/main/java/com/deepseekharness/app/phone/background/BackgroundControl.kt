@@ -27,8 +27,10 @@ class BackgroundControl private constructor(context: Context) {
     private val adb = AdbStarter(app) { notifyChanged() }
     private val root = RootStarter(app) { notifyChanged() }
 
-    @Volatile private var mode: String = "off"          // off | shizuku | sui | root | adb
-    @Volatile private var rootSelected = false
+    private val prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    @Volatile private var mode: String = prefs.getString(K_MODE, "off") ?: "off"
+    @Volatile private var rootSelected = mode == "root"
     @Volatile private var channel: PrivilegedChannel? = null
     @Volatile private var driver: BackgroundDisplay? = null
     @Volatile private var driverTaskId: Long? = null
@@ -37,6 +39,18 @@ class BackgroundControl private constructor(context: Context) {
     // Cached probe results (null = not probed this session).
     @Volatile private var trustedDisplayOk: Boolean? = null
     @Volatile private var injectOk: Boolean? = null
+
+    init {
+        if (mode == "root" && androidOk()) {
+            Thread({
+                runCatching {
+                    root.start { mode == "root" }
+                    runGateProbe()
+                    notifyChanged()
+                }
+            }, "dsh-root-reconnect").apply { isDaemon = true }.start()
+        }
+    }
 
     private fun notifyChanged() = runCatching { onStatusChanged() }
 
@@ -101,6 +115,7 @@ class BackgroundControl private constructor(context: Context) {
     private fun rootReason(): String? {
         val status = root.status()
         if (status.connected) return null
+        if (mode == "root" && !status.checked) return null
         val resource = when {
             status.starting -> R.string.background_root_starting
             !status.checked -> R.string.background_root_not_selected
@@ -135,6 +150,7 @@ class BackgroundControl private constructor(context: Context) {
         }
         mode = selected
         rootSelected = selected == "root"
+        prefs.edit().putString(K_MODE, selected).apply()
         when (selected) {
             "off" -> { notifyChanged(); return mapOf("ok" to true) }
             "shizuku", "sui" -> shizuku.ensureListeners()
@@ -293,7 +309,7 @@ class BackgroundControl private constructor(context: Context) {
         channel?.takeIf { it.alive() }?.let { return it }
         channel = when (mode) {
             "shizuku", "sui" -> shizuku.connect()
-            "root" -> root.connect()
+            "root" -> root.connect() ?: if (rootSelected) root.start() else null
             "adb" -> adb.connect()
             else -> null
         }
@@ -331,6 +347,9 @@ class BackgroundControl private constructor(context: Context) {
     }
 
     companion object {
+        private const val PREFS = "dsh_phone_background"
+        private const val K_MODE = "background_mode"
+
         /** UserHandle.PER_USER_RANGE: a uid's user is uid / this. */
         private const val PER_USER_RANGE = 100_000
 
