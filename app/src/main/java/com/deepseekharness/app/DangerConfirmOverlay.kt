@@ -325,11 +325,51 @@ object DangerConfirmOverlay {
 
         root.addView(card, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
 
-        // 5. 挂载窗口
+        // 5. 挂载窗口（优先无障碍通道，若失败或不可用则自动使用 Root 兜底挂载）
+        var attached = false
+        var targetWm = wm
+        var targetType = windowType
+
+        if (targetWm != null) {
+            params.type = targetType
+            try {
+                targetWm.addView(root, params)
+                attached = true
+            } catch (e: Throwable) {
+                Log.w(TAG, "首次挂载失败 (type=$targetType)，尝试 Root 兜底通道", e)
+            }
+        }
+
+        // 若首次挂载未成功，立刻切换到 Root 通道兜底
+        if (!attached) {
+            try {
+                ensureRootAlertWindow(context)
+                val rootWm = context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
+                if (rootWm != null) {
+                    val rootType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                    } else {
+                        @Suppress("DEPRECATION")
+                        WindowManager.LayoutParams.TYPE_PHONE
+                    }
+                    params.type = rootType
+                    rootWm.addView(root, params)
+                    targetWm = rootWm
+                    targetType = rootType
+                    attached = true
+                }
+            } catch (e2: Throwable) {
+                Log.w(TAG, "Root 兜底挂载也失败", e2)
+            }
+        }
+
+        if (!attached || targetWm == null) {
+            return false
+        }
+
         return try {
-            wm.addView(root, params)
             activeRoot = root
-            activeWindowManager = wm
+            activeWindowManager = targetWm
             currentEpoch = epoch
             isDismissing.set(false)
 
@@ -355,7 +395,7 @@ object DangerConfirmOverlay {
             mainHandler.postDelayed(ticker, 1000)
             true
         } catch (e: Throwable) {
-            Log.w(TAG, "wm.addView failed (windowType=$windowType)", e)
+            Log.w(TAG, "初始化悬浮状态异常", e)
             false
         }
     }

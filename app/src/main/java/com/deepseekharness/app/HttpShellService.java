@@ -1849,23 +1849,20 @@ public final class HttpShellService {
             confirmResolved.set(false);  // 必须早于发布 latch：latch 一露面就可能有点击进来
             pendingLatch = latch;
 
-            // 1. 保留通知与灵动岛通道（复刻危险拦截的通知通道和灵动岛状态接力）
-            showConfirmNotification(cmd, myEpoch);
-
-            // 2. 尝试展示与手机操控同款样式的统一 UI 弹窗（优先无障碍，未开时走 Root 兜底）
+            // 1. 优先展示与手机操控同款样式的统一 UI 弹窗（无障碍 + Root 双通道兜底）
             boolean overlayShown = DangerConfirmOverlay.show(ctx, safeDisplay(cmd), myEpoch, CONFIRM_TIMEOUT_S,
                     (decision, ep) -> resolveConfirm(decision, ep));
 
+            // 2. 弹窗成功挂载时只显示底部卡片，绝不发通知；仅当弹窗不可用/挂载失败时，才降级退回到通知栏与灵动岛！
             if (!overlayShown) {
-                // 若悬浮卡片无法挂载，桌面悬浮条或通知通道接力
+                showConfirmNotification(cmd, myEpoch);
                 OverlayController.askConfirm(ctx, safeDisplay(cmd),
                         () -> resolveConfirm(ShellDecision.ALLOW_ONCE, myEpoch),
                         () -> resolveConfirm(ShellDecision.DENY, myEpoch));
-            }
-
-            if (!notificationsEnabled() && !overlayShown) {
-                android.util.Log.w("DSHA", "无前台界面且通知权限被拒且弹窗未挂载，确认必然超时拒绝："
-                        + safeDisplay(cmd));
+                if (!notificationsEnabled()) {
+                    android.util.Log.w("DSHA", "无前台界面且通知权限被拒且弹窗未挂载，确认必然超时拒绝："
+                            + safeDisplay(cmd));
+                }
             }
 
             try {
