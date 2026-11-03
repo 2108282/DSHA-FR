@@ -23,7 +23,10 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
-import com.deepseekharness.app.phone.a11y.OverlayPalette
+import com.deepseekharness.app.core.ConfigStore
+import com.deepseekharness.app.ui.MonetEngine
+import com.deepseekharness.app.ui.MonetThemeHelper
+import com.deepseekharness.app.ui.ThemeController
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.roundToInt
 
@@ -46,10 +49,14 @@ fun interface OnDecisionListener {
 
 /**
  * 危险命令统一悬浮卡片：
- * - 样式 1:1 复刻手机操控底部确认卡片（Skia 圆角卡片、莫奈动态取色、平滑动画与防自点保护）；
+ * - 样式与色彩 100% 对齐快捷对话（QuickChat 抽屉）调色板与审批横幅；
+ * - 严格按照快捷对话的三大色彩模式：
+ *   1. 深色模式（反色开启）：坚决不使用莫奈杂色，维持科技蓝灰黑高对比纯正深色底（#10141B）；
+ *   2. 正常浅色模式（莫奈关闭）：经典冷瓷白（#F5F8FC）配深黑墨字与琥珀焦糖告警标题；
+ *   3. 浅色莫奈模式（莫奈开启）：调用 MonetThemeHelper 提取壁纸主色与容器底色，主按钮与背景平滑动态演色；
  * - 优先使用无障碍顶层窗口（TYPE_ACCESSIBILITY_OVERLAY）；
- * - 若无障碍未开启，自动使用 Root 特权（TYPE_APPLICATION_OVERLAY）兜底挂载，无需手动翻找系统悬浮窗权限；
- * - 失败时返回 false，供调用方优雅降级到系统通知与灵动岛通道。
+ * - 若无障碍未开启，自动使用 Root 特权（TYPE_APPLICATION_OVERLAY）两段式兜底挂载；
+ * - 挂载失败时返回 false，供调用方优雅降级到系统通知与灵动岛通道。
  */
 object DangerConfirmOverlay {
     private const val TAG = "DangerConfirmOverlay"
@@ -148,10 +155,35 @@ object DangerConfirmOverlay {
             return false
         }
 
-        // 2. 准备主题与调色板（完整跟随 DSHA 内部主题选择、系统深浅色以及 MonetEngine 莫奈动态取色）
-        val isDark = runCatching { com.deepseekharness.app.ui.ThemeController.isDark(context) }
-            .getOrDefault((context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES)
-        val c = OverlayPalette.resolve(context, isDark)
+        // 2. 准备主题与调色板（严格跟随快捷对话 QuickChat 抽屉的配置与 MonetThemeHelper 引擎）
+        val cfg = ConfigStore(context)
+        val isDarkMode = cfg.isSheetInvertColor || ThemeController.isDark(context)
+        val isMonet = cfg.isSheetMonetColor && !isDarkMode
+        val opacity = if (isDarkMode) cfg.sheetOpacityNight else cfg.sheetOpacityDay
+        val palette = MonetThemeHelper.resolve(context, isDarkMode, isMonet, opacity)
+
+        val cardBgColor = palette.cardBgColor
+        val borderColor = palette.borderColor
+        val textColor = palette.textColor
+        val textSecondaryColor = palette.textSecondaryColor
+        val lineColor = palette.lineColor
+
+        // 快捷对话审批横幅 1:1 对应的颜色定义
+        val titleColor = if (isDarkMode) Color.parseColor("#FBBF24") else Color.parseColor("#B45309")
+        val cmdBoxBg = if (isDarkMode) Color.parseColor("#181D26") else Color.parseColor("#F0F4F9")
+        val tonalBtnBg = if (isDarkMode) Color.parseColor("#252C38") else Color.parseColor("#E2E8F0")
+        val denyBtnBg = if (isDarkMode) Color.parseColor("#29EF4444") else Color.parseColor("#14EF4444")
+        val denyBtnStroke = Color.parseColor("#4DEF4444")
+        val denyBtnText = Color.parseColor("#EF4444")
+
+        // 允许一次按钮：浅色开启莫奈时取莫奈主色；深色或关闭莫奈时维持快捷对话标志性的翡翠绿（#10B981）
+        val allowBtnBg = if (!isDarkMode && isMonet) {
+            runCatching { MonetEngine.resolveCurrentPalette(context).primaryColor }.getOrDefault(Color.parseColor("#10B981"))
+        } else {
+            Color.parseColor("#10B981")
+        }
+        val allowBtnText = Color.WHITE
+        val rippleColor = if (isDarkMode) 0x22FFFFFF else 0x1F000000
 
         // 3. 构造窗口参数
         val params = WindowManager.LayoutParams(
@@ -178,7 +210,7 @@ object DangerConfirmOverlay {
         params.width = minOf(screenW - dp(context, 16), dp(context, 480))
         params.y = dp(context, 16)
 
-        // 4. 构造 UI 层级（与手机操控确认弹窗 1:1 风格）
+        // 4. 构造 UI 层级（与快捷对话抽屉卡片 1:1 质感）
         val root = FrameLayout(context).apply {
             setPadding(dp(context, 6), dp(context, 6), dp(context, 6), dp(context, 6))
             clipToPadding = false
@@ -186,22 +218,26 @@ object DangerConfirmOverlay {
 
         val card = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(c.surfaceTop, c.surfaceBottom)).apply {
+            background = GradientDrawable().apply {
+                setColor(cardBgColor)
                 cornerRadius = dp(context, 20).toFloat()
-                setStroke(dp(context, 1), c.hairline)
+                setStroke(dp(context, 1), borderColor)
             }
             elevation = dp(context, 8).toFloat()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                outlineAmbientShadowColor = if (isDarkMode) Color.parseColor("#4D000000") else Color.parseColor("#203B6590")
+                outlineSpotShadowColor = if (isDarkMode) Color.parseColor("#80000000") else Color.parseColor("#383B6590")
+            }
             setPadding(dp(context, 18), dp(context, 16), dp(context, 18), dp(context, 16))
             filterTouchesWhenObscured = true
         }
 
-        // --- 标题栏（带琥珀金告警色与倒计时） ---
+        // --- 标题栏（琥珀金告警色与倒计时） ---
         val header = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
 
-        val titleColor = if (isDark) 0xFFF59E0B.toInt() else 0xFFD97706.toInt()
         val titleView = TextView(context).apply {
             text = "⚠️ 危险命令确认"
             textSize = 15f
@@ -213,7 +249,7 @@ object DangerConfirmOverlay {
         val countdownView = TextView(context).apply {
             text = "${timeoutSeconds}s"
             textSize = 12.5f
-            setTextColor(c.muted)
+            setTextColor(textSecondaryColor)
             typeface = Typeface.MONOSPACE
         }
         header.addView(countdownView, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT))
@@ -223,7 +259,7 @@ object DangerConfirmOverlay {
         val hintView = TextView(context).apply {
             text = "智能体请求执行破坏性命令，请选择授权粒度："
             textSize = 12f
-            setTextColor(c.faint)
+            setTextColor(textSecondaryColor)
             setLineSpacing(0f, 1.2f)
             setPadding(0, dp(context, 6), 0, dp(context, 8))
         }
@@ -232,9 +268,9 @@ object DangerConfirmOverlay {
         // --- 命令展示框（深色玻璃槽内嵌、等宽字体） ---
         val cmdBox = FrameLayout(context).apply {
             background = GradientDrawable().apply {
-                setColor(c.field)
+                setColor(cmdBoxBg)
                 cornerRadius = dp(context, 12).toFloat()
-                setStroke(dp(context, 1), c.hairline)
+                setStroke(dp(context, 1), lineColor)
             }
             setPadding(dp(context, 10), dp(context, 8), dp(context, 10), dp(context, 8))
         }
@@ -246,7 +282,7 @@ object DangerConfirmOverlay {
         val cmdText = TextView(context).apply {
             text = cmd
             textSize = 13.5f
-            setTextColor(c.ink)
+            setTextColor(textColor)
             typeface = Typeface.MONOSPACE
             setLineSpacing(0f, 1.25f)
         }
@@ -276,17 +312,19 @@ object DangerConfirmOverlay {
         val btnTask = createOptionButton(
             context = context,
             label = "本任务允许",
-            bgColor = c.tonal,
-            textColor = c.ink,
-            rippleColor = c.ripple,
+            bgColor = tonalBtnBg,
+            textColor = textColor,
+            rippleColor = rippleColor,
+            strokeColor = lineColor,
             onClick = { decide(ShellDecision.ALLOW_TASK) }
         )
         val btn10Min = createOptionButton(
             context = context,
             label = "10分钟临时授权",
-            bgColor = c.tonal,
-            textColor = c.ink,
-            rippleColor = c.ripple,
+            bgColor = tonalBtnBg,
+            textColor = textColor,
+            rippleColor = rippleColor,
+            strokeColor = lineColor,
             onClick = { decide(ShellDecision.ALLOW_10MIN) }
         )
 
@@ -305,18 +343,18 @@ object DangerConfirmOverlay {
         val btnDeny = createOptionButton(
             context = context,
             label = "拒绝请求",
-            bgColor = c.dangerSoft,
-            textColor = c.danger,
-            rippleColor = c.ripple,
-            strokeColor = c.danger,
+            bgColor = denyBtnBg,
+            textColor = denyBtnText,
+            rippleColor = rippleColor,
+            strokeColor = denyBtnStroke,
             onClick = { decide(ShellDecision.DENY) }
         )
         val btnAllowOnce = createOptionButton(
             context = context,
             label = "允许一次",
-            bgColor = c.accent,
-            textColor = c.onAccent,
-            rippleColor = c.ripple,
+            bgColor = allowBtnBg,
+            textColor = allowBtnText,
+            rippleColor = Color.argb(0x30, 0xFF, 0xFF, 0xFF),
             onClick = { decide(ShellDecision.ALLOW_ONCE) }
         )
 
