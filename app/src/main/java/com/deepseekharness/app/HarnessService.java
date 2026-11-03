@@ -256,6 +256,9 @@ public class HarnessService extends Service {
                 s.checkAndReleaseLocksIfIdle();
             }
         }
+        if (!running) {
+            HttpShellService.isTaskWaived = false;
+        }
         if (!running && ctx != null) {
             try {
                 com.deepseekharness.app.phone.PhoneControl pc =

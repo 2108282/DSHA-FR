@@ -82,6 +82,10 @@ public class DshaAccessibilityService extends com.deepseekharness.app.phone.a11y
         return instance != null;
     }
 
+    public static DshaAccessibilityService getInstance() {
+        return instance;
+    }
+
     /** 自动静默自愈无障碍服务（Root 环境下自动授予 WRITE_SECURE_SETTINGS、解除 A13~A17 受限设置并挂载服务） */
     public static boolean ensureConnected(Context ctx) {
         if (instance != null) return true;

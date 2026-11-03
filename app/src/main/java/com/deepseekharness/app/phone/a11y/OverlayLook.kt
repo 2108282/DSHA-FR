@@ -29,7 +29,7 @@ import kotlin.math.roundToInt
  * no-blur fill, made opaque — with the glass's hairline, top rim and cool-ink shadow, so it reads
  * the same over any page and its text keeps its contrast (ink ≥ 13 : 1, faint ≥ 4.6 : 1).
  */
-internal class OverlayPalette(
+class OverlayPalette(
     val surfaceTop: Int, val surfaceBottom: Int, val hairline: Int, val rim: Int, val shadow: Int,
     val ink: Int, val muted: Int, val faint: Int,
     val accent: Int, val accentSoft: Int, val onAccentSoft: Int, val onAccent: Int,

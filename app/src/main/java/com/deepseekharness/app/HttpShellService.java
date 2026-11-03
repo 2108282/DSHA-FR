@@ -75,6 +75,8 @@ public final class HttpShellService {
 
     /** 宿主当前是否有后台任务正在活跃运行（供息屏自动休眠判定用） */
     public static volatile boolean isTaskActive = false;
+    /** 本任务内是否已获得危险命令免确认豁免（用户点击「本任务允许」） */
+    public static volatile boolean isTaskWaived = false;
     /** 当前是否有安全审批/危险权限确认正在挂起等待用户决断 */
     public static volatile boolean isApprovalWaiting = false;
     public static volatile AuthPromptInfo sCurrentApprovalInfo = null;
@@ -638,12 +640,12 @@ public final class HttpShellService {
                     result = "NO";
                 } else {
                     boolean force = path.contains("force=1");
-                    boolean needConfirm = force || (confirmEnabled() && DangerShellGuard.isDangerous(cmd));
+                    boolean needConfirm = force || (confirmEnabled() && DangerShellGuard.isDangerous(cmd) && !isLeaseActive() && !(isTaskWaived && isTaskActive));
                     result = needConfirm ? (requestUserConfirm(cmd) ? "YES" : "NO") : "YES";
                 }
             } else if (DangerShellGuard.isPolicyBlocked(cmd)) {
                 result = "[POLICY_BLOCKED] 设备策略强制拦截：禁止修改底层块设备、分区、SELinux状态或挂载操作";
-            } else if (DangerShellGuard.isDangerous(cmd) && confirmEnabled()) {
+            } else if (DangerShellGuard.isDangerous(cmd) && confirmEnabled() && !isLeaseActive() && !(isTaskWaived && isTaskActive)) {
                 result = awaitConfirm(cmd);
             } else {
                 result = execRootCommand(cmd);
@@ -861,7 +863,6 @@ public final class HttpShellService {
         String q = queryOf(path);
         try {
             if (path.startsWith("/app/ui/dump")) {
-                if (!uiAuthorized("读取当前屏幕上的文字与控件")) return "[ERR] 你拒绝了这次屏幕读取";
                 if (!DshaAccessibilityService.isConnected()) {
                     DshaAccessibilityService.ensureConnected(ctx);
                 }
@@ -871,7 +872,6 @@ public final class HttpShellService {
                 String text = getParam(q, "text", "");
                 // 有文字就按文字点：控件位置会随滚动和动画变，文字不会
                 if (!text.isEmpty()) {
-                    if (!uiAuthorized("点击「" + shortText(text) + "」")) return "[ERR] 你拒绝了这次点击";
                     if (!DshaAccessibilityService.isConnected()) {
                         DshaAccessibilityService.ensureConnected(ctx);
                     }
@@ -880,7 +880,6 @@ public final class HttpShellService {
                 int x = intParam(q, "x", -1);
                 int y = intParam(q, "y", -1);
                 if (x < 0 || y < 0) return "[ERR] 需要 ?text=要点的文字 或 ?x=&y=坐标";
-                if (!uiAuthorized("点击坐标 (" + x + "," + y + ")")) return "[ERR] 你拒绝了这次点击";
                 if (!DshaAccessibilityService.isConnected()) {
                     DshaAccessibilityService.ensureConnected(ctx);
                 }
@@ -894,9 +893,6 @@ public final class HttpShellService {
             if (path.startsWith("/app/ui/input")) {
                 String text = getParam(q, "text", "");
                 if (text.isEmpty()) return "[ERR] 需要 ?text=";
-                if (!uiAuthorized("在输入框里填入「" + shortText(text) + "」")) {
-                    return "[ERR] 你拒绝了这次输入";
-                }
                 if (!DshaAccessibilityService.isConnected()) {
                     DshaAccessibilityService.ensureConnected(ctx);
                 }
@@ -904,7 +900,6 @@ public final class HttpShellService {
             }
             if (path.startsWith("/app/ui/key")) {
                 String k = getParam(q, "name", getParam(q, "key", ""));
-                if (!uiAuthorized("按下系统按键 " + shortText(k))) return "[ERR] 你拒绝了这次按键";
                 if (!DshaAccessibilityService.isConnected()) {
                     DshaAccessibilityService.ensureConnected(ctx);
                 }
@@ -919,8 +914,6 @@ public final class HttpShellService {
                 return res;
             }
             if (path.startsWith("/app/ui/screenshot") || path.startsWith("/app/ui/shot")) {
-                // 截屏会把当前画面留到磁盘，等于一份可被后续读取的隐私快照
-                if (!uiAuthorized("截取当前屏幕并保存为图片")) return "[ERR] 你拒绝了这次截屏";
                 if (!DshaAccessibilityService.isConnected()) {
                     DshaAccessibilityService.ensureConnected(ctx);
                 }
@@ -940,9 +933,6 @@ public final class HttpShellService {
                 int y2 = intParam(q, "y2", -1);
                 if (x1 < 0 || y1 < 0 || x2 < 0 || y2 < 0) {
                     return "[ERR] 需要 ?x1=&y1=&x2=&y2=（可选 &ms=时长）";
-                }
-                if (!uiAuthorized("滑动屏幕 (" + x1 + "," + y1 + ")→(" + x2 + "," + y2 + ")")) {
-                    return "[ERR] 你拒绝了这次滑动";
                 }
                 if (!DshaAccessibilityService.isConnected()) {
                     DshaAccessibilityService.ensureConnected(ctx);
@@ -1843,8 +1833,10 @@ public final class HttpShellService {
     }
 
     /** 只请求用户确认（不执行命令），返回是否允许；/confirm 端点用。
-     *  通知与弹窗同时发：只走弹窗的话，Activity 一被 pause 用户就再也看不见，
-     *  只能干等 60s 超时——这正是「弹窗有时不出现」的由来。（吸收上游 PR#24） */
+     *  通知、灵动岛与统一 Skia 确认卡片双轨联动：
+     *  - 优先通过无障碍或 Root 弹出底部统一 UI 卡片（带允许一次/本任务允许/10分钟临时授权/拒绝请求 4 选项）；
+     *  - 同时通过通知栏与灵动岛推送高优先级确认，卡片不可用或用户在通知栏操作时无缝决策；
+     *  - 谁先点谁生效，全通道级联瞬时销毁。 */
     private boolean requestUserConfirm(String cmd) {
         if (!confirmBusy.compareAndSet(false, true)) {
             return false; // 已有确认在进行：拒绝新的（避免 pendingLatch 互相覆盖）
@@ -1857,15 +1849,22 @@ public final class HttpShellService {
             confirmResolved.set(false);  // 必须早于发布 latch：latch 一露面就可能有点击进来
             pendingLatch = latch;
 
-            // 双通道联动：通知栏/灵动岛 + 桌面悬浮条就地批准（共用同一个 epoch + latch，谁先点谁生效）
+            // 1. 保留通知与灵动岛通道（复刻危险拦截的通知通道和灵动岛状态接力）
             showConfirmNotification(cmd, myEpoch);
-            OverlayController.askConfirm(ctx, safeDisplay(cmd),
-                    () -> resolveConfirm(true, myEpoch),
-                    () -> resolveConfirm(false, myEpoch));
-            if (!notificationsEnabled()) {
-                // 后台 + 通知被拒 = 用户看不到任何提示，只能干等 60s 超时被拒。
-                // 至少留下日志，别让这变成无从排查的「命令莫名被拒」。
-                android.util.Log.w("DSHA", "无前台界面且通知权限被拒，确认必然超时拒绝："
+
+            // 2. 尝试展示与手机操控同款样式的统一 UI 弹窗（优先无障碍，未开时走 Root 兜底）
+            boolean overlayShown = DangerConfirmOverlay.show(ctx, safeDisplay(cmd), myEpoch, CONFIRM_TIMEOUT_S,
+                    (decision, ep) -> resolveConfirm(decision, ep));
+
+            if (!overlayShown) {
+                // 若悬浮卡片无法挂载，桌面悬浮条或通知通道接力
+                OverlayController.askConfirm(ctx, safeDisplay(cmd),
+                        () -> resolveConfirm(ShellDecision.ALLOW_ONCE, myEpoch),
+                        () -> resolveConfirm(ShellDecision.DENY, myEpoch));
+            }
+
+            if (!notificationsEnabled() && !overlayShown) {
+                android.util.Log.w("DSHA", "无前台界面且通知权限被拒且弹窗未挂载，确认必然超时拒绝："
                         + safeDisplay(cmd));
             }
 
@@ -1876,12 +1875,10 @@ public final class HttpShellService {
                 return false;
             }
         } finally {
-            // 顺序要紧：清理全部做完，最后才放开 confirmBusy。反过来的话，
-            // 下一个请求会抢在清理前发出新通知，而 cancelConfirmNotification()
-            // 用的是固定通知 ID，会把它刚发的那条取消掉。
             pendingLatch = null;
             dismissConfirmDialog();
             cancelConfirmNotification();
+            DangerConfirmOverlay.dismiss();
             OverlayController.dismissConfirm(ctx);
             confirmBusy.set(false);
         }
@@ -1906,13 +1903,17 @@ public final class HttpShellService {
         dismissConfirmDialog();
         // 2. 取消通知栏卡片并收起灵动岛大胶囊
         cancelConfirmNotification();
-        // 3. 关闭桌面悬浮条批准卡片
+        // 3. 关闭统一悬浮卡片
+        try {
+            DangerConfirmOverlay.dismiss();
+        } catch (Throwable ignored) {}
+        // 4. 关闭桌面悬浮条批准卡片
         try {
             OverlayController.dismissConfirm(ctx);
         } catch (Throwable ignored) {}
-        // 4. 同步给活动的 WebView 消除 Web 上的审批弹窗
+        // 5. 同步给活动的 WebView 消除 Web 上的审批弹窗
         dismissWebApprovalDialogs();
-        // 5. 同步关闭抽屉原生审批条
+        // 6. 同步关闭抽屉原生审批条
         com.deepseekharness.app.ui.QuickChatSheetActivity.dismissNativeApprovalBanner();
     }
 
@@ -1928,9 +1929,8 @@ public final class HttpShellService {
         });
     }
 
-    /** 通知按钮（ConfirmReceiver）、前台弹窗按钮与悬浮条按钮共用的回调。
-     *  epoch 校验 + 原子认领：丢弃迟到的（属于上一个请求的）点击，以及同一轮里后到的那次。 */
-    public void resolveConfirm(boolean allow, long epoch) {
+    /** 统一决策收束（支持 4 选项）：允许一次 / 本任务允许 / 10分钟临时授权 / 拒绝请求 */
+    public void resolveConfirm(ShellDecision decision, long epoch) {
         if (epoch != confirmEpoch.get()) {
             android.util.Log.i("DSHA", "忽略过期的确认点击（epoch " + epoch + "）");
             return;
@@ -1941,21 +1941,34 @@ public final class HttpShellService {
             return;
         }
 
-        pendingAllow = allow;
-        ConfirmReceiver.writeApprovalDecision(allow ? "allowed-once" : "rejected");
-
-        // 无论何种触发来源（同步阻塞命令或异步审批通知），立即全通道级联销毁
-        dismissAllApprovalUi();
-
-        if (allow) {
-            // 允许操作时自动授予 10 分钟免打扰操作租约
+        if (decision == ShellDecision.ALLOW_ONCE) {
+            pendingAllow = true;
+            ConfirmReceiver.writeApprovalDecision("allowed-once");
+        } else if (decision == ShellDecision.ALLOW_TASK) {
+            pendingAllow = true;
+            isTaskWaived = true;
+            ConfirmReceiver.writeApprovalDecision("allowed-task");
+        } else if (decision == ShellDecision.ALLOW_10MIN) {
+            pendingAllow = true;
             grantAuthLease(UI_GRANT_MS);
+            ConfirmReceiver.writeApprovalDecision("allowed-10min");
+        } else {
+            pendingAllow = false;
+            ConfirmReceiver.writeApprovalDecision("rejected");
         }
+
+        // 无论何种触发来源，立即全通道级联销毁
+        dismissAllApprovalUi();
 
         CountDownLatch l = pendingLatch;
         if (l != null) {
             l.countDown();
         }
+    }
+
+    /** 兼容原有 boolean 回调 */
+    public void resolveConfirm(boolean allow, long epoch) {
+        resolveConfirm(allow ? ShellDecision.ALLOW_ONCE : ShellDecision.DENY, epoch);
     }
 
     /** 关掉挂起的弹窗：setCancelable(false) 让它自己关不掉，确认完成后必须主动 dismiss，
@@ -2568,6 +2581,7 @@ public final class HttpShellService {
         if (ctx == null) return;
         try {
             isTaskActive = false;
+            isTaskWaived = false;
             HarnessService.onTaskStateChanged(ctx, false);
             NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm != null) nm.cancel(Constants.NOTIF_TASK_RUNNING);
@@ -2585,7 +2599,7 @@ public final class HttpShellService {
     private void showConfirmNotification(String cmd, long epoch) {
         isApprovalWaiting = true;
         sCurrentApprovalEpoch = epoch;
-        sCurrentApprovalInfo = parseAuthPrompt(cmd, "⚠️ 危险命令确认", new String[]{"允许", "拒绝"});
+        sCurrentApprovalInfo = parseAuthPrompt(cmd, "⚠️ 危险命令确认", new String[]{"允许一次", "拒绝"});
         AuthPromptInfo info = sCurrentApprovalInfo;
         createConfirmChannel();
 
@@ -2596,10 +2610,16 @@ public final class HttpShellService {
         Intent allowI = new Intent(ctx, ConfirmReceiver.class).setAction(ConfirmReceiver.ACTION_ALLOW)
                 .addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
                 .putExtra(ConfirmReceiver.EXTRA_EPOCH, epoch);
+        Intent allow10MinI = new Intent(ctx, ConfirmReceiver.class).setAction(ConfirmReceiver.ACTION_ALLOW_10MIN)
+                .addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
+                .putExtra(ConfirmReceiver.EXTRA_EPOCH, epoch);
         Intent denyI = new Intent(ctx, ConfirmReceiver.class).setAction(ConfirmReceiver.ACTION_DENY)
                 .addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
                 .putExtra(ConfirmReceiver.EXTRA_EPOCH, epoch);
+
         PendingIntent allowPi = PendingIntent.getBroadcast(ctx, 31, allowI,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        PendingIntent allow10MinPi = PendingIntent.getBroadcast(ctx, 33, allow10MinI,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         PendingIntent denyPi = PendingIntent.getBroadcast(ctx, 32, denyI,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
@@ -2610,17 +2630,19 @@ public final class HttpShellService {
                 .setContentText(info.detail)
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(info.detail))
                 .setContentIntent(contentPi)
-                .addAction(0, info.primaryBtn, allowPi)
-                .addAction(0, info.secondaryBtn, denyPi)
+                .addAction(0, "允许一次", allowPi)
+                .addAction(0, "10分钟授权", allow10MinPi)
+                .addAction(0, "拒绝", denyPi)
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setOngoing(true)
                 .setAutoCancel(false);
 
-        attachFocusCapsule(ctx, cb, info.title, info.detail, info.statusLabel, info.primaryBtn, info.capsuleText, allowPi, info.secondaryBtn, denyPi, true);
+        attachFocusCapsule(ctx, cb, info.title, info.detail, info.statusLabel, "允许一次", info.capsuleText, allowPi, "拒绝", denyPi, true);
 
         try {
             NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm != null) {
+                nm.cancel(Constants.NOTIF_TASK_RUNNING);
                 nm.cancel(CONFIRM_NOTIF_ID);
                 nm.notify(CONFIRM_NOTIF_ID, cb.build());
             }
