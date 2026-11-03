@@ -38,6 +38,13 @@ enum class ShellDecision {
 }
 
 /**
+ * 决策回调监听器（SAM 接口，方便 Java 与 Kotlin 互调）
+ */
+fun interface OnDecisionListener {
+    fun onDecision(decision: ShellDecision, epoch: Long)
+}
+
+/**
  * 危险命令统一悬浮卡片：
  * - 样式 1:1 复刻手机操控底部确认卡片（Skia 圆角卡片、莫奈动态取色、平滑动画与防自点保护）；
  * - 优先使用无障碍顶层窗口（TYPE_ACCESSIBILITY_OVERLAY）；
@@ -70,7 +77,7 @@ object DangerConfirmOverlay {
         cmd: String,
         epoch: Long,
         timeoutSeconds: Long = 60L,
-        onDecision: (ShellDecision, Long) -> Unit
+        onDecision: OnDecisionListener
     ): Boolean {
         dismiss()
         val appContext = context.applicationContext ?: context
@@ -105,7 +112,7 @@ object DangerConfirmOverlay {
         cmd: String,
         epoch: Long,
         timeoutSeconds: Long,
-        onDecision: (ShellDecision, Long) -> Unit
+        onDecision: OnDecisionListener
     ): Boolean {
         // 1. 获取 WindowManager 与 WindowType（优先无障碍，Root 形式兜底）
         var wm: WindowManager? = null
@@ -256,7 +263,7 @@ object DangerConfirmOverlay {
         fun decide(decision: ShellDecision) {
             if (isDismissing.getAndSet(true)) return
             dismiss()
-            onDecision(decision, epoch)
+            onDecision.onDecision(decision, epoch)
         }
 
         // --- 按钮第 1 行：两项次级选项（本任务允许 / 10分钟临时授权） ---
