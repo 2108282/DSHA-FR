@@ -248,7 +248,7 @@ class PhoneControlFragment : Fragment() {
         appCard.addView(appRow)
         root.addView(appCard)
 
-        // ==================== 5. 解除限制（高危三项，长按 1.5s 解锁） ====================
+        // ==================== 5. 解除限制（高危三项，二次弹窗确认） ====================
         root.addView(sectionHeader("解除限制（高危 · 默认全关）"))
         val unlockCard = card()
 
@@ -985,10 +985,9 @@ class PhoneControlFragment : Fragment() {
     }
 
     /**
-     * 解除限制：关闭只需点一下；开启必须阅读免责声明并按住「我了解风险，开启」1.5 秒。
+     * 解除限制：关闭只需点一下；开启弹出免责声明卡片，点击「确认开启」即可生效。
      * 采用插件安装弹窗同款 ModernCardView 布局。
      */
-    @SuppressLint("ClickableViewAccessibility")
     private fun handleUnlockToggle(key: String, title: String, wantEnable: Boolean) {
         val ctx = context ?: return
         val pc = PhoneControl.get(ctx)
@@ -1026,10 +1025,10 @@ class PhoneControlFragment : Fragment() {
             titleText = "解除高危限制",
             subTitleText = title,
             badge1Text = "高风险操作",
-            badge2Text = "长按 1.5 秒开启",
+            badge2Text = "确认后生效",
             footNote = "• 建议仅在需要时临时开启，用完立即关闭\n• 开启后顶部悬浮胶囊前会显示红色开锁标记",
             cancelText = "取消",
-            confirmText = "按住 1.5 秒开启",
+            confirmText = "确认开启",
             isDangerConfirm = true
         )
 
@@ -1042,51 +1041,12 @@ class PhoneControlFragment : Fragment() {
 
         holder.btnCancel.setOnClickListener { holder.dialog.dismiss() }
 
-        var downAt = 0L
-        var holding = false
-        val holdDurationMs = 1500L
-        val tickRunnable = object : Runnable {
-            override fun run() {
-                if (!holding) return
-                val elapsed = SystemClock.uptimeMillis() - downAt
-                if (elapsed >= holdDurationMs) {
-                    holding = false
-                    holder.btnConfirm.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-                    val next = pc.policies().unlocks.toMap().toMutableMap().apply { put(key, true) }
-                    pc.setPolicies(mapOf("unlocks" to next))
-                    ToastHelper.show(ctx, "已解除限制：$title")
-                    holder.dialog.dismiss()
-                    refreshState()
-                } else {
-                    val remain = ((holdDurationMs - elapsed) / 100f).roundToInt() / 10.0
-                    holder.btnConfirm.text = "继续按住 ${remain}s…"
-                    mainHandler.postDelayed(this, 50)
-                }
-            }
-        }
-
-        holder.btnConfirm.setOnTouchListener { _, ev ->
-            when (ev.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    downAt = SystemClock.uptimeMillis()
-                    holding = true
-                    mainHandler.post(tickRunnable)
-                    true
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    val elapsed = SystemClock.uptimeMillis() - downAt
-                    if (holding) {
-                        holding = false
-                        mainHandler.removeCallbacks(tickRunnable)
-                        holder.btnConfirm.text = "按住 1.5 秒开启"
-                        if (elapsed in 60 until holdDurationMs) {
-                            ToastHelper.show(ctx, "⚠️ 请持续长按住按钮 1.5 秒以确认开启")
-                        }
-                    }
-                    true
-                }
-                else -> false
-            }
+        holder.btnConfirm.setOnClickListener {
+            val next = pc.policies().unlocks.toMap().toMutableMap().apply { put(key, true) }
+            pc.setPolicies(mapOf("unlocks" to next))
+            ToastHelper.show(ctx, "已解除限制：$title")
+            holder.dialog.dismiss()
+            refreshState()
         }
 
         holder.dialog.show()
