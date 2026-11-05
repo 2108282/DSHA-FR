@@ -527,10 +527,18 @@ public final class BackupManager {
                     + "python3 /root/.dsha-restore-merge.py --stage /root/.dsha-restore-stage --root /root --workdir " + ShellQuote.arg(wd) + scopeArg + " 2>&1";
             String out = c.proot().execChecked(runCmd);
 
-            // 恢复后的原生环境轻量自愈（原子覆盖，避免 rm 误触命令守卫）
+            // 恢复后的原生环境自愈与软链修补
+            String healScript = c.readAsset("dsha-plugin-heal.sh");
+            String healCmd = "";
+            if (healScript != null && !healScript.isEmpty()) {
+                String healB64 = android.util.Base64.encodeToString(healScript.getBytes(java.nio.charset.StandardCharsets.UTF_8), android.util.Base64.NO_WRAP);
+                healCmd = "printf '%s' '" + healB64 + "' | base64 -d > /root/.dsh/dsha-plugin-heal.sh; "
+                        + "chmod 755 /root/.dsh/dsha-plugin-heal.sh; "
+                        + "/bin/bash /root/.dsh/dsha-plugin-heal.sh 2>&1 || true; ";
+            }
             String postHealCmd = "mkdir -p /sdcard/Download/DSHA/工作区 /root/.dsh 2>/dev/null || true; "
                     + "ln -sfn /sdcard/Download/DSHA /root/内部存储 2>/dev/null || true; "
-                    + "find /root/.dsh -xtype l -delete 2>/dev/null || true; "
+                    + healCmd
                     + "chmod 777 /root/.dsh 2>/dev/null || true";
             c.proot().execChecked(postHealCmd);
             com.deepseekharness.app.HttpShellService.syncTokenToRootfsSync();

@@ -29,7 +29,7 @@ GLOBAL_NM = (
     "/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules",
     "/usr/local/lib/node_modules",
 )
-PLUGIN_SRC_DIRNAME = "plugin-src"
+PLUGIN_SRC_DIRNAME = os.path.join(".dsh", "plugin-src")
 INLINE_DIRNAME = ".dsha-plugin-src"
 report = []
 partial = False
@@ -640,9 +640,13 @@ def ensure_nm_link(prof_dir, name, target):
     nm = os.path.join(prof_dir, "node_modules")
     link = os.path.join(nm, name)
     try:
-        os.makedirs(nm, exist_ok=True)
-        # 用 readlink 而不是 os.path.islink —— proot 下 lstat 被劫持，islink 对
-        # 这些链恒返回 False，已经建好的正确链接会被下面的 isdir 分支当成普通目录处理
+        parent = os.path.dirname(link)
+        if os.path.islink(parent):
+            try:
+                os.unlink(parent)
+            except OSError:
+                pass
+        os.makedirs(parent, exist_ok=True)
         try:
             cur = os.readlink(link)
         except OSError:
@@ -651,8 +655,13 @@ def ensure_nm_link(prof_dir, name, target):
             if os.path.realpath(link) == os.path.realpath(target):
                 return True
             os.unlink(link)
+        elif os.path.islink(link):
+            os.unlink(link)
         elif os.path.isdir(link):
-            return True  # 已有实体目录（pnpm 装的真包），不动
+            if not os.path.isfile(os.path.join(link, "package.json")):
+                shutil.rmtree(link, ignore_errors=True)
+            else:
+                return True  # 已有实体目录（pnpm 装的真包），不动
         elif os.path.exists(link):
             os.remove(link)
         os.symlink(target, link)
@@ -942,7 +951,7 @@ def heal_plugin_links(root):
     except Exception:
         pass
 
-    # 1. 修复第三方插件 (如 dsh-agy)
+    # 1. 修复第三方插件 (如 dsh-agy, @easytz/dsh-git)
     src_dir = os.path.join(root, ".dsh", "plugin-src")
     if os.path.isdir(src_dir):
         try:
@@ -953,15 +962,41 @@ def heal_plugin_links(root):
             p = os.path.join(src_dir, name)
             if not os.path.isdir(p):
                 continue
+
+            # 支持 @scope 组织命名空间包 (如 @easytz/dsh-git)
+            if name.startswith("@"):
+                g_scope = os.path.join(global_nm, name)
+                p_scope = os.path.join(prof_nm, name)
+                for s_dir in (g_scope, p_scope):
+                    if os.path.islink(s_dir):
+                        try:
+                            os.unlink(s_dir)
+                        except OSError:
+                            pass
+                    os.makedirs(s_dir, exist_ok=True)
+                for sub in os.listdir(p):
+                    sub_p = os.path.join(p, sub)
+                    if not os.path.isdir(sub_p) or not os.path.isfile(os.path.join(sub_p, "package.json")):
+                        continue
+                    _force_symlink(sub_p, os.path.join(g_scope, sub))
+                    _force_symlink(sub_p, os.path.join(p_scope, sub))
+                    sub_nm = os.path.join(sub_p, "node_modules", "@deepseek-ai")
+                    if os.path.islink(sub_nm):
+                        try:
+                            os.unlink(sub_nm)
+                        except Exception:
+                            pass
+                continue
+
+            # 普通非 scope 插件
             _force_symlink(p, os.path.join(global_nm, name))
             _force_symlink(p, os.path.join(prof_nm, name))
-            p_nm = os.path.join(p, "node_modules")
+            p_nm = os.path.join(p, "node_modules", "@deepseek-ai")
             if os.path.islink(p_nm):
-                try: os.unlink(p_nm)
-                except Exception: pass
-            try: os.makedirs(p_nm, exist_ok=True)
-            except Exception: pass
-            _force_symlink(target_nm, os.path.join(p_nm, "@deepseek-ai"))
+                try:
+                    os.unlink(p_nm)
+                except Exception:
+                    pass
 
     # 2. 修复内置插件
     for name in ["dsh-device-shell-guide", "dsh-status-overlay", "dsh-task-notifier", "dsh-web-mobile"]:
@@ -981,6 +1016,13 @@ def heal_plugin_links(root):
 
 def _force_symlink(target, link_path):
     try:
+        parent = os.path.dirname(link_path)
+        if os.path.islink(parent):
+            try:
+                os.unlink(parent)
+            except OSError:
+                pass
+        os.makedirs(parent, exist_ok=True)
         if os.path.islink(link_path):
             if os.readlink(link_path) == target:
                 return
