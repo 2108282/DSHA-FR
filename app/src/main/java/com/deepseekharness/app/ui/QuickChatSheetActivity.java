@@ -67,6 +67,7 @@ import android.widget.Toast;
 import com.deepseekharness.app.util.ToastHelper;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.view.ViewCompat;
@@ -418,8 +419,73 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         }
         setupGesture();
         setupKeyboardObserver();
+        setupBackDispatcher();
         attachChatWeb();
         animateIn();
+    }
+
+    private static final String SCRIPT_TRIGGER_MOBILE_BACK =
+            "(function() {\n" +
+            "    try {\n" +
+            "        if (typeof window.triggerMobileBack === 'function') {\n" +
+            "            return String(window.triggerMobileBack());\n" +
+            "        }\n" +
+            "        if (typeof window.__dshTriggerMobileBack === 'function') {\n" +
+            "            return String(window.__dshTriggerMobileBack());\n" +
+            "        }\n" +
+            "    } catch (e) {\n" +
+            "        console.error('triggerMobileBack error:', e);\n" +
+            "    }\n" +
+            "    return 'none';\n" +
+            "})()";
+
+    private void dispatchBackAction() {
+        // 1. 优先消费原生最高优先级浮层（原生对话框、大纲下拉、全屏文件查看器）
+        if (currentActiveDialogMask != null) {
+            dismissActiveDialog();
+            return;
+        }
+        if (turnOutlineDropdownMask != null && turnOutlineDropdownMask.getVisibility() == View.VISIBLE) {
+            dismissTurnOutlineDropdown();
+            return;
+        }
+        if (fileViewerContainer != null && fileViewerContainer.getVisibility() == View.VISIBLE) {
+            closeFileViewer();
+            return;
+        }
+
+        // 2. 调用网页内部全面屏手势分发器（window.triggerMobileBack / window.__dshTriggerMobileBack）
+        WebView webView = getActiveWebView();
+        if (webView != null) {
+            webView.evaluateJavascript(SCRIPT_TRIGGER_MOBILE_BACK, value -> {
+                boolean isHandledByPlugin = false;
+                if (value != null) {
+                    String clean = value.replace("\"", "").trim();
+                    if ("true".equalsIgnoreCase(clean)) {
+                        isHandledByPlugin = true;
+                    }
+                }
+                if (isHandledByPlugin) {
+                    // 1) 值为 true：由插件自身完成消费操作，全面屏手势不触发其他内容
+                    return;
+                }
+                // 2) 值为 none 或其他：表示处于最底层普通对话页，触发抽屉平滑退出进入后台
+                dismissSheet();
+            });
+            return;
+        }
+
+        // 兜底：WebView 不存在时直接退出抽屉
+        dismissSheet();
+    }
+
+    private void setupBackDispatcher() {
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                dispatchBackAction();
+            }
+        });
     }
 
     private void dismissActiveDialog() {
@@ -2875,6 +2941,20 @@ public class QuickChatSheetActivity extends AppCompatActivity {
 
     private int dpToPx(float dp) {
         return Math.max(1, (int) (dp * getResources().getDisplayMetrics().density + 0.5f));
+    }
+
+    @Override
+    public void onBackPressed() {
+        dispatchBackAction();
+    }
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (keyCode == KeyEvent.KEYCODE_BACK) {
+            dispatchBackAction();
+            return true;
+        }
+        return super.onKeyDown(keyCode, event);
     }
 
     private boolean tryInterceptLocalFile(String url) {
