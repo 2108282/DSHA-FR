@@ -433,10 +433,10 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             "        if (typeof window.__dshTriggerMobileBack === 'function') {\n" +
             "            return String(window.__dshTriggerMobileBack());\n" +
             "        }\n" +
+            "        return 'ERR_NOT_FOUND';\n" +
             "    } catch (e) {\n" +
-            "        console.error('triggerMobileBack error:', e);\n" +
+            "        return 'ERR_EXCEPTION_' + (e ? e.message : 'unknown');\n" +
             "    }\n" +
-            "    return 'none';\n" +
             "})()";
 
     private void dispatchBackAction() {
@@ -458,6 +458,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         WebView webView = getActiveWebView();
         if (webView != null) {
             webView.evaluateJavascript(SCRIPT_TRIGGER_MOBILE_BACK, value -> {
+                android.util.Log.i("DSHA-Back", "triggerMobileBack result: " + value);
                 boolean isHandledByPlugin = false;
                 if (value != null) {
                     String clean = value.replace("\"", "").trim();
