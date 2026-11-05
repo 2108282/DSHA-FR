@@ -230,8 +230,44 @@ class Lifecycle:
             'updateFor': request.get('updateFor', ''),
             'fromVersion': request.get('fromVersion', '')
         }
+        self.annotate_existing_install(prepared)
         self.write(os.path.join(path, 'preview.json'), prepared)
         return prepared
+
+    def annotate_existing_install(self, prepared):
+        """若安装包中的插件已存在，智能对比版本并标记为更新/重新覆盖，绝不生硬终止。"""
+        items = prepared.get('items') or []
+        for item in items:
+            name = item.get('name')
+            if not name:
+                continue
+            cur_dir = self.g['resolve_plugin_dir'](name)
+            if not cur_dir or not os.path.isdir(cur_dir):
+                continue
+            cur_pkg = self.read(os.path.join(cur_dir, 'package.json'), {})
+            cur_ver = str(cur_pkg.get('version', '')).strip()
+            if not cur_ver:
+                continue
+            new_ver = str(item.get('version', '')).strip()
+            cmp = compare_versions(new_ver, cur_ver)
+            if cmp is not None and cmp > 0:
+                item['updateStatus'] = 'upgrade'
+                item['installedVersion'] = cur_ver
+                item['compatibilityMessage'] = (item.get('compatibilityMessage', '') +
+                    f"\n【版本升级】当前已安装 v{cur_ver}，确认后将平滑更新至 v{new_ver}（旧版本自动备份，支持随时回退）。")
+            elif cmp == 0:
+                item['updateStatus'] = 'reinstall'
+                item['installedVersion'] = cur_ver
+                item['compatibilityMessage'] = (item.get('compatibilityMessage', '') +
+                    f"\n【重新安装】当前已安装相同版本 v{cur_ver}，确认后将重新安装覆盖（旧版本自动备份）。")
+            else:
+                item['updateStatus'] = 'downgrade'
+                item['installedVersion'] = cur_ver
+                item['compatibilityMessage'] = (item.get('compatibilityMessage', '') +
+                    f"\n【版本降级】⚠ 警告：当前已安装较新版本 v{cur_ver}，确认后将降级覆盖为 v{new_ver}。")
+            if not prepared.get('updateFor'):
+                prepared['updateFor'] = name
+                prepared['fromVersion'] = cur_ver
 
     def metadata_from_dict(self, pkg):
         author = pkg.get('author', '')
@@ -296,6 +332,7 @@ class Lifecycle:
             prepared = {'previewId': key, 'source': source, 'command': command, 'sha256': digest,
                         'items': items, 'createdAt': int(time.time()), 'subdir': subdir,
                         'updateFor': request.get('updateFor', ''), 'fromVersion': request.get('fromVersion', '')}
+            self.annotate_existing_install(prepared)
             self.write(os.path.join(path, 'preview.json'), prepared)
             shutil.rmtree(staging)
             return 0
@@ -360,8 +397,11 @@ class Lifecycle:
                 sources = {}
             sources[name] = "npm:" + spec
             self.write(self.local(self.g['SOURCES']), sources)
+            if self.g.get('ensure_plugin_symlinks'):
+                self.g['ensure_plugin_symlinks'](name)
             shutil.rmtree(path)
-            self.g['result']('ok', f"已安装 {name}；重启 Web 后生效。", installed=[name])
+            action_desc = "更新" if preview.get('updateFor') else "安装"
+            self.g['result']('ok', f"已{action_desc} {name}；重启 Web 后生效。", installed=[name])
             return 0
 
         archive = os.path.join(path, 'archive')
@@ -444,6 +484,26 @@ class Lifecycle:
         updates = sum(1 for item in checked if item['available'])
         self.g['result']('ok', '已检查 %d 个插件，%d 个可更新；详情见插件卡片' % (len(checked), updates), updates=checked)
         return 0
+
+    def update(self, name):
+        """命令行或一键更新：自动解析插件来源最新版本并执行就地无缝升级。"""
+        if not self.builtin.valid_name(name):
+            raise ValueError("无效的插件名称")
+        directory = self.g['resolve_plugin_dir'](name)
+        if not directory or not os.path.isdir(directory):
+            raise ValueError(f"插件 {name} 尚未安装，请先使用 install 命令安装")
+        pkg = self.read(os.path.join(directory, 'package.json'), {})
+        cur_ver = str(pkg.get('version', '')).strip()
+        cmd = self.source_command(name)
+        preview = self.inspect({'command': cmd, 'name': name,
+                               'updateFor': name, 'fromVersion': cur_ver}, emit=False)
+        latest = (preview.get('items') or [{}])[0]
+        latest_ver = str(latest.get('version', '')).strip()
+        cmp = compare_versions(latest_ver, cur_ver)
+        if cmp is not None and cmp <= 0:
+            self.g['result']('ok', f"{name} 已是最新版本 (v{cur_ver})，无需更新。")
+            return 0
+        return self.install_preview(preview['previewId'])
 
     def rollback(self, name, expected=''):
         if self.builtin.is_official_bundle(name):

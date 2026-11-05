@@ -242,6 +242,33 @@ def prepare_dependencies(root, pkg):
         shutil.move(os.path.join(work, "node_modules"), modules)
 
 
+def ensure_plugin_symlinks(name):
+    """确保插件在 local(builtin.NODE_MODULES) 与 /usr/local/lib/node_modules 下的双向软链均正确建立"""
+    target = resolve_plugin_dir(name)
+    if not target or not os.path.isdir(target):
+        return
+    for base_nm in [local(builtin.NODE_MODULES), "/usr/local/lib/node_modules"]:
+        link = os.path.join(base_nm, name)
+        parent = os.path.dirname(link)
+        if os.path.islink(parent):
+            try: os.unlink(parent)
+            except OSError: pass
+        os.makedirs(parent, exist_ok=True)
+        if os.path.islink(link):
+            try: os.unlink(link)
+            except OSError: pass
+        elif os.path.lexists(link):
+            if os.path.isdir(link):
+                shutil.rmtree(link, ignore_errors=True)
+            else:
+                try: os.unlink(link)
+                except OSError: pass
+        try:
+            os.symlink(target, link, target_is_directory=True)
+        except Exception:
+            pass
+
+
 def register_plugin(root, source, expected_version=None):
     pkg = plugin_package(root)
     name = pkg["name"]
@@ -282,7 +309,10 @@ def register_plugin(root, source, expected_version=None):
             source_written = False
             link = os.path.join(local(builtin.NODE_MODULES), name)
             if os.path.lexists(link) and not os.path.islink(link):
-                raise ValueError(name + " 已由 pnpm 安装为实体目录，请先在终端移除该依赖再导入")
+                if existed or name in doc.get("dependencies", {}):
+                    shutil.rmtree(link, ignore_errors=True)
+                else:
+                    raise ValueError(name + " 已由 pnpm 安装为实体目录，请先在终端移除该依赖再导入")
             old_link = os.readlink(link) if os.path.islink(link) else None
             marker = builtin.marker_path(name)
             previous_bundles = doc.get("dsh", {}).get("profile", {}).get("bundles", [])
@@ -306,6 +336,7 @@ def register_plugin(root, source, expected_version=None):
                             pass
                     os.makedirs(parent_dir, exist_ok=True)
                     os.symlink(dest, link, target_is_directory=True)
+                    ensure_plugin_symlinks(name)
                 bundles = doc.setdefault("dsh", {}).setdefault("profile", {}).setdefault("bundles", [])
                 if enabled and name not in bundles:
                     bundles.append(name)
@@ -743,6 +774,8 @@ def main():
             return lifecycle().discard_preview(args[1])
         if args[0] == "check-updates" and len(args) in (1, 2):
             return lifecycle().check_updates(args[1] if len(args) == 2 else '')
+        if args[0] == "update" and len(args) == 2:
+            return lifecycle().update(args[1])
         if args[0] == "rollback" and len(args) in (2, 3):
             return lifecycle().rollback(*args[1:])
         if args[0] == "safe-mode" and len(args) == 2:

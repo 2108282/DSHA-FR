@@ -20,4 +20,6 @@ public interface PluginActions {
     void onStatusMessageClick();
     void onToggleItem(PluginRepository.Item item, boolean enabled);
     void onUninstallClick(PluginRepository.Item item);
+    void onUpdateClick(PluginRepository.Item item);
+    void onRollbackClick(PluginRepository.Item item);
 }

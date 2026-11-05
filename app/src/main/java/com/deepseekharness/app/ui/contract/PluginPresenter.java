@@ -543,4 +543,35 @@ public class PluginPresenter implements PluginActions {
 
         dialog.show();
     }
+
+    @Override
+    public void onUpdateClick(PluginRepository.Item item) {
+        if (repository.isBusy()) {
+            ToastHelper.makeText(context, "上一项插件操作仍在进行，请稍候", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (item.updateAvailable) {
+            repository.prepareUpdate(item);
+        } else {
+            repository.checkUpdates(item);
+        }
+    }
+
+    @Override
+    public void onRollbackClick(PluginRepository.Item item) {
+        if (repository.isBusy()) {
+            ToastHelper.makeText(context, "上一项插件操作仍在进行，请稍候", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (item.rollbackVersion == null || item.rollbackVersion.isEmpty()) {
+            ToastHelper.makeText(context, "没有可回退的历史版本", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        new AlertDialog.Builder(activity)
+                .setTitle("回退插件版本？")
+                .setMessage("是否将 " + item.name + " 回退至上一版本 v" + item.rollbackVersion + "？\n\n回退后将保留启用状态，重启 Web 后生效。")
+                .setPositiveButton("确认回退", (d, which) -> repository.rollback(item))
+                .setNegativeButton("取消", null)
+                .show();
+    }
 }

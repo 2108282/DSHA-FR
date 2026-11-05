@@ -120,6 +120,51 @@
             android:textColor="@color/text_muted"
             android:textSize="12sp" />
 
+        <!-- 单个插件更新与回退操作行 -->
+        <LinearLayout
+            android:id="@+id/pluginUpdateRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnPluginUpdate"
+                android:layout_width="0dp"
+                android:layout_height="34dp"
+                android:layout_weight="1"
+                android:background="@drawable/m3_btn_tonal_expressive"
+                android:elevation="0dp"
+                android:gravity="center"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:stateListAnimator="@animator/btn_press_scale"
+                android:text="更新"
+                android:textAllCaps="false"
+                android:textColor="@color/primary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnPluginRollback"
+                android:layout_width="0dp"
+                android:layout_height="34dp"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:background="@drawable/m3_btn_tonal_small"
+                android:elevation="0dp"
+                android:gravity="center"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:stateListAnimator="@animator/btn_press_scale"
+                android:text="回退上一版"
+                android:textAllCaps="false"
+                android:textColor="@color/primary"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+        </LinearLayout>
+
         <!-- 四大操作小按钮行 (height: 32px; gap: 8px) -->
         <LinearLayout
             android:layout_width="match_parent"

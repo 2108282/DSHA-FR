@@ -549,6 +549,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
             final Button actionBtn;
             final View detailsPanel;
             final TextView detailText;
+            final Button btnUpdate, btnRollback;
             final Button btnAddr, btnRename, btnExport, btnUninstall;
 
             Holder(View view) {
@@ -561,6 +562,8 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
                 actionBtn = view.findViewById(R.id.pluginActions);
                 detailsPanel = view.findViewById(R.id.pluginDetailsPanel);
                 detailText = view.findViewById(R.id.pluginDetailText);
+                btnUpdate = view.findViewById(R.id.btnPluginUpdate);
+                btnRollback = view.findViewById(R.id.btnPluginRollback);
                 btnAddr = view.findViewById(R.id.btnPluginAddr);
                 btnRename = view.findViewById(R.id.btnPluginRename);
                 btnExport = view.findViewById(R.id.btnPluginExport);
@@ -651,6 +654,39 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
                 holder.detailText.setText("当前版本：" + curVer
                         + "\n最新版本：" + latestVerStr
                         + "\n配置路径：" + configPath);
+            }
+
+            if (holder.btnUpdate != null) {
+                if (item.builtin || item.official) {
+                    holder.btnUpdate.setVisibility(View.GONE);
+                } else if (item.updateAvailable) {
+                    holder.btnUpdate.setVisibility(View.VISIBLE);
+                    holder.btnUpdate.setText("🚀 更新至 v" + item.latestVersion.replace("v", ""));
+                    holder.btnUpdate.setEnabled(!repository.isBusy());
+                    holder.btnUpdate.setOnClickListener(v -> {
+                        if (actions != null) actions.onUpdateClick(item);
+                    });
+                } else {
+                    holder.btnUpdate.setVisibility(View.VISIBLE);
+                    holder.btnUpdate.setText("检查更新");
+                    holder.btnUpdate.setEnabled(!repository.isBusy());
+                    holder.btnUpdate.setOnClickListener(v -> {
+                        if (actions != null) actions.onUpdateClick(item);
+                    });
+                }
+            }
+
+            if (holder.btnRollback != null) {
+                if (item.rollbackVersion != null && !item.rollbackVersion.isEmpty()) {
+                    holder.btnRollback.setVisibility(View.VISIBLE);
+                    holder.btnRollback.setText("回退至 v" + item.rollbackVersion.replace("v", ""));
+                    holder.btnRollback.setEnabled(!repository.isBusy());
+                    holder.btnRollback.setOnClickListener(v -> {
+                        if (actions != null) actions.onRollbackClick(item);
+                    });
+                } else {
+                    holder.btnRollback.setVisibility(View.GONE);
+                }
             }
 
             if (holder.btnAddr != null) {
