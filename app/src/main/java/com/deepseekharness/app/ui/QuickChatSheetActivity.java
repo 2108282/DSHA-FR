@@ -67,7 +67,6 @@ import android.widget.Toast;
 import com.deepseekharness.app.util.ToastHelper;
 
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.core.view.ViewCompat;
@@ -419,7 +418,6 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         }
         setupGesture();
         setupKeyboardObserver();
-        setupBackDispatcher();
         attachChatWeb();
         animateIn();
     }
@@ -443,161 +441,6 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         currentActiveDialogMask = mask;
         rootOverlay.addView(mask);
         mask.bringToFront();
-    }
-
-    private static final String SCRIPT_CONSUME_WEB_BACK =
-            "(function() {\n" +
-            "    try {\n" +
-            "        // 1. 优先消费：模态弹窗（通用设置、快捷键速查、对话框、确认框等）\n" +
-            "        // 注意：后打开的弹窗（如快捷键弹窗）位于 DOM 较深层级，必须优先消费最顶层的 modal\n" +
-            "        var modals = document.querySelectorAll('[aria-modal=\"true\"], [role=\"dialog\"]');\n" +
-            "        if (modals && modals.length > 0) {\n" +
-            "            var modal = modals[modals.length - 1];\n" +
-            "            var closeBtn = modal.querySelector('button[aria-label*=\"Close\" i], button[aria-label*=\"关闭\" i], [class*=\"_close\"], [class*=\"_headerActions\"] button, [class*=\"_header\"] button:last-child');\n" +
-            "            if (closeBtn) {\n" +
-            "                closeBtn.click();\n" +
-            "                return true;\n" +
-            "            }\n" +
-            "            var escEvent = new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true, cancelable: true });\n" +
-            "            document.dispatchEvent(escEvent);\n" +
-            "            window.dispatchEvent(escEvent);\n" +
-            "            return true;\n" +
-            "        }\n" +
-            "        // 2. 优先消费：右侧文件树 / 面板（严格判定仅在真实展开可见时才执行收起，严禁在收起状态误触 toggle）\n" +
-            "        var rightPane = document.querySelector('[data-sidebar-right-panel]');\n" +
-            "        var expandBtn = document.querySelector('[data-sidebar-right-expand]');\n" +
-            "        var isRightOpen = false;\n" +
-            "        if (rightPane && !expandBtn) {\n" +
-            "            if (document.querySelector('[data-sidebar-right-open]') !== null) {\n" +
-            "                isRightOpen = true;\n" +
-            "            } else {\n" +
-            "                var cs = window.getComputedStyle(rightPane);\n" +
-            "                if (cs.visibility !== 'hidden' && cs.display !== 'none' && rightPane.getBoundingClientRect().left < window.innerWidth) {\n" +
-            "                    isRightOpen = true;\n" +
-            "                }\n" +
-            "            }\n" +
-            "        }\n" +
-            "        if (isRightOpen) {\n" +
-            "            var toggleBtn = document.querySelector('[data-sidebar-right-toggle], [data-sidebar-right-panel] button[aria-label*=\"收起\" i], [data-sidebar-right-panel] button[aria-label*=\"折叠\" i], [data-sidebar-right-panel] button[aria-label*=\"Collapse\" i]');\n" +
-            "            if (toggleBtn && typeof toggleBtn.click === 'function') { toggleBtn.click(); return true; }\n" +
-            "            var tabClose = rightPane.querySelector('button[aria-label*=\"关闭\" i], button[aria-label*=\"Close\" i], [class*=\"_tabClose\"], [class*=\"_closeBtn\"]');\n" +
-            "            if (tabClose && typeof tabClose.click === 'function') { tabClose.click(); return true; }\n" +
-            "        }\n" +
-            "        var frame = document.querySelector('[data-mobile-nav=\"frame\"]');\n" +
-            "        if (frame && frame.hasAttribute('data-aionui-explorer-open')) {\n" +
-            "            frame.removeAttribute('data-aionui-explorer-open');\n" +
-            "            return true;\n" +
-            "        }\n" +
-            "        if (frame && frame.hasAttribute('data-aionui-preview-open')) {\n" +
-            "            frame.removeAttribute('data-aionui-preview-open');\n" +
-            "            frame.removeAttribute('data-mobile-preview-full');\n" +
-            "            return true;\n" +
-            "        }\n" +
-            "        // 3. 优先消费：左侧抽屉 / 侧边栏（仅在侧边栏真实展开时收起）\n" +
-            "        if (frame && !frame.hasAttribute('data-sidebar-collapsed')) {\n" +
-            "            var backdrop = document.querySelector('[data-mobile-nav=\"backdrop\"]');\n" +
-            "            if (backdrop) { backdrop.click(); return true; }\n" +
-            "            var escEv = new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true, cancelable: true });\n" +
-            "            document.dispatchEvent(escEv);\n" +
-            "            window.dispatchEvent(escEv);\n" +
-            "            if (!frame.hasAttribute('data-sidebar-collapsed')) {\n" +
-            "                frame.setAttribute('data-sidebar-collapsed', '');\n" +
-            "            }\n" +
-            "            return true;\n" +
-            "        }\n" +
-            "        // 4. 优先消费：删除确认卡片等浮层\n" +
-            "        var deleteBackdrop = document.querySelector('[data-mobile-nav=\"delete-dialog-backdrop\"]');\n" +
-            "        if (deleteBackdrop) { deleteBackdrop.click(); return true; }\n" +
-            "        // 5. 优先消费：插件二级/三级配置详情页的面包屑导航返回\n" +
-            "        var pluginCrumb = document.querySelector('[data-plugin-panel] button[class*=\"crumb\"], [data-plugin-panel] button[aria-label*=\"返回\" i], [data-plugin-panel] button[aria-label*=\"Back to\" i]');\n" +
-            "        if (pluginCrumb) {\n" +
-            "            pluginCrumb.click();\n" +
-            "            return true;\n" +
-            "        }\n" +
-            "        // 6. 优先消费：插件管理主页面（或其它非会话全局面板），将返回手势严格绑定到左上角返回按钮\n" +
-            "        var pluginPanel = document.querySelector('[data-plugin-panel]');\n" +
-            "        var activePanel = document.querySelector('[class*=\"panelRow\"][class*=\"panelActive\"], [class*=\"panelRow\"][aria-current=\"page\"]');\n" +
-            "        var fabBack = document.querySelector('[data-mobile-nav=\"fab\"][data-mobile-nav-fab-mode=\"exit-panel\"], [data-mobile-nav=\"fab\"][aria-label*=\"返回\" i], [data-mobile-nav=\"fab\"][title*=\"返回\" i]');\n" +
-            "        if (pluginPanel || activePanel || fabBack) {\n" +
-            "            if (fabBack) {\n" +
-            "                fabBack.click();\n" +
-            "                return true;\n" +
-            "            }\n" +
-            "            var anyFab = document.querySelector('[data-mobile-nav=\"fab\"]');\n" +
-            "            if (anyFab && (anyFab.getAttribute('data-mobile-nav-fab-mode') === 'exit-panel' || anyFab.innerHTML.indexOf('path') !== -1)) {\n" +
-            "                anyFab.click();\n" +
-            "                return true;\n" +
-            "            }\n" +
-            "            var panelItem = document.querySelector('[class*=\"panelRow\"], button[aria-current=\"page\"]');\n" +
-            "            if (panelItem) {\n" +
-            "                var rKey = Object.keys(panelItem).find(function(k) { return k.startsWith('__reactProps') || k.startsWith('__reactFiber'); });\n" +
-            "                if (rKey && panelItem[rKey]) {\n" +
-            "                    var curr = panelItem[rKey];\n" +
-            "                    for (var d = 0; curr && d < 20; d++) {\n" +
-            "                        var p = curr.memoizedProps || curr.pendingProps || curr;\n" +
-            "                        if (p && typeof p.selectPanel === 'function') {\n" +
-            "                            p.selectPanel(null);\n" +
-            "                            return true;\n" +
-            "                        }\n" +
-            "                        curr = curr.return;\n" +
-            "                    }\n" +
-            "                }\n" +
-            "            }\n" +
-            "            var curSession = document.querySelector('[class*=\"sessionRow\"][class*=\"selected\"], [class*=\"sessionRow\"][aria-selected=\"true\"], [class*=\"sessionRow\"][aria-current=\"true\"]');\n" +
-            "            if (curSession) {\n" +
-            "                curSession.click();\n" +
-            "                return true;\n" +
-            "            }\n" +
-            "            var anySession = document.querySelector('[class*=\"sessionRow\"]');\n" +
-            "            if (anySession) {\n" +
-            "                anySession.click();\n" +
-            "                return true;\n" +
-            "            }\n" +
-            "            var newChat = document.querySelector('[class*=\"newSession\"], [aria-label*=\"新会话\"], [aria-label*=\"新建\"], button[title*=\"新会话\"], button[title*=\"New session\"]');\n" +
-            "            if (newChat) {\n" +
-            "                newChat.click();\n" +
-            "                return true;\n" +
-            "            }\n" +
-            "        }\n" +
-            "    } catch (e) {\n" +
-            "        console.error('dsha consume back error:', e);\n" +
-            "    }\n" +
-            "    return false;\n" +
-            "})()";
-
-    private void dispatchBackAction() {
-        if (currentActiveDialogMask != null) {
-            dismissActiveDialog();
-            return;
-        }
-        if (turnOutlineDropdownMask != null && turnOutlineDropdownMask.getVisibility() == View.VISIBLE) {
-            dismissTurnOutlineDropdown();
-            return;
-        }
-        if (fileViewerContainer != null && fileViewerContainer.getVisibility() == View.VISIBLE) {
-            closeFileViewer();
-            return;
-        }
-        if (sCachedWebView != null) {
-            sCachedWebView.evaluateJavascript(SCRIPT_CONSUME_WEB_BACK, value -> {
-                if ("true".equals(value)) {
-                    return;
-                }
-                // 浮层消费完毕后，快捷抽屉的侧滑返回意图一律为平滑退出抽屉，严禁执行 WebView goBack() 导致 SPA 会话历史倒退刷新
-                dismissSheet();
-            });
-            return;
-        }
-        dismissSheet();
-    }
-
-    private void setupBackDispatcher() {
-        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
-            @Override
-            public void handleOnBackPressed() {
-                dispatchBackAction();
-            }
-        });
     }
 
     @Override
@@ -3032,20 +2875,6 @@ public class QuickChatSheetActivity extends AppCompatActivity {
 
     private int dpToPx(float dp) {
         return Math.max(1, (int) (dp * getResources().getDisplayMetrics().density + 0.5f));
-    }
-
-    @Override
-    public void onBackPressed() {
-        dispatchBackAction();
-    }
-
-    @Override
-    public boolean onKeyDown(int keyCode, KeyEvent event) {
-        if (keyCode == KeyEvent.KEYCODE_BACK) {
-            dispatchBackAction();
-            return true;
-        }
-        return super.onKeyDown(keyCode, event);
     }
 
     private boolean tryInterceptLocalFile(String url) {
