@@ -57,13 +57,14 @@ if [ -d "$OVERLAY_DIR" ]; then
     ln -sfn "/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-mcp-client" "$GLOBAL_NM/@deepseek-ai/dsh-mcp-client"
 
     # 动态扫描注入的插件实体，自动完成安装凭证立牌与语法检测
-    for pdir in "$STAGE_DIR/root/dsha-"* "$STAGE_DIR/root/dsh-web-mobile"; do
+    for pdir in "$STAGE_DIR/root/dsha-"* "$STAGE_DIR/root/dsh-"*; do
         [ -d "$pdir" ] || continue
+        [ -f "$pdir/package.json" ] || continue
         pname=$(basename "$pdir")
-        if [ "$pname" = "dsh-web-mobile" ]; then
-            pkg_name="dsh-web-mobile"
-        else
+        if [[ "$pname" == dsha-* ]]; then
             pkg_name="dsh-${pname#dsha-}"
+        else
+            pkg_name="$pname"
         fi
         
         # 1. 自动立牌：确保 App 与底座将其识别为内置插件

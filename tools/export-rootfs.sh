@@ -154,7 +154,8 @@ for d in os.listdir(base):
     "dsh-device-shell-guide": "link:/root/dsha-device-shell-guide",
     "dsh-task-notifier": "link:/root/dsha-task-notifier",
     "dsh-status-overlay": "link:/root/dsha-status-overlay",
-    "dsh-web-mobile": "link:/root/dsh-web-mobile"
+    "dsh-mobile-lite": "link:/root/dsh-mobile-lite",
+    "dsh-classic-chat": "link:/root/dsh-classic-chat"
   },
   "dsh": {
     "profile": {
@@ -164,7 +165,8 @@ for d in os.listdir(base):
         "dsh-device-shell-guide",
         "dsh-task-notifier",
         "dsh-status-overlay",
-        "dsh-web-mobile"
+        "dsh-mobile-lite",
+        "dsh-classic-chat"
       ],
       "patchReload": "startup"
     }
@@ -313,16 +315,25 @@ EOF_CORDIS
         "--exclude=./var/lib/dsh-app/phone/bridge.json"
         "--exclude=./root/.dsh/skills/*/*.bak"
         "--exclude=./root/.dsh/skills/*/*~"
-        # 排除 dsh-web-mobile 源码开发依赖与文档 (生产底座仅需 lib/ 与 package.json)
-        "--exclude=./root/dsh-web-mobile/node_modules"
-        "--exclude=./root/dsh-web-mobile/node_modules/*"
-        "--exclude=./root/dsh-web-mobile/.git"
-        "--exclude=./root/dsh-web-mobile/.git/*"
-        "--exclude=./root/dsh-web-mobile/docs"
-        "--exclude=./root/dsh-web-mobile/docs/*"
-        "--exclude=./root/dsh-web-mobile/tests"
-        "--exclude=./root/dsh-web-mobile/tests/*"
-        "--exclude=./root/dsh-web-mobile/assets/banner*"
+        # 排除内置插件源码开发依赖、测试与文档 (生产底座仅需 lib/ 与 package.json)
+        "--exclude=./root/dsh-mobile-lite/node_modules"
+        "--exclude=./root/dsh-mobile-lite/node_modules/*"
+        "--exclude=./root/dsh-mobile-lite/.git"
+        "--exclude=./root/dsh-mobile-lite/.git/*"
+        "--exclude=./root/dsh-mobile-lite/.client-build"
+        "--exclude=./root/dsh-mobile-lite/.client-build/*"
+        "--exclude=./root/dsh-classic-chat/node_modules"
+        "--exclude=./root/dsh-classic-chat/node_modules/*"
+        "--exclude=./root/dsh-classic-chat/.git"
+        "--exclude=./root/dsh-classic-chat/.git/*"
+        "--exclude=./root/dsh-classic-chat/docs"
+        "--exclude=./root/dsh-classic-chat/docs/*"
+        "--exclude=./root/dsh-classic-chat/tests"
+        "--exclude=./root/dsh-classic-chat/tests/*"
+        "--exclude=./root/dsh-classic-chat/repro"
+        "--exclude=./root/dsh-classic-chat/repro/*"
+        "--exclude=./root/dsh-classic-chat/benchmarks"
+        "--exclude=./root/dsh-classic-chat/benchmarks/*"
         # 排除工作区与个人工程文件 (严禁将用户工作区数据打入公开底包)
         "--exclude=./root/workspaces/*"
         "--exclude=./root/.dsha-workspaces*"
@@ -470,14 +481,25 @@ EOF_CORDIS
         ln -sfn "/root/.dsh/skills/reverse-engineer-anything" "$STAGE_AGENTS_SKILLS/reverse-engineer-anything"
         EXTRA_STAGE_INJECTS+=("./root/.agents/skills/reverse-engineer-anything")
     fi
-    for p in dsh-device-shell-guide dsh-task-notifier dsh-status-overlay dsh-web-mobile; do
-        if [ "$p" = "dsh-web-mobile" ]; then
-            tgt="/root/dsh-web-mobile"
+    BUILTIN_PLUGINS=(
+        "dsh-device-shell-guide"
+        "dsh-task-notifier"
+        "dsh-status-overlay"
+        "dsh-mobile-lite"
+        "dsh-classic-chat"
+    )
+    for p in "${BUILTIN_PLUGINS[@]}"; do
+        if [ "$p" = "dsh-mobile-lite" ] || [ "$p" = "dsh-classic-chat" ]; then
+            tgt="/root/$p"
         else
             tgt="/root/dsha-${p#dsh-}"
         fi
         ln -sfn "$tgt" "$STAGE_PROFILE_NM/$p"
         ln -sfn "$tgt" "$STAGE_GLOBAL_NM/$p"
+        EXTRA_STAGE_INJECTS+=(
+            "./root/.dsh/profiles/web/node_modules/$p"
+            "./usr/local/lib/node_modules/$p"
+        )
     done
     tar --numeric-owner -rf "$TMP_RAW_TAR" -C "$STAGE_DIR" \
         ./root/.dsh/profiles/web/package.json \
@@ -485,14 +507,6 @@ EOF_CORDIS
         ./root/.dsh/profiles/web/node_modules/@deepseek-ai/dsh \
         ./root/.dsh/profiles/web/node_modules/@deepseek-ai/dsh-mcp-client \
         ./usr/local/lib/node_modules/@deepseek-ai/dsh-mcp-client \
-        ./root/.dsh/profiles/web/node_modules/dsh-device-shell-guide \
-        ./root/.dsh/profiles/web/node_modules/dsh-task-notifier \
-        ./root/.dsh/profiles/web/node_modules/dsh-status-overlay \
-        ./root/.dsh/profiles/web/node_modules/dsh-web-mobile \
-        ./usr/local/lib/node_modules/dsh-device-shell-guide \
-        ./usr/local/lib/node_modules/dsh-task-notifier \
-        ./usr/local/lib/node_modules/dsh-status-overlay \
-        ./usr/local/lib/node_modules/dsh-web-mobile \
         ./root/.agents/skills/.gitkeep \
         ${EXTRA_STAGE_INJECTS[@]+"${EXTRA_STAGE_INJECTS[@]}"} \
         ./root/workspaces/.gitkeep
