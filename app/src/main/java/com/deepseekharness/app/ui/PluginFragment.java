@@ -661,7 +661,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
                     holder.btnUpdate.setVisibility(View.GONE);
                 } else if (item.updateAvailable) {
                     holder.btnUpdate.setVisibility(View.VISIBLE);
-                    holder.btnUpdate.setText("🚀 更新至 v" + item.latestVersion.replace("v", ""));
+                    holder.btnUpdate.setText("更新至 v" + item.latestVersion.replace("v", ""));
                     holder.btnUpdate.setEnabled(!repository.isBusy());
                     holder.btnUpdate.setOnClickListener(v -> {
                         if (actions != null) actions.onUpdateClick(item);

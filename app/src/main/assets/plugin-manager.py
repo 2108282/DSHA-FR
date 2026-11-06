@@ -307,6 +307,7 @@ def register_plugin(root, source, expected_version=None):
                 sources = {}
             previous_sources = dict(sources)
             source_written = False
+            existed = os.path.lexists(dest)
             link = os.path.join(local(builtin.NODE_MODULES), name)
             if os.path.lexists(link) and not os.path.islink(link):
                 if existed or name in doc.get("dependencies", {}):
@@ -318,7 +319,6 @@ def register_plugin(root, source, expected_version=None):
             previous_bundles = doc.get("dsh", {}).get("profile", {}).get("bundles", [])
             known = name in doc.get("dependencies", {}) or name in previous_bundles
             enabled = not os.path.isfile(marker) and (not known or name in previous_bundles)
-            existed = os.path.lexists(dest)
             if existed:
                 if os.path.islink(dest) or not os.path.isdir(dest):
                     raise ValueError("插件目标目录类型异常：" + name)
