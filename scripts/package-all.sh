@@ -12,7 +12,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
 mkdir -p "$DIST_DIR"
 
-VERSION="${1:-0.2.1-rc.5-u1}"
+VERSION="${1:-0.2.2-rc.1-u1}"
+ROOTFS_TAG="${ROOTFS_TAG:-0.2.2-rc.1-rootfs}"
 
 STAGE_DIR="/tmp/dsha_pkg_stage_$$"
 mkdir -p "$STAGE_DIR"
@@ -50,7 +51,7 @@ cp -f dist/dsha_ksu_native_lite.zip "$DIST_DIR/dsha_ksu_native_lite.zip"
 echo "✓ 产物 2 完成: $DIST_DIR/dsha_ksu_native_lite.zip"
 
 echo "  -> 按照 dsh-magisk 规范动态层叠熔铸底包并打包全内置 Full 包..."
-./scripts/build-module.sh full
+ROOTFS_TAG="$ROOTFS_TAG" ./scripts/build-module.sh full
 cp -f dist/dsha_ksu_native_full.zip "$DIST_DIR/dsha_ksu_native_full.zip"
 echo "✓ 产物 3 完成: $DIST_DIR/dsha_ksu_native_full.zip"
 cd "$ROOT_DIR"

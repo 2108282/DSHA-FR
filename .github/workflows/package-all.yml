@@ -18,9 +18,13 @@ on:
         type: boolean
         default: true
       release_tag:
-        description: "自定义发布 Release Tag (例如 0.2.1-rc.5-u1)"
+        description: "自定义发布 Release Tag (例如 0.2.2-rc.1-u1)"
         required: false
-        default: "0.2.1-rc.5-u1"
+        default: "0.2.2-rc.1-u1"
+      rootfs_tag:
+        description: "基准纯净底包 Release Tag (默认 0.2.2-rc.1-rootfs)"
+        required: false
+        default: "0.2.2-rc.1-rootfs"
       prerelease:
         description: "是否标记为预发布 (Pre-release)"
         type: boolean
@@ -52,7 +56,7 @@ jobs:
           elif [ -n "${{ inputs.release_tag }}" ]; then
             V="${{ inputs.release_tag }}"
           else
-            V="0.2.1-rc.5-u1"
+            V="0.2.2-rc.1-u1"
           fi
           echo "VERSION=$V" >> "$GITHUB_ENV"
           echo "VERSION=$V" >> "$GITHUB_OUTPUT"
@@ -143,11 +147,32 @@ jobs:
           echo "✓ 产物 1 已就绪 (前端 APK): dist/DSHA-FR ${VERSION}.apk ($(ls -lh "dist/DSHA-FR ${VERSION}.apk" | awk '{print $5}'))"
 
       # ============================================================
+      # 3.5 准备基准 RootFS 纯净底包 (0.2.2-rc.1-rootfs)
+      # ============================================================
+      - name: 下载基准 RootFS 纯净底包 (0.2.2-rc.1-rootfs)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          ROOTFS_TAG="${{ inputs.rootfs_tag || '0.2.2-rc.1-rootfs' }}"
+          echo "==> 正在从官方 Release ($ROOTFS_TAG) 下载基准 rootfs.tar.gz..."
+          mkdir -p module_source/magisk-module
+          if command -v gh >/dev/null 2>&1 && gh release download "$ROOTFS_TAG" --repo "${{ github.repository }}" --pattern "rootfs.tar.gz" --dir module_source/magisk-module 2>/dev/null && [ -s module_source/magisk-module/rootfs.tar.gz ]; then
+            echo "✓ 成功通过 gh CLI 下载最新底包"
+          else
+            echo "--> 使用 curl 从官方 Release 直链下载..."
+            curl -L -f -A "Mozilla/5.0" --retry 3 -o module_source/magisk-module/rootfs.tar.gz \
+              "https://github.com/${{ github.repository }}/releases/download/${ROOTFS_TAG}/rootfs.tar.gz"
+          fi
+          ls -lh module_source/magisk-module/rootfs.tar.gz
+
+      # ============================================================
       # 4. 严格按照 dsh-magisk 分支逻辑构建核心完整包与 Lite 包
       # ============================================================
       - name: 执行核心模块打包 (build-module.sh --lite 与 full)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ROOTFS_TAG: ${{ inputs.rootfs_tag || '0.2.2-rc.1-rootfs' }}
         run: |
           set -euo pipefail
           cd module_source
