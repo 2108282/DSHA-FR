@@ -1,0 +1,4 @@
+# dsh-mobile-lite bundle patch: one client-only plugin row.
+- insert:
+    - id: dsh-mobile-lite
+      name: 'dsh-mobile-lite'

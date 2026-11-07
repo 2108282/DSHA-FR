@@ -1,0 +1,152 @@
+/* ==========================================================================
+   dsh-web-mobile: 输入框与底部性能用量组件相关样式
+   来源: src/client/styles/layout.css.ts & src/client/styles/compat.css.ts
+   ========================================================================== */
+
+/* 1. 活跃会话下的输入框紧凑化 (layout.css.ts) */
+[data-mobile-nav="frame"] [data-phase="active"] [data-composer-card] {
+  padding-top: 2px !important;
+  gap: 4px !important;
+}
+[data-mobile-nav="frame"] [data-phase="active"] [data-composer-card] [class*="_row"] {
+  padding: 0 8px !important;
+}
+[data-mobile-nav="frame"] [data-phase="active"] [data-composer-card] [data-composer-input],
+[data-mobile-nav="frame"] [data-phase="active"] [data-composer-card] [class*="_scroll"] {
+  min-height: 28px !important;
+  padding-top: 2px !important;
+}
+
+/* 2. 统计胶囊排版：Activity (轮次/步数/TPS) 与 Usage (Token/缓存命中) (compat.css.ts) */
+[data-composer-stat="activity"] {
+  flex: 0 0 auto !important;
+  width: max-content !important;
+  min-width: max-content !important;
+  max-width: 60% !important;
+  font-size: 10.5px !important;
+  line-height: 18px !important;
+  margin-right: 4px !important;
+  white-space: nowrap !important;
+}
+[data-composer-stat="activity"] button,
+[data-composer-stat="activity"] span,
+[data-composer-stat="activity"] svg {
+  font-size: 10.5px !important;
+}
+[data-composer-stat="activity"] button {
+  padding: 1px 5px !important;
+  gap: 4px !important;
+}
+[data-composer-stat="activity"] svg {
+  width: 13px !important;
+  height: 13px !important;
+  flex: 0 0 auto !important;
+}
+
+[data-composer-stat="usage"] {
+  flex: 0 1 auto !important;
+  min-width: 0 !important;
+  max-width: 50% !important;
+  font-size: 10.5px !important;
+  line-height: 18px !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+}
+[data-composer-stat="usage"] button,
+[data-composer-stat="usage"] span,
+[data-composer-stat="usage"] svg {
+  font-size: 10.5px !important;
+}
+[data-composer-stat="usage"] button {
+  padding: 1px 5px !important;
+  gap: 4px !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow: hidden !important;
+}
+[data-composer-stat="usage"] svg {
+  width: 13px !important;
+  height: 13px !important;
+  flex: 0 0 auto !important;
+}
+[data-composer-stat="usage"] [class*="_label"],
+[data-composer-stat="usage"] button > span {
+  flex: 0 1 auto !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+/* 3. 上下文用量环：浮层化绝对定位并隐藏文本（仅留16px圆环） (compat.css.ts) */
+[data-mobile-nav="stats-ring"] {
+  position: absolute !important;
+  flex: 0 0 auto !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  min-width: 0 !important;
+  margin: 0 2px 0 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border: 0 !important;
+}
+[data-mobile-nav="stats-ring"],
+[data-mobile-nav="stats-ring"] * {
+  font-size: 0 !important;
+}
+[data-mobile-nav="stats-ring"] button {
+  padding: 0 !important;
+  margin: 0 !important;
+  gap: 0 !important;
+  min-width: 0 !important;
+  width: auto !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border: 0 !important;
+}
+[data-mobile-nav="stats-ring"] svg {
+  display: inline-block !important;
+  width: 16px !important;
+  height: 16px !important;
+  flex: 0 0 auto !important;
+}
+
+/* 4. 插件自建占位符与定位基准上下文 (compat.css.ts) */
+[data-mobile-nav="stats-ring-reserve"],
+[data-mobile-nav="stats-tps-reserve"] {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+[data-mobile-nav="stats-ring-reserve"] {
+  flex: 0 0 auto !important;
+  display: inline-block !important;
+  width: 16px !important;
+  height: 16px !important;
+  margin: 0 2px 0 0 !important;
+  padding: 0 !important;
+}
+[data-mobile-nav="stats-tps"] {
+  display: flex !important;
+  flex-flow: row nowrap !important;
+  align-items: center !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  font-size: 10px !important;
+  line-height: 18px !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+[data-mobile-nav="stats-tps"] * {
+  white-space: nowrap !important;
+}
+[data-mobile-nav="stats-tps"] span {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  min-width: 0 !important;
+}
+[data-mobile-nav="stats-ring-dock"],
+[data-mobile-nav="stats-tps-row"] {
+  position: relative;
+}

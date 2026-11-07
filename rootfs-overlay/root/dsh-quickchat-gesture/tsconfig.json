@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "node16",
+    "moduleResolution": "node16",
+    "rootDir": "src",
+    "outDir": "lib",
+    "declaration": true,
+    "declarationDir": "lib/types",
+    "strict": false,
+    "skipLibCheck": true,
+    "esModuleInterop": true
+  },
+  "include": [
+    "src/index.ts"
+  ]
+}

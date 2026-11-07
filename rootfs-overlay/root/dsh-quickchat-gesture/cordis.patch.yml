@@ -1,0 +1,4 @@
+# dsh-quickchat-gesture bundle patch: one client-only plugin row.
+- insert:
+    - id: dsh-quickchat-gesture
+      name: 'dsh-quickchat-gesture'

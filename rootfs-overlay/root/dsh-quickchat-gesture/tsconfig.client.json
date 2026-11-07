@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "ignoreDeprecations": "6.0",
+    "rootDir": "src/client",
+    "outDir": ".client-build",
+    "declaration": false,
+    "strict": false,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "noEmitOnError": false,
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true
+  },
+  "include": [
+    "src/client/**/*.ts",
+    "src/client/**/*.d.ts"
+  ],
+  "exclude": [
+    "lib",
+    ".client-build"
+  ]
+}

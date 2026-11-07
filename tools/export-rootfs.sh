@@ -155,7 +155,8 @@ for d in os.listdir(base):
     "dsh-task-notifier": "link:/root/dsha-task-notifier",
     "dsh-status-overlay": "link:/root/dsha-status-overlay",
     "dsh-mobile-lite": "link:/root/dsh-mobile-lite",
-    "dsh-classic-chat": "link:/root/dsh-classic-chat"
+    "dsh-classic-chat": "link:/root/dsh-classic-chat",
+    "dsh-quickchat-gesture": "link:/root/dsh-quickchat-gesture"
   },
   "dsh": {
     "profile": {
@@ -166,7 +167,8 @@ for d in os.listdir(base):
         "dsh-task-notifier",
         "dsh-status-overlay",
         "dsh-mobile-lite",
-        "dsh-classic-chat"
+        "dsh-classic-chat",
+        "dsh-quickchat-gesture"
       ],
       "patchReload": "startup"
     }
@@ -322,6 +324,12 @@ EOF_CORDIS
         "--exclude=./root/dsh-mobile-lite/.git/*"
         "--exclude=./root/dsh-mobile-lite/.client-build"
         "--exclude=./root/dsh-mobile-lite/.client-build/*"
+        "--exclude=./root/dsh-quickchat-gesture/node_modules"
+        "--exclude=./root/dsh-quickchat-gesture/node_modules/*"
+        "--exclude=./root/dsh-quickchat-gesture/.git"
+        "--exclude=./root/dsh-quickchat-gesture/.git/*"
+        "--exclude=./root/dsh-quickchat-gesture/.client-build"
+        "--exclude=./root/dsh-quickchat-gesture/.client-build/*"
         "--exclude=./root/dsh-classic-chat/node_modules"
         "--exclude=./root/dsh-classic-chat/node_modules/*"
         "--exclude=./root/dsh-classic-chat/.git"
@@ -487,9 +495,10 @@ EOF_CORDIS
         "dsh-status-overlay"
         "dsh-mobile-lite"
         "dsh-classic-chat"
+        "dsh-quickchat-gesture"
     )
     for p in "${BUILTIN_PLUGINS[@]}"; do
-        if [ "$p" = "dsh-mobile-lite" ] || [ "$p" = "dsh-classic-chat" ]; then
+        if [ "$p" = "dsh-mobile-lite" ] || [ "$p" = "dsh-classic-chat" ] || [ "$p" = "dsh-quickchat-gesture" ]; then
             tgt="/root/$p"
         else
             tgt="/root/dsha-${p#dsh-}"

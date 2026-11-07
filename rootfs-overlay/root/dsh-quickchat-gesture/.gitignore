@@ -1,0 +1,4 @@
+node_modules/
+.client-build/
+*.log
+.DS_Store

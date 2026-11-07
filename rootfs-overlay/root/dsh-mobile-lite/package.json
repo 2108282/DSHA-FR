@@ -1,0 +1,44 @@
+{
+  "name": "dsh-mobile-lite",
+  "version": "1.0.0",
+  "description": "极简轻量版 DSH 移动端适配插件：输入框/性能用量优化 + 左右侧边栏滑动手势",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "src",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node /usr/local/lib/node_modules/typescript/bin/tsc -p tsconfig.json && node /usr/local/lib/node_modules/typescript/bin/tsc -p tsconfig.client.json && node scripts/build-client.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-layout"
+      ]
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-client-runtime": "*",
+    "@deepseek-ai/dsh-client-ui-layout": "*"
+  }
+}
