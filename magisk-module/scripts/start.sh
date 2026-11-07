@@ -245,23 +245,59 @@ if [ -f /root/.dsh/.auth_lease ]; then
   fi
 fi
 
-# 2. 安全临时文件清理白名单（删除截图、临时文件免弹窗）
+# 2. 安全临时文件与工作区白名单（工作区与下载目录放行，根目录严加防范）
+is_whitelisted_path() {
+  local target="$1"
+  [ -z "$target" ] && return 1
+  if [ "$target" = "/root/.dsh/.auth_lease" ]; then return 0; fi
+
+  local p
+  p="$(realpath -m "$target" 2>/dev/null || echo "$target")"
+
+  case "$p" in
+    /|/root|/root/|/root/workspaces|/root/workspaces/|/sdcard|/sdcard/|/sdcard/Download|/sdcard/Download/|/sdcard/Download/DSHA|/sdcard/Download/DSHA/|/storage/emulated/0|/storage/emulated/0/|/storage/emulated/0/Download/DSHA|/storage/emulated/0/Download/DSHA/|/data/adb/dsha/rootfs/root/workspaces|/data/adb/dsha/rootfs/root/workspaces/|/data/adb/dsha/rootfs/root/内部存储|/data/adb/dsha/rootfs/root/内部存储/|/root/内部存储|/root/内部存储/|/tmp|/tmp/)
+      return 1 ;;
+  esac
+
+  case "$p" in
+    /root/workspaces/*|/data/adb/dsha/rootfs/root/workspaces/*)
+      return 0 ;;
+    /sdcard/Download/DSHA/*|/storage/emulated/0/Download/DSHA/*|/root/内部存储/*|/data/adb/dsha/rootfs/root/内部存储/*)
+      return 0 ;;
+    /tmp/*)
+      return 0 ;;
+    /sdcard/Download/*.png|/sdcard/Download/*.jpg|/sdcard/Download/*.jpeg|/sdcard/Download/*.tmp|\
+    /storage/emulated/0/Download/*.png|/storage/emulated/0/Download/*.jpg|/storage/emulated/0/Download/*.jpeg|/storage/emulated/0/Download/*.tmp)
+      return 0 ;;
+  esac
+
+  return 1
+}
+
 is_safe_cleanup() {
   local c="$1"
-  [[ "$c" =~ ^(rm|unlink)[[:space:]] ]] || return 1
-  [[ "$c" =~ -r|-R|\* ]] && return 1
+  local cmd_name="${c%% *}"
+  case "$cmd_name" in
+    rm|unlink|rmdir) ;;
+    *) return 1 ;;
+  esac
+
+  local has_target=0
   for arg in $c; do
-    [[ "$arg" =~ ^(rm|unlink|-f|-v)$ ]] && continue
-    if [[ "$arg" =~ ^/sdcard/Download/DSHA/.*(png|jpg|jpeg|tmp)$ ]] || \
-       [[ "$arg" =~ ^/sdcard/Download/.*(png|jpg|jpeg|tmp)$ ]] || \
-       [[ "$arg" =~ ^/tmp/.* ]] || \
-       [[ "$arg" == "/root/.dsh/.auth_lease" ]]; then
-      continue
-    else
+    case "$arg" in
+      rm|unlink|rmdir|-f|-v|-i|-I|--force|--verbose|--interactive) continue ;;
+      -r|-R|-rf|-fr|-rfi|-rif|-fir|-fRi|-Rfi|-frI|-rI|-Ir) continue ;;
+      --recursive) continue ;;
+      -*) return 1 ;;
+    esac
+    has_target=1
+    if ! is_whitelisted_path "$arg"; then
       return 1
     fi
   done
-  return 0
+
+  [ "$has_target" -eq 1 ] && return 0
+  return 1
 }
 
 FORCE=0
