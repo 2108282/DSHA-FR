@@ -75,7 +75,6 @@ public class ConfigPresenter implements ConfigActions {
         boolean capSensors = sp.getBoolean("cap_sensors", false);
         boolean capLocation = sp.getBoolean("cap_location", false);
         boolean chromiumFlags = sp.getBoolean(Constants.KEY_CHROMIUM_FLAGS, false);
-        boolean asrContinuous = sp.getBoolean("asr_continuous", false);
         boolean isBlockGuardActive = hasScannedRealMount ? realRootIsolated : checkBlockGuardActive();
         boolean isBlockGuardGlobal = hasScannedRealMount ? realHostPenetrated : config.isBlockGuardGlobal();
 
@@ -93,7 +92,6 @@ public class ConfigPresenter implements ConfigActions {
                 : "未开启：仅能访问 App 私有目录；点击跳转系统设置开启";
 
         String a11yStatus = checkA11yStatus();
-        String asrStatus = checkAsrStatus();
 
         int freezeCode = HarnessController.get(context).getFreezeState();
         String freezeStatusText;
@@ -115,10 +113,10 @@ public class ConfigPresenter implements ConfigActions {
 
         ConfigUiState state = new ConfigUiState(
                 port, taskset, confirmShell, isIdleFreeze, overlayStream, capSensors,
-                capLocation, chromiumFlags, asrContinuous,
+                capLocation, chromiumFlags,
                 isBlockGuardActive, isBlockGuardGlobal,
                 blockGuardStatusText,
-                allFilesStatus, a11yStatus, asrStatus, currentRootStatus,
+                allFilesStatus, a11yStatus, currentRootStatus,
                 freezeCode, freezeStatusText
         );
         mainHandler.post(() -> callback.onRender(state));
@@ -211,18 +209,8 @@ public class ConfigPresenter implements ConfigActions {
     }
 
     @Override public void onBack() { callback.onGoBack(); }
-    @Override public void onOpenAllFilesSettings() { openAllFilesAccess(); }
     @Override public void onOpenA11ySettings() { openA11ySettings(); }
-    @Override public void onCheckAsrStatus() { refreshState(); toast("ASR 状态检测已更新"); }
-    @Override public void onFixAsrConfig() { applyAsrConfig(); }
-
-    @Override
-    public void onToggleAsrContinuous(boolean enabled) {
-        context.getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE)
-                .edit().putBoolean("asr_continuous", enabled).apply();
-        toast(enabled ? "已开启长语音连续接力模式" : "已恢复短语音模式（默认）");
-        refreshState();
-    }
+    @Override public void onOpenAllFilesSettings() { openAllFilesAccess(); }
 
     private void execRootMm(String cmd) {
         try {
@@ -354,51 +342,6 @@ public class ConfigPresenter implements ConfigActions {
         } catch (Throwable t) {
             return "状态检测失败：" + t.getMessage();
         }
-    }
-
-    private String checkAsrStatus() {
-        try {
-            String currentService = Settings.Secure.getString(context.getContentResolver(), "voice_recognition_service");
-            boolean isXiaomi = currentService != null && currentService.contains("com.xiaomi.mibrain.speech");
-            boolean hasAudioPerm = context.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
-
-            if (isXiaomi && hasAudioPerm) {
-                return "已就绪：小米底层 ASR 引擎正常，录音权限已授予";
-            } else {
-                StringBuilder sb = new StringBuilder("需配置：");
-                if (!isXiaomi) {
-                    String shortName = currentService != null ? currentService.substring(currentService.lastIndexOf('.') + 1) : "未设置";
-                    sb.append("当前引擎=").append(shortName).append("；");
-                }
-                if (!hasAudioPerm) {
-                    sb.append("录音权限未授予；");
-                }
-                sb.append("请点击「一键配置」修复");
-                return sb.toString();
-            }
-        } catch (Throwable t) {
-            return "状态读取失败: " + t.getMessage();
-        }
-    }
-
-    private void applyAsrConfig() {
-        toast("正在通过 Root 配置小米原生 ASR 引擎...");
-        new Thread(() -> {
-            try {
-                String pkg = context.getPackageName();
-                String cmd = "settings put secure voice_recognition_service \"com.xiaomi.mibrain.speech/com.xiaomi.mibrain.speech.asr.AsrService\""
-                + " && pm grant " + pkg + " android.permission.RECORD_AUDIO"
-                + " && cmd appops set com.xiaomi.mibrain.speech RECORD_AUDIO allow"
-                + " && cmd appops set " + pkg + " RECORD_AUDIO allow";
-                HttpShellService.execRootCommand(cmd);
-                mainHandler.post(() -> {
-                    refreshState();
-                    toast("ASR 引擎与录音权限已配置完成");
-                });
-            } catch (Throwable t) {
-                mainHandler.post(() -> toast("配置失败：" + t.getMessage()));
-            }
-        }).start();
     }
 
     private void openAllFilesAccess() {

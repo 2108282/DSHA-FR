@@ -11,9 +11,6 @@ public interface ConfigActions {
     void onOpenAllFilesSettings();
     void onOpenA11ySettings();
     void onCheckRootClick();
-    void onCheckAsrStatus();
-    void onFixAsrConfig();
-    void onToggleAsrContinuous(boolean enabled);
     void onToggleBlockGuardActive(boolean enabled);
     void onToggleBlockGuardGlobal(boolean enabled);
     void onTestFreeze();

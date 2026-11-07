@@ -49,10 +49,6 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
     private Button rootAuthBtn;
     private View a11yBtn;
     private TextView a11yStatusText;
-    private TextView asrStatusText;
-    private CheckBox asrContinuousCheck;
-    private View asrCheckBtn;
-    private View asrFixBtn;
 
     private View freezeDotView;
     private TextView freezeStatusText;
@@ -170,10 +166,6 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         rootAuthBtn = view.findViewById(R.id.config_root_auth);
         a11yBtn = view.findViewById(R.id.config_a11y);
         a11yStatusText = view.findViewById(R.id.config_a11y_status);
-        asrStatusText = view.findViewById(R.id.config_asr_status);
-        asrContinuousCheck = view.findViewById(R.id.config_asr_continuous);
-        asrCheckBtn = view.findViewById(R.id.config_asr_btn_check);
-        asrFixBtn = view.findViewById(R.id.config_asr_btn_fix);
 
         freezeDotView = view.findViewById(R.id.config_freeze_dot);
         freezeStatusText = view.findViewById(R.id.config_freeze_status);
@@ -183,16 +175,12 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         if (allFilesBtn != null) allFilesBtn.setOnClickListener(v -> actions.onOpenAllFilesSettings());
         if (rootAuthBtn != null) rootAuthBtn.setOnClickListener(v -> actions.onCheckRootClick());
         a11yBtn.setOnClickListener(v -> actions.onOpenA11ySettings());
-        asrCheckBtn.setOnClickListener(v -> actions.onCheckAsrStatus());
-        asrFixBtn.setOnClickListener(v -> actions.onFixAsrConfig());
 
         if (btnTestFreeze != null) btnTestFreeze.setOnClickListener(v -> actions.onTestFreeze());
         if (btnTestWake != null) btnTestWake.setOnClickListener(v -> actions.onTestWake());
 
         translateBtn.setOnClickListener(v ->
                 ToastHelper.makeText(requireContext(), "插件市场翻译组件已内置，后续版本开放自定义模型接口", Toast.LENGTH_SHORT).show());
-
-        asrContinuousCheck.setOnCheckedChangeListener((btn, checked) -> actions.onToggleAsrContinuous(checked));
 
         MonetEngine.PaletteInfo palette = MonetEngine.resolveCurrentPalette(requireContext());
         MonetEngine.applyToViewTree(view, palette);
@@ -237,10 +225,6 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         rootAuthBtn = null;
         a11yBtn = null;
         a11yStatusText = null;
-        asrStatusText = null;
-        asrContinuousCheck = null;
-        asrCheckBtn = null;
-        asrFixBtn = null;
         freezeDotView = null;
         freezeStatusText = null;
         btnTestFreeze = null;
@@ -286,14 +270,6 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         }
         isBinding = false;
 
-        if (asrContinuousCheck != null) {
-            asrContinuousCheck.setOnCheckedChangeListener(null);
-            asrContinuousCheck.setChecked(state.isAsrContinuous);
-            asrContinuousCheck.setOnCheckedChangeListener((b, c) -> {
-                if (actions != null) actions.onToggleAsrContinuous(c);
-            });
-        }
-
         if (allFilesStatusText != null) allFilesStatusText.setText(state.allFilesStatusText);
         if (blockGuardStatusText != null && state.blockGuardStatusText != null) {
             blockGuardStatusText.setText(state.blockGuardStatusText);
@@ -302,7 +278,6 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
             blockGuardDotView.setBackgroundResource(state.isBlockGuardActive ? R.drawable.dot_active : R.drawable.dot_inactive);
         }
         if (a11yStatusText != null) a11yStatusText.setText(state.a11yStatusText);
-        if (asrStatusText != null) asrStatusText.setText(state.asrStatusText);
         if (rootStatusView != null && state.rootStatusText != null) {
             rootStatusView.setText(state.rootStatusText);
         }

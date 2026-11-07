@@ -9,24 +9,22 @@ public class ConfigUiState {
     public final boolean isCapSensors;
     public final boolean isCapLocation;
     public final boolean isChromiumFlags;
-    public final boolean isAsrContinuous;
     public final boolean isBlockGuardActive;
     public final boolean isBlockGuardGlobal;
     public final String blockGuardStatusText;
     public final String allFilesStatusText;
     public final String a11yStatusText;
-    public final String asrStatusText;
     public final String rootStatusText;
     public final int freezeStateCode;
     public final String freezeStatusText;
 
     public ConfigUiState(String port, String taskset, boolean isConfirmShell, boolean isIdleFreeze,
                          boolean isOverlayStream, boolean isCapSensors, boolean isCapLocation,
-                         boolean isChromiumFlags, boolean isAsrContinuous,
+                         boolean isChromiumFlags,
                          boolean isBlockGuardActive, boolean isBlockGuardGlobal,
                          String blockGuardStatusText,
                          String allFilesStatusText,
-                         String a11yStatusText, String asrStatusText, String rootStatusText,
+                         String a11yStatusText, String rootStatusText,
                          int freezeStateCode, String freezeStatusText) {
         this.port = port;
         this.taskset = taskset;
@@ -36,13 +34,11 @@ public class ConfigUiState {
         this.isCapSensors = isCapSensors;
         this.isCapLocation = isCapLocation;
         this.isChromiumFlags = isChromiumFlags;
-        this.isAsrContinuous = isAsrContinuous;
         this.isBlockGuardActive = isBlockGuardActive;
         this.isBlockGuardGlobal = isBlockGuardGlobal;
         this.blockGuardStatusText = blockGuardStatusText;
         this.allFilesStatusText = allFilesStatusText;
         this.a11yStatusText = a11yStatusText;
-        this.asrStatusText = asrStatusText;
         this.rootStatusText = rootStatusText;
         this.freezeStateCode = freezeStateCode;
         this.freezeStatusText = freezeStatusText;
