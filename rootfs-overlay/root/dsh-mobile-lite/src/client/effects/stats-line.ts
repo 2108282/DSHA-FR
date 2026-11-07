@@ -1,4 +1,5 @@
 import type { ReconcilerTask } from '../core/reconciler-core.ts'
+import { ensureFrameMarker, isMobileViewport } from './phone-chrome.ts'
 
 // The official conversation status row (turns / steps / LLM time / TTFT /
 // cache) has a hashed class, so the stylesheet cannot target it directly.
@@ -103,11 +104,10 @@ export function createStatsLineTask(): ReconcilerTask {
       return
     }
   }
-  // 2026-09-23（店主最终确认）：**环要、百分比数字不要** —— 环显示在输入框行
-  // 的右簇（模型/麦克风旁），CSS 用 font-size:0 只留环、隐掉 "45%" 文本；统计条
-  // 拿满整宽。与 moveTps 同款 overlay：环留在 React 渲染的 dock 原位，插件自建
-  // 占位 span 顶住右簇槽位（16px 环 + 2px 边距，行 gap 补足余量）。
-  const moveRing = (statsOrDock?: Element | null): void => {
+  // 保持上下文用量环在底部 Dock 与会话统计、Token 用量同排流式排布。
+  // 不再将其悬浮外移至输入框工具栏，解除绝对定位与文字隐藏。
+  const markRing = (statsOrDock?: Element | null): void => {
+    if (!isMobileViewport()) return
     let dock: Element | null = null
     if (statsOrDock !== null && statsOrDock !== undefined) {
       if (statsOrDock.matches?.('[data-composer-dock], [class*="_dock"]')) {
@@ -121,6 +121,11 @@ export function createStatsLineTask(): ReconcilerTask {
       dock = document.querySelector('[data-composer-dock], [class*="_dock"]')
     }
     if (dock === null) return
+
+    // 清理历史可能残留的占位节点
+    for (const stale of document.querySelectorAll('[data-mobile-nav="stats-ring-reserve"]')) {
+      stale.remove()
+    }
 
     // Search the composer dock for the real ContextMeter.
     // 1. MUST NOT match dsh-api-dashboard (.dshadb_barwrap or [class*="dshadb_"]).
@@ -140,36 +145,51 @@ export function createStatsLineTask(): ReconcilerTask {
       return hasCircle && hasPercent
     })
     if (ring === undefined) return
-    const row = document.querySelector('[data-composer-card] [class*="_row"] [class*="_trailing"]')
-    if (row === null) return
-    let reserve = row.querySelector(':scope > [data-mobile-nav="stats-ring-reserve"]')
-    // Position reserve STRICTLY before the send / activity button (never behind/underneath).
-    let insertBeforeNode: Node | null = null
-    const activity = row.querySelector('[class*="_activity"], [class*="_primary"]')
-    if (activity !== null) {
-      let n: Node | null = activity
-      while (n && n.parentElement !== row) n = n.parentElement
-      insertBeforeNode = n
-    }
-    if (reserve === null) {
-      reserve = document.createElement('span')
-      reserve.setAttribute('data-mobile-nav', 'stats-ring-reserve')
-      row.insertBefore(reserve, insertBeforeNode)
-    } else if (reserve.nextSibling !== insertBeforeNode) {
-      row.insertBefore(reserve, insertBeforeNode)
-    }
     if (ring.getAttribute('data-mobile-nav') !== 'stats-ring') {
       ring.setAttribute('data-mobile-nav', 'stats-ring')
     }
-    const ringParent = ring.parentElement ?? dock
-    if (ringParent !== null) ensurePositioned(ringParent, 'stats-ring-dock')
-    placeOverlay(ring, reserve)
+    const styled = ring as HTMLElement
+    if (styled.style.left) styled.style.left = ''
+    if (styled.style.top) styled.style.top = ''
+    if (styled.style.position) styled.style.position = ''
   }
+
+  // 精简与规整统计胶囊文本：隐藏 · 分隔符后确保段落之间有正常空格，并将 "缓存命中" 精简为 "命中"
+  const compactStatsText = (): void => {
+    if (!isMobileViewport()) return
+    const stack = document.querySelector('[class*="_composerStack"]')
+    if (stack === null) return
+    for (const statKey of ['activity', 'usage']) {
+      const pill = stack.querySelector(`[data-composer-stat="${statKey}"]`)
+      if (pill === null) continue
+      const label = pill.querySelector('[class*="_label"]') ?? pill.querySelector('button')
+      if (label === null) continue
+      const children = [...label.childNodes]
+      // 如果存在 _sep 分隔符且后方有第二段文字，确保前半段文字末尾有一个正常空格
+      if (children.length >= 3) {
+        const first = children[0]
+        if (first.nodeType === Node.TEXT_NODE && first.nodeValue && !first.nodeValue.endsWith(' ')) {
+          first.nodeValue = `${first.nodeValue.trimEnd()} `
+        }
+      }
+      if (statKey === 'usage') {
+        const walker = document.createTreeWalker(pill, NodeFilter.SHOW_TEXT)
+        let node: Text | null
+        while ((node = walker.nextNode() as Text | null)) {
+          if (node.nodeValue && node.nodeValue.includes('缓存命中')) {
+            node.nodeValue = node.nodeValue.replace(/缓存命中/g, '命中')
+          }
+        }
+      }
+    }
+  }
+
   let viewportHandler: (() => void) | null = null
   const relayout = (): void => {
     const anchor = document.querySelector('[data-mobile-nav="stats"]')
     if (anchor !== null) moveTps(anchor)
-    moveRing()
+    markRing()
+    compactStatsText()
   }
   // Wake-up channel. Upstream's reconciler observes documentElement with
   // subtree:true and notes the '*' tree key on every mutation, so this task
@@ -217,11 +237,15 @@ export function createStatsLineTask(): ReconcilerTask {
   // cost: while the anchor is alive this is one querySelector plus two
   // ancestor walks, ~3x/sec.
   const reanchor = (): void => {
+    ensureFrameMarker()
+    markRing()
+    compactStatsText()
     const anchor = document.querySelector('[data-mobile-nav="stats"]')
     if (anchor !== null && statsAnchorAlive(anchor)) return
     mark()
   }
   const mark = (): void => {
+    ensureFrameMarker()
     // Keyboard open/close and viewport rotations relayout the composer without
     // any DOM mutation, so the overlays need their own re-layout channel.
     if (viewportHandler === null) {
@@ -229,10 +253,9 @@ export function createStatsLineTask(): ReconcilerTask {
       window.addEventListener('resize', relayout)
       window.visualViewport?.addEventListener('resize', relayout)
     }
-    // Independent ContextMeter overlay: as long as the dock and meter exist,
-    // position the context ring in the composer's trailing cluster right away.
-    // Never gate moveRing on discovering a stats strip.
-    moveRing()
+    // 保持上下文用量环与统计胶囊在 dock 内就地紧凑渲染
+    markRing()
+    compactStatsText()
 
     // Fast path: the marked strip usually survives React rebuilds between
     // tokens; re-verifying the anchor is O(1) while the full-tree hunt below
@@ -334,6 +357,7 @@ export function createStatsLineTask(): ReconcilerTask {
         styled.style.left = ''
         styled.style.top = ''
         styled.style.maxWidth = ''
+        styled.style.position = ''
       }
       for (const key of ['stats', 'stats-ring', 'stats-ring-dock', 'stats-tps', 'stats-tps-row']) {
         for (const el of document.querySelectorAll(`[data-mobile-nav="${key}"]`)) {

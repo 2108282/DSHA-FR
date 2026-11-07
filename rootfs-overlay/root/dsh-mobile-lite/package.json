@@ -1,6 +1,6 @@
 {
   "name": "dsh-mobile-lite",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "极简轻量版 DSH 移动端适配插件：输入框/性能用量优化 + 左右侧边栏滑动手势",
   "type": "module",
   "main": "lib/index.js",

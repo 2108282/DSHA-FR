@@ -4,14 +4,22 @@ __modules["effects/phone-chrome.js"] = function (require, module, exports) {
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MOBILE_QUERY = void 0;
+exports.isMobileViewport = isMobileViewport;
 exports.findFrame = findFrame;
 exports.getFrame = getFrame;
+exports.ensureFrameMarker = ensureFrameMarker;
 exports.installMobileEffect = installMobileEffect;
 /**
  * 移动端/触屏断点检测：
  * 视口宽度 < 1024px 且主输入为粗指针 (触屏设备 / DSHA 原生环境)
  */
 exports.MOBILE_QUERY = '(max-width: 1023px) and (pointer: coarse)';
+/**
+ * 检查当前视口是否匹配移动端
+ */
+function isMobileViewport() {
+    return typeof window !== 'undefined' && window.matchMedia(exports.MOBILE_QUERY).matches;
+}
 /**
  * 获取 AppFrame 外壳根节点：
  * 依次尝试插件打标的选择器、shell.overlay 父节点、以及带有 sidebarCol 的类名匹配。
@@ -20,30 +28,62 @@ function findFrame() {
     const overlay = document.querySelector('[data-shell-overlay]');
     if (overlay?.parentElement)
         return overlay.parentElement;
-    return document.querySelector('[data-mobile-nav="frame"], [class*="pI_x6G_frame"], [class*="frame"]:has(> [class*="sidebarCol"])');
+    return document.querySelector('[data-mobile-nav="frame"], [class*="pI_x6G_frame"], [class*="frame"]:has(> [class*="sidebarCol"]), [class*="frame"]:has(> [data-pane="sidebar"])');
 }
 function getFrame() {
     return document.querySelector('[data-mobile-nav="frame"]') ?? findFrame();
 }
 /**
+ * 确保外壳打上移动端标记，随时可重入
+ */
+function ensureFrameMarker() {
+    if (!isMobileViewport())
+        return null;
+    const frame = getFrame();
+    if (frame !== null && !frame.hasAttribute('data-mobile-nav')) {
+        frame.setAttribute('data-mobile-nav', 'frame');
+    }
+    return frame;
+}
+/**
  * 移动端专属副作用生命周期挂载器：
  * 1. 响应式监听 matchMedia 状态变化；
  * 2. 匹配移动端时自动给 frame 注入 [data-mobile-nav="frame"]，使紧凑化 CSS 生效；
- * 3. 挂载子任务并绑定清理回调。
+ * 3. 首帧若未渲染完成则通过轮询与监听确保标记注入；
+ * 4. 挂载子任务并绑定清理回调。
  */
 function installMobileEffect(ctx, label, install, query = exports.MOBILE_QUERY) {
     ctx.effect(() => {
         const narrow = window.matchMedia(query);
         let cleanup;
+        let pollCount = 0;
+        let pollId = null;
         const arm = () => {
             cleanup?.();
-            const frame = getFrame();
+            if (pollId !== null) {
+                cancelAnimationFrame(pollId);
+                pollId = null;
+            }
             if (narrow.matches) {
-                frame?.setAttribute('data-mobile-nav', 'frame');
+                ensureFrameMarker();
+                // 若首帧 React 尚未挂载 frame，连续在接下来的几帧持续尝试
+                const tryArmFrame = () => {
+                    if (!narrow.matches)
+                        return;
+                    const frame = ensureFrameMarker();
+                    if (frame === null && pollCount < 30) {
+                        pollCount++;
+                        pollId = requestAnimationFrame(tryArmFrame);
+                    }
+                    else {
+                        pollId = null;
+                    }
+                };
+                tryArmFrame();
                 cleanup = install(narrow);
             }
             else {
-                frame?.removeAttribute('data-mobile-nav');
+                getFrame()?.removeAttribute('data-mobile-nav');
                 cleanup = undefined;
             }
         };
@@ -51,6 +91,8 @@ function installMobileEffect(ctx, label, install, query = exports.MOBILE_QUERY) 
         narrow.addEventListener('change', arm);
         return () => {
             narrow.removeEventListener('change', arm);
+            if (pollId !== null)
+                cancelAnimationFrame(pollId);
             cleanup?.();
             getFrame()?.removeAttribute('data-mobile-nav');
         };
@@ -63,6 +105,7 @@ __modules["effects/stats-line.js"] = function (require, module, exports) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.statsAnchorAlive = statsAnchorAlive;
 exports.createStatsLineTask = createStatsLineTask;
+const phone_chrome_ts_1 = require("./effects/phone-chrome.js");
 // The official conversation status row (turns / steps / LLM time / TTFT /
 // cache) has a hashed class, so the stylesheet cannot target it directly.
 // Mark the exact row on narrow screens by text: a [class*=_root] that
@@ -177,11 +220,11 @@ function createStatsLineTask() {
             return;
         }
     };
-    // 2026-09-23（店主最终确认）：**环要、百分比数字不要** —— 环显示在输入框行
-    // 的右簇（模型/麦克风旁），CSS 用 font-size:0 只留环、隐掉 "45%" 文本；统计条
-    // 拿满整宽。与 moveTps 同款 overlay：环留在 React 渲染的 dock 原位，插件自建
-    // 占位 span 顶住右簇槽位（16px 环 + 2px 边距，行 gap 补足余量）。
-    const moveRing = (statsOrDock) => {
+    // 保持上下文用量环在底部 Dock 与会话统计、Token 用量同排流式排布。
+    // 不再将其悬浮外移至输入框工具栏，解除绝对定位与文字隐藏。
+    const markRing = (statsOrDock) => {
+        if (!(0, phone_chrome_ts_1.isMobileViewport)())
+            return;
         let dock = null;
         if (statsOrDock !== null && statsOrDock !== undefined) {
             if (statsOrDock.matches?.('[data-composer-dock], [class*="_dock"]')) {
@@ -197,6 +240,10 @@ function createStatsLineTask() {
         }
         if (dock === null)
             return;
+        // 清理历史可能残留的占位节点
+        for (const stale of document.querySelectorAll('[data-mobile-nav="stats-ring-reserve"]')) {
+            stale.remove();
+        }
         // Search the composer dock for the real ContextMeter.
         // 1. MUST NOT match dsh-api-dashboard (.dshadb_barwrap or [class*="dshadb_"]).
         // 2. MUST contain an svg circle and percentage text (real context meter).
@@ -216,41 +263,57 @@ function createStatsLineTask() {
         });
         if (ring === undefined)
             return;
-        const row = document.querySelector('[data-composer-card] [class*="_row"] [class*="_trailing"]');
-        if (row === null)
-            return;
-        let reserve = row.querySelector(':scope > [data-mobile-nav="stats-ring-reserve"]');
-        // Position reserve STRICTLY before the send / activity button (never behind/underneath).
-        let insertBeforeNode = null;
-        const activity = row.querySelector('[class*="_activity"], [class*="_primary"]');
-        if (activity !== null) {
-            let n = activity;
-            while (n && n.parentElement !== row)
-                n = n.parentElement;
-            insertBeforeNode = n;
-        }
-        if (reserve === null) {
-            reserve = document.createElement('span');
-            reserve.setAttribute('data-mobile-nav', 'stats-ring-reserve');
-            row.insertBefore(reserve, insertBeforeNode);
-        }
-        else if (reserve.nextSibling !== insertBeforeNode) {
-            row.insertBefore(reserve, insertBeforeNode);
-        }
         if (ring.getAttribute('data-mobile-nav') !== 'stats-ring') {
             ring.setAttribute('data-mobile-nav', 'stats-ring');
         }
-        const ringParent = ring.parentElement ?? dock;
-        if (ringParent !== null)
-            ensurePositioned(ringParent, 'stats-ring-dock');
-        placeOverlay(ring, reserve);
+        const styled = ring;
+        if (styled.style.left)
+            styled.style.left = '';
+        if (styled.style.top)
+            styled.style.top = '';
+        if (styled.style.position)
+            styled.style.position = '';
+    };
+    // 精简与规整统计胶囊文本：隐藏 · 分隔符后确保段落之间有正常空格，并将 "缓存命中" 精简为 "命中"
+    const compactStatsText = () => {
+        if (!(0, phone_chrome_ts_1.isMobileViewport)())
+            return;
+        const stack = document.querySelector('[class*="_composerStack"]');
+        if (stack === null)
+            return;
+        for (const statKey of ['activity', 'usage']) {
+            const pill = stack.querySelector(`[data-composer-stat="${statKey}"]`);
+            if (pill === null)
+                continue;
+            const label = pill.querySelector('[class*="_label"]') ?? pill.querySelector('button');
+            if (label === null)
+                continue;
+            const children = [...label.childNodes];
+            // 如果存在 _sep 分隔符且后方有第二段文字，确保前半段文字末尾有一个正常空格
+            if (children.length >= 3) {
+                const first = children[0];
+                if (first.nodeType === Node.TEXT_NODE && first.nodeValue && !first.nodeValue.endsWith(' ')) {
+                    first.nodeValue = `${first.nodeValue.trimEnd()} `;
+                }
+            }
+            if (statKey === 'usage') {
+                const walker = document.createTreeWalker(pill, NodeFilter.SHOW_TEXT);
+                let node;
+                while ((node = walker.nextNode())) {
+                    if (node.nodeValue && node.nodeValue.includes('缓存命中')) {
+                        node.nodeValue = node.nodeValue.replace(/缓存命中/g, '命中');
+                    }
+                }
+            }
+        }
     };
     let viewportHandler = null;
     const relayout = () => {
         const anchor = document.querySelector('[data-mobile-nav="stats"]');
         if (anchor !== null)
             moveTps(anchor);
-        moveRing();
+        markRing();
+        compactStatsText();
     };
     // Wake-up channel. Upstream's reconciler observes documentElement with
     // subtree:true and notes the '*' tree key on every mutation, so this task
@@ -300,12 +363,16 @@ function createStatsLineTask() {
     // cost: while the anchor is alive this is one querySelector plus two
     // ancestor walks, ~3x/sec.
     const reanchor = () => {
+        (0, phone_chrome_ts_1.ensureFrameMarker)();
+        markRing();
+        compactStatsText();
         const anchor = document.querySelector('[data-mobile-nav="stats"]');
         if (anchor !== null && statsAnchorAlive(anchor))
             return;
         mark();
     };
     const mark = () => {
+        (0, phone_chrome_ts_1.ensureFrameMarker)();
         // Keyboard open/close and viewport rotations relayout the composer without
         // any DOM mutation, so the overlays need their own re-layout channel.
         if (viewportHandler === null) {
@@ -313,10 +380,9 @@ function createStatsLineTask() {
             window.addEventListener('resize', relayout);
             window.visualViewport?.addEventListener('resize', relayout);
         }
-        // Independent ContextMeter overlay: as long as the dock and meter exist,
-        // position the context ring in the composer's trailing cluster right away.
-        // Never gate moveRing on discovering a stats strip.
-        moveRing();
+        // 保持上下文用量环与统计胶囊在 dock 内就地紧凑渲染
+        markRing();
+        compactStatsText();
         // Fast path: the marked strip usually survives React rebuilds between
         // tokens; re-verifying the anchor is O(1) while the full-tree hunt below
         // grows with the conversation. moveTps still re-runs so a rebuilt TPS
@@ -422,6 +488,7 @@ function createStatsLineTask() {
                 styled.style.left = '';
                 styled.style.top = '';
                 styled.style.maxWidth = '';
+                styled.style.position = '';
             }
             for (const key of ['stats', 'stats-ring', 'stats-ring-dock', 'stats-tps', 'stats-tps-row']) {
                 for (const el of document.querySelectorAll(`[data-mobile-nav="${key}"]`)) {
@@ -1651,6 +1718,47 @@ function installSidebarSwipe(ctx, filesToggle) {
 }
 
 };
+__modules["effects/file-upload.js"] = function (require, module, exports) {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.installFileUpload = installFileUpload;
+/**
+ * 原生文件上传触发器：使用 MutationObserver 锚定 composer 卡片，
+ * 注入触发宿主 hidden input 的原生按钮。
+ */
+function installFileUpload(ctx) {
+    ctx.effect(() => {
+        const PAPERCLIP_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><g transform="rotate(-45 12 12)"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></g></svg>`;
+        const observer = new MutationObserver(() => {
+            const card = document.querySelector('[data-composer-card]');
+            if (!card || card.querySelector('[data-mobile-nav="file-upload"]'))
+                return;
+            const hostInput = card.querySelector('input[type=file]');
+            if (!hostInput)
+                return;
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.dataset.mobileNav = 'file-upload';
+            btn.innerHTML = PAPERCLIP_SVG;
+            btn.ariaLabel = '上传文件';
+            btn.title = '上传文件';
+            btn.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                hostInput.click();
+            };
+            // 寻找工具栏容器
+            const tools = card.querySelector('[class*="_tools"]') || card.querySelector('[class*="_modes"]');
+            if (tools) {
+                tools.appendChild(btn);
+            }
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+        return () => observer.disconnect();
+    }, 'dsh-mobile-lite: file-upload injector');
+}
+
+};
 __modules["components/open-files-panel.js"] = function (require, module, exports) {
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
@@ -1712,7 +1820,44 @@ exports.COMPOSER_AND_STATS_CSS = void 0;
 /**
  * 提取自 dsh-web-mobile 的紧凑化输入框与统计胶囊排版规则
  */
-exports.COMPOSER_AND_STATS_CSS = "/* ==========================================================================\n   dsh-web-mobile: 输入框与底部性能用量组件相关样式\n   来源: src/client/styles/layout.css.ts & src/client/styles/compat.css.ts\n   ========================================================================== */\n\n/* 1. 活跃会话下的输入框紧凑化 (layout.css.ts) */\n[data-mobile-nav=\"frame\"] [data-phase=\"active\"] [data-composer-card] {\n  padding-top: 2px !important;\n  gap: 4px !important;\n}\n[data-mobile-nav=\"frame\"] [data-phase=\"active\"] [data-composer-card] [class*=\"_row\"] {\n  padding: 0 8px !important;\n}\n[data-mobile-nav=\"frame\"] [data-phase=\"active\"] [data-composer-card] [data-composer-input],\n[data-mobile-nav=\"frame\"] [data-phase=\"active\"] [data-composer-card] [class*=\"_scroll\"] {\n  min-height: 28px !important;\n  padding-top: 2px !important;\n}\n\n/* 2. 统计胶囊排版：Activity (轮次/步数/TPS) 与 Usage (Token/缓存命中) (compat.css.ts) */\n[data-composer-stat=\"activity\"] {\n  flex: 0 0 auto !important;\n  width: max-content !important;\n  min-width: max-content !important;\n  max-width: 60% !important;\n  font-size: 10.5px !important;\n  line-height: 18px !important;\n  margin-right: 4px !important;\n  white-space: nowrap !important;\n}\n[data-composer-stat=\"activity\"] button,\n[data-composer-stat=\"activity\"] span,\n[data-composer-stat=\"activity\"] svg {\n  font-size: 10.5px !important;\n}\n[data-composer-stat=\"activity\"] button {\n  padding: 1px 5px !important;\n  gap: 4px !important;\n}\n[data-composer-stat=\"activity\"] svg {\n  width: 13px !important;\n  height: 13px !important;\n  flex: 0 0 auto !important;\n}\n\n[data-composer-stat=\"usage\"] {\n  flex: 0 1 auto !important;\n  min-width: 0 !important;\n  max-width: 50% !important;\n  font-size: 10.5px !important;\n  line-height: 18px !important;\n  overflow: hidden !important;\n  white-space: nowrap !important;\n}\n[data-composer-stat=\"usage\"] button,\n[data-composer-stat=\"usage\"] span,\n[data-composer-stat=\"usage\"] svg {\n  font-size: 10.5px !important;\n}\n[data-composer-stat=\"usage\"] button {\n  padding: 1px 5px !important;\n  gap: 4px !important;\n  min-width: 0 !important;\n  max-width: 100% !important;\n  overflow: hidden !important;\n}\n[data-composer-stat=\"usage\"] svg {\n  width: 13px !important;\n  height: 13px !important;\n  flex: 0 0 auto !important;\n}\n[data-composer-stat=\"usage\"] [class*=\"_label\"],\n[data-composer-stat=\"usage\"] button > span {\n  flex: 0 1 auto !important;\n  min-width: 0 !important;\n  overflow: hidden !important;\n  text-overflow: ellipsis !important;\n  white-space: nowrap !important;\n}\n\n/* 3. 上下文用量环：浮层化绝对定位并隐藏文本（仅留16px圆环） (compat.css.ts) */\n[data-mobile-nav=\"stats-ring\"] {\n  position: absolute !important;\n  flex: 0 0 auto !important;\n  display: inline-flex !important;\n  align-items: center !important;\n  min-width: 0 !important;\n  margin: 0 2px 0 0 !important;\n  padding: 0 !important;\n  background: transparent !important;\n  box-shadow: none !important;\n  border: 0 !important;\n}\n[data-mobile-nav=\"stats-ring\"],\n[data-mobile-nav=\"stats-ring\"] * {\n  font-size: 0 !important;\n}\n[data-mobile-nav=\"stats-ring\"] button {\n  padding: 0 !important;\n  margin: 0 !important;\n  gap: 0 !important;\n  min-width: 0 !important;\n  width: auto !important;\n  background: transparent !important;\n  box-shadow: none !important;\n  border: 0 !important;\n}\n[data-mobile-nav=\"stats-ring\"] svg {\n  display: inline-block !important;\n  width: 16px !important;\n  height: 16px !important;\n  flex: 0 0 auto !important;\n}\n\n/* 4. 插件自建占位符与定位基准上下文 (compat.css.ts) */\n[data-mobile-nav=\"stats-ring-reserve\"],\n[data-mobile-nav=\"stats-tps-reserve\"] {\n  visibility: hidden !important;\n  pointer-events: none !important;\n}\n[data-mobile-nav=\"stats-ring-reserve\"] {\n  flex: 0 0 auto !important;\n  display: inline-block !important;\n  width: 16px !important;\n  height: 16px !important;\n  margin: 0 2px 0 0 !important;\n  padding: 0 !important;\n}\n[data-mobile-nav=\"stats-tps\"] {\n  display: flex !important;\n  flex-flow: row nowrap !important;\n  align-items: center !important;\n  margin: 0 !important;\n  padding: 0 !important;\n  font-size: 10px !important;\n  line-height: 18px !important;\n  white-space: nowrap !important;\n  overflow: hidden !important;\n  text-overflow: ellipsis !important;\n}\n[data-mobile-nav=\"stats-tps\"] * {\n  white-space: nowrap !important;\n}\n[data-mobile-nav=\"stats-tps\"] span {\n  overflow: hidden !important;\n  text-overflow: ellipsis !important;\n  min-width: 0 !important;\n}\n[data-mobile-nav=\"stats-ring-dock\"],\n[data-mobile-nav=\"stats-tps-row\"] {\n  position: relative;\n}\n";
+exports.COMPOSER_AND_STATS_CSS = `/* ==========================================================================
+   dsh-web-mobile: 移动端紧凑化样式（遵循原生 @media 契约）
+   ========================================================================== */
+
+/* 移动端专属规则：严格限制在小屏触屏设备 */
+@media (max-width: 1023px) and (pointer: coarse) {
+  /* ... (其他紧凑化样式不变) ... */
+
+  /* 文件上传按钮移动端适配 */
+  [data-composer-card] [data-mobile-nav="file-upload"] {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 28px !important;
+    height: 28px !important;
+    min-width: 28px !important;
+    min-height: 28px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    border-radius: var(--dsw-radius-sm, 6px) !important;
+    background: transparent !important;
+    color: var(--dsw-alias-label-secondary, currentColor) !important;
+    cursor: pointer !important;
+    flex: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+  }
+}
+
+/* 桌面端/非移动端：显式禁用移动端特有样式，恢复原生 */
+@media not (max-width: 1023px) and (pointer: coarse) {
+  [data-composer-card] [data-mobile-nav="file-upload"] {
+    /* 移除移动端强制属性，恢复 auto */
+    width: auto !important;
+    height: auto !important;
+  }
+}
+`;
 
 };
 __modules["index.js"] = function (require, module, exports) {
@@ -1723,18 +1868,11 @@ exports.apply = apply;
 const phone_chrome_ts_1 = require("./effects/phone-chrome.js");
 const stats_line_ts_1 = require("./effects/stats-line.js");
 const sidebar_swipe_ts_1 = require("./effects/sidebar-swipe.js");
+const file_upload_ts_1 = require("./effects/file-upload.js");
 const open_files_panel_ts_1 = require("./components/open-files-panel.js");
 const styles_ts_1 = require("./styles/styles.js");
-/** 声明 Cordis 客户端服务依赖（侧边栏开关需要调用 ctx.layout.toggleSidebar） */
 exports.inject = ['layout'];
-/**
- * 移动端轻量功能总装入口：
- * 1. 注入输入框紧凑化与用量环浮层 CSS；
- * 2. 挂载 stats-line 动态计算与局部 MutationObserver 调度任务；
- * 3. 挂载左滑/右滑调出侧边栏的双向手势引擎。
- */
 function apply(ctx) {
-    // 1. 挂载紧凑化与用量环样式表
     ctx.effect(() => {
         const tagId = 'dsh-mobile-lite-styles';
         for (const stale of document.querySelectorAll(`style[data-plugin-css="${tagId}"]`)) {
@@ -1748,7 +1886,6 @@ function apply(ctx) {
             style.remove();
         };
     }, 'dsh-mobile-lite: inject styles');
-    // 2. 挂载功能 1：输入框与底部性能/用量组件布局优化 (Stats-line)
     (0, phone_chrome_ts_1.installMobileEffect)(ctx, 'dsh-mobile-lite: stats-line task', () => {
         const statsTask = (0, stats_line_ts_1.createStatsLineTask)();
         statsTask.ensure();
@@ -1756,8 +1893,8 @@ function apply(ctx) {
             statsTask.dispose();
         };
     });
-    // 3. 挂载功能 2：左右两侧侧边栏滑动手势 (Sidebar & Files Swipe)
     (0, sidebar_swipe_ts_1.installSidebarSwipe)(ctx, () => (0, open_files_panel_ts_1.openFilesPanel)());
+    (0, file_upload_ts_1.installFileUpload)(ctx);
 }
 
 };
