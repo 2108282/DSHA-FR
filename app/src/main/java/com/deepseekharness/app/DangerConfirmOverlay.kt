@@ -303,20 +303,19 @@ object DangerConfirmOverlay {
             onDecision.onDecision(decision, epoch)
         }
 
-        // --- 按钮第 1 行：两项次级选项（本任务允许 / 10分钟临时授权） ---
-        val row1 = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+        // --- 按钮布局：垂直排列（允许一次 / 10分钟临时授权 / 拒绝请求） ---
+        val container = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
         }
 
-        val btnTask = createOptionButton(
+        val btnAllowOnce = createOptionButton(
             context = context,
-            label = "本任务允许",
-            bgColor = tonalBtnBg,
-            textColor = textColor,
-            rippleColor = rippleColor,
-            strokeColor = lineColor,
-            onClick = { decide(ShellDecision.ALLOW_TASK) }
+            label = "允许一次",
+            bgColor = allowBtnBg,
+            textColor = allowBtnText,
+            rippleColor = Color.argb(0x30, 0xFF, 0xFF, 0xFF),
+            onClick = { decide(ShellDecision.ALLOW_ONCE) }
         )
         val btn10Min = createOptionButton(
             context = context,
@@ -327,19 +326,6 @@ object DangerConfirmOverlay {
             strokeColor = lineColor,
             onClick = { decide(ShellDecision.ALLOW_10MIN) }
         )
-
-        row1.addView(btnTask, LinearLayout.LayoutParams(0, dp(context, 42), 1f).apply { marginEnd = dp(context, 8) })
-        row1.addView(btn10Min, LinearLayout.LayoutParams(0, dp(context, 42), 1f))
-        card.addView(row1, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-            bottomMargin = dp(context, 8)
-        })
-
-        // --- 按钮第 2 行：主操作行（拒绝请求 / 允许一次） ---
-        val row2 = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-
         val btnDeny = createOptionButton(
             context = context,
             label = "拒绝请求",
@@ -349,18 +335,17 @@ object DangerConfirmOverlay {
             strokeColor = denyBtnStroke,
             onClick = { decide(ShellDecision.DENY) }
         )
-        val btnAllowOnce = createOptionButton(
-            context = context,
-            label = "允许一次",
-            bgColor = allowBtnBg,
-            textColor = allowBtnText,
-            rippleColor = Color.argb(0x30, 0xFF, 0xFF, 0xFF),
-            onClick = { decide(ShellDecision.ALLOW_ONCE) }
-        )
 
-        row2.addView(btnDeny, LinearLayout.LayoutParams(0, dp(context, 44), 1f).apply { marginEnd = dp(context, 8) })
-        row2.addView(btnAllowOnce, LinearLayout.LayoutParams(0, dp(context, 44), 1.25f))
-        card.addView(row2, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        val paramsBtn = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(context, 48)).apply {
+            bottomMargin = dp(context, 8)
+        }
+        val paramsLastBtn = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(context, 48))
+
+        container.addView(btnAllowOnce, paramsBtn)
+        container.addView(btn10Min, paramsBtn)
+        container.addView(btnDeny, paramsLastBtn)
+        
+        card.addView(container, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
 
         root.addView(card, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
 

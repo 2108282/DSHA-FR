@@ -32,7 +32,6 @@ import java.io.File;
 public class ConfirmReceiver extends BroadcastReceiver {
 
     public static final String ACTION_ALLOW = "com.deepseekharness.app.CONFIRM_ALLOW";
-    public static final String ACTION_ALLOW_TASK = "com.deepseekharness.app.CONFIRM_ALLOW_TASK";
     public static final String ACTION_ALLOW_10MIN = "com.deepseekharness.app.CONFIRM_ALLOW_10MIN";
     public static final String ACTION_DENY = "com.deepseekharness.app.CONFIRM_DENY";
     public static final String ACTION_ASK_ANSWER = "com.deepseekharness.app.ASK_ANSWER";
@@ -83,10 +82,6 @@ public class ConfirmReceiver extends BroadcastReceiver {
                 triggerVibrate(context, 50);
                 writeApprovalDecision("allowed-once");
                 svc.resolveConfirm(ShellDecision.ALLOW_ONCE, epoch);
-            } else if (ACTION_ALLOW_TASK.equals(act)) {
-                triggerVibrate(context, 50);
-                writeApprovalDecision("allowed-task");
-                svc.resolveConfirm(ShellDecision.ALLOW_TASK, epoch);
             } else if (ACTION_ALLOW_10MIN.equals(act)) {
                 triggerVibrate(context, 50);
                 writeApprovalDecision("allowed-10min");
@@ -98,10 +93,10 @@ public class ConfirmReceiver extends BroadcastReceiver {
             }
         } else {
             NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
-            if (nm != null && (ACTION_ALLOW.equals(act) || ACTION_ALLOW_TASK.equals(act) || ACTION_ALLOW_10MIN.equals(act) || ACTION_DENY.equals(act))) {
+            if (nm != null && (ACTION_ALLOW.equals(act) || ACTION_ALLOW_10MIN.equals(act) || ACTION_DENY.equals(act))) {
                 nm.cancel(Constants.NOTIF_SHELL_CONFIRM);
             }
-            if (ACTION_ALLOW.equals(act) || ACTION_ALLOW_TASK.equals(act) || ACTION_ALLOW_10MIN.equals(act)) {
+            if (ACTION_ALLOW.equals(act) || ACTION_ALLOW_10MIN.equals(act)) {
                 writeApprovalDecision("allowed-once");
                 com.deepseekharness.app.ui.QuickChatSheetActivity.syncApprovalDecision(true);
             } else if (ACTION_DENY.equals(act)) {

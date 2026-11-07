@@ -79,6 +79,12 @@ has_active_workers() {
         if [ "$cpid" = "$lan_pid" ] || [ "$cpid" = "$freezer_pid" ] || [ "$cpid" = "$$" ] || [ "$cpid" = "$PPID" ]; then
             continue
         fi
+        # 排除常驻 MCP stdio 桥接与中继守护 (如 phone relay.cjs)
+        local cmdline=$(cat "/proc/$cpid/cmdline" 2>/dev/null | tr '\0' ' ')
+        if echo "$cmdline" | grep -qE "relay\.cjs"; then
+            continue
+        fi
+
         local cstat=$(awk '{print $3}' "/proc/$cpid/stat" 2>/dev/null)
         # 排除僵尸进程 (Z)，若存在有效运行或等待态子进程则视为忙碌
         if [ -n "$cstat" ] && [ "$cstat" != "Z" ]; then

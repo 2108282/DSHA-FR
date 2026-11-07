@@ -1941,10 +1941,6 @@ public final class HttpShellService {
         if (decision == ShellDecision.ALLOW_ONCE) {
             pendingAllow = true;
             ConfirmReceiver.writeApprovalDecision("allowed-once");
-        } else if (decision == ShellDecision.ALLOW_TASK) {
-            pendingAllow = true;
-            isTaskWaived = true;
-            ConfirmReceiver.writeApprovalDecision("allowed-task");
         } else if (decision == ShellDecision.ALLOW_10MIN) {
             pendingAllow = true;
             grantAuthLease(UI_GRANT_MS);
