@@ -171,18 +171,20 @@ object DangerConfirmOverlay {
         // 快捷对话审批横幅 1:1 对应的颜色定义
         val titleColor = if (isDarkMode) Color.parseColor("#FBBF24") else Color.parseColor("#B45309")
         val cmdBoxBg = if (isDarkMode) Color.parseColor("#181D26") else Color.parseColor("#F0F4F9")
-        val tonalBtnBg = if (isDarkMode) Color.parseColor("#252C38") else Color.parseColor("#E2E8F0")
+
+        // 统一全套半透明毛玻璃胶囊质感（绿、中性、红三色对齐）
+        val allowBtnBg = if (isDarkMode) Color.parseColor("#2910B981") else Color.parseColor("#1410B981")
+        val allowBtnStroke = Color.parseColor("#4D10B981")
+        val allowBtnText = if (isDarkMode) Color.parseColor("#34D399") else Color.parseColor("#059669")
+
+        val tonalBtnBg = if (isDarkMode) Color.parseColor("#1FFFFFFF") else Color.parseColor("#0F000000")
+        val tonalBtnStroke = if (isDarkMode) Color.parseColor("#33FFFFFF") else Color.parseColor("#1F000000")
+        val tonalBtnText = textColor
+
         val denyBtnBg = if (isDarkMode) Color.parseColor("#29EF4444") else Color.parseColor("#14EF4444")
         val denyBtnStroke = Color.parseColor("#4DEF4444")
         val denyBtnText = Color.parseColor("#EF4444")
 
-        // 允许一次按钮：浅色开启莫奈时取莫奈主色；深色或关闭莫奈时维持快捷对话标志性的翡翠绿（#10B981）
-        val allowBtnBg = if (!isDarkMode && isMonet) {
-            runCatching { MonetEngine.resolveCurrentPalette(context).primaryColor }.getOrDefault(Color.parseColor("#10B981"))
-        } else {
-            Color.parseColor("#10B981")
-        }
-        val allowBtnText = Color.WHITE
         val rippleColor = if (isDarkMode) 0x22FFFFFF else 0x1F000000
 
         // 3. 构造窗口参数
@@ -309,30 +311,34 @@ object DangerConfirmOverlay {
             gravity = Gravity.CENTER_HORIZONTAL
         }
 
+        // 统一全套半透明毛玻璃胶囊质感（背景半透明 + 统一描边）
+        val btnStroke = Color.parseColor("#33FFFFFF") // 统一半透明描边
+
         val btnAllowOnce = createOptionButton(
             context = context,
             label = "允许一次",
-            bgColor = allowBtnBg,
-            textColor = allowBtnText,
+            bgColor = Color.parseColor("#1A10B981"), // 半透明绿
+            textColor = if (isDarkMode) Color.parseColor("#34D399") else Color.parseColor("#059669"),
             rippleColor = Color.argb(0x30, 0xFF, 0xFF, 0xFF),
+            strokeColor = btnStroke,
             onClick = { decide(ShellDecision.ALLOW_ONCE) }
         )
         val btn10Min = createOptionButton(
             context = context,
             label = "10分钟临时授权",
-            bgColor = tonalBtnBg,
+            bgColor = Color.parseColor("#1A000000"), // 半透明黑
             textColor = textColor,
             rippleColor = rippleColor,
-            strokeColor = lineColor,
+            strokeColor = btnStroke,
             onClick = { decide(ShellDecision.ALLOW_10MIN) }
         )
         val btnDeny = createOptionButton(
             context = context,
             label = "拒绝请求",
-            bgColor = denyBtnBg,
-            textColor = denyBtnText,
+            bgColor = Color.parseColor("#1AEF4444"), // 半透明红
+            textColor = Color.parseColor("#EF4444"),
             rippleColor = rippleColor,
-            strokeColor = denyBtnStroke,
+            strokeColor = btnStroke,
             onClick = { decide(ShellDecision.DENY) }
         )
 
