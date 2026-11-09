@@ -71,28 +71,18 @@ function closeLeftDrawerAnimated(ctx) {
     }, 280);
 }
 /**
- * 带有平滑退出动画关闭右侧 Files 面板
+ * 关闭右侧 Files 面板：直接触发官方原生平滑收起过渡，杜绝多重平移与闪烁
  */
 function closeRightSidebarAnimated() {
-    const panel = document.querySelector('[data-sidebar-right-panel]');
-    const closer = document.querySelector('[data-sidebar-right-toggle]');
-    if (!panel) {
-        closer?.click();
-        return;
+    const panel = document.querySelector('[data-sidebar-right-panel][data-sidebar-right-open], [data-sidebar-right-open]');
+    const closer = panel?.querySelector('[data-sidebar-right-toggle]') ||
+        document.querySelector('[data-sidebar-right-toggle], button[aria-label*="收起右侧边栏"], button[aria-label*="Collapse right sidebar"]');
+    if (typeof closer?.click === 'function') {
+        closer.click();
     }
-    // 1. 触发 CSS 向右平滑移出屏幕
-    panel.style.transition = 'transform 0.28s var(--ds-ease-in-out, ease-in-out)';
-    panel.style.transform = 'translateX(100%)';
-    panel.style.pointerEvents = 'none';
-    // 2. 动画结束后真正调用宿主卸载按钮
-    setTimeout(() => {
-        if (typeof closer?.click === 'function') {
-            closer.click();
-        }
-        panel.style.transition = '';
-        panel.style.transform = '';
-        panel.style.pointerEvents = '';
-    }, 280);
+    else {
+        dispatchEscape();
+    }
 }
 /**
  * 安全派发 Escape 键盘事件
@@ -165,12 +155,14 @@ function triggerMobileBack(ctx) {
         return true;
     }
     // =========================================================================
-    // 3. 检测【右侧文件栏】是否处于最上层
+    // 3. 检测【右侧文件栏 / 侧边栏】是否处于最上层
     // =========================================================================
-    const rightPanel = document.querySelector('[data-sidebar-right-panel]');
-    if (rightPanel) {
-        const cs = getComputedStyle(rightPanel);
-        const inViewport = rightPanel.getBoundingClientRect().left < window.innerWidth;
+    const openRightPanel = document.querySelector('[data-sidebar-right-panel][data-sidebar-right-open], [data-sidebar-right-open]');
+    if (openRightPanel) {
+        const cs = getComputedStyle(openRightPanel);
+        const rect = openRightPanel.getBoundingClientRect();
+        const inViewport = (rect.width > 0 && rect.right > 0 && rect.left < window.innerWidth) ||
+            openRightPanel.offsetWidth > 0;
         const isVisible = cs.display !== 'none' && cs.visibility !== 'hidden';
         if (isVisible && inViewport) {
             closeRightSidebarAnimated();
