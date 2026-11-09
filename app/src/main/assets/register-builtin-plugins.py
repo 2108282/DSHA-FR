@@ -50,14 +50,16 @@ PATCH_FILE = os.path.join(PROFILE, "cordis.patch.yml")
 WORKSPACE = os.path.join(PROFILE, "pnpm-workspace.yaml")
 NODE_MODULES = os.path.join(PROFILE, "node_modules")
 REPAIR_LOG = os.path.join(DSH_HOME, "repair-builtin.log")
-BUILTIN_LIST = os.path.join(ROOT, "root", "dsha-builtin.txt")
+BUILTIN_LIST_REL = "/root/dsha-builtin.txt"
 
-# 兜底清单：dsha-builtin.txt 缺失（精简包/手改）时仍能认出这四个内置插件
+# 兜底清单：dsha-builtin.txt 缺失时认出系统全部内置固有插件
 DEFAULT_BUILTINS = (
     "dsh-device-shell-guide",
     "dsh-task-notifier",
     "dsh-status-overlay",
-    "dsh-web-mobile",
+    "dsh-mobile-lite",
+    "dsh-classic-chat",
+    "dsh-quickchat-gesture",
 )
 
 # web profile 的官方核心（dsh 的 PROFILE_TEMPLATES.web），新建 profile 时打底
@@ -187,8 +189,8 @@ def ensure_runtime_modules():
 
 
 def ensure_global_plugin_links():
-    """确保所有插件（内置插件与 plugin-src 下插件）：
-    1. 在全局 /usr/local/lib/node_modules 下有软链，指向其实际生效的实体目录（plugin-src 优先，无则指向 /root/dsha-*）；
+    """确保所有插件（内置固有插件与第三方扩展插件）：
+    1. 在全局 /usr/local/lib/node_modules 下有软链，内置固有插件严格指向 /root/dsha-* 或 /root/<name>，第三方插件指向 plugin-src；
     2. 在插件自身的 node_modules/@deepseek-ai 提供就近系统库软链，彻底杜绝 peer 模块丢失。
     """
     global_modules = local('/usr/local/lib/node_modules')
@@ -196,16 +198,18 @@ def ensure_global_plugin_links():
     src_dir = os.path.join(local(DSH_HOME), 'plugin-src')
     count = 0
     all_plugins = {}
+    builtin_set = set(builtin_names())
+    for b_name in builtin_set:
+        d = entity_dir(b_name)
+        if d:
+            all_plugins[b_name] = local(d)
     if os.path.isdir(src_dir):
         for name in os.listdir(src_dir):
+            if name in builtin_set:
+                continue
             p = os.path.join(src_dir, name)
             if os.path.isdir(p) and os.path.isfile(os.path.join(p, 'package.json')):
                 all_plugins[name] = p
-    for b_name in builtin_names():
-        if b_name not in all_plugins:
-            d = entity_dir(b_name)
-            if d:
-                all_plugins[b_name] = local(d)
 
     for name, plugin_path in all_plugins.items():
         if not os.path.isdir(plugin_path) or not os.path.isfile(os.path.join(plugin_path, 'package.json')):
@@ -260,12 +264,9 @@ def operation_lock():
 
 
 def entity_dir(name):
-    """内置插件名 → 其实体目录（/root/dsha-*），官方包回退到全局安装树，找不到返回 None。"""
+    """内置插件名 → 其实体目录（/root/dsha-* 或 /root/<name>），官方包回退到全局安装树，找不到返回 None。"""
     if not valid_name(name):
         return None
-    imported = os.path.join(DSH_HOME, "plugin-src", name)
-    if os.path.isfile(local(os.path.join(imported, "package.json"))):
-        return imported
     if is_official_bundle(name):
         return find_official_pkg_dir(name)
     cands = ["/root/" + name, "/root/dsha-" + name]
@@ -289,7 +290,7 @@ def is_disabled(name):
 def builtin_names():
     """内置插件名清单：优先读 dsha-builtin.txt，缺失时用兜底清单。"""
     try:
-        with open(BUILTIN_LIST, encoding="utf-8") as f:
+        with open(local(BUILTIN_LIST_REL), encoding="utf-8") as f:
             names = [ln.strip() for ln in f if ln.strip() and not ln.startswith("#")]
         if names:
             return names
@@ -482,9 +483,15 @@ def enable_plugin(name):
 
 
 def disable_plugin(name):
-    """--disable：从 profile 的 dsh.profile.bundles 清单中剔除，对齐官方 DSH 标准。"""
+    """--disable：从 profile 的 dsh.profile.bundles 清单中剔除，写禁用标记，对齐官方 DSH 标准。"""
     lines = ["== " + time.strftime("%Y-%m-%d %H:%M:%S") + " 禁用 " + name]
     try:
+        if not is_official_bundle(name):
+            marker = marker_path(name)
+            os.makedirs(os.path.dirname(marker), exist_ok=True)
+            with open(marker, "w", encoding="utf-8") as f:
+                f.write("")
+            lines.append("已写禁用标记")
         doc = read_manifest()
         if doc is None:
             raise RuntimeError("profile 不存在")

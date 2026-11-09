@@ -510,13 +510,6 @@ class Lifecycle:
             raise ValueError('官方核心插件请通过应用更新维护')
         previous = self.history_info(name)
         if not previous:
-            if name in self.builtin.builtin_names():
-                imported = os.path.join(self.home, 'plugin-src', name)
-                if os.path.isdir(imported):
-                    shutil.rmtree(imported, ignore_errors=True)
-                    self.builtin.register()
-                    self.g['result']('ok', '已恢复 ' + name + ' 至预装内置版本；重启 Web 生效')
-                    return 0
             raise ValueError('没有可回退的上一版')
         if expected and previous.get('version') != expected:
             raise ValueError('上一版已发生变化，请刷新后重新确认')

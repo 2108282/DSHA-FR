@@ -273,11 +273,20 @@ def register_plugin(root, source, expected_version=None):
     pkg = plugin_package(root)
     name = pkg["name"]
     prepare_dependencies(root, pkg)
-    dest = local(os.path.join(PLUGIN_SRC, name))
-    managed_root = os.path.realpath(local(PLUGIN_SRC))
-    if os.path.commonpath([os.path.realpath(local(DSH_HOME)), managed_root]) != os.path.realpath(local(DSH_HOME)) \
-            or os.path.commonpath([managed_root, os.path.realpath(os.path.dirname(dest))]) != managed_root:
-        raise ValueError("插件目标目录越界，已停止安装")
+    is_builtin = name in builtin.builtin_names()
+    if is_builtin:
+        entity = builtin.entity_dir(name)
+        if not entity:
+            raise ValueError(f"无法确定内置插件 {name} 的底模安装目录")
+        dest = local(entity)
+        dep_target = entity
+    else:
+        dest = local(os.path.join(PLUGIN_SRC, name))
+        managed_root = os.path.realpath(local(PLUGIN_SRC))
+        if os.path.commonpath([os.path.realpath(local(DSH_HOME)), managed_root]) != os.path.realpath(local(DSH_HOME)) \
+                or os.path.commonpath([managed_root, os.path.realpath(os.path.dirname(dest))]) != managed_root:
+            raise ValueError("插件目标目录越界，已停止安装")
+        dep_target = os.path.join(PLUGIN_SRC, name).replace("\\", "/")
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     # 新目录先准备完整再切换；第三方插件只保留唯一上一版，供显式回退。
     with tempfile.TemporaryDirectory(prefix=".install-", dir=os.path.dirname(dest)) as work:
@@ -343,12 +352,12 @@ def register_plugin(root, source, expected_version=None):
                 if not enabled and name in bundles:
                     bundles.remove(name)
                 doc["dsh"]["profile"]["patchReload"] = "startup"
-                doc.setdefault("dependencies", {})[name] = "link:" + os.path.join(PLUGIN_SRC, name).replace("\\", "/")
+                doc.setdefault("dependencies", {})[name] = "link:" + dep_target
                 # 来源属于辅助信息，先写入；注册清单是最后的提交点。
                 sources[name] = source or repository_url(pkg) or sources.get(name, "")
                 write_json(local(SOURCES), sources)
                 source_written = True
-                if existed and name not in builtin.builtin_names():
+                if existed:
                     history_change = lifecycle().retain(name, old, work, previous_sources.get(name, ""))
                 builtin.write_manifest(doc)
             except Exception:
@@ -404,12 +413,23 @@ def cmd_import(archive, subdir="", source="", expected_versions=None):
 def resolve_plugin_dir(name):
     if not builtin.valid_name(name):
         raise ValueError("无效的插件名称")
-    directory = builtin.entity_dir(name)
-    if directory:
-        return local(directory)
+    # 1. 内置固有插件：指向底座实体目录 (/root/dsha-* 或 /root/<name>)
+    if name in builtin.builtin_names():
+        directory = builtin.entity_dir(name)
+        if directory and os.path.isfile(local(os.path.join(directory, "package.json"))):
+            return local(directory)
+    # 2. 第三方插件：检查 plugin-src 目录
+    src_dir = local(os.path.join(PLUGIN_SRC, name))
+    if os.path.isfile(os.path.join(src_dir, "package.json")):
+        return src_dir
+    # 3. 检查 web profile 的 node_modules
     path = os.path.join(local(builtin.NODE_MODULES), name)
     if os.path.isfile(os.path.join(path, "package.json")):
         return os.path.realpath(path)
+    # 4. 检查官方核心包或内置插件实体兜底
+    direct = builtin.entity_dir(name)
+    if direct and os.path.isfile(local(os.path.join(direct, "package.json"))):
+        return local(direct)
     return builtin.find_official_pkg_dir(name)
 
 
@@ -714,19 +734,7 @@ def cmd_list():
                           exportable=not official and directory is not None,
                           deletable=not official and name not in builtin.builtin_names()))
         update = updates.get(name, {})
-        previous = lifecycle().history_info(name) if not official and name not in builtin.builtin_names() else {}
-        if not previous and name in builtin.builtin_names():
-            imported = os.path.join(DSH_HOME, 'plugin-src', name)
-            if os.path.isdir(local(imported)):
-                orig_cands = ["/root/" + name, "/root/dsha-" + name]
-                if name.startswith("dsh-"):
-                    orig_cands.insert(0, "/root/dsha-" + name[4:])
-                for c in orig_cands:
-                    p_json = local(os.path.join(c, "package.json"))
-                    if os.path.isfile(p_json):
-                        orig_pkg = read_json(p_json, {})
-                        previous = {'version': orig_pkg.get('version', '') + ' (预装底包)'}
-                        break
+        previous = lifecycle().history_info(name) if not official else {}
         items[-1].update(latestVersion=update.get('latestVersion', ''), updateAvailable=bool(update.get('available'))
                          and update.get('installedVersion') == str(pkg.get('version', '')),
                          updatePreviewId=update.get('previewId', ''), updateMessage=update.get('message', '')

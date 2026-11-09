@@ -635,9 +635,18 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
             }
 
             // 6. 展开抽屉内的详情与 4 个小按钮
-            String configPath = item.builtin
-                    ? "/data/adb/dsha/rootfs/root/dsha-" + item.name + "/"
-                    : "/data/adb/dsha/rootfs/root/.dsh/plugin-src/" + item.name + "/";
+            String configPath;
+            if (item.builtin) {
+                if ("dsh-mobile-lite".equals(item.name) || "dsh-classic-chat".equals(item.name) || "dsh-quickchat-gesture".equals(item.name)) {
+                    configPath = "/data/adb/dsha/rootfs/root/" + item.name + "/";
+                } else if (item.name.startsWith("dsh-")) {
+                    configPath = "/data/adb/dsha/rootfs/root/dsha-" + item.name.substring(4) + "/";
+                } else {
+                    configPath = "/data/adb/dsha/rootfs/root/dsha-" + item.name + "/";
+                }
+            } else {
+                configPath = "/data/adb/dsha/rootfs/root/.dsh/plugin-src/" + item.name + "/";
+            }
             if (holder.detailText != null) {
                 String curVer = item.version.isEmpty() ? "未知" : "v" + item.version.replace("v", "");
                 String latestVerStr;
@@ -645,8 +654,8 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
                     latestVerStr = "v" + item.latestVersion.replace("v", "") + " (有可用更新)";
                 } else if (!item.latestVersion.isEmpty()) {
                     latestVerStr = "v" + item.latestVersion.replace("v", "") + " (已是最新)";
-                } else if (item.builtin || item.official) {
-                    latestVerStr = curVer + " (已是最新)";
+                } else if (item.official) {
+                    latestVerStr = curVer + " (官方核心)";
                 } else {
                     latestVerStr = curVer + " (已就绪)";
                 }
@@ -657,7 +666,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
             }
 
             if (holder.btnUpdate != null) {
-                if (item.builtin || item.official) {
+                if (item.official) {
                     holder.btnUpdate.setVisibility(View.GONE);
                 } else if (item.updateAvailable) {
                     holder.btnUpdate.setVisibility(View.VISIBLE);
