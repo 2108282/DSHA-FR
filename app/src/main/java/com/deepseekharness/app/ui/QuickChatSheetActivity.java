@@ -131,6 +131,9 @@ public class QuickChatSheetActivity extends AppCompatActivity {
     public static volatile String sPendingApprovalDecision = null;
 
     public static WebView getActiveWebView() {
+        if (PureQuickChatSheetActivity.sCurrentInstance != null) {
+            return PureQuickChatSheetActivity.getActiveWebView();
+        }
         if (sIsRemoteActive && sRemoteWebView != null) {
             return sRemoteWebView;
         }
@@ -139,15 +142,19 @@ public class QuickChatSheetActivity extends AppCompatActivity {
 
     /**
      * 构建点击通知唤起抽屉的标准 Intent。
-     * 采用标准的单任务栈拉起模式，避免 FLAG_ACTIVITY_REORDER_TO_FRONT 导致的任务栈串台误入主界面。
+     * 根据设置中的纯净模式开关自动路由到 PureQuickChatSheetActivity 或经典 QuickChatSheetActivity。
      */
     public static Intent createLaunchIntent(Context ctx) {
-        return new Intent(ctx, QuickChatSheetActivity.class)
+        Class<?> target = new ConfigStore(ctx).isSheetPureMode()
+                ? PureQuickChatSheetActivity.class
+                : QuickChatSheetActivity.class;
+        return new Intent(ctx, target)
                 .setAction("com.deepseekharness.app.OPEN_SHEET")
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS);
     }
 
     public static void syncApprovalDecision(boolean allow) {
+        PureQuickChatSheetActivity.syncApprovalDecision(allow);
         sPendingApprovalDecision = allow ? "allowed-once" : "rejected";
         if (sCachedWebView != null) {
             sCachedWebView.post(() -> {
@@ -361,6 +368,16 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         enforceExcludeFromRecents();
         super.onCreate(savedInstanceState);
 
+        // 如果开启了纯净模式，自动跳转到纯净版抽屉
+        if (new ConfigStore(this).isSheetPureMode()) {
+            Intent redirect = new Intent(getIntent());
+            redirect.setClass(this, PureQuickChatSheetActivity.class);
+            startActivity(redirect);
+            finish();
+            overridePendingTransition(0, 0);
+            return;
+        }
+
         // 窗口基础配置：全屏铺满、底部对齐（彻底锁死底部）、半透明遮罩、点击外部退出
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         setFinishOnTouchOutside(true);
@@ -424,7 +441,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         animateIn();
     }
 
-    private static final String SCRIPT_TRIGGER_MOBILE_BACK =
+    public static final String SCRIPT_TRIGGER_MOBILE_BACK =
             "(function() {\n" +
             "    try {\n" +
             "        if (typeof window.triggerMobileBack === 'function') {\n" +
@@ -971,12 +988,20 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         if (inst != null && info != null) {
             inst.runOnUiThread(() -> inst.displayApprovalBanner(info, epoch));
         }
+        PureQuickChatSheetActivity pureInst = PureQuickChatSheetActivity.sCurrentInstance;
+        if (pureInst != null && info != null) {
+            pureInst.runOnUiThread(() -> pureInst.displayApprovalBanner(info, epoch));
+        }
     }
 
     public static void dismissNativeApprovalBanner() {
         QuickChatSheetActivity inst = sCurrentInstance;
         if (inst != null) {
             inst.runOnUiThread(() -> inst.hideApprovalBanner());
+        }
+        PureQuickChatSheetActivity pureInst = PureQuickChatSheetActivity.sCurrentInstance;
+        if (pureInst != null) {
+            pureInst.runOnUiThread(() -> pureInst.hideApprovalBanner());
         }
     }
 
@@ -1394,9 +1419,11 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         return rootOverlay;
     }
 
-    private HeaderIconButton createHeaderIconButton(int iconType, int iconColor, String contentDescription) {
-        HeaderIconButton btn = new HeaderIconButton(this, iconType, iconColor);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dpToPx(36), dpToPx(36));
+    public static HeaderIconButton createHeaderIconButton(Context context, int iconType, int iconColor, String contentDescription) {
+        HeaderIconButton btn = new HeaderIconButton(context, iconType, iconColor);
+        float density = context.getResources().getDisplayMetrics().density;
+        int sizePx = (int) (36 * density + 0.5f);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(sizePx, sizePx);
         btn.setLayoutParams(lp);
         btn.setContentDescription(contentDescription);
         btn.setClickable(true);
@@ -1413,8 +1440,12 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         return btn;
     }
 
+    private HeaderIconButton createHeaderIconButton(int iconType, int iconColor, String contentDescription) {
+        return createHeaderIconButton(this, iconType, iconColor, contentDescription);
+    }
+
     /** 4 按钮高精度矢量绘制 View（统一 36x36dp 容器、1.85dp 规范线宽、圆倒角与对称视觉） */
-    private static class HeaderIconButton extends View {
+    public static class HeaderIconButton extends View {
         private int iconType;
         private final Paint paint;
         private final RectF rectF = new RectF();
@@ -4703,13 +4734,13 @@ public class QuickChatSheetActivity extends AppCompatActivity {
     // 历史对话轮次下拉列表（方案 A：React Fiber 内核级跳转，纯文字触发，实心底色自适应）
     // =========================================================================
 
-    private static class TurnOutlineItem {
-        final int turn;
-        final String prompt;
-        final String response;
-        final boolean active;
+    public static class TurnOutlineItem {
+        public final int turn;
+        public final String prompt;
+        public final String response;
+        public final boolean active;
 
-        TurnOutlineItem(int turn, String prompt, String response, boolean active) {
+        public TurnOutlineItem(int turn, String prompt, String response, boolean active) {
             this.turn = turn;
             this.prompt = prompt;
             this.response = response;
@@ -4717,7 +4748,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         }
     }
 
-    private static final String SCRIPT_GET_TURN_OUTLINE =
+    public static final String SCRIPT_GET_TURN_OUTLINE =
             "(function() {\n" +
             "    try {\n" +
             "        // 优先方案 A：从 TurnNavigator 的 React Fiber 读取全量轮次\n" +
@@ -4793,7 +4824,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
             turnOutlineDropdownMask.setLayoutParams(lp);
             turnOutlineDropdownMask.setBackgroundColor(Color.TRANSPARENT);
-            turnOutlineDropdownMask.setClipChildren(true);
+            turnOutlineDropdownMask.setClipChildren(false); // 允许四周自然阴影投射出边界
             turnOutlineDropdownMask.setOnClickListener(v -> dismissTurnOutlineDropdown());
             turnOutlineDropdownMask.setVisibility(View.GONE);
             webContainer.addView(turnOutlineDropdownMask);
@@ -4892,26 +4923,35 @@ public class QuickChatSheetActivity extends AppCompatActivity {
 
         GradientDrawable cardBg = new GradientDrawable();
         cardBg.setShape(GradientDrawable.RECTANGLE);
-        float r = dpToPx(16);
-        cardBg.setCornerRadii(new float[]{ 0, 0, 0, 0, r, r, r, r }); // 上平下圆，顶边平滑贴合顶栏底部分割线
+        cardBg.setCornerRadius(dpToPx(16)); // 四周统一 16dp 优雅大圆角悬浮卡片
         cardBg.setColor(solidBgColor);
         cardBg.setStroke(dpToPx(1), borderColor);
         card.setBackground(cardBg);
         card.setElevation(dpToPx(12));
+        card.setClipToOutline(true);
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            card.setOutlineAmbientShadowColor(isDarkMode ? Color.parseColor("#80000000") : Color.parseColor("#40000000"));
+            card.setOutlineSpotShadowColor(isDarkMode ? Color.parseColor("#B0000000") : Color.parseColor("#60000000"));
+        }
+
+        // 占满抽屉宽度的 95%，水平居中，距离顶栏下边距 8dp 悬浮
+        int containerW = webContainer.getWidth() > 0 ? webContainer.getWidth() : getResources().getDisplayMetrics().widthPixels;
+        int cardW = (int) (containerW * 0.95f);
         FrameLayout.LayoutParams cardLp = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        cardLp.gravity = Gravity.TOP;
+                cardW, ViewGroup.LayoutParams.WRAP_CONTENT);
+        cardLp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+        cardLp.topMargin = dpToPx(8);
         card.setLayoutParams(cardLp);
 
-        // 顶栏概要行
+        // 顶栏概要行：左侧「历史对话」，右侧「xx 轮」
         LinearLayout topBar = new LinearLayout(this);
         topBar.setOrientation(LinearLayout.HORIZONTAL);
         topBar.setGravity(Gravity.CENTER_VERTICAL);
         topBar.setPadding(dpToPx(16), dpToPx(10), dpToPx(16), dpToPx(10));
 
         TextView tvTitle = new TextView(this);
-        tvTitle.setText("历史对话轮次");
+        tvTitle.setText("历史对话");
         tvTitle.setTextColor(textColor);
         tvTitle.setTextSize(13);
         tvTitle.setTypeface(Typeface.DEFAULT_BOLD);
@@ -4919,7 +4959,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         topBar.addView(tvTitle, titleLp);
 
         TextView tvCount = new TextView(this);
-        tvCount.setText((items != null && !items.isEmpty()) ? ("共 " + items.size() + " 轮") : "");
+        tvCount.setText((items != null && !items.isEmpty()) ? (items.size() + " 轮") : "");
         tvCount.setTextColor(textSecondaryColor);
         tvCount.setTextSize(11);
         topBar.addView(tvCount);
@@ -5070,7 +5110,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             @Override
             public boolean onPreDraw() {
                 card.getViewTreeObserver().removeOnPreDrawListener(this);
-                int h = card.getHeight();
+                int h = card.getHeight() + dpToPx(16);
                 card.setTranslationY(-h);
                 card.animate()
                         .translationY(0f)
@@ -5085,8 +5125,8 @@ public class QuickChatSheetActivity extends AppCompatActivity {
     private void dismissTurnOutlineDropdown() {
         if (turnOutlineDropdownMask == null || turnOutlineDropdownMask.getVisibility() != View.VISIBLE) return;
         if (turnOutlineDropdownCard != null) {
-            int h = turnOutlineDropdownCard.getHeight();
-            if (h <= 0) h = dpToPx(200);
+            int h = turnOutlineDropdownCard.getHeight() + dpToPx(16);
+            if (h <= dpToPx(16)) h = dpToPx(240);
             turnOutlineDropdownCard.animate()
                     .translationY(-h)
                     .setDuration(180)

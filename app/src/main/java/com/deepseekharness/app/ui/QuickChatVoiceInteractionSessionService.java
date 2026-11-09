@@ -34,7 +34,10 @@ public class QuickChatVoiceInteractionSessionService extends VoiceInteractionSes
             super.onShow(args, showFlags);
             Context ctx = getContext();
             if (ctx != null) {
-                Intent intent = new Intent(ctx, QuickChatSheetActivity.class);
+                Class<?> target = new com.deepseekharness.app.core.ConfigStore(ctx).isSheetPureMode()
+                        ? PureQuickChatSheetActivity.class
+                        : QuickChatSheetActivity.class;
+                Intent intent = new Intent(ctx, target);
                 intent.setAction(Intent.ACTION_ASSIST);
                 intent.putExtra(AssistGatewayActivity.EXTRA_START_SOURCE, AssistGatewayActivity.SOURCE_GESTURE);
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK

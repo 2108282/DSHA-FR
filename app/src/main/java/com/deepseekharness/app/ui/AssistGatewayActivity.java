@@ -36,7 +36,10 @@ public class AssistGatewayActivity extends Activity {
         }
         sLastGatewayLaunchTime = now;
 
-        Intent intent = new Intent(this, QuickChatSheetActivity.class);
+        Class<?> target = new com.deepseekharness.app.core.ConfigStore(this).isSheetPureMode()
+                ? PureQuickChatSheetActivity.class
+                : QuickChatSheetActivity.class;
+        Intent intent = new Intent(this, target);
         intent.setAction(Intent.ACTION_ASSIST);
         intent.putExtra(EXTRA_START_SOURCE, SOURCE_GESTURE);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK

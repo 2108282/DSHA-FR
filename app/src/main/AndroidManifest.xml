@@ -83,6 +83,18 @@
                 <action android:name="android.app.contextualsearch.action.LAUNCH_CONTEXTUAL_SEARCH" />
             </intent-filter>
         </activity>
+
+        <!-- 纯净版快捷对话底部抽屉弹层（标准实体浏览器窗口，无毛玻璃与半透特效） -->
+        <activity
+            android:name=".ui.PureQuickChatSheetActivity"
+            android:exported="false"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:autoRemoveFromRecents="true"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustNothing"
+            android:configChanges="uiMode|orientation|screenSize|screenLayout|smallestScreenSize"
+            android:theme="@style/Theme.DeepseekHarness.SheetTransparent" />
         <activity android:name=".ui.PluginInstallActivity" android:exported="true">
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />

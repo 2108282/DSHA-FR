@@ -48,6 +48,23 @@ public class SheetSettingsFragment extends Fragment {
 
         ConfigStore cfg = new ConfigStore(requireContext());
 
+        // 0. 抽屉纯净模式开关（纯净实体浏览器窗口，无毛玻璃与半透特效）
+        DshaToggle pureModeToggle = v.findViewById(R.id.sheet_settings_pure_mode_toggle);
+        View pureModeRow = v.findViewById(R.id.sheet_settings_pure_mode_row);
+        boolean isPureMode = cfg.isSheetPureMode();
+        if (pureModeToggle != null) {
+            pureModeToggle.setChecked(isPureMode, false, false);
+            pureModeToggle.setOnCheckedChangeListener((toggle, isChecked) -> {
+                cfg.setSheetPureMode(isChecked);
+                updatePureModeStates(v, isChecked, cfg);
+                com.deepseekharness.app.util.ToastHelper.show(requireContext(),
+                        isChecked ? "已启用纯净模式（标准浏览器窗口样式）" : "已恢复特效模式（毛玻璃与动态材质）");
+            });
+            if (pureModeRow != null) {
+                pureModeRow.setOnClickListener(x -> pureModeToggle.toggle());
+            }
+        }
+
         // 1. 抽屉正反色开关（DshaToggle 纯 Skia 自绘）
         DshaToggle invertToggle = v.findViewById(R.id.sheet_settings_invert_toggle);
         if (invertToggle != null) {
@@ -311,7 +328,66 @@ public class SheetSettingsFragment extends Fragment {
         MonetEngine.PaletteInfo palette = MonetEngine.resolveCurrentPalette(requireContext());
         MonetEngine.applyToViewTree(v, palette);
 
+        // 初始化纯净模式下的置灰禁用状态
+        updatePureModeStates(v, isPureMode, cfg);
+
         return v;
+    }
+
+    /**
+     * 纯净模式联动控制：开启纯净模式时，反色、莫奈、渐变材质、背景压暗与不透明度等设置项直接完全折叠收起（View.GONE）
+     */
+    private void updatePureModeStates(View v, boolean isPureMode, ConfigStore cfg) {
+        if (v == null) return;
+        int visibility = isPureMode ? View.GONE : View.VISIBLE;
+
+        // 1. 反色模式行及分割线
+        View invertRow = v.findViewById(R.id.sheet_settings_invert_row);
+        View invertDivider = v.findViewById(R.id.sheet_settings_invert_divider);
+        if (invertRow != null) invertRow.setVisibility(visibility);
+        if (invertDivider != null) invertDivider.setVisibility(visibility);
+
+        // 2. 莫奈取色行及分割线
+        View monetRow = v.findViewById(R.id.sheet_settings_monet_row);
+        View monetDivider = v.findViewById(R.id.sheet_settings_monet_divider);
+        if (monetRow != null) monetRow.setVisibility(visibility);
+        if (monetDivider != null) monetDivider.setVisibility(visibility);
+
+        // 莫奈二级选项卡片与标签
+        View monetOptionsContainer = v.findViewById(R.id.sheet_settings_monet_options_container);
+        View monetOptionsLabel = v.findViewById(R.id.sheet_settings_monet_options_label);
+        View monetInvertRow = v.findViewById(R.id.sheet_settings_monet_invert_row);
+        View monetInvertDivider = v.findViewById(R.id.sheet_settings_monet_invert_divider);
+        if (isPureMode) {
+            if (monetOptionsContainer != null) monetOptionsContainer.setVisibility(View.GONE);
+            if (monetOptionsLabel != null) monetOptionsLabel.setVisibility(View.GONE);
+            if (monetInvertRow != null) monetInvertRow.setVisibility(View.GONE);
+            if (monetInvertDivider != null) monetInvertDivider.setVisibility(View.GONE);
+        } else {
+            boolean monetEnabled = cfg.isSheetMonetColor();
+            if (monetOptionsContainer != null) monetOptionsContainer.setVisibility(monetEnabled ? View.VISIBLE : View.GONE);
+            if (monetOptionsLabel != null) monetOptionsLabel.setVisibility(monetEnabled ? View.VISIBLE : View.GONE);
+            if (monetInvertRow != null) monetInvertRow.setVisibility(monetEnabled ? View.VISIBLE : View.GONE);
+            if (monetInvertDivider != null) monetInvertDivider.setVisibility(monetEnabled ? View.VISIBLE : View.GONE);
+        }
+
+        // 3. 渐变材质行及分割线
+        View liquidRow = v.findViewById(R.id.sheet_settings_liquid_glass_row);
+        View liquidDivider = v.findViewById(R.id.sheet_settings_liquid_glass_divider);
+        if (liquidRow != null) liquidRow.setVisibility(visibility);
+        if (liquidDivider != null) liquidDivider.setVisibility(visibility);
+
+        // 4. 背景压暗蒙版
+        View dimLabel = v.findViewById(R.id.sheet_settings_dim_label);
+        View dimContainer = v.findViewById(R.id.sheet_settings_dim_container);
+        if (dimLabel != null) dimLabel.setVisibility(visibility);
+        if (dimContainer != null) dimContainer.setVisibility(visibility);
+
+        // 5. 抽屉不透明度
+        View opacityLabel = v.findViewById(R.id.sheet_settings_opacity_label);
+        View opacityContainer = v.findViewById(R.id.sheet_settings_opacity_container);
+        if (opacityLabel != null) opacityLabel.setVisibility(visibility);
+        if (opacityContainer != null) opacityContainer.setVisibility(visibility);
     }
 
     @Override

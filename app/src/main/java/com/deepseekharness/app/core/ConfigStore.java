@@ -244,7 +244,15 @@ public class ConfigStore {
         com.deepseekharness.app.util.ToastHelper.syncEnabled(enabled);
     }
 
-    // ================= 快捷抽屉反色与莫奈取色开关 =================
+    // ================= 快捷抽屉纯净模式与特效开关 =================
+
+    public boolean isSheetPureMode() {
+        return prefs.getBoolean(Constants.KEY_SHEET_PURE_MODE, false);
+    }
+
+    public void setSheetPureMode(boolean enabled) {
+        prefs.edit().putBoolean(Constants.KEY_SHEET_PURE_MODE, enabled).apply();
+    }
 
     public boolean isSheetInvertColor() {
         return prefs.getBoolean(Constants.KEY_SHEET_INVERT_COLOR, false);
