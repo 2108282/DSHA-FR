@@ -1,6 +1,6 @@
 id=dsha_native
 name=DSHA Native Chroot Core
-version=0.2.2-rc.1-u7
-versionCode=160
+version=0.2.2-rc.1-u8
+versionCode=161
 author=21082
 description=DSHA 原生 Linux chroot 极速运行时，内置全新独立全面屏返回调度插件与升级版极简移动端插件 (dsh-mobile-lite v1.0.1)，按需启停。

@@ -3,7 +3,8 @@
 # patch-sync-rm-one-file-system-guard.sh — DSHA 极速热更新增量补丁
 # 包含内容：
 # 1. 现场升级容器 /root/dsh-bin/rm 命令安全守卫包装器；
-# 2. 递归删除自动注入 --one-file-system 防护，杜绝跨文件系统穿透。
+# 2. 递归删除自动注入 --one-file-system 防护，杜绝跨文件系统穿透；
+# 3. 遇到跨设备挂载点被跳过时，输出清晰纯文本提示。
 # ============================================================
 set -eu
 
@@ -55,7 +56,18 @@ if [ "${DSH_CONFIRM:-0}" = "1" ] || [ "${DSH_SHELL:-0}" = "1" ]; then
   fi
 fi
 
-exec "$REAL" "$@"
+ERR_LOG=$(mktemp 2>/dev/null || echo "/tmp/.rm_err_$$")
+"$REAL" "$@" 2>"$ERR_LOG"
+STATUS=$?
+
+if [ -s "$ERR_LOG" ]; then
+  cat "$ERR_LOG" >&2
+  if grep -E -q "different device|different file system" "$ERR_LOG"; then
+    echo "[DSHA 提示]: 检测到目标路径包含活动挂载目录，已安全跳过，请检查是否需要进一步手动卸载清理！" >&2
+  fi
+fi
+rm -f "$ERR_LOG" 2>/dev/null || true
+exit $STATUS
 EOF
     chmod 755 "$DSH_BIN/rm"
     echo "  ✓ 现场生成并注入增强版 rm 守卫"
