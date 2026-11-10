@@ -3,7 +3,7 @@ ui_print "*****************************************"
 ui_print "      DSHA Native 极速热更新补丁包       "
 ui_print "      增量热更新 · 无需重装完整底包      "
 ui_print "*****************************************"
-ui_print "- 当前补丁版本: 0.2.2-rc.1-u6"
+ui_print "- 当前补丁版本: 0.2.2-rc.1-u7"
 ui_print "*****************************************"
 
 DATA_DIR="/data/adb/dsha"
@@ -145,11 +145,7 @@ fi
 
 mkdir -p "$ROOTFS_DIR/root/.agents/skills" 2>/dev/null || true
 
-if grep -q " $TMP_STAGE" /proc/mounts 2>/dev/null; then
-    ui_print "⚠️ [安全提示]: 临时目录存在活动挂载点，已跳过清理，请检查是否需要进一步卸载！"
-else
-    rm -rf --one-file-system "$TMP_STAGE" 2>/dev/null || rm -rf "$TMP_STAGE" 2>/dev/null || true
-fi
+rm -rf --one-file-system "$TMP_STAGE" 2>/dev/null || rm -rf "$TMP_STAGE" 2>/dev/null || true
 ui_print "-----------------------------------------"
 ui_print "✓ DSHA 极速热更新全部处理完成！"
 ui_print "*****************************************"

@@ -19,11 +19,7 @@ if [ "$MODE" = "--lite" ] || [ "$MODE" = "lite" ]; then
     STAGE_LITE="/tmp/dsha_build_lite_$$"
     mkdir -p "$STAGE_LITE"
     cleanup_lite() {
-        if grep -q " $STAGE_LITE" /proc/mounts 2>/dev/null; then
-            echo "⚠️ [安全提示]: 临时目录 $STAGE_LITE 下存在活动挂载点，已跳过物理清理，请检查是否需要进一步卸载！" >&2
-        else
-            rm -rf --one-file-system "$STAGE_LITE" 2>/dev/null || python3 -c "import shutil; shutil.rmtree('$STAGE_LITE', ignore_errors=True)" 2>/dev/null || true
-        fi
+        rm -rf --one-file-system "$STAGE_LITE" 2>/dev/null || python3 -c "import shutil; shutil.rmtree('$STAGE_LITE', ignore_errors=True)" 2>/dev/null || true
     }
     trap cleanup_lite EXIT INT TERM
 

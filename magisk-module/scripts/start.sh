@@ -406,54 +406,38 @@ if ! grep -q "dsh-guard.sh" "$ROOTFS/root/.bashrc" 2>/dev/null; then
 fi
 
 # PATH 级命令守卫包装（若缺失则补齐）
-# 针对 rm 注入专属的 --one-file-system 防跨文件系统穿透与挂载点安全检查规则
+# 针对 rm 注入专属的 --one-file-system 自动防护逻辑
 cat << 'RM_WRAPPER_EOF' > "$DSH_BIN/rm"
 #!/bin/bash
 SELF="rm"
-REAL=""
-for p in /usr/local/bin /usr/bin /bin /usr/sbin /sbin; do
-  if [ -x "$p/$SELF" ] && [ "$p/$SELF" != "$0" ]; then REAL="$p/$SELF"; break; fi
-done
-[ -z "$REAL" ] && REAL=$(ls /usr/local/bin/$SELF /usr/bin/$SELF /bin/$SELF 2>/dev/null | head -1)
-if [ -z "$REAL" ]; then echo "找不到真实命令: $SELF" >&2; exit 127; fi
+REAL="/bin/rm"
+[ ! -x "$REAL" ] && REAL="/usr/bin/rm"
 
-# 1. 递归删除拦截检查：是否包含 -r / -R / --recursive
+# 1. 递归删除（-r/-R/--recursive）自动追加 --one-file-system
 IS_RECURSIVE=0
-HAS_ONE_FS=0
 for arg in "$@"; do
   case "$arg" in
     -*r*|-*R*|--recursive) IS_RECURSIVE=1 ;;
-    --one-file-system) HAS_ONE_FS=1 ;;
   esac
 done
 
-# 2. 若为递归删除，检查目标路径下是否存在活跃挂载目录
 if [ "$IS_RECURSIVE" = "1" ]; then
-  for target in "$@"; do
-    case "$target" in -*) continue ;; esac
-    abs_target=$(realpath -m "$target" 2>/dev/null || echo "$target")
-    mount_hits=$(grep -F " ${abs_target%/}/" /proc/mounts 2>/dev/null | awk '{print $2}' || true)
-    if [ -n "$mount_hits" ]; then
-      echo "⚠️ [DSHA 存储安全提示]: 检测到目标路径下存在活动挂载目录：" >&2
-      for m in $mount_hits; do echo "   -> 挂载点: $m" >&2; done
-      echo "   已自动启用 --one-file-system 保护，挂载点内容已被跳过，请检查是否需要进一步卸载清理。" >&2
-    fi
-  done
+  case " $* " in
+    *" --one-file-system "*) ;;
+    *) set -- --one-file-system "$@" ;;
+  esac
+fi
 
-  # 3. 强制追加 --one-file-system，物理防御跨文件系统穿透删除
-  if [ "$HAS_ONE_FS" = "0" ]; then
-    set -- --one-file-system "$@"
+# 2. 原有的确认拦截机制
+if [ "${DSH_CONFIRM:-0}" = "1" ] || [ "${DSH_SHELL:-0}" = "1" ]; then
+  if ! /root/dsh-confirm.sh "$SELF $*"; then
+    echo "已拒绝: $SELF $*" >&2
+    exit 1
   fi
 fi
 
-if [ "${DSH_CONFIRM:-0}" != "1" ] && [ "${DSH_SHELL:-0}" != "1" ]; then
-  exec "$REAL" "$@"
-fi
-if /root/dsh-confirm.sh "$SELF $*"; then
-  exec "$REAL" "$@"
-fi
-echo "已拒绝: $SELF $*" >&2
-exit 1
+# 3. 执行真实命令
+exec "$REAL" "$@"
 RM_WRAPPER_EOF
 chmod 755 "$DSH_BIN/rm"
 
