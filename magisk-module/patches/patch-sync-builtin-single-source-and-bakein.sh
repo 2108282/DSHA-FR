@@ -58,25 +58,71 @@ dsh-quickchat-gesture
 EOF
 fi
 
-# 3. 清理历史残留在 plugin-src 下针对内置插件的错误软链与断链
-if [ -d "$DSH_DIR/profiles/web/node_modules" ]; then
-    for bp in dsh-device-shell-guide dsh-task-notifier dsh-status-overlay dsh-mobile-lite dsh-classic-chat dsh-quickchat-gesture; do
-        link_target="$DSH_DIR/profiles/web/node_modules/$bp"
-        if [ -L "$link_target" ]; then
-            dest=$(readlink "$link_target" || true)
-            if [ "$dest" = "/root/.dsh/plugin-src/$bp" ] || [ "$dest" = "$DSH_DIR/plugin-src/$bp" ]; then
-                rm -f "$link_target" 2>/dev/null || true
-                echo "  - 拔除旧版 plugin-src 软链: $bp"
-            fi
+# 3. 清理历史残留在 plugin-src 下针对内置插件的错误软链与断链，并重建单源权威软链接
+PROFILE_NM="$DSH_DIR/profiles/web/node_modules"
+GLOBAL_NM="$ROOTFS/usr/local/lib/node_modules"
+mkdir -p "$PROFILE_NM" "$GLOBAL_NM" 2>/dev/null || true
+
+for bp in dsh-device-shell-guide dsh-task-notifier dsh-status-overlay dsh-mobile-lite dsh-classic-chat dsh-quickchat-gesture; do
+    if [ "$bp" = "dsh-mobile-lite" ] || [ "$bp" = "dsh-classic-chat" ] || [ "$bp" = "dsh-quickchat-gesture" ]; then
+        container_tgt="/root/$bp"
+        host_tgt="$ROOT_DIR/$bp"
+    else
+        container_tgt="/root/dsha-${bp#dsh-}"
+        host_tgt="$ROOT_DIR/dsha-${bp#dsh-}"
+    fi
+
+    link_target="$PROFILE_NM/$bp"
+    global_target="$GLOBAL_NM/$bp"
+
+    # 若旧软链指向 plugin-src 或断链，拔除
+    if [ -L "$link_target" ]; then
+        dest=$(readlink "$link_target" || true)
+        if [ "$dest" = "/root/.dsh/plugin-src/$bp" ] || [ "$dest" = "$DSH_DIR/plugin-src/$bp" ] || [ ! -e "$link_target" ]; then
+            rm -f "$link_target" 2>/dev/null || true
+            echo "  - 拔除旧版软链: $bp"
         fi
-    done
+    fi
+
+    # 只要底模实体存在，无条件建立标准单源符号链接 (指向容器内绝对路径)
+    if [ -d "$host_tgt" ]; then
+        ln -sfn "$container_tgt" "$link_target" 2>/dev/null || true
+        ln -sfn "$container_tgt" "$global_target" 2>/dev/null || true
+        echo "  + 重建单源软链: $bp -> $container_tgt"
+    fi
+done
+
+# 4. 同步更新 profiles/web/package.json 权威注册
+PROFILE_PKG="$DSH_DIR/profiles/web/package.json"
+if [ -f "$PROFILE_PKG" ] && command -v python3 >/dev/null 2>&1; then
+    python3 -c "
+import json
+try:
+    with open('$PROFILE_PKG', 'r', encoding='utf-8') as f:
+        doc = json.load(f)
+    deps = doc.setdefault('dependencies', {})
+    deps['dsh-device-shell-guide'] = 'link:/root/dsha-device-shell-guide'
+    deps['dsh-task-notifier'] = 'link:/root/dsha-task-notifier'
+    deps['dsh-status-overlay'] = 'link:/root/dsha-status-overlay'
+    deps['dsh-mobile-lite'] = 'link:/root/dsh-mobile-lite'
+    deps['dsh-classic-chat'] = 'link:/root/dsh-classic-chat'
+    deps['dsh-quickchat-gesture'] = 'link:/root/dsh-quickchat-gesture'
+    bundles = doc.setdefault('dsh', {}).setdefault('profile', {}).setdefault('bundles', [])
+    for b in ['dsh-device-shell-guide', 'dsh-task-notifier', 'dsh-status-overlay', 'dsh-mobile-lite', 'dsh-classic-chat', 'dsh-quickchat-gesture']:
+        if b not in bundles:
+            bundles.append(b)
+    with open('$PROFILE_PKG', 'w', encoding='utf-8') as f:
+        json.dump(doc, f, indent=2, ensure_ascii=False)
+    print('  + profiles/web/package.json 已同步注册全部 6 大内置插件')
+except Exception as e:
+    print('  ⚠️ 更新 package.json 出现异常:', e)
+" 2>/dev/null || true
 fi
 
-# 4. 现场触发自愈脚本重建单源权威软链接
+# 5. 现场触发自愈脚本重建单源权威软链接与权限校准
 if [ -f "$DSH_DIR/dsha-plugin-heal.sh" ]; then
-    echo "  -> 正在执行单源软链自愈与权威注册..."
-    chroot "$ROOTFS" /bin/bash /root/.dsh/dsha-plugin-heal.sh 2>/dev/null || \
-    sh "$DSH_DIR/dsha-plugin-heal.sh" 2>/dev/null || true
+    echo "  -> 正在执行容器内置插件自愈与权限校准..."
+    chroot "$ROOTFS" /bin/bash /root/.dsh/dsha-plugin-heal.sh 2>/dev/null || true
 fi
 
 echo "✓ 内置插件单源物理熔铸增量补丁执行完毕！"
