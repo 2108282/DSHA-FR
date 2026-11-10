@@ -58,7 +58,11 @@ done
 STAGE_DIR="/tmp/dsha_export_stage_$$"
 mkdir -p "$STAGE_DIR"
 cleanup() {
-    python3 -c "import shutil; shutil.rmtree('$STAGE_DIR', ignore_errors=True)" 2>/dev/null || rm -rf "$STAGE_DIR" 2>/dev/null || true
+    if grep -q " $STAGE_DIR" /proc/mounts 2>/dev/null; then
+        echo "⚠️ [安全提示]: 临时目录 $STAGE_DIR 下存在活动挂载点，已跳过物理清理，请检查是否需要进一步卸载！" >&2
+    else
+        rm -rf --one-file-system "$STAGE_DIR" 2>/dev/null || python3 -c "import shutil; shutil.rmtree('$STAGE_DIR', ignore_errors=True)" 2>/dev/null || true
+    fi
 }
 trap cleanup EXIT INT TERM
 
