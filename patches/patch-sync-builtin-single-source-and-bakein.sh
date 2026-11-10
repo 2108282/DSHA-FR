@@ -58,7 +58,12 @@ dsh-quickchat-gesture
 EOF
 fi
 
-# 3. 清理历史残留在 plugin-src 下针对内置插件的错误软链与断链，并重建单源权威软链接
+# 3. 清理历史残留在 plugin-src 下针对内置插件的错误软链、旧版备份快照，并重建单源权威软链接
+# 3.1 彻底清理 dsh-mobile-lite 历史 1.0.0 旧快照与 .bak 目录，消除界面退回选项
+rm -rf "$DSH_DIR/plugin-history/803195391b7d9cc4272b540c33de656b" 2>/dev/null || true
+rm -rf "$DSH_DIR/plugin-src/dsh-mobile-lite.bak" 2>/dev/null || true
+rm -f "$DATA_DIR/patches/patch-wake-storage-auto-heal.sh" 2>/dev/null || true
+
 PROFILE_NM="$DSH_DIR/profiles/web/node_modules"
 GLOBAL_NM="$ROOTFS/usr/local/lib/node_modules"
 mkdir -p "$PROFILE_NM" "$GLOBAL_NM" 2>/dev/null || true
