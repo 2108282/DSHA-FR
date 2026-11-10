@@ -470,6 +470,67 @@ EOF_CORDIS
     mkdir -p "$(dirname "$OUTPUT_TAR")"
     TMP_RAW_TAR="$STAGE_DIR/raw_rootfs.tar"
 
+    # 6. 内置插件外层更新检测与自动熔铸 (Bake-in)
+    # 若在工作区或 plugin-src 中存在修改或编译出的更新版本，自动将最新生产产物替换底层与 overlay
+    echo "==> [0/3] 正在检测内置固有插件是否有外层新版本并执行自动熔铸..."
+    PRE_BUILTIN_PLUGINS=(
+        "dsh-device-shell-guide"
+        "dsh-task-notifier"
+        "dsh-status-overlay"
+        "dsh-mobile-lite"
+        "dsh-classic-chat"
+        "dsh-quickchat-gesture"
+    )
+    for p in "${PRE_BUILTIN_PLUGINS[@]}"; do
+        if [ "$p" = "dsh-mobile-lite" ] || [ "$p" = "dsh-classic-chat" ] || [ "$p" = "dsh-quickchat-gesture" ]; then
+            base_tgt="/root/$p"
+            overlay_tgt="$ROOT_DIR/rootfs-overlay/root/$p"
+        else
+            base_tgt="/root/dsha-${p#dsh-}"
+            overlay_tgt="$ROOT_DIR/rootfs-overlay/root/dsha-${p#dsh-}"
+        fi
+
+        # 候选外层来源优先顺序：工作区开发源码 > plugin-src
+        src_candidate=""
+        if [ -d "/root/workspaces/内部工作区/$p" ] && [ -f "/root/workspaces/内部工作区/$p/package.json" ]; then
+            src_candidate="/root/workspaces/内部工作区/$p"
+        elif [ -d "/root/.dsh/plugin-src/$p" ] && [ -f "/root/.dsh/plugin-src/$p/package.json" ]; then
+            src_candidate="/root/.dsh/plugin-src/$p"
+        fi
+
+        if [ -n "$src_candidate" ] && [ -d "$base_tgt" ]; then
+            # 比对版本或核心编译产物修改时间
+            src_ver=$(python3 -c "import json; print(json.load(open('$src_candidate/package.json')).get('version', ''))" 2>/dev/null || true)
+            base_ver=$(python3 -c "import json; print(json.load(open('$base_tgt/package.json')).get('version', ''))" 2>/dev/null || true)
+            need_bake=0
+            if [ -n "$src_ver" ] && [ "$src_ver" != "$base_ver" ]; then
+                need_bake=1
+            elif [ -d "$src_candidate/lib" ] && [ "$src_candidate/lib" -nt "$base_tgt/package.json" ]; then
+                need_bake=1
+            fi
+
+            if [ "$need_bake" -eq 1 ]; then
+                echo "  -> [自动熔铸] 发现 $p 外层新版本 (外层: v$src_ver, 底层: v$base_ver)，正在熔铸进底包..."
+                # 物理覆盖底层生产产物 (排除 node_modules, .git, src 等开发死重，纯净就绪)
+                mkdir -p "$base_tgt"
+                rm -rf "$base_tgt/lib" 2>/dev/null || true
+                cp -af "$src_candidate/package.json" "$base_tgt/"
+                [ -d "$src_candidate/lib" ] && cp -af "$src_candidate/lib" "$base_tgt/"
+                [ -f "$src_candidate/cordis.patch.yml" ] && cp -af "$src_candidate/cordis.patch.yml" "$base_tgt/"
+                [ -f "$src_candidate/README.md" ] && cp -af "$src_candidate/README.md" "$base_tgt/"
+                
+                # 同步更新到仓库的 rootfs-overlay
+                if [ -d "$ROOT_DIR/rootfs-overlay" ]; then
+                    mkdir -p "$overlay_tgt"
+                    cp -af "$base_tgt/." "$overlay_tgt/" 2>/dev/null || true
+                fi
+                echo "     ✓ $p 已成功熔铸至底模 (v$src_ver)"
+            fi
+        fi
+        # 确保标记立牌存在
+        touch "$base_tgt-installed" 2>/dev/null || true
+    done
+
     echo "==> [1/3] 正在扫描系统并创建脱敏底包流..."
     cd /
     tar --numeric-owner -cf "$TMP_RAW_TAR" "${CLEAN_EXCLUDES[@]}" . || [ $? -eq 1 ]

@@ -9,6 +9,10 @@ if [ -d "/root/.dsh/plugin-src" ]; then
   for p in /root/.dsh/plugin-src/*; do
     [ -d "$p" ] || continue
     name=$(basename "$p")
+    # 内置固有插件有专属单源底层，严禁从 plugin-src 建立覆盖软链
+    if [ "$name" = "dsh-device-shell-guide" ] || [ "$name" = "dsh-task-notifier" ] || [ "$name" = "dsh-status-overlay" ] || [ "$name" = "dsh-mobile-lite" ] || [ "$name" = "dsh-classic-chat" ] || [ "$name" = "dsh-quickchat-gesture" ]; then
+      continue
+    fi
     
     # 支持 @scope 组织命名空间包 (如 @easytz/dsh-git)
     if [[ "$name" == @* ]]; then
@@ -60,15 +64,10 @@ for p in /root/dsha-*; do
   echo "Fixed builtin plugin: $name"
 done
 
-# 2.1 确保核心移动端插件 dsh-mobile-lite 与 dsh-quickchat-gesture 标准软链接
-for cp in dsh-mobile-lite dsh-quickchat-gesture; do
-  tgt=""
-  if [ -d "/root/$cp" ]; then
-    tgt="/root/$cp"
-  elif [ -d "/root/.dsh/plugin-src/$cp" ]; then
-    tgt="/root/.dsh/plugin-src/$cp"
-  fi
-  if [ -n "$tgt" ]; then
+# 2.1 确保核心移动端独立插件标准软链接（单源绑定 /root/<name>，不回退 plugin-src）
+for cp in dsh-mobile-lite dsh-classic-chat dsh-quickchat-gesture; do
+  tgt="/root/$cp"
+  if [ -d "$tgt" ]; then
     ln -sfn "$tgt" "/usr/local/lib/node_modules/$cp"
     mkdir -p "/root/.dsh/profiles/web/node_modules"
     ln -sfn "$tgt" "/root/.dsh/profiles/web/node_modules/$cp"
