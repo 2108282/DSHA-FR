@@ -1821,14 +1821,136 @@ exports.COMPOSER_AND_STATS_CSS = void 0;
  * 提取自 dsh-web-mobile 的紧凑化输入框与统计胶囊排版规则
  */
 exports.COMPOSER_AND_STATS_CSS = `/* ==========================================================================
-   dsh-web-mobile: 移动端紧凑化样式（遵循原生 @media 契约）
+   dsh-web-mobile: 移动端紧凑化样式（严格遵循上游 @media 媒体查询契约）
    ========================================================================== */
 
-/* 移动端专属规则：严格限制在小屏触屏设备 */
 @media (max-width: 1023px) and (pointer: coarse) {
-  /* ... (其他紧凑化样式不变) ... */
+  /* 1. 活跃会话下的输入框紧凑化 */
+  [data-phase="active"] [data-composer-card] {
+    padding-top: 2px !important;
+    gap: 4px !important;
+  }
+  [data-phase="active"] [data-composer-card] [class*="_row"] {
+    padding: 0 8px !important;
+  }
+  [data-phase="active"] [data-composer-card] [data-composer-input],
+  [data-phase="active"] [data-composer-card] [class*="_scroll"] {
+    min-height: 28px !important;
+    padding-top: 2px !important;
+  }
 
-  /* 文件上传按钮移动端适配 */
+  /* 2. 底部 Dock 容器单排紧凑化排布 */
+  [data-composer-dock],
+  [class*="_dock"] {
+    gap: 4px !important;
+    justify-content: center !important;
+    align-items: center !important;
+  }
+  [data-slot="conversation.composer.dock"] {
+    display: contents !important;
+  }
+
+  /* 3. 统计胶囊排版：Activity (轮次/步数/TPS) 与 Usage (Token/缓存命中) */
+  [data-composer-stat="activity"] {
+    flex: 0 0 auto !important;
+    width: max-content !important;
+    min-width: max-content !important;
+    max-width: 50% !important;
+    font-size: 10.5px !important;
+    line-height: 18px !important;
+    margin-right: 4px !important;
+    white-space: nowrap !important;
+  }
+  [data-composer-stat="activity"] button,
+  [data-composer-stat="activity"] span,
+  [data-composer-stat="activity"] svg {
+    font-size: 10.5px !important;
+  }
+  [data-composer-stat="activity"] button {
+    padding: 1px 5px !important;
+    gap: 4px !important;
+  }
+  [data-composer-stat="activity"] svg {
+    width: 13px !important;
+    height: 13px !important;
+    flex: 0 0 auto !important;
+  }
+
+  [data-composer-stat="usage"] {
+    flex: 0 1 auto !important;
+    min-width: 0 !important;
+    max-width: 45% !important;
+    font-size: 10.5px !important;
+    line-height: 18px !important;
+    margin-right: 4px !important;
+    overflow: hidden !important;
+    white-space: nowrap !important;
+  }
+  [data-composer-stat="usage"] button,
+  [data-composer-stat="usage"] span,
+  [data-composer-stat="usage"] svg {
+    font-size: 10.5px !important;
+  }
+  [data-composer-stat="usage"] button {
+    padding: 1px 5px !important;
+    gap: 4px !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+  }
+  [data-composer-stat="usage"] svg {
+    width: 13px !important;
+    height: 13px !important;
+    flex: 0 0 auto !important;
+  }
+  [data-composer-stat="usage"] [class*="_label"],
+  [data-composer-stat="usage"] button > span {
+    flex: 0 1 auto !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  /* 4. 彻底隐藏移动端的 · 分隔符 */
+  [data-composer-stat] [class*="_sep"] {
+    display: none !important;
+  }
+
+  /* 5. 上下文用量环：同排流式紧凑排布（保留 10.5px 文本与 13px 圆环） */
+  [data-mobile-nav="stats-ring"] {
+    position: static !important;
+    flex: 0 0 auto !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    border: 0 !important;
+    font-size: 10.5px !important;
+    line-height: 18px !important;
+  }
+  [data-mobile-nav="stats-ring"] button,
+  [data-mobile-nav="stats-ring"] span {
+    font-size: 10.5px !important;
+    line-height: 18px !important;
+  }
+  [data-mobile-nav="stats-ring"] button {
+    padding: 1px 5px !important;
+    gap: 3px !important;
+    min-width: 0 !important;
+    width: auto !important;
+  }
+  [data-mobile-nav="stats-ring"] svg {
+    display: inline-block !important;
+    width: 13px !important;
+    height: 13px !important;
+    flex: 0 0 auto !important;
+  }
+
+  /* 6. 文件上传按钮移动端适配 */
   [data-composer-card] [data-mobile-nav="file-upload"] {
     display: inline-flex !important;
     align-items: center !important;
@@ -1847,14 +1969,30 @@ exports.COMPOSER_AND_STATS_CSS = `/* ===========================================
     flex: none !important;
     -webkit-tap-highlight-color: transparent !important;
   }
-}
 
-/* 桌面端/非移动端：显式禁用移动端特有样式，恢复原生 */
-@media not (max-width: 1023px) and (pointer: coarse) {
-  [data-composer-card] [data-mobile-nav="file-upload"] {
-    /* 移除移动端强制属性，恢复 auto */
-    width: auto !important;
-    height: auto !important;
+  [data-composer-card] [data-mobile-nav="file-upload"]:hover {
+    background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, .06)) !important;
+  }
+
+  [data-composer-card] [data-mobile-nav="file-upload"]:active {
+    background: var(--dsw-alias-interactive-bg-active, rgba(0, 0, 0, .12)) !important;
+  }
+
+  [data-composer-card] [data-mobile-nav="file-upload"] svg {
+    width: 14px !important;
+    height: 14px !important;
+    display: block !important;
+    flex: none !important;
+    stroke: currentColor !important;
+  }
+
+  [data-composer-card] [data-mobile-nav="file-upload"]:disabled {
+    opacity: 0.38;
+    cursor: default;
+  }
+
+  [data-composer-card]:not(:has(input[type=file])) [data-mobile-nav="file-upload"] {
+    display: none !important;
   }
 }
 `;

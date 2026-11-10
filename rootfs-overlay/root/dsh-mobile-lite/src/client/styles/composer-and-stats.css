@@ -28,71 +28,66 @@
     display: contents !important;
   }
 
-  /* 3. 统计胶囊排版：Activity 与 Usage */
-  [data-composer-stat="activity"],
-  [data-composer-stat="usage"],
-  [data-mobile-nav="stats-ring"] {
-    height: 22px !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    vertical-align: middle !important;
-  }
-
+  /* 3. 统计胶囊排版：Activity (轮次/步数/TPS) 与 Usage (Token/缓存命中) */
   [data-composer-stat="activity"] {
     flex: 0 0 auto !important;
     width: max-content !important;
     min-width: max-content !important;
     max-width: 50% !important;
+    font-size: 10.5px !important;
+    line-height: 18px !important;
     margin-right: 4px !important;
     white-space: nowrap !important;
+  }
+  [data-composer-stat="activity"] button,
+  [data-composer-stat="activity"] span,
+  [data-composer-stat="activity"] svg {
+    font-size: 10.5px !important;
+  }
+  [data-composer-stat="activity"] button {
+    padding: 1px 5px !important;
+    gap: 4px !important;
+  }
+  [data-composer-stat="activity"] svg {
+    width: 13px !important;
+    height: 13px !important;
+    flex: 0 0 auto !important;
   }
 
   [data-composer-stat="usage"] {
     flex: 0 1 auto !important;
     min-width: 0 !important;
     max-width: 45% !important;
+    font-size: 10.5px !important;
+    line-height: 18px !important;
     margin-right: 4px !important;
     overflow: hidden !important;
     white-space: nowrap !important;
   }
-
-  /* 统一胶囊内部按钮 */
-  [data-composer-stat] button,
-  [data-mobile-nav="stats-ring"] button {
-    box-sizing: border-box !important;
-    height: 22px !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    padding: 0 5px !important;
+  [data-composer-stat="usage"] button,
+  [data-composer-stat="usage"] span,
+  [data-composer-stat="usage"] svg {
+    font-size: 10.5px !important;
+  }
+  [data-composer-stat="usage"] button {
+    padding: 1px 5px !important;
     gap: 4px !important;
-    font-size: 11px !important;
-    line-height: 1 !important;
-    vertical-align: middle !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
   }
-
-  /* 统一胶囊内部 SVG */
-  [data-composer-stat] svg,
-  [data-mobile-nav="stats-ring"] svg {
+  [data-composer-stat="usage"] svg {
+    width: 13px !important;
+    height: 13px !important;
     flex: 0 0 auto !important;
-    width: 14px !important;
-    height: 14px !important;
-    display: block !important;
-    margin: 0 !important;
-    vertical-align: middle !important;
   }
-
-  /* 统一胶囊内部文本 */
-  [data-composer-stat] [class*="_label"],
-  [data-composer-stat] button > span,
-  [data-mobile-nav="stats-ring"] span {
-    display: inline-flex !important;
-    align-items: center !important;
-    font-size: 11px !important;
-    line-height: 1 !important;
-    white-space: nowrap !important;
+  [data-composer-stat="usage"] [class*="_label"],
+  [data-composer-stat="usage"] button > span {
+    flex: 0 1 auto !important;
+    min-width: 0 !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
+    white-space: nowrap !important;
   }
 
   /* 4. 彻底隐藏移动端的 · 分隔符 */
@@ -100,15 +95,81 @@
     display: none !important;
   }
 
-  /* 5. 上下文用量环：静态流式排布 */
+  /* 5. 上下文用量环：同排流式紧凑排布（保留 10.5px 文本与 13px 圆环） */
   [data-mobile-nav="stats-ring"] {
     position: static !important;
     flex: 0 0 auto !important;
+    display: inline-flex !important;
+    align-items: center !important;
     min-width: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
     background: transparent !important;
     box-shadow: none !important;
     border: 0 !important;
+    font-size: 10.5px !important;
+    line-height: 18px !important;
+  }
+  [data-mobile-nav="stats-ring"] button,
+  [data-mobile-nav="stats-ring"] span {
+    font-size: 10.5px !important;
+    line-height: 18px !important;
+  }
+  [data-mobile-nav="stats-ring"] button {
+    padding: 1px 5px !important;
+    gap: 3px !important;
+    min-width: 0 !important;
+    width: auto !important;
+  }
+  [data-mobile-nav="stats-ring"] svg {
+    display: inline-block !important;
+    width: 13px !important;
+    height: 13px !important;
+    flex: 0 0 auto !important;
+  }
+
+  /* 6. 文件上传按钮移动端适配 */
+  [data-composer-card] [data-mobile-nav="file-upload"] {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 28px !important;
+    height: 28px !important;
+    min-width: 28px !important;
+    min-height: 28px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    border-radius: var(--dsw-radius-sm, 6px) !important;
+    background: transparent !important;
+    color: var(--dsw-alias-label-secondary, currentColor) !important;
+    cursor: pointer !important;
+    flex: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+  }
+
+  [data-composer-card] [data-mobile-nav="file-upload"]:hover {
+    background: var(--dsw-alias-interactive-bg-hover, rgba(0, 0, 0, .06)) !important;
+  }
+
+  [data-composer-card] [data-mobile-nav="file-upload"]:active {
+    background: var(--dsw-alias-interactive-bg-active, rgba(0, 0, 0, .12)) !important;
+  }
+
+  [data-composer-card] [data-mobile-nav="file-upload"] svg {
+    width: 14px !important;
+    height: 14px !important;
+    display: block !important;
+    flex: none !important;
+    stroke: currentColor !important;
+  }
+
+  [data-composer-card] [data-mobile-nav="file-upload"]:disabled {
+    opacity: 0.38;
+    cursor: default;
+  }
+
+  [data-composer-card]:not(:has(input[type=file])) [data-mobile-nav="file-upload"] {
+    display: none !important;
   }
 }
