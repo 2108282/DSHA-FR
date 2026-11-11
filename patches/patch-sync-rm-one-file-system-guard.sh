@@ -66,7 +66,7 @@ if [ -s "$ERR_LOG" ]; then
     echo "[DSHA 提示]: 检测到目标路径包含活动挂载目录，已安全跳过，请检查是否需要进一步手动卸载清理！" >&2
   fi
 fi
-rm -f "$ERR_LOG" 2>/dev/null || true
+"$REAL" -f "$ERR_LOG" 2>/dev/null || true
 exit $STATUS
 EOF
     chmod 755 "$DSH_BIN/rm"
