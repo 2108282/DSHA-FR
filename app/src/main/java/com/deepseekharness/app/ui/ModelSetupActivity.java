@@ -1204,11 +1204,11 @@ public final class ModelSetupActivity extends AppCompatActivity {
 
                 String ctxStr = editContext.getText().toString().trim();
                 if (ctxStr.isEmpty()) next.remove("contextWindow");
-                else next.addProperty("contextWindow", Long.parseLong(ctxStr));
+                else next.addProperty("contextWindow", parseTokenString(ctxStr));
 
                 String tokStr = editTokens.getText().toString().trim();
                 if (tokStr.isEmpty()) next.remove("maxTokens");
-                else next.addProperty("maxTokens", Long.parseLong(tokStr));
+                else next.addProperty("maxTokens", parseTokenString(tokStr));
 
                 boolean prior = original.has(inputField) && original.get(inputField).toString().contains("\"image\"");
                 if (toggleVision.isChecked() != prior || index < 0) {
@@ -1600,6 +1600,19 @@ public final class ModelSetupActivity extends AppCompatActivity {
 
     private int dp(int n) {
         return Math.round(n * getResources().getDisplayMetrics().density);
+    }
+
+    private long parseTokenString(String s) {
+        s = s.toUpperCase(Locale.US);
+        long multiplier = 1;
+        if (s.endsWith("K")) {
+            multiplier = 1000;
+            s = s.substring(0, s.length() - 1);
+        } else if (s.endsWith("M")) {
+            multiplier = 1000000;
+            s = s.substring(0, s.length() - 1);
+        }
+        return Long.parseLong(s.trim()) * multiplier;
     }
 
     @Override

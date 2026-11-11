@@ -155,9 +155,9 @@
                     android:layout_width="match_parent"
                     android:layout_height="42dp"
                     android:background="@drawable/bg_input"
-                    android:hint="如 65536 (留空默认)"
+                    android:hint="如 65536 或 64K"
                     android:importantForAutofill="no"
-                    android:inputType="number"
+                    android:inputType="textCapCharacters"
                     android:paddingHorizontal="12dp"
                     android:textColor="@color/text"
                     android:textSize="14sp" />
@@ -184,9 +184,9 @@
                     android:layout_width="match_parent"
                     android:layout_height="42dp"
                     android:background="@drawable/bg_input"
-                    android:hint="如 8192 (留空默认)"
+                    android:hint="如 8192 或 8K"
                     android:importantForAutofill="no"
-                    android:inputType="number"
+                    android:inputType="textCapCharacters"
                     android:paddingHorizontal="12dp"
                     android:textColor="@color/text"
                     android:textSize="14sp" />
