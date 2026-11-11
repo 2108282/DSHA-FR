@@ -974,8 +974,8 @@ public final class ModelSetupActivity extends AppCompatActivity {
         tvTitle.setText(index < 0 ? t("添加模型", "Add Model") : t("模型详情", "Model Details"));
         editId.setText(s(original, "id"));
         editName.setText(s(original, "name"));
-        editContext.setText(s(original, "contextWindow"));
-        editTokens.setText(s(original, "maxTokens"));
+        editContext.setText(formatTokenString(s(original, "contextWindow")));
+        editTokens.setText(formatTokenString(s(original, "maxTokens")));
 
         String inputField = deepseek() ? "inputModalities" : "input";
         boolean hasVision = original.has(inputField) && original.get(inputField).toString().contains("\"image\"");
@@ -1600,6 +1600,18 @@ public final class ModelSetupActivity extends AppCompatActivity {
 
     private int dp(int n) {
         return Math.round(n * getResources().getDisplayMetrics().density);
+    }
+
+    private String formatTokenString(String s) {
+        if (s == null || s.isEmpty()) return "";
+        try {
+            long val = Long.parseLong(s);
+            if (val > 0 && val % 1000000 == 0) return (val / 1000000) + "M";
+            if (val > 0 && val % 1000 == 0) return (val / 1000) + "K";
+            return String.valueOf(val);
+        } catch (NumberFormatException e) {
+            return s;
+        }
     }
 
     private long parseTokenString(String s) {
