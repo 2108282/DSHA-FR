@@ -1,0 +1,309 @@
+/*
+ * Font size and line height follow the Host's content-font axis, with
+ * fallbacks chosen so that EACH supported Harness version renders exactly what
+ * its own assistant root renders.
+ *
+ * The axis is published on `document.body` by the Harness layout plugin
+ * (`--dsh-content-font-size`) and derived by its theme stylesheet
+ * (`--dsh-content-font-delta: calc(size - 14px)`,
+ * `--dsh-content-font-size-secondary`, `--dsh-content-font-delta-secondary`).
+ * No package in the pinned 0.1.0-rc.6 dependency tree assigns any of them -
+ * rc.6 has neither the layout nor the theme plugin - and rc.6's own assistant
+ * root is a hard `16px/28px`.
+ *
+ * So the fallback has to be rc.6's value, not 14px: `var(size, 16px)` with
+ * `calc(24px + var(delta, 4px))` yields 16px/28px on rc.6 (matching its root)
+ * and the Host's live value on 0.1.5+ (where the same expression is what the
+ * Harness itself writes).
+ */
+.root {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: var(--dsh-content-font-size, 16px);
+  line-height: calc(24px + var(--dsh-content-font-delta, 4px));
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.body > [data-turn-process-inline][hidden] {
+  margin-bottom: -16px;
+}
+
+.think {
+  display: flex;
+  flex-direction: column;
+}
+
+.thinkRow {
+  position: relative;
+  overflow: hidden;
+}
+
+.think[data-state='running'] .thinkRow::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  width: 300px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--dsw-alias-bg-base) 60%, transparent) 55%,
+    transparent 100%
+  );
+  animation: dsh-smooth-stream-think-sweep 2.6s ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes dsh-smooth-stream-think-sweep {
+  0% { left: -300px; }
+  90%, 100% { left: 100%; }
+}
+
+.thinkLeading {
+  flex-shrink: 0;
+}
+
+.thinkChevron {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.thinkTitle {
+  font-weight: 400;
+}
+
+.thinkSeparator {
+  flex: none;
+  width: 2px;
+  height: 2px;
+  margin: 0 8px;
+  border-radius: 1px;
+  background: var(--dsw-alias-label-caption);
+}
+
+/*
+ * Think text reads the secondary tier, mirroring the Harness's own reasoning
+ * row (`ui-chat/src/client/chat/ReasoningRow.module.css`): one step under the
+ * body size, with `secondary` fallbacks that reproduce rc.6's hard `14px/24px`
+ * when no Host axis is published.
+ */
+.thinkSummary {
+  min-width: 0;
+  overflow: hidden;
+  flex: 1 1 auto;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: var(--dsh-content-font-size-secondary, 14px);
+  line-height: calc(20px + var(--dsh-content-font-delta-secondary, 4px));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.thinkSummary[data-follow-end] {
+  text-overflow: clip;
+}
+
+.thinkBody {
+  /* Indent under the title, which starts at leading (16 + delta) + gap 6. */
+  padding: 4px 0 4px calc(22px + var(--dsh-content-font-delta, 0px));
+  color: var(--dsw-alias-label-tertiary);
+  font-size: var(--dsh-content-font-size-secondary, 14px);
+  line-height: calc(20px + var(--dsh-content-font-delta-secondary, 4px));
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/*
+ * AnimatedDisclosure chrome: mirrors the harness DisclosureRow geometry
+ * ([16px leading] gap 6 [title 14/24]) plus the hover icon->chevron preview.
+ */
+.disclosureRoot {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+}
+
+.disclosureRow {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  /* The Harness DisclosureRow reserves this row with the same expression, so
+   * the disclosure grows with the reading font instead of clipping it. */
+  height: calc(24px + var(--dsh-content-font-delta, 0px));
+  min-width: 0;
+  cursor: pointer;
+}
+
+.disclosureLeading {
+  position: relative;
+  flex: none;
+  width: calc(16px + var(--dsh-content-font-delta, 0px));
+  height: calc(16px + var(--dsh-content-font-delta, 0px));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 6px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.disclosureLeading svg:not([data-state]) {
+  width: calc(14px + var(--dsh-content-font-delta, 0px));
+  height: calc(14px + var(--dsh-content-font-delta, 0px));
+}
+
+.disclosureIconIdle {
+  display: inline-flex;
+  opacity: 1;
+  transition: opacity 100ms ease;
+}
+
+.disclosureChevronHover {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  opacity: 0;
+  transition: opacity 100ms ease;
+}
+
+.disclosureRow:hover .disclosureIconIdle {
+  opacity: 0;
+}
+
+.disclosureRow:hover .disclosureChevronHover {
+  opacity: 1;
+}
+
+.disclosureTitle {
+  flex: none;
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: calc(24px + var(--dsh-content-font-delta, 0px));
+  color: var(--dsw-alias-label-secondary);
+}
+
+/*
+ * The animated body: one grid track transitions 0fr <-> 1fr, so the height
+ * glides to the body's natural size with no measured pixel target. The direct
+ * child clips to the track; `visibility` (not display) keeps a collapsed body
+ * out of the accessibility tree and tab order while it still measures for the
+ * animation - it flips visible immediately on expand and waits for the height
+ * to collapse before hiding. Rides the deepsuite curve tokens with fallbacks
+ * for standalone composition.
+ */
+.disclosureContent {
+  display: grid;
+  grid-template-rows: 1fr;
+  visibility: visible;
+  overflow: hidden;
+  transition:
+    grid-template-rows var(--ds-transition-duration, 0.2s) var(--ds-ease-in-out, cubic-bezier(0.4, 0, 0.2, 1)),
+    visibility 0s;
+}
+
+.disclosureContent[data-collapsed] {
+  display: none !important;
+  grid-template-rows: 0fr;
+  visibility: hidden;
+  transition: none;
+}
+
+.disclosureContent[data-collapsed] > * {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+/* Auto-close at stream end snaps instead of animating: the follower's settle
+ * spring already absorbs the height step through the compositor, so a grid
+ * animation would double-animate the same collapse for a dozen frames. */
+.disclosureContent[data-no-transition] {
+  transition: none;
+}
+
+.disclosureContent > * {
+  min-height: 0;
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .think[data-state='running'] .thinkRow::after {
+    animation: none;
+  }
+
+  .disclosureContent,
+  .disclosureContent[data-collapsed] {
+    transition: none;
+  }
+}
+
+.stopped {
+  align-self: flex-start;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.visuallyHidden {
+  position: absolute;
+  overflow: hidden;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  margin: -1px;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/*
+ * Follow host: ordinary document flow. The assistant node owns follow during
+ * streaming; the last text block takes over while its settled queue drains
+ * (see useConversationFollow).
+ */
+.follow {
+  contain: layout style;
+  min-width: 0;
+}
+
+/*
+ * Inline code is allowed to wrap inside list items. The Harness markdown
+ * theme uses `inline-flex` for its single-line code treatment, but an
+ * inline-flex box can expose multiple painted line boxes without contributing
+ * their full height to a trimmed list-item line box in Chromium. Keep the
+ * code's font and padding while using normal inline layout so every wrapped
+ * line participates in the parent list item's geometry.
+ */
+.root :not(pre) > code {
+  display: inline;
+  line-height: inherit;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  vertical-align: baseline;
+}
+
+/*
+ * Trim the half-leading above and below each text block so line boxes hug
+ * the font's ascent/descent edges. `text` edges are used instead of
+ * `cap alphabetic` because assistant text is CJK-heavy and cap-height
+ * trimming would clip ideographic glyphs.
+ */
+@supports (text-box-trim: trim-both) {
+  /* List-item line boxes must retain their full leading. A wrapped inline
+   * code element is an inline-flex formatting context; Chromium's
+   * text-box-trim can shrink the li's layout box below the code's painted
+   * second line, letting the following item start inside that line. */
+  .root :is(p, h1, h2, h3, h4, h5, h6, blockquote) {
+    text-box-trim: trim-both;
+    text-box-edge: text;
+  }
+}

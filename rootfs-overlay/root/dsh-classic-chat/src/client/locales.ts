@@ -1,0 +1,285 @@
+/** Locale bundles for the smooth-stream plugin configuration card. */
+
+/** Dictionary namespace owned by this plugin's settings card. */
+export const NS = 'settings.smoothStream'
+
+/**
+ * Namespace owning the conversation keys THIS PLUGIN must be able to render
+ * but the Harness does not always provide.
+ *
+ * The plugin consumes keys from two Harness namespaces, and which one owns a
+ * given key is not stable across Harness versions:
+ *
+ * - `conversation` (`dsh-client-ui-conversation`) owns the `image.*` family in
+ *   every version, and also owned `message.stopped`, `message.unknownBlock`
+ *   and `json.truncated` before those moved to `chat`.
+ * - `chat` (`dsh-client-ui-chat`, present from 0.1.5 on) owns `message.think`
+ *   and now owns the three keys above. It does not exist at all in rc.6, the
+ *   version this package still pins in devDependencies.
+ *
+ * Neither namespace alone can serve every key this plugin renders, so
+ * `index.ts` layers them. This plugin-owned namespace is the final layer; it
+ * exists because a plugin may NOT register into `chat` or `conversation` —
+ * `LocaleRuntime.register` throws when the (namespace, locale) pair already
+ * has an owner, and the Harness owns both.
+ */
+export const CHAT_NS = 'smoothStream.chat'
+
+/**
+ * Keys the plugin resolves through {@link CHAT_NS}. Only keys with no
+ * dependable Harness owner belong here; anything the Harness already provides
+ * must keep coming from the Harness so a language pack can override it.
+ */
+export type SmoothStreamChatKey = 'message.think' | 'image.serviceUnavailable'
+
+/** English fallback for {@link SmoothStreamChatKey}. */
+export const chatEn: Record<SmoothStreamChatKey, string> = {
+  'message.think': 'Think',
+  // Removed from the Harness dictionaries in 0.1.5 (rc.6 had it under
+  // `conversation`), and the plugin interpolates it into a thrown Error, so
+  // the raw key must never reach a reader.
+  'image.serviceUnavailable': 'Image service unavailable',
+}
+
+/** Simplified Chinese fallback for {@link SmoothStreamChatKey}. */
+export const chatZh: Record<SmoothStreamChatKey, string> = {
+  'message.think': '思考',
+  'image.serviceUnavailable': '图片服务不可用',
+}
+
+/** Locale keys the card renders. */
+export type SmoothStreamLocaleKey =
+  | 'title' | 'description'
+  | 'enabled' | 'enabledHint'
+  | 'controlScroll' | 'controlScrollHint'
+  | 'motionPreference' | 'motionPreferenceHint'
+  | 'motionAuto' | 'motionAutoHint'
+  | 'motionForceSmooth' | 'motionForceSmoothHint'
+  | 'motionForceReduced' | 'motionForceReducedHint'
+  | 'thinkAutoExpand' | 'thinkAutoExpandHint'
+  | 'logarithmicFade' | 'logarithmicFadeHint'
+  | 'fastFold' | 'fastFoldHint'
+  | 'fastPipeline' | 'fastPipelineHint'
+  | 'keepStreamOnToolCall' | 'keepStreamOnToolCallHint'
+  | 'debugEnabled' | 'debugEnabledHint' | 'debugUnavailable'
+  | 'debugPanelTitle' | 'debugPanelToggle' | 'debugPanelClose' | 'debugGuide'
+  | 'debugLive' | 'debugIdle' | 'debugUnsaved'
+  | 'debugSave' | 'debugDiscard' | 'debugReset' | 'debugCopy' | 'debugCopied'
+  | 'debugSectionLive' | 'debugSectionReveal' | 'debugSectionFollow'
+  | 'debugFps' | 'debugFrameTime' | 'debugBacklog' | 'debugRevealSpeed' | 'debugProgress'
+  | 'debugFollowState' | 'debugFollowing' | 'debugReleased'
+  | 'debugLag' | 'debugVelocity' | 'debugReserve' | 'debugCapacity' | 'debugAppliedScale'
+  | 'debugRevealMultiplier' | 'debugQueuePressure' | 'debugMaxReveal' | 'debugCadenceClamp'
+  | 'debugSpringStiffness' | 'debugSpringDamping' | 'debugSpringMass'
+  | 'debugRunway' | 'debugReserveResponse' | 'debugBackpressureMin'
+  | 'debugTipRevealMultiplier' | 'debugTipQueuePressure' | 'debugTipMaxReveal'
+  | 'debugTipSpringStiffness' | 'debugTipSpringDamping' | 'debugTipSpringMass'
+  | 'debugTipRunway' | 'debugTipReserveResponse' | 'debugTipBackpressureMin'
+  | 'readOnly' | 'loading' | 'unavailable' | 'retry'
+  | 'version' | 'developmentVersion'
+  | 'updates' | 'updateHint' | 'developmentBuild' | 'updateUnavailable'
+  | 'update' | 'updating' | 'restartRequired' | 'updateFailed'
+  | 'save' | 'saving' | 'discard' | 'unsaved' | 'saveFailed'
+
+/** English copy. */
+export const en: Record<SmoothStreamLocaleKey, string> = {
+  title: 'Smooth stream',
+  description: 'How replies are revealed while they stream.',
+  enabled: 'Enable smooth streaming',
+  enabledHint: 'Let this plugin render and follow streaming replies. Turn off to use the built-in Harness renderer.',
+  controlScroll: 'Take over scrolling',
+  controlScrollHint: 'On by default; smooth-stream writes the conversation scroll position. Turn off to leave bottom-follow to Harness.',
+  motionPreference: 'Motion',
+  motionPreferenceHint: 'How streaming responds to the system reduce-motion setting.',
+  motionAuto: 'Follow system',
+  motionAutoHint: 'Reduced-motion systems get raw text (accessibility first).',
+  motionForceSmooth: 'Always smooth',
+  motionForceSmoothHint: 'Keep the smoothing engine even when the system asks for reduced motion.',
+  motionForceReduced: 'Always raw',
+  motionForceReducedHint: 'Render raw text even when the system allows motion.',
+  thinkAutoExpand: 'Auto-expand thinking',
+  logarithmicFade: 'Logarithmic fade',
+  logarithmicFadeHint: 'Fade new answer and expanded thinking text into view. Follows the motion preference.',
+  fastFold: 'Fast fold acceleration',
+  fastFoldHint: 'Detach collapsed tool steps from the layout tree using display: none, eliminating reflow stutter during streaming in long conversations.',
+  fastPipeline: 'Fast dispatch pipeline (Heal DSH 3-frame throttle)',
+  fastPipelineHint: 'Bypass DSH 3-frame nested requestAnimationFrame throttle (~50ms delay per chunk) into instant native single-frame rendering, making streaming output completely responsive.',
+  keepStreamOnToolCall: 'Keep streaming before tool calls',
+  keepStreamOnToolCallHint: 'Do not end text streaming early when followed by a tool call; preserve fluid typewriter reveal.',
+  thinkAutoExpandHint: 'Open the thinking block while it streams. Turn off to keep it collapsed.',
+  debugEnabled: 'Show render diagnostics',
+  debugEnabledHint: 'Show live streaming and scroll metrics on the right side of the chat. Tune values there, then save them here.',
+  debugUnavailable: 'Live diagnostics require a newer plugin Host.',
+  debugPanelTitle: 'Render diagnostics',
+  debugPanelToggle: 'Toggle render diagnostics',
+  debugPanelClose: 'Hide diagnostics panel',
+  debugGuide: 'Tune one value at a time while a reply streams. Keep FPS stable and backlog near zero. If text lags, raise the reveal multiplier, queue pressure, or maximum reveal; if a blank gap appears, reduce Predictive runway. Increase damping when the scroll feels springy. Save only after the behavior is stable; Reset restores the production defaults.',
+  debugLive: 'Streaming',
+  debugIdle: 'Idle',
+  debugUnsaved: 'Unsaved tuning',
+  debugSave: 'Save tuning',
+  debugDiscard: 'Discard changes',
+  debugReset: 'Reset tuning',
+  debugCopy: 'Copy diagnostics',
+  debugCopied: 'Copied',
+  debugSectionLive: 'Live renderer',
+  debugSectionReveal: 'Reveal tuning',
+  debugSectionFollow: 'Scroll tuning',
+  debugFps: 'FPS',
+  debugFrameTime: 'Frame',
+  debugBacklog: 'Backlog',
+  debugRevealSpeed: 'Reveal',
+  debugProgress: 'Progress',
+  debugFollowState: 'Follow',
+  debugFollowing: 'Pinned',
+  debugReleased: 'Released',
+  debugLag: 'Visual lag',
+  debugVelocity: 'Velocity',
+  debugReserve: 'Reserve',
+  debugCapacity: 'Capacity',
+  debugAppliedScale: 'Applied scale',
+  debugRevealMultiplier: 'Reveal multiplier',
+  debugQueuePressure: 'Queue pressure',
+  debugMaxReveal: 'Maximum reveal',
+  debugCadenceClamp: 'Cadence clamp',
+  debugSpringStiffness: 'Spring stiffness',
+  debugSpringDamping: 'Spring damping',
+  debugSpringMass: 'Spring mass',
+  debugRunway: 'Predictive runway',
+  debugReserveResponse: 'Runway response',
+  debugBackpressureMin: 'Minimum backpressure',
+  debugTipRevealMultiplier: 'Overall reveal speed multiplier. Higher reveals text faster and clears backlog sooner, but can feel jumpy. Lower is smoother but takes longer to finish.',
+  debugTipQueuePressure: 'Backlog acceleration strength. Higher catches up to a growing queue more aggressively; lower keeps speed steadier but may leave backlog.',
+  debugTipMaxReveal: 'Hard cap for reveal speed in characters per second. Higher allows faster catch-up; lower limits bursts and keeps motion calmer.',
+  debugTipCadenceClamp: 'Micro-step character limit per rendering frame (1~16). Prevents burst jumps during frame drops and maintains silky fluid pacing.',
+  debugTipSpringStiffness: 'Scroll spring strength. Higher closes visual lag faster but can feel sharp; lower feels softer but follows more slowly.',
+  debugTipSpringDamping: 'Scroll energy damping. Higher suppresses overshoot and jitter but feels heavier; lower feels livelier but may oscillate.',
+  debugTipSpringMass: 'Scroll inertia. Higher makes movement slower and heavier; lower makes it react faster but can feel abrupt.',
+  debugTipRunway: 'Predictive blank space reserved while content grows. Higher absorbs growth and protects the bottom follow, but can create a larger visible gap; lower reduces blank space but leaves less room to absorb lag.',
+  debugTipReserveResponse: 'How quickly the reserved runway opens or closes. Higher changes more gradually; lower reacts faster but can look abrupt.',
+  debugTipBackpressureMin: 'Slowest reveal multiplier under scroll pressure. Higher keeps text moving but may increase visual lag; lower slows text more to protect smooth following.',
+  readOnly: 'This deployment stores settings read-only.',
+  loading: 'Loading plugin settings…',
+  unavailable: 'Plugin settings are unavailable in this connection.',
+  retry: 'Retry',
+  version: 'Version {version}',
+  developmentVersion: 'Development version {version}',
+  updates: 'Updates',
+  updateHint: 'Install the newest npm version, then restart Harness.',
+  developmentBuild: 'Linked source; updates are managed in the checkout.',
+  updateUnavailable: 'Updates are available only for an npm profile installation.',
+  update: 'Update',
+  updating: 'Updating…',
+  restartRequired: 'Updated. Restart Harness to load the new version.',
+  updateFailed: 'The package update failed; your current version is unchanged.',
+  save: 'Save',
+  saving: 'Saving…',
+  discard: 'Discard',
+  unsaved: 'Unsaved',
+  saveFailed: 'The deployment did not accept these values; they were left for you to correct.',
+}
+
+/** Simplified Chinese copy. */
+export const zh: Record<SmoothStreamLocaleKey, string> = {
+  title: '丝滑流式',
+  description: '回复在流式输出时如何逐字展现。',
+  enabled: '启用丝滑流式渲染',
+  enabledHint: '由本插件渲染并跟随流式回复；关闭后使用 Harness 内置渲染。',
+  controlScroll: '接管滚动',
+  controlScrollHint: '默认开启，由丝滑流式写入会话滚动位置；关闭后贴底滚动交给 Harness。',
+  motionPreference: '动效偏好',
+  motionPreferenceHint: '流式渲染如何响应系统的「减少动态效果」设置。',
+  motionAuto: '跟随系统',
+  motionAutoHint: '系统开启减少动态效果时直接呈现原始文本（优先无障碍）。',
+  motionForceSmooth: '始终平滑',
+  motionForceSmoothHint: '即使系统要求减少动态效果，仍保持平滑流式渲染。',
+  motionForceReduced: '始终原始',
+  motionForceReducedHint: '即使系统允许动效，也直接呈现原始文本。',
+  thinkAutoExpand: '自动展开思考',
+  logarithmicFade: '对数淡入',
+  logarithmicFadeHint: '让回答正文和展开的思考文字由淡变实，遵循动效偏好。',
+  fastFold: '折叠彻底跳过排版（长对话极速出字）',
+  fastFoldHint: '收起已完成的工具步骤时使用 display: none 彻底脱离排版树，根除长对话下出字与滚动的严重卡顿（仅失去针对收缩内容的 Ctrl+F 页面搜索）。',
+  fastPipeline: '解除 DSH 官方 3 帧限制（极速吐字自愈）',
+  fastPipelineHint: 'DSH 官方核心写死了 3 重嵌套 requestAnimationFrame（每 50ms 仅刷新一次，长对话严重顿挫）。插件在内存中将其自愈为原生单帧极速派发，出字顺滑跟手。',
+  keepStreamOnToolCall: '工具引导语保持流式',
+  keepStreamOnToolCallHint: '文字后紧接工具调用时不提前宣告结束，让短引导语保持平滑打字。',
+  thinkAutoExpandHint: '思考块在流式时自动展开；关闭后保持折叠，可手动展开。',
+  debugEnabled: '显示渲染调试面板',
+  debugEnabledHint: '在聊天右侧显示流式渲染和滚动的实时参数，可在面板中调节并在这里保存。',
+  debugUnavailable: '当前 Host 版本不支持实时调试，请先更新插件 Host。',
+  debugPanelTitle: '渲染诊断',
+  debugPanelToggle: '显示或隐藏渲染诊断',
+  debugPanelClose: '收起诊断面板',
+  debugGuide: '流式输出时一次只调一个参数，观察帧率、积压和视觉滞后。优先保持帧率稳定、积压接近 0；如果文字滞后，提高揭示倍率、队列压力或最大揭示速度；如果底部出现空白，降低“预测预留空间”。滚动有回弹或抖动时提高阻尼。确认表现稳定后再保存；“恢复默认参数”会回到生产默认值。',
+  debugLive: '正在流式输出',
+  debugIdle: '空闲',
+  debugUnsaved: '参数尚未保存',
+  debugSave: '保存参数',
+  debugDiscard: '放弃修改',
+  debugReset: '恢复默认参数',
+  debugCopy: '复制诊断数据',
+  debugCopied: '已复制',
+  debugSectionLive: '实时渲染',
+  debugSectionReveal: '流式参数',
+  debugSectionFollow: '滚动参数',
+  debugFps: '帧率',
+  debugFrameTime: '帧耗时',
+  debugBacklog: '积压字符',
+  debugRevealSpeed: '揭示速度',
+  debugProgress: '渲染进度',
+  debugFollowState: '跟随状态',
+  debugFollowing: '跟随底部',
+  debugReleased: '用户已释放',
+  debugLag: '视觉滞后',
+  debugVelocity: '滚动速度',
+  debugReserve: '预留空间',
+  debugCapacity: '安全容量',
+  debugAppliedScale: '实际倍率',
+  debugRevealMultiplier: '揭示倍率',
+  debugQueuePressure: '队列压力',
+  debugMaxReveal: '最大揭示速度',
+  debugCadenceClamp: '单帧微步长上限',
+  debugSpringStiffness: '弹簧刚度',
+  debugSpringDamping: '弹簧阻尼',
+  debugSpringMass: '弹簧质量',
+  debugRunway: '预测预留空间',
+  debugReserveResponse: '预留响应时间',
+  debugBackpressureMin: '最小背压倍率',
+  debugTipRevealMultiplier: '整体文字揭示速度倍率。调大能更快清空积压，但可能显得跳；调小更平滑，但完成回复需要更久。',
+  debugTipQueuePressure: '积压对加速的影响强度。调大能更积极追赶增长中的队列；调小速度更稳定，但积压可能持续。',
+  debugTipMaxReveal: '每秒揭示字符数上限。调大允许更快追赶；调小限制突发速度，让动作更平稳。',
+  debugTipCadenceClamp: '单帧渲染最多吐出的字符数上限（Cadence Clamp，1~16 字/帧）。调小能杜绝手机掉帧时的大块蹦字感，保持极度细腻的流水感；调大在快节奏下吐字更激进。',
+  debugTipSpringStiffness: '滚动弹簧刚度。调大更快收拢视觉滞后，但感觉更硬；调小更柔和，但跟随更慢。',
+  debugTipSpringDamping: '滚动能量阻尼。调大能抑制过冲和抖动，但感觉更沉；调小更灵活，但可能回弹。',
+  debugTipSpringMass: '滚动惯性。调大移动更慢更沉；调小反应更快，但可能显得突兀。',
+  debugTipRunway: '内容增长时预留的预测空白。调大更能吸收增长、保护底部跟随，但可能产生更大的可见空区；调小能减少空白，但可吸收滞后的空间也更少。',
+  debugTipReserveResponse: '预留空间打开或关闭的响应时间。调大变化更渐进；调小反应更快，但可能显得突变。',
+  debugTipBackpressureMin: '滚动压力下允许的最低揭示倍率。调大文字仍会较快前进，但视觉滞后可能增加；调小会更积极减速，以保护跟随平滑。',
+  readOnly: '本部署的设置为只读。',
+  loading: '正在加载插件设置…',
+  unavailable: '当前连接无法访问插件设置。',
+  retry: '重试',
+  version: '版本 {version}',
+  developmentVersion: '开发版本 {version}',
+  updates: '更新',
+  updateHint: '安装最新 npm 版本后重启 Harness。',
+  developmentBuild: '当前为本地链接版本，请在源码目录管理更新。',
+  updateUnavailable: '只有 profile 使用 npm 包时才能更新。',
+  update: '更新',
+  updating: '更新中…',
+  restartRequired: '已更新；重启 Harness 后加载新版本。',
+  updateFailed: '包更新失败，当前版本未改变。',
+  save: '保存',
+  saving: '保存中…',
+  discard: '放弃修改',
+  unsaved: '未保存',
+  saveFailed: '本部署没有接受这些值，已保留供你修改。',
+}
+
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface LocaleNamespaceMap {
+    'settings.smoothStream': SmoothStreamLocaleKey
+    'smoothStream.chat': SmoothStreamChatKey
+  }
+}

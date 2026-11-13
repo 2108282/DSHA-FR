@@ -1,0 +1,17 @@
+# 1. 物理屏蔽官方升级后引起卡顿与全局回流的对话窗双组件（ui-conversation & ui-chat）
+- id: ui-conversation
+  disabled: true
+
+- id: ui-chat
+  disabled: true
+
+# 2. 挂载全自包含的经典极速对话窗插件（自带完整装配、服务接管、聊天渲染与平滑打字机）
+- insert:
+    - id: classic-chat
+      name: 'dsh-classic-chat'
+      config:
+        mode: typewriter
+        preset: balanced
+        revealCharsPerSec: 80
+        scrollSpeedPxPerSec: 48
+        maxScrollSpeedPxPerSec: 1000

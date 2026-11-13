@@ -1,0 +1,34 @@
+/*
+ * Opaque Agent rows (tools, retries, context, etc.) cannot reuse the
+ * assistant's character queue. This is a single compositor-friendly reveal:
+ * the row arrives with a short rise/fade and a left-to-right mask, echoing the
+ * assistant's reading cadence without re-typing status text or countdowns.
+ */
+.surface {
+  min-width: 0;
+}
+
+.surface[data-entrance='active'] {
+  animation: dsh-smooth-stream-agent-row-in 120ms ease-out both;
+  will-change: opacity;
+}
+
+@keyframes dsh-smooth-stream-agent-row-in {
+  0% {
+    opacity: 0.85;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .surface[data-entrance='active'] {
+    animation: none;
+    opacity: 1;
+    transform: none;
+    clip-path: none;
+    will-change: auto;
+  }
+}

@@ -1,0 +1,23 @@
+node_modules/
+# lib/ is committed so DSHA can install directly from Git repo
+*.tsbuildinfo
+.DS_Store
+.idea/
+.agents/
+.claude/
+.vscode/
+*.log
+
+# Generated outputs and agent-workflow files (not sources)
+repro/bundle.js
+repro/bundle.css
+repro/audit.bundle.js
+repro/audit.bundle.css
+repro/overlap.bundle.js
+repro/overlap.bundle.css
+repro/artifacts/
+.mt-probe.*
+benchmarks/results/
+.workbuddy/
+.gtoffice/
+skills-lock.json
