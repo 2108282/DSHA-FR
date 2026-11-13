@@ -77,9 +77,9 @@ for p in "$ROOT_DIR/magisk-module/rootfs.tar.gz" \
     if [ -f "$p" ]; then TAR_SRC="$p"; break; fi
 done
 
-# 若本地未找到底包，自动从官方 Release 0.2.2-rc.1-rootfs 下载纯净底包
+# 若本地未找到底包，自动从官方 Release 0.2.2-rc.2-rootfs 下载纯净底包
 if [ -z "$TAR_SRC" ]; then
-    ROOTFS_TAG="${ROOTFS_TAG:-0.2.2-rc.1-rootfs}"
+    ROOTFS_TAG="${ROOTFS_TAG:-0.2.2-rc.2-rootfs}"
     echo "--> 未检测到本地底包，正在自动从官方 Release (${ROOTFS_TAG}) 下载纯净底包..."
     DOWN_URL="${ROOTFS_URL:-https://github.com/${GITHUB_REPOSITORY:-2108282/DSHA-FR}/releases/download/${ROOTFS_TAG}/rootfs.tar.gz}"
     mkdir -p /tmp/dsha_download
