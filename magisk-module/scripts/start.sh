@@ -234,7 +234,8 @@ CURRENT_TOKEN=$(cat "$TOKEN_FILE" 2>/dev/null)
 # 写入确认交互脚本（支持 10 分钟临时免打扰租约、临时文件白名单放行与双端口兼容）
 cat << 'CONFIRM_EOF' > "$ROOTFS/root/dsh-confirm.sh"
 #!/bin/bash
-# 用法：dsh-confirm.sh [--force] <命令...>
+# 用法：dsh-confirm.sh [--force|--guard] <命令...>
+# --guard: 终端已判危，但仍保留动态开关、临时免审租约及任务豁免。
 
 # 1. 检查统一的 10 分钟临时免审租约
 if [ -f /root/.dsh/.auth_lease ]; then
@@ -301,7 +302,7 @@ is_safe_cleanup() {
 }
 
 FORCE=0
-if [ "$1" = "--force" ]; then FORCE=1; shift; fi
+case "${1:-}" in --force) FORCE=1; shift ;; --guard) FORCE=2; shift ;; esac
 CMD="$*"
 
 if [ "$FORCE" != "1" ] && is_safe_cleanup "$CMD"; then
@@ -376,36 +377,165 @@ exit 1
 CONFIRM_EOF
 chmod 755 "$ROOTFS/root/dsh-confirm.sh" 
 
-# 写入函数级命令守卫
-if [ ! -f "$ROOTFS/root/dsh-guard.sh" ]; then
+# 每次启动更新守卫策略，旧 rootfs 也会升级；此处为原生 chroot 内路径。
+cat << 'POLICY_EOF' > "$ROOTFS/root/dsh-guard-policy.sh"
+# DSHA-GUARD-V12: shared by function and PATH guards; no child process on flag reads.
+__dsha_guard_active() {
+  local value
+  if [ -e /root/.dsh/.guard_enabled ]; then
+    value=''
+    IFS= read -r value < /root/.dsh/.guard_enabled || :
+    case "$value" in 0) return 1 ;; 1|'') return 0 ;; *) return 1 ;; esac
+  fi
+  [ "${DSH_CONFIRM:-0}" = 1 ] || [ "${DSH_SHELL:-0}" = 1 ]
+}
+__dsha_critical_path() {
+  local target="$1" path
+  [ -n "$target" ] || return 1
+  target="$(/usr/bin/realpath -m -- "$target" 2>/dev/null)" || return 1
+  for path in /root/.dsh /usr/local/lib/node_modules /usr/local/bin /etc /usr/lib /system /data/data; do
+    case "$target" in "$path"|"$path"/*) return 0 ;; esac
+    # Moving an ancestor also moves its protected descendants.
+    case "$path/" in "${target%/}/"*) return 0 ;; esac
+  done
+  return 1
+}
+__dsha_needs_confirm() {
+  local name="$1" arg
+  shift
+  __dsha_guard_active || return 1
+  case "$name" in
+    mv)
+      for arg in "$@"; do
+        case "$arg" in --target-directory=*) arg="${arg#*=}" ;; -t?*) arg="${arg#-t}" ;; -*) continue ;; esac
+        __dsha_critical_path "$arg" && return 0
+      done
+      return 1 ;;
+    find)
+      for arg in "$@"; do
+        case "$arg" in -delete|-exec|-execdir|-ok|-okdir) return 0 ;; esac
+      done
+      return 1 ;;
+    *) return 0 ;;
+  esac
+}
+__dsha_adb_danger() {
+  local arg found=0 text=''
+  __dsha_guard_active || return 1
+  for arg in "$@"; do
+    [ "$found" = 1 ] && text="$text $arg"
+    case "$arg" in shell|exec-out|exec-in) found=1 ;; esac
+  done
+  [ -n "$text" ] || return 1
+  [[ "$text" =~ (^|[^a-z])(rm|rmdir|unlink|truncate|wipe|dd|mkfs|fdisk|format|reboot|shutdown|poweroff|halt)([^a-z]|$)|-delete|base64|\|[[:space:]]*(sh|bash)|eval|sh[[:space:]]+-c|toybox|pm[[:space:]]+clear|uninstall ]]
+}
+POLICY_EOF
 cat << 'GUARD_EOF' > "$ROOTFS/root/dsh-guard.sh"
-# DSHA 危险命令守卫
-if [ "${DSH_CONFIRM:-0}" = "1" ] || [ "${DSH_SHELL:-0}" = "1" ]; then
-  rm()       { /root/dsh-confirm.sh "rm $*" && /usr/bin/rm "$@"; }
-  rmdir()    { /root/dsh-confirm.sh "rmdir $*" && /usr/bin/rmdir "$@"; }
-  unlink()   { /root/dsh-confirm.sh "unlink $*" && /usr/bin/unlink "$@"; }
-  truncate() { /root/dsh-confirm.sh "truncate $*" && /usr/bin/truncate "$@"; }
-  dd()       { /root/dsh-confirm.sh "dd $*" && /usr/bin/dd "$@"; }
-  mkfs()     { /root/dsh-confirm.sh "mkfs $*" && /usr/sbin/mkfs "$@"; }
-  mkfs.ext4(){ /root/dsh-confirm.sh "mkfs.ext4 $*" && /usr/sbin/mkfs.ext4 "$@"; }
-  mkfs.vfat(){ /root/dsh-confirm.sh "mkfs.vfat $*" && /usr/sbin/mkfs.vfat "$@"; }
-  fdisk()    { /root/dsh-confirm.sh "fdisk $*" && /usr/sbin/fdisk "$@"; }
-  reboot()   { /root/dsh-confirm.sh "reboot $*" && /usr/sbin/reboot "$@"; }
-  shutdown() { /root/dsh-confirm.sh "shutdown $*" && /usr/sbin/shutdown "$@"; }
-  halt()     { /root/dsh-confirm.sh "halt $*" && /usr/sbin/halt "$@"; }
-  poweroff() { /root/dsh-confirm.sh "poweroff $*" && /usr/sbin/poweroff "$@"; }
-  wipe()     { /root/dsh-confirm.sh "wipe $*" && /usr/sbin/wipe "$@"; }
+# DSHA-GUARD-V12: source repeatedly without stacking traps or changing BASH_ENV.
+source /root/dsh-guard-policy.sh
+__dsha_run_guarded() {
+  local name="$1" executable="$2"
+  shift 2
+  if __dsha_needs_confirm "$name" "$@"; then
+    if [ "$name" = mv ]; then /root/dsh-confirm.sh --guard "$name $*" || return 1
+    else /root/dsh-confirm.sh "$name $*" || return 1; fi
+  fi
+  "$executable" "$@"
+}
+rm() { __dsha_run_guarded rm /usr/bin/rm "$@"; }
+rmdir() { __dsha_run_guarded rmdir /usr/bin/rmdir "$@"; }
+unlink() { __dsha_run_guarded unlink /usr/bin/unlink "$@"; }
+truncate() { __dsha_run_guarded truncate /usr/bin/truncate "$@"; }
+find() { __dsha_run_guarded find /usr/bin/find "$@"; }
+dd() { __dsha_run_guarded dd /usr/bin/dd "$@"; }
+mkfs() { __dsha_run_guarded mkfs /usr/sbin/mkfs "$@"; }
+mkfs.ext4() { __dsha_run_guarded mkfs.ext4 /usr/sbin/mkfs.ext4 "$@"; }
+mkfs.vfat() { __dsha_run_guarded mkfs.vfat /usr/sbin/mkfs.vfat "$@"; }
+fdisk() { __dsha_run_guarded fdisk /usr/sbin/fdisk "$@"; }
+reboot() { __dsha_run_guarded reboot /usr/sbin/reboot "$@"; }
+shutdown() { __dsha_run_guarded shutdown /usr/sbin/shutdown "$@"; }
+halt() { __dsha_run_guarded halt /usr/sbin/halt "$@"; }
+poweroff() { __dsha_run_guarded poweroff /usr/sbin/poweroff "$@"; }
+wipe() { __dsha_run_guarded wipe /usr/sbin/wipe "$@"; }
+mv() { __dsha_run_guarded mv /usr/bin/mv "$@"; }
+adb() {
+  if __dsha_adb_danger "$@"; then /root/dsh-confirm.sh "adb $*" || return 1; fi
+  # The PATH wrapper performs the same check; call the real binary only once.
+  if [ -x /root/.dsh-real/adb ]; then /root/.dsh-real/adb "$@"; else command adb "$@"; fi
+}
+# Lex only redirection operands, never eval the command. Quoted text containing '>'
+# is data. >, >| and &> overwrite; >> appends and >& duplicates descriptors.
+# Simple $var/${var} operands are resolved with indirect expansion, never eval.
+__dsha_guard_redirection() {
+  local __dsha_text="$1" __dsha_i=0 __dsha_ch __dsha_quote='' __dsha_word='' __dsha_target=0 __dsha_escaped=0 __dsha_var __dsha_rest
+  [[ "$__dsha_text" == *'>'* ]] || return 0
+  [[ "$__dsha_text" != '[['* ]] || return 0
+  __dsha_guard_active || return 0
+  while (( __dsha_i < ${#__dsha_text} )); do
+    __dsha_ch="${__dsha_text:__dsha_i:1}"
+    ((__dsha_i+=1))
+    if [ "$__dsha_escaped" = 1 ]; then __dsha_word+="$__dsha_ch"; __dsha_escaped=0; continue; fi
+    if [ "$__dsha_ch" = '\' ] && [ "$__dsha_quote" != "'" ]; then __dsha_escaped=1; continue; fi
+    if [ -n "$__dsha_quote" ]; then
+      if [ "$__dsha_ch" = "$__dsha_quote" ]; then __dsha_quote=''; continue; fi
+    else
+      case "$__dsha_ch" in
+        "'"|'"') __dsha_quote="$__dsha_ch"; continue ;;
+        '>')
+          if [ "$__dsha_target" = 1 ] && __dsha_critical_path "$__dsha_word"; then
+            /root/dsh-confirm.sh --guard "$__dsha_text"; return $?
+          fi
+          __dsha_word=''; __dsha_target=1
+          case "${__dsha_text:__dsha_i:1}" in '>'|'&') __dsha_target=0; ((__dsha_i+=1)) ;; '|') ((__dsha_i+=1)) ;; esac
+          continue ;;
+        ' '|$'\t'|$'\n'|';'|'|'|'&'|'<'|')'|'(')
+          if [ "$__dsha_target" = 1 ] && [ -n "$__dsha_word" ]; then
+            if __dsha_critical_path "$__dsha_word"; then /root/dsh-confirm.sh --guard "$__dsha_text"; return $?; fi
+            __dsha_target=0
+          fi
+          __dsha_word=''; continue ;;
+      esac
+    fi
+    if [ "$__dsha_target" = 1 ] && [ "$__dsha_ch" = '$' ] && [ "$__dsha_quote" != "'" ]; then
+      __dsha_rest="${__dsha_text:__dsha_i}"
+      if [[ "$__dsha_rest" =~ ^\{([a-zA-Z_][a-zA-Z_0-9]*)\} ]]; then
+        __dsha_var="${BASH_REMATCH[1]}"; __dsha_word+="${!__dsha_var-}"; ((__dsha_i+=${#__dsha_var}+2)); continue
+      elif [[ "$__dsha_rest" =~ ^([a-zA-Z_][a-zA-Z_0-9]*) ]]; then
+        __dsha_var="${BASH_REMATCH[1]}"; __dsha_word+="${!__dsha_var-}"; ((__dsha_i+=${#__dsha_var})); continue
+      fi
+    fi
+    __dsha_word+="$__dsha_ch"
+  done
+  if [ "$__dsha_target" = 1 ] && __dsha_critical_path "$__dsha_word"; then
+    /root/dsh-confirm.sh --guard "$__dsha_text"; return $?
+  fi
+  return 0
+}
+__dsha_guard_debug() {
+  [[ "$1" == *'>'* ]] || return 0
+  # Regex matching in the parser must not clobber the caller's BASH_REMATCH.
+  local -a __dsha_saved_match=("${BASH_REMATCH[@]}")
+  local __dsha_result=0
+  __dsha_guard_redirection "$1" || __dsha_result=$?
+  BASH_REMATCH=("${__dsha_saved_match[@]}")
+  return "$__dsha_result"
+}
+# extdebug is required for a nonzero DEBUG result to skip the pending command.
+# Bash suppresses DEBUG re-entry while its handler runs; do not untrap/retrap.
+# Preserve an inherited DEBUG trap (bash hides non-inherited traps while sourcing).
+if [ -z "$(trap -p DEBUG)" ] || [[ "$(trap -p DEBUG)" == *'__dsha_guard_debug'* ]]; then
+  shopt -s extdebug
+  trap '__dsha_guard_debug "$BASH_COMMAND"' DEBUG
 fi
 GUARD_EOF
 chmod 755 "$ROOTFS/root/dsh-guard.sh"
-fi
 
 # 注入 bashrc 自动加载
 if ! grep -q "dsh-guard.sh" "$ROOTFS/root/.bashrc" 2>/dev/null; then
     echo '[ -f /root/dsh-guard.sh ] && source /root/dsh-guard.sh' >> "$ROOTFS/root/.bashrc"
 fi
 
-# PATH 级命令守卫包装（若缺失则补齐）
+# PATH 级命令守卫包装：每次启动更新，保留模块递归跨挂载保护
 # 针对 rm 注入专属的 --one-file-system 自动防护逻辑
 cat << 'RM_WRAPPER_EOF' > "$DSH_BIN/rm"
 #!/bin/bash
@@ -428,8 +558,9 @@ if [ "$IS_RECURSIVE" = "1" ]; then
   esac
 fi
 
-# 2. 原有的确认拦截机制
-if [ "${DSH_CONFIRM:-0}" = "1" ] || [ "${DSH_SHELL:-0}" = "1" ]; then
+# 2. 与函数级守卫共享动态开关
+source /root/dsh-guard-policy.sh
+if __dsha_needs_confirm "$SELF" "$@"; then
   if ! /root/dsh-confirm.sh "$SELF $*"; then
     echo "已拒绝: $SELF $*" >&2
     exit 1
@@ -452,29 +583,141 @@ exit $STATUS
 RM_WRAPPER_EOF
 chmod 755 "$DSH_BIN/rm"
 
-if [ ! -f "$DSH_BIN/rmdir" ]; then
-for C in rmdir unlink truncate dd mkfs mkfs.ext4 mkfs.vfat fdisk reboot shutdown halt poweroff wipe; do
-cat << 'WRAPPER_EOF' > "$DSH_BIN/$C"
+# find 保留移动端功耗保护，再按动态策略确认修改操作
+cat << 'FIND_WRAPPER_EOF' > "$DSH_BIN/find"
 #!/bin/bash
+# DSHA 移动端性能与能耗守护拦截器：禁止全盘/大范围递归 find 扫盘
 SELF=$(basename "$0")
 REAL=""
 for p in /usr/local/bin /usr/bin /bin /usr/sbin /sbin; do
   if [ -x "$p/$SELF" ] && [ "$p/$SELF" != "$0" ]; then REAL="$p/$SELF"; break; fi
 done
-[ -z "$REAL" ] && REAL=$(ls /usr/local/bin/$SELF /usr/bin/$SELF /bin/$SELF 2>/dev/null | head -1)
+[ -z "$REAL" ] && REAL=$(ls /usr/local/bin/$SELF /usr/bin/$SELF /bin/$SELF 2>/dev/null | grep -v "$0" | head -1)
 if [ -z "$REAL" ]; then echo "找不到真实命令: $SELF" >&2; exit 127; fi
-if [ "${DSH_CONFIRM:-0}" != "1" ] && [ "${DSH_SHELL:-0}" != "1" ]; then
-  exec "$REAL" "$@"
+
+IS_DANGEROUS=0
+HAS_MAXDEPTH=0
+MAXDEPTH_VAL=999
+PREV=""
+PATHS=()
+
+for arg in "$@"; do
+  if [ "$PREV" = "-maxdepth" ]; then
+    HAS_MAXDEPTH=1
+    MAXDEPTH_VAL="$arg"
+    PREV=""
+    continue
+  fi
+  if [ "$arg" = "-maxdepth" ]; then
+    PREV="-maxdepth"
+    continue
+  fi
+  if [[ ! "$arg" =~ ^- ]] && [ "$arg" != "!" ] && [ "$arg" != "(" ] && [ "$arg" != ")" ]; then
+    PATHS+=("$arg")
+  fi
+done
+
+if [ ${#PATHS[@]} -eq 0 ]; then
+  PATHS+=(".")
 fi
-if /root/dsh-confirm.sh "$SELF $*"; then
-  exec "$REAL" "$@"
+
+for p in "${PATHS[@]}"; do
+  ABS_P=""
+  if [ "$p" = "." ]; then
+    ABS_P="$PWD"
+  elif [[ "$p" = /* ]]; then
+    ABS_P="$p"
+  else
+    ABS_P="$PWD/$p"
+  fi
+  ABS_P="${ABS_P%/}"
+  [ -z "$ABS_P" ] && ABS_P="/"
+
+  # 检测是否为根目录、系统根或海量 FUSE 用户数据目录
+  if [ "$ABS_P" = "/" ] || \
+     [ "$ABS_P" = "/sdcard" ] || \
+     [ "$ABS_P" = "/storage" ] || \
+     [ "$ABS_P" = "/storage/emulated" ] || \
+     [ "$ABS_P" = "/storage/emulated/0" ] || \
+     [ "$ABS_P" = "/data" ] || \
+     [ "$ABS_P" = "/data/adb" ]; then
+    if [ "$HAS_MAXDEPTH" -eq 0 ] || [ "$MAXDEPTH_VAL" -gt 3 ]; then
+      IS_DANGEROUS=1
+      break
+    fi
+  fi
+done
+
+if [ "$IS_DANGEROUS" -eq 1 ]; then
+  cat >&2 << 'EOF'
+[POLICY_BLOCKED] 移动端功耗与性能安全拦截：
+检测到试图对 Android 根目录或 /sdcard 全盘执行无限制递归 find 扫描！
+原因：手机端 /sdcard 挂载于 FUSE 用户态文件系统，扫描数百 GB 海量文件会导致 CPU 持续满载、发热严重并引起整机系统卡死。
+
+解决方案（请选择以下安全方式）：
+  1. 优先使用 DSH 内置原生工具：glob（找文件）或 grep（搜内容，带 include 过滤）；
+  2. 收敛检索范围：限定在当前工作区、/data/adb/dsha/ 或 /sdcard/Download/DSHA/ 等明确子目录；
+  3. 若必须使用 find，请显式限制检索深度（例如加上 -maxdepth 2）；
+  4. 如需在手机中查询图片/视频/音频，使用 Android 原生零 I/O 媒体库命令：
+     content query --uri content://media/external/file --projection _data --where "_display_name LIKE '%name%'"
+EOF
+  exit 1
 fi
-echo "已拒绝: $SELF $*" >&2
-exit 1
+
+source /root/dsh-guard-policy.sh
+if __dsha_needs_confirm find "$@"; then
+  /root/dsh-confirm.sh "find $*" || exit 1
+fi
+exec "$REAL" "$@"
+FIND_WRAPPER_EOF
+chmod 755 "$DSH_BIN/find"
+
+for C in rmdir unlink truncate dd mkfs mkfs.ext4 mkfs.vfat fdisk reboot shutdown halt poweroff wipe mv; do
+cat << 'WRAPPER_EOF' > "$DSH_BIN/$C"
+#!/bin/bash
+SELF=${0##*/}
+REAL=""
+for p in /usr/local/bin /usr/bin /bin /usr/sbin /sbin; do
+  if [ -x "$p/$SELF" ] && [ "$p/$SELF" != "$0" ]; then REAL="$p/$SELF"; break; fi
+done
+if [ -z "$REAL" ]; then echo "找不到真实命令: $SELF" >&2; exit 127; fi
+source /root/dsh-guard-policy.sh
+if __dsha_needs_confirm "$SELF" "$@"; then
+  if [ "$SELF" = mv ]; then /root/dsh-confirm.sh --guard "$SELF $*" || exit 1
+  else /root/dsh-confirm.sh "$SELF $*" || exit 1; fi
+fi
+exec "$REAL" "$@"
 WRAPPER_EOF
 chmod 755 "$DSH_BIN/$C"
 done
+echo 12 > "$DSH_BIN/.version"
+
+# adb 包装也读取统一动态策略，已有 rootfs 不再保留静态环境开关版本。
+cat << 'ADB_WRAPPER_EOF' > "$DSH_BIN/adb"
+#!/bin/bash
+SELF=$(basename "$0")
+REAL=""
+for p in /root/.dsh-real /usr/local/bin /usr/bin /bin /system/bin /data/data/com.termux/files/usr/bin; do
+  # 只需排除「自己」，不能顺手排除 /root/.dsh-real/adb —— 那恰好是真实 adb 的标准存放位置，
+  # 排掉之后只能靠后面的 ls 兜底，兜不到就直接报「找不到真实 adb」
+  if [ -x "$p/$SELF" ] && [ "$p/$SELF" != "$0" ]; then REAL="$p/$SELF"; break; fi
+done
+[ -z "$REAL" ] && REAL=$(ls /root/.dsh-real/adb /usr/local/bin/adb /usr/bin/adb /system/bin/adb 2>/dev/null | head -1)
+if [ -z "$REAL" ]; then
+  REAL=$(PATH=/usr/local/bin:/usr/bin:/bin:/system/bin command -v "$SELF" 2>/dev/null | grep -v "^$DSH_BIN" | head -1)
 fi
+if [ -z "$REAL" ]; then
+  echo "找不到真实 $SELF：rootfs 里没装它（App 的 ADB 功能走 Android 侧，不依赖这个）。" >&2
+  echo "想看系统日志可以直接用 /system/bin/logcat" >&2
+  exit 127
+fi
+source /root/dsh-guard-policy.sh
+if __dsha_adb_danger "$@"; then
+  /root/dsh-confirm.sh "adb $*" || exit 1
+fi
+exec "$REAL" "$@"
+ADB_WRAPPER_EOF
+chmod 755 "$DSH_BIN/adb"
 
 # 宿主 Android 命令穿透直通包装（利用 nsenter 映射宿主 /system/bin 命令）
 for HCMD in am pm cmd input screencap dumpsys getprop logcat; do

@@ -1,0 +1,22 @@
+#!/bin/bash
+SELF=$(basename "$0")
+REAL=""
+for p in /root/.dsh-real /usr/local/bin /usr/bin /bin /system/bin /data/data/com.termux/files/usr/bin; do
+  # 只需排除「自己」，不能顺手排除 /root/.dsh-real/adb —— 那恰好是真实 adb 的标准存放位置，
+  # 排掉之后只能靠后面的 ls 兜底，兜不到就直接报「找不到真实 adb」
+  if [ -x "$p/$SELF" ] && [ "$p/$SELF" != "$0" ]; then REAL="$p/$SELF"; break; fi
+done
+[ -z "$REAL" ] && REAL=$(ls /root/.dsh-real/adb /usr/local/bin/adb /usr/bin/adb /system/bin/adb 2>/dev/null | head -1)
+if [ -z "$REAL" ]; then
+  REAL=$(PATH=/usr/local/bin:/usr/bin:/bin:/system/bin command -v "$SELF" 2>/dev/null | grep -v "^$DSH_BIN" | head -1)
+fi
+if [ -z "$REAL" ]; then
+  echo "找不到真实 $SELF：rootfs 里没装它（App 的 ADB 功能走 Android 侧，不依赖这个）。" >&2
+  echo "想看系统日志可以直接用 /system/bin/logcat" >&2
+  exit 127
+fi
+source /root/dsh-guard-policy.sh
+if __dsha_adb_danger "$@"; then
+  /root/dsh-confirm.sh "adb $*" || exit 1
+fi
+exec "$REAL" "$@"

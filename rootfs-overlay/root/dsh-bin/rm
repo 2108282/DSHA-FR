@@ -18,15 +18,16 @@ if [ "$IS_RECURSIVE" = "1" ]; then
   esac
 fi
 
-# 2. 原有的确认拦截机制
-if [ "${DSH_CONFIRM:-0}" = "1" ] || [ "${DSH_SHELL:-0}" = "1" ]; then
+# 2. 与函数级守卫共享动态开关
+source /root/dsh-guard-policy.sh
+if __dsha_needs_confirm "$SELF" "$@"; then
   if ! /root/dsh-confirm.sh "$SELF $*"; then
     echo "已拒绝: $SELF $*" >&2
     exit 1
   fi
 fi
 
-# 3. 执行真实命令并捕获跨设备跳过提示（纯文本输出，无 emoji）
+# 3. 执行真实命令并捕获跨设备跳过提示（纯文本输出）
 ERR_LOG=$(mktemp 2>/dev/null || echo "/tmp/.rm_err_$$")
 "$REAL" "$@" 2>"$ERR_LOG"
 STATUS=$?

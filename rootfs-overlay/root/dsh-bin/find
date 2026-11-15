@@ -1,0 +1,84 @@
+#!/bin/bash
+# DSHA 移动端性能与能耗守护拦截器：禁止全盘/大范围递归 find 扫盘
+SELF=$(basename "$0")
+REAL=""
+for p in /usr/local/bin /usr/bin /bin /usr/sbin /sbin; do
+  if [ -x "$p/$SELF" ] && [ "$p/$SELF" != "$0" ]; then REAL="$p/$SELF"; break; fi
+done
+[ -z "$REAL" ] && REAL=$(ls /usr/local/bin/$SELF /usr/bin/$SELF /bin/$SELF 2>/dev/null | grep -v "$0" | head -1)
+if [ -z "$REAL" ]; then echo "找不到真实命令: $SELF" >&2; exit 127; fi
+
+IS_DANGEROUS=0
+HAS_MAXDEPTH=0
+MAXDEPTH_VAL=999
+PREV=""
+PATHS=()
+
+for arg in "$@"; do
+  if [ "$PREV" = "-maxdepth" ]; then
+    HAS_MAXDEPTH=1
+    MAXDEPTH_VAL="$arg"
+    PREV=""
+    continue
+  fi
+  if [ "$arg" = "-maxdepth" ]; then
+    PREV="-maxdepth"
+    continue
+  fi
+  if [[ ! "$arg" =~ ^- ]] && [ "$arg" != "!" ] && [ "$arg" != "(" ] && [ "$arg" != ")" ]; then
+    PATHS+=("$arg")
+  fi
+done
+
+if [ ${#PATHS[@]} -eq 0 ]; then
+  PATHS+=(".")
+fi
+
+for p in "${PATHS[@]}"; do
+  ABS_P=""
+  if [ "$p" = "." ]; then
+    ABS_P="$PWD"
+  elif [[ "$p" = /* ]]; then
+    ABS_P="$p"
+  else
+    ABS_P="$PWD/$p"
+  fi
+  ABS_P="${ABS_P%/}"
+  [ -z "$ABS_P" ] && ABS_P="/"
+
+  # 检测是否为根目录、系统根或海量 FUSE 用户数据目录
+  if [ "$ABS_P" = "/" ] || \
+     [ "$ABS_P" = "/sdcard" ] || \
+     [ "$ABS_P" = "/storage" ] || \
+     [ "$ABS_P" = "/storage/emulated" ] || \
+     [ "$ABS_P" = "/storage/emulated/0" ] || \
+     [ "$ABS_P" = "/data" ] || \
+     [ "$ABS_P" = "/data/adb" ]; then
+    if [ "$HAS_MAXDEPTH" -eq 0 ] || [ "$MAXDEPTH_VAL" -gt 3 ]; then
+      IS_DANGEROUS=1
+      break
+    fi
+  fi
+done
+
+if [ "$IS_DANGEROUS" -eq 1 ]; then
+  cat >&2 << 'EOF'
+[POLICY_BLOCKED] 移动端功耗与性能安全拦截：
+检测到试图对 Android 根目录或 /sdcard 全盘执行无限制递归 find 扫描！
+原因：手机端 /sdcard 挂载于 FUSE 用户态文件系统，扫描数百 GB 海量文件会导致 CPU 持续满载、发热严重并引起整机系统卡死。
+
+解决方案（请选择以下安全方式）：
+  1. 优先使用 DSH 内置原生工具：glob（找文件）或 grep（搜内容，带 include 过滤）；
+  2. 收敛检索范围：限定在当前工作区、/data/adb/dsha/ 或 /sdcard/Download/DSHA/ 等明确子目录；
+  3. 若必须使用 find，请显式限制检索深度（例如加上 -maxdepth 2）；
+  4. 如需在手机中查询图片/视频/音频，使用 Android 原生零 I/O 媒体库命令：
+     content query --uri content://media/external/file --projection _data --where "_display_name LIKE '%name%'"
+EOF
+  exit 1
+fi
+
+source /root/dsh-guard-policy.sh
+if __dsha_needs_confirm find "$@"; then
+  /root/dsh-confirm.sh "find $*" || exit 1
+fi
+exec "$REAL" "$@"

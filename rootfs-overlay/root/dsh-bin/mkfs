@@ -1,0 +1,13 @@
+#!/bin/bash
+SELF=${0##*/}
+REAL=""
+for p in /usr/local/bin /usr/bin /bin /usr/sbin /sbin; do
+  if [ -x "$p/$SELF" ] && [ "$p/$SELF" != "$0" ]; then REAL="$p/$SELF"; break; fi
+done
+if [ -z "$REAL" ]; then echo "找不到真实命令: $SELF" >&2; exit 127; fi
+source /root/dsh-guard-policy.sh
+if __dsha_needs_confirm "$SELF" "$@"; then
+  if [ "$SELF" = mv ]; then /root/dsh-confirm.sh --guard "$SELF $*" || exit 1
+  else /root/dsh-confirm.sh "$SELF $*" || exit 1; fi
+fi
+exec "$REAL" "$@"
