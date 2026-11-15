@@ -1572,13 +1572,11 @@ public class PureQuickChatSheetActivity extends AppCompatActivity {
         ((TextView) approvalBtnDeny).setTextColor(Color.parseColor("#FF4D4F"));
         approvalBtnDeny.setPadding(dpToPx(12), dpToPx(6), dpToPx(12), dpToPx(6));
         approvalBtnDeny.setOnClickListener(v -> {
-            ConfirmReceiver.triggerVibrate(this, 50);
-            ConfirmReceiver.writeApprovalDecision("rejected");
             HttpShellService svc = HttpShellService.instance();
-            if (svc != null) {
-                svc.resolveConfirm(false, currentApprovalEpoch);
+            if (svc != null && svc.resolveConfirm(false, currentApprovalEpoch)) {
+                ConfirmReceiver.triggerVibrate(this, 50);
+                syncApprovalDecision(false);
             }
-            syncApprovalDecision(false);
             hideApprovalBanner();
         });
         btnRow.addView(approvalBtnDeny);
@@ -1589,13 +1587,11 @@ public class PureQuickChatSheetActivity extends AppCompatActivity {
         ((TextView) approvalBtnAllow).setTypeface(Typeface.DEFAULT_BOLD);
         approvalBtnAllow.setPadding(dpToPx(12), dpToPx(6), dpToPx(12), dpToPx(6));
         approvalBtnAllow.setOnClickListener(v -> {
-            ConfirmReceiver.triggerVibrate(this, 50);
-            ConfirmReceiver.writeApprovalDecision("allowed-once");
             HttpShellService svc = HttpShellService.instance();
-            if (svc != null) {
-                svc.resolveConfirm(true, currentApprovalEpoch);
+            if (svc != null && svc.resolveConfirm(true, currentApprovalEpoch)) {
+                ConfirmReceiver.triggerVibrate(this, 50);
+                syncApprovalDecision(true);
             }
-            syncApprovalDecision(true);
             hideApprovalBanner();
         });
         btnRow.addView(approvalBtnAllow);

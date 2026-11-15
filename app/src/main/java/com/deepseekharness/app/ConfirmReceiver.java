@@ -79,29 +79,18 @@ public class ConfirmReceiver extends BroadcastReceiver {
             } else if (ACTION_ASK_ANSWER.equals(act)) {
                 svc.resolveAsk(intent.getStringExtra(EXTRA_ANSWER), epoch);
             } else if (ACTION_ALLOW.equals(act)) {
-                triggerVibrate(context, 50);
-                writeApprovalDecision("allowed-once");
-                svc.resolveConfirm(ShellDecision.ALLOW_ONCE, epoch);
+                if (svc.resolveConfirm(ShellDecision.ALLOW_ONCE, epoch)) triggerVibrate(context, 50);
             } else if (ACTION_ALLOW_10MIN.equals(act)) {
-                triggerVibrate(context, 50);
-                writeApprovalDecision("allowed-10min");
-                svc.resolveConfirm(ShellDecision.ALLOW_10MIN, epoch);
+                if (svc.resolveConfirm(ShellDecision.ALLOW_10MIN, epoch)) triggerVibrate(context, 50);
             } else if (ACTION_DENY.equals(act)) {
-                triggerVibrate(context, 50);
-                writeApprovalDecision("rejected");
-                svc.resolveConfirm(ShellDecision.DENY, epoch);
+                if (svc.resolveConfirm(ShellDecision.DENY, epoch)) triggerVibrate(context, 50);
             }
         } else {
+            // No live service means the notification's epoch cannot be verified. Drop it;
+            // a stale allow must never be written for a later approval request.
             NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm != null && (ACTION_ALLOW.equals(act) || ACTION_ALLOW_10MIN.equals(act) || ACTION_DENY.equals(act))) {
                 nm.cancel(Constants.NOTIF_SHELL_CONFIRM);
-            }
-            if (ACTION_ALLOW.equals(act) || ACTION_ALLOW_10MIN.equals(act)) {
-                writeApprovalDecision("allowed-once");
-                com.deepseekharness.app.ui.QuickChatSheetActivity.syncApprovalDecision(true);
-            } else if (ACTION_DENY.equals(act)) {
-                writeApprovalDecision("rejected");
-                com.deepseekharness.app.ui.QuickChatSheetActivity.syncApprovalDecision(false);
             }
         }
     }
@@ -248,23 +237,28 @@ public class ConfirmReceiver extends BroadcastReceiver {
         } catch (Throwable ignored) {}
     }
 
-    public static void writeApprovalDecision(String decision) {
-        new Thread(() -> {
+    static void writeApprovalDecision(String decision, ApprovalRequestGate gate, long epoch) {
+        new Thread(() -> gate.writeIfCurrent(epoch, () -> writeApprovalDecisionNow(decision)),
+                "approval-decision-writer").start();
+    }
+
+    private static void writeApprovalDecisionNow(String decision) {
+        try {
+            // 1. 优先普通 Java 写 App 沙盒私有文件（0 提权开销）
             try {
-                // 1. 优先普通 Java 写 App 沙盒私有文件（0 提权开销）
-                try {
-                    java.io.File priv = new java.io.File("/data/data/com.dsha.fr/files/.approval_decision");
-                    Compat.write(priv, decision.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-                } catch (Throwable ignored) {}
-                // 2. 写入共享存储与 chroot 目录
-                String cmd = "mkdir -p /data/adb/dsha/rootfs/root/.dsh /sdcard/Download/DSHA 2>/dev/null; "
-                        + "echo -n '" + decision + "' > /data/adb/dsha/rootfs/root/.dsh/.approval_decision; "
-                        + "echo -n '" + decision + "' > /sdcard/Download/DSHA/.approval_decision; "
-                        + "echo -n '" + decision + "' > /data/data/com.dsha.fr/files/.approval_decision 2>/dev/null; "
-                        + "chmod 666 /data/adb/dsha/rootfs/root/.dsh/.approval_decision /sdcard/Download/DSHA/.approval_decision /data/data/com.dsha.fr/files/.approval_decision 2>/dev/null || true";
-                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
-                p.waitFor();
+                java.io.File priv = new java.io.File("/data/data/com.dsha.fr/files/.approval_decision");
+                Compat.write(priv, decision.getBytes(java.nio.charset.StandardCharsets.UTF_8));
             } catch (Throwable ignored) {}
-        }, "approval-decision-writer").start();
+            // 2. 写入共享存储与 chroot 目录
+            String cmd = "mkdir -p /data/adb/dsha/rootfs/root/.dsh /sdcard/Download/DSHA 2>/dev/null; "
+                    + "echo -n '" + decision + "' > /data/adb/dsha/rootfs/root/.dsh/.approval_decision; "
+                    + "echo -n '" + decision + "' > /sdcard/Download/DSHA/.approval_decision; "
+                    + "echo -n '" + decision + "' > /data/data/com.dsha.fr/files/.approval_decision 2>/dev/null; "
+                    + "chmod 666 /data/adb/dsha/rootfs/root/.dsh/.approval_decision /sdcard/Download/DSHA/.approval_decision /data/data/com.dsha.fr/files/.approval_decision 2>/dev/null || true";
+            Process p = new ProcessBuilder("su", "-c", cmd).redirectErrorStream(true)
+                    .redirectOutput(new java.io.File("/dev/null")).start();
+            // The generation lock covers the complete write; never hold it indefinitely.
+            if (!p.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)) p.destroyForcibly();
+        } catch (Throwable ignored) {}
     }
 }

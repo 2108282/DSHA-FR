@@ -100,18 +100,12 @@ public final class HttpShellService {
      *  {@code getCount() == 0} 的检查，于是后到的那个会把 pendingAllow 覆盖掉 ——
      *  等待线程读到的是后写入的值。表现是<b>授权语义反转</b>：点「允许」却被拒绝，
      *  更糟的是点「拒绝」而另一条渠道的「允许」后到，命令照样执行。 */
-    private final java.util.concurrent.atomic.AtomicBoolean confirmResolved =
-            new java.util.concurrent.atomic.AtomicBoolean(false);
+    private final ApprovalRequestGate approvalRequests = new ApprovalRequestGate();
     /** 确认进行中标志：并发确认请求直接拒绝（避免 latch 覆盖导致"点了允许却拒绝"）。
      *  用 AtomicBoolean 而非 volatile boolean —— "检查后置位"必须原子，
      *  否则两个请求线程可能同时通过检查、互相覆盖 pendingLatch。（吸收上游 PR#24） */
     private final java.util.concurrent.atomic.AtomicBoolean confirmBusy =
             new java.util.concurrent.atomic.AtomicBoolean(false);
-    /** 每次确认的序号：判定一次「允许/拒绝」点击属于哪个请求。
-     *  没有它的话，残留通知（锁屏/通知历史/手表转发）上的旧按钮会把授权决定
-     *  打到下一个请求上——等于一次点击授权了另一条命令。（吸收上游 PR#24） */
-    private final java.util.concurrent.atomic.AtomicLong confirmEpoch =
-            new java.util.concurrent.atomic.AtomicLong();
     /** 当前挂起的弹窗：setCancelable(false) 后它自己关不掉，确认完必须主动 dismiss */
     private volatile androidx.appcompat.app.AlertDialog pendingDialog;
     /** /app/ask 的一次性问答状态（支持前台弹窗与通知栏快捷按钮双通道同步回答）。 */
@@ -428,8 +422,12 @@ public final class HttpShellService {
             pool = null;
         }
         // 释放挂起的确认（默认拒绝）
-        CountDownLatch l = pendingLatch;
-        if (l != null) l.countDown();
+        synchronized (approvalRequests) {
+            approvalRequests.invalidate();
+            pendingAllow = false;
+            CountDownLatch l = pendingLatch;
+            if (l != null) l.countDown();
+        }
         dismissConfirmDialog();
         cancelConfirmNotification();
         STARTED.set(false); // 放开，允许后续重新启动（DeviceBridgeService 会自愈拉起）
@@ -636,8 +634,13 @@ public final class HttpShellService {
                 if (DangerShellGuard.isPolicyBlocked(cmd)) {
                     result = "NO";
                 } else {
-                    boolean force = path.contains("force=1");
-                    boolean needConfirm = force || (confirmEnabled() && DangerShellGuard.isDangerous(cmd) && !isLeaseActive() && !(isTaskWaived && isTaskActive));
+                    String mode = getParam(queryOf(path), "force", "0");
+                    boolean force = "1".equals(mode);
+                    // Mode 2 means the terminal already classified the expanded path as dangerous.
+                    // Unlike an explicit force prompt, it still honors the switch and 10-minute lease.
+                    boolean guarded = "2".equals(mode);
+                    boolean needConfirm = force || (confirmEnabled() && (guarded || DangerShellGuard.isDangerous(cmd))
+                            && !isLeaseActive() && !(isTaskWaived && isTaskActive));
                     result = needConfirm ? (requestUserConfirm(cmd) ? "YES" : "NO") : "YES";
                 }
             } else if (DangerShellGuard.isPolicyBlocked(cmd)) {
@@ -1829,13 +1832,13 @@ public final class HttpShellService {
         if (!confirmBusy.compareAndSet(false, true)) {
             return false; // 已有确认在进行：拒绝新的（避免 pendingLatch 互相覆盖）
         }
-        try {
-            CountDownLatch latch = new CountDownLatch(1);
-            // epoch 先递增：上一轮残留的弹窗/通知按钮带的是旧 epoch，会被丢弃
-            final long myEpoch = confirmEpoch.incrementAndGet();
-            pendingAllow = false;   // 先写标志，再发布 latch
-            confirmResolved.set(false);  // 必须早于发布 latch：latch 一露面就可能有点击进来
+        final long myEpoch;
+        CountDownLatch latch = new CountDownLatch(1);
+        myEpoch = approvalRequests.begin(() -> {
+            pendingAllow = false;
             pendingLatch = latch;
+        });
+        try {
 
             // 1. 优先展示与手机操控同款样式的统一 UI 弹窗（无障碍 + Root 双通道兜底）
             boolean overlayShown = DangerConfirmOverlay.show(ctx, safeDisplay(cmd), myEpoch, CONFIRM_TIMEOUT_S,
@@ -1860,7 +1863,10 @@ public final class HttpShellService {
                 return false;
             }
         } finally {
-            pendingLatch = null;
+            synchronized (approvalRequests) {
+                approvalRequests.expire(myEpoch);
+                pendingLatch = null;
+            }
             dismissConfirmDialog();
             cancelConfirmNotification();
             DangerConfirmOverlay.dismiss();
@@ -1915,41 +1921,41 @@ public final class HttpShellService {
     }
 
     /** 统一决策收束（支持 4 选项）：允许一次 / 本任务允许 / 10分钟临时授权 / 拒绝请求 */
-    public void resolveConfirm(ShellDecision decision, long epoch) {
-        if (epoch != confirmEpoch.get()) {
-            android.util.Log.i("DSHA", "忽略过期的确认点击（epoch " + epoch + "）");
-            return;
-        }
+    public boolean resolveConfirm(ShellDecision decision, long epoch) {
+        synchronized (approvalRequests) {
+            // Generation validation and claiming must be atomic with begin()/expire().
+            if (!approvalRequests.claim(epoch)) {
+                android.util.Log.i("DSHA", "忽略过期或已处理的确认点击（epoch " + epoch + "）");
+                return false;
+            }
 
-        // 真正的认领在这里，且必须原子 —— 挡住多条渠道（通知/弹窗/悬浮）同时点
-        if (!confirmResolved.compareAndSet(false, true)) {
-            return;
-        }
+            if (decision == ShellDecision.ALLOW_ONCE) {
+                pendingAllow = true;
+                ConfirmReceiver.writeApprovalDecision("allowed-once", approvalRequests, epoch);
+            } else if (decision == ShellDecision.ALLOW_10MIN) {
+                pendingAllow = true;
+                grantAuthLease(UI_GRANT_MS);
+                // The lease is held by the bridge; unified approval consumers expect allowed-once.
+                ConfirmReceiver.writeApprovalDecision("allowed-once", approvalRequests, epoch);
+            } else {
+                pendingAllow = false;
+                ConfirmReceiver.writeApprovalDecision("rejected", approvalRequests, epoch);
+            }
 
-        if (decision == ShellDecision.ALLOW_ONCE) {
-            pendingAllow = true;
-            ConfirmReceiver.writeApprovalDecision("allowed-once");
-        } else if (decision == ShellDecision.ALLOW_10MIN) {
-            pendingAllow = true;
-            grantAuthLease(UI_GRANT_MS);
-            ConfirmReceiver.writeApprovalDecision("allowed-10min");
-        } else {
-            pendingAllow = false;
-            ConfirmReceiver.writeApprovalDecision("rejected");
-        }
+            // 无论何种触发来源，立即全通道级联销毁
+            dismissAllApprovalUi();
 
-        // 无论何种触发来源，立即全通道级联销毁
-        dismissAllApprovalUi();
-
-        CountDownLatch l = pendingLatch;
-        if (l != null) {
-            l.countDown();
+            CountDownLatch l = pendingLatch;
+            if (l != null) {
+                l.countDown();
+            }
+            return true;
         }
     }
 
     /** 兼容原有 boolean 回调 */
-    public void resolveConfirm(boolean allow, long epoch) {
-        resolveConfirm(allow ? ShellDecision.ALLOW_ONCE : ShellDecision.DENY, epoch);
+    public boolean resolveConfirm(boolean allow, long epoch) {
+        return resolveConfirm(allow ? ShellDecision.ALLOW_ONCE : ShellDecision.DENY, epoch);
     }
 
     /** 关掉挂起的弹窗：setCancelable(false) 让它自己关不掉，确认完成后必须主动 dismiss，
@@ -2439,9 +2445,10 @@ public final class HttpShellService {
 
     private void showApprovalWaitingNotification(String title, String reason) {
         try {
-            isApprovalWaiting = true;
-            confirmResolved.set(false);
-            pendingAllow = false;
+            final long myEpoch = approvalRequests.begin(() -> {
+                isApprovalWaiting = true;
+                pendingAllow = false;
+            });
             String rawPrompt = (reason != null && !reason.trim().isEmpty()) ? reason : title;
             AuthPromptInfo info = parseAuthPrompt(rawPrompt, "危险权限授权申请", new String[]{"允许", "拒绝"});
 
@@ -2451,13 +2458,14 @@ public final class HttpShellService {
             PendingIntent contentPi = PendingIntent.getActivity(ctx, 115, openAppIntent,
                     PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
-            long myEpoch = confirmEpoch.incrementAndGet();
             sCurrentApprovalEpoch = myEpoch;
             sCurrentApprovalInfo = info;
             Intent allowI = new Intent(ctx, ConfirmReceiver.class).setAction(ConfirmReceiver.ACTION_ALLOW)
+                    .setData(Uri.parse("dsha://approval/" + myEpoch))
                     .addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
                     .putExtra(ConfirmReceiver.EXTRA_EPOCH, myEpoch);
             Intent denyI = new Intent(ctx, ConfirmReceiver.class).setAction(ConfirmReceiver.ACTION_DENY)
+                    .setData(Uri.parse("dsha://approval/" + myEpoch))
                     .addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
                     .putExtra(ConfirmReceiver.EXTRA_EPOCH, myEpoch);
             PendingIntent allowPi = PendingIntent.getBroadcast(ctx, 131, allowI,
@@ -2482,14 +2490,10 @@ public final class HttpShellService {
             // 桌面悬浮条同步就地展开审批按钮，并绑定同一 myEpoch（与通知栏、Web 端小黄窗构成三级联动）
             OverlayController.askConfirm(ctx, safeDisplay(info.detail),
                     () -> {
-                        ConfirmReceiver.triggerVibrate(ctx, 50);
-                        ConfirmReceiver.writeApprovalDecision("allowed-once");
-                        resolveConfirm(true, myEpoch);
+                        if (resolveConfirm(true, myEpoch)) ConfirmReceiver.triggerVibrate(ctx, 50);
                     },
                     () -> {
-                        ConfirmReceiver.triggerVibrate(ctx, 50);
-                        ConfirmReceiver.writeApprovalDecision("rejected");
-                        resolveConfirm(false, myEpoch);
+                        if (resolveConfirm(false, myEpoch)) ConfirmReceiver.triggerVibrate(ctx, 50);
                     });
 
             if (nm != null) {
@@ -2589,12 +2593,15 @@ public final class HttpShellService {
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
         Intent allowI = new Intent(ctx, ConfirmReceiver.class).setAction(ConfirmReceiver.ACTION_ALLOW)
+                .setData(Uri.parse("dsha://approval/" + epoch))
                 .addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
                 .putExtra(ConfirmReceiver.EXTRA_EPOCH, epoch);
         Intent allow10MinI = new Intent(ctx, ConfirmReceiver.class).setAction(ConfirmReceiver.ACTION_ALLOW_10MIN)
+                .setData(Uri.parse("dsha://approval/" + epoch))
                 .addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
                 .putExtra(ConfirmReceiver.EXTRA_EPOCH, epoch);
         Intent denyI = new Intent(ctx, ConfirmReceiver.class).setAction(ConfirmReceiver.ACTION_DENY)
+                .setData(Uri.parse("dsha://approval/" + epoch))
                 .addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
                 .putExtra(ConfirmReceiver.EXTRA_EPOCH, epoch);
 

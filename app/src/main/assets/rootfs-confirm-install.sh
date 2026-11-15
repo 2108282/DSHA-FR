@@ -7,11 +7,12 @@ mkdir -p "$DSH_BIN"
 
 cat > /root/dsh-confirm.sh <<'EOF'
 #!/bin/bash
-# 用法：dsh-confirm.sh [--force] <命令...>
+# 用法：dsh-confirm.sh [--force|--guard] <命令...>
 #   --force：所有命令都弹确认（设备 shell 报备用；守卫开时）
+#   --guard：终端已判危，桥仍检查开关与临时免审租约
 #   不带：仅危险命令确认（守卫内部行为由 3090 桥 confirmEnabled 决定）
 FORCE=0
-if [ "$1" = "--force" ]; then FORCE=1; shift; fi
+case "${1:-}" in --force) FORCE=1; shift ;; --guard) FORCE=2; shift ;; esac
 CMD="$*"
 # 3090 桥有 token 鉴权（防其他 App 冒充 agent 弹确认框）：
 # 必须带 X-Token 头（= /root/.dsh/.bridge_token 内容），否则一律 [UNAUTHORIZED] 被拒
@@ -110,35 +111,161 @@ chmod +x /root/dsh-confirm.sh
 # 函数级守卫：由 bash 工具 lib 补丁（ensureBashGuardPatch）在每条命令前 source 加载。
 # 不用 BASH_ENV —— 它会污染插件初始化时的子 shell，导致 dsh web 加载插件失败。
 # 函数优先于 PATH 查找，PATH 被覆盖/哈希缓存都无法绕过命令名拦截
+cat > /root/dsh-guard-policy.sh <<'POLICY_EOF'
+# DSHA-GUARD-V12: shared by function and PATH guards; no child process on flag reads.
+__dsha_guard_active() {
+  local value
+  if [ -e /root/.dsh/.guard_enabled ]; then
+    value=''
+    IFS= read -r value < /root/.dsh/.guard_enabled || :
+    case "$value" in 0) return 1 ;; 1|'') return 0 ;; *) return 1 ;; esac
+  fi
+  [ "${DSH_CONFIRM:-0}" = 1 ] || [ "${DSH_SHELL:-0}" = 1 ]
+}
+__dsha_critical_path() {
+  local target="$1" path
+  [ -n "$target" ] || return 1
+  target="$(/usr/bin/realpath -m -- "$target" 2>/dev/null)" || return 1
+  for path in /root/.dsh /usr/local/lib/node_modules /usr/local/bin /etc /usr/lib /system /data/data; do
+    case "$target" in "$path"|"$path"/*) return 0 ;; esac
+    # Moving an ancestor also moves its protected descendants.
+    case "$path/" in "${target%/}/"*) return 0 ;; esac
+  done
+  return 1
+}
+__dsha_needs_confirm() {
+  local name="$1" arg
+  shift
+  __dsha_guard_active || return 1
+  case "$name" in
+    mv)
+      for arg in "$@"; do
+        case "$arg" in --target-directory=*) arg="${arg#*=}" ;; -t?*) arg="${arg#-t}" ;; -*) continue ;; esac
+        __dsha_critical_path "$arg" && return 0
+      done
+      return 1 ;;
+    find)
+      for arg in "$@"; do
+        case "$arg" in -delete|-exec|-execdir|-ok|-okdir) return 0 ;; esac
+      done
+      return 1 ;;
+    *) return 0 ;;
+  esac
+}
+__dsha_adb_danger() {
+  local arg found=0 text=''
+  __dsha_guard_active || return 1
+  for arg in "$@"; do
+    [ "$found" = 1 ] && text="$text $arg"
+    case "$arg" in shell|exec-out|exec-in) found=1 ;; esac
+  done
+  [ -n "$text" ] || return 1
+  [[ "$text" =~ (^|[^a-z])(rm|rmdir|unlink|truncate|wipe|dd|mkfs|fdisk|format|reboot|shutdown|poweroff|halt)([^a-z]|$)|-delete|base64|\|[[:space:]]*(sh|bash)|eval|sh[[:space:]]+-c|toybox|pm[[:space:]]+clear|uninstall ]]
+}
+POLICY_EOF
+
 cat > /root/dsh-guard.sh <<'EOF'
-# DSHA 危险命令守卫（由 BASH_ENV 注入，勿手动删除）
-if [ "${DSH_CONFIRM:-0}" = "1" ] || [ "${DSH_SHELL:-0}" = "1" ]; then
-  rm()      { /root/dsh-confirm.sh "rm $*"      && /usr/bin/rm "$@"; }
-  rmdir()   { /root/dsh-confirm.sh "rmdir $*"    && /usr/bin/rmdir "$@"; }
-  unlink()  { /root/dsh-confirm.sh "unlink $*"   && /usr/bin/unlink "$@"; }
-  truncate(){ /root/dsh-confirm.sh "truncate $*" && /usr/bin/truncate "$@"; }
-  # find 带 -delete 或 -exec rm 时确认（正常 find 不受影响）
-  find()    { for a in "$@"; do if [ "$a" = "-delete" ] || [ "$a" = "-exec" ]; then /root/dsh-confirm.sh "find $*" || return 1; break; fi; done; /usr/bin/find "$@"; }
-  dd()      { /root/dsh-confirm.sh "dd $*"      && /usr/bin/dd "$@"; }
-  mkfs()    { /root/dsh-confirm.sh "mkfs $*"    && /usr/sbin/mkfs "$@"; }
-  mkfs.ext4(){ /root/dsh-confirm.sh "mkfs.ext4 $*" && /usr/sbin/mkfs.ext4 "$@"; }
-  mkfs.vfat(){ /root/dsh-confirm.sh "mkfs.vfat $*" && /usr/sbin/mkfs.vfat "$@"; }
-  fdisk()   { /root/dsh-confirm.sh "fdisk $*"   && /usr/sbin/fdisk "$@"; }
-  reboot()  { /root/dsh-confirm.sh "reboot $*"  && /usr/sbin/reboot "$@"; }
-  shutdown(){ /root/dsh-confirm.sh "shutdown $*" && /usr/sbin/shutdown "$@"; }
-  halt()    { /root/dsh-confirm.sh "halt $*"    && /usr/sbin/halt "$@"; }
-  poweroff(){ /root/dsh-confirm.sh "poweroff $*" && /usr/sbin/poweroff "$@"; }
-  wipe()    { /root/dsh-confirm.sh "wipe $*"    && /usr/sbin/wipe "$@"; }
-  # adb shell/exec-out/exec-in 通道：设备侧命令含危险操作时确认
-  is_danger_cmd() {
-    echo "$1" | grep -qE '(^|[^a-z])(rm|rmdir|unlink|truncate|wipe)([^a-z]|$)|(dd|mkfs|fdisk|format|reboot|shutdown|poweroff|halt)([^a-z]|$)|-delete|base64|\| ?(sh|bash)|eval|sh -c|toybox|pm clear|uninstall'
-  }
-  adb()     { local FOUND=0 CMDSTR=""; for a in "$@"; do if [ "$FOUND" = "1" ]; then CMDSTR="$CMDSTR $a"; fi; [ "$a" = "shell" ] || [ "$a" = "exec-out" ] || [ "$a" = "exec-in" ] && FOUND=1; done; if [ -n "$CMDSTR" ] && is_danger_cmd "$CMDSTR"; then /root/dsh-confirm.sh "adb shell:$CMDSTR" || return 1; fi; /root/.dsh-real/adb "$@" 2>/dev/null || command adb "$@"; }
+# DSHA-GUARD-V12: source repeatedly without stacking traps or changing BASH_ENV.
+source /root/dsh-guard-policy.sh
+__dsha_run_guarded() {
+  local name="$1" executable="$2"
+  shift 2
+  if __dsha_needs_confirm "$name" "$@"; then
+    if [ "$name" = mv ]; then /root/dsh-confirm.sh --guard "$name $*" || return 1
+    else /root/dsh-confirm.sh "$name $*" || return 1; fi
+  fi
+  "$executable" "$@"
+}
+rm() { __dsha_run_guarded rm /usr/bin/rm "$@"; }
+rmdir() { __dsha_run_guarded rmdir /usr/bin/rmdir "$@"; }
+unlink() { __dsha_run_guarded unlink /usr/bin/unlink "$@"; }
+truncate() { __dsha_run_guarded truncate /usr/bin/truncate "$@"; }
+find() { __dsha_run_guarded find /usr/bin/find "$@"; }
+dd() { __dsha_run_guarded dd /usr/bin/dd "$@"; }
+mkfs() { __dsha_run_guarded mkfs /usr/sbin/mkfs "$@"; }
+mkfs.ext4() { __dsha_run_guarded mkfs.ext4 /usr/sbin/mkfs.ext4 "$@"; }
+mkfs.vfat() { __dsha_run_guarded mkfs.vfat /usr/sbin/mkfs.vfat "$@"; }
+fdisk() { __dsha_run_guarded fdisk /usr/sbin/fdisk "$@"; }
+reboot() { __dsha_run_guarded reboot /usr/sbin/reboot "$@"; }
+shutdown() { __dsha_run_guarded shutdown /usr/sbin/shutdown "$@"; }
+halt() { __dsha_run_guarded halt /usr/sbin/halt "$@"; }
+poweroff() { __dsha_run_guarded poweroff /usr/sbin/poweroff "$@"; }
+wipe() { __dsha_run_guarded wipe /usr/sbin/wipe "$@"; }
+mv() { __dsha_run_guarded mv /usr/bin/mv "$@"; }
+adb() {
+  if __dsha_adb_danger "$@"; then /root/dsh-confirm.sh "adb $*" || return 1; fi
+  # The PATH wrapper performs the same check; call the real binary only once.
+  if [ -x /root/.dsh-real/adb ]; then /root/.dsh-real/adb "$@"; else command adb "$@"; fi
+}
+# Lex only redirection operands, never eval the command. Quoted text containing '>'
+# is data. >, >| and &> overwrite; >> appends and >& duplicates descriptors.
+# Simple $var/${var} operands are resolved with indirect expansion, never eval.
+__dsha_guard_redirection() {
+  local __dsha_text="$1" __dsha_i=0 __dsha_ch __dsha_quote='' __dsha_word='' __dsha_target=0 __dsha_escaped=0 __dsha_var __dsha_rest
+  [[ "$__dsha_text" == *'>'* ]] || return 0
+  [[ "$__dsha_text" != '[['* ]] || return 0
+  __dsha_guard_active || return 0
+  while (( __dsha_i < ${#__dsha_text} )); do
+    __dsha_ch="${__dsha_text:__dsha_i:1}"
+    ((__dsha_i+=1))
+    if [ "$__dsha_escaped" = 1 ]; then __dsha_word+="$__dsha_ch"; __dsha_escaped=0; continue; fi
+    if [ "$__dsha_ch" = '\' ] && [ "$__dsha_quote" != "'" ]; then __dsha_escaped=1; continue; fi
+    if [ -n "$__dsha_quote" ]; then
+      if [ "$__dsha_ch" = "$__dsha_quote" ]; then __dsha_quote=''; continue; fi
+    else
+      case "$__dsha_ch" in
+        "'"|'"') __dsha_quote="$__dsha_ch"; continue ;;
+        '>')
+          if [ "$__dsha_target" = 1 ] && __dsha_critical_path "$__dsha_word"; then
+            /root/dsh-confirm.sh --guard "$__dsha_text"; return $?
+          fi
+          __dsha_word=''; __dsha_target=1
+          case "${__dsha_text:__dsha_i:1}" in '>'|'&') __dsha_target=0; ((__dsha_i+=1)) ;; '|') ((__dsha_i+=1)) ;; esac
+          continue ;;
+        ' '|$'\t'|$'\n'|';'|'|'|'&'|'<'|')'|'(')
+          if [ "$__dsha_target" = 1 ] && [ -n "$__dsha_word" ]; then
+            if __dsha_critical_path "$__dsha_word"; then /root/dsh-confirm.sh --guard "$__dsha_text"; return $?; fi
+            __dsha_target=0
+          fi
+          __dsha_word=''; continue ;;
+      esac
+    fi
+    if [ "$__dsha_target" = 1 ] && [ "$__dsha_ch" = '$' ] && [ "$__dsha_quote" != "'" ]; then
+      __dsha_rest="${__dsha_text:__dsha_i}"
+      if [[ "$__dsha_rest" =~ ^\{([a-zA-Z_][a-zA-Z_0-9]*)\} ]]; then
+        __dsha_var="${BASH_REMATCH[1]}"; __dsha_word+="${!__dsha_var-}"; ((__dsha_i+=${#__dsha_var}+2)); continue
+      elif [[ "$__dsha_rest" =~ ^([a-zA-Z_][a-zA-Z_0-9]*) ]]; then
+        __dsha_var="${BASH_REMATCH[1]}"; __dsha_word+="${!__dsha_var-}"; ((__dsha_i+=${#__dsha_var})); continue
+      fi
+    fi
+    __dsha_word+="$__dsha_ch"
+  done
+  if [ "$__dsha_target" = 1 ] && __dsha_critical_path "$__dsha_word"; then
+    /root/dsh-confirm.sh --guard "$__dsha_text"; return $?
+  fi
+  return 0
+}
+__dsha_guard_debug() {
+  [[ "$1" == *'>'* ]] || return 0
+  # Regex matching in the parser must not clobber the caller's BASH_REMATCH.
+  local -a __dsha_saved_match=("${BASH_REMATCH[@]}")
+  local __dsha_result=0
+  __dsha_guard_redirection "$1" || __dsha_result=$?
+  BASH_REMATCH=("${__dsha_saved_match[@]}")
+  return "$__dsha_result"
+}
+# extdebug is required for a nonzero DEBUG result to skip the pending command.
+# Bash suppresses DEBUG re-entry while its handler runs; do not untrap/retrap.
+# Preserve an inherited DEBUG trap (bash hides non-inherited traps while sourcing).
+if [ -z "$(trap -p DEBUG)" ] || [[ "$(trap -p DEBUG)" == *'__dsha_guard_debug'* ]]; then
+  shopt -s extdebug
+  trap '__dsha_guard_debug "$BASH_COMMAND"' DEBUG
 fi
 EOF
 chmod +x /root/dsh-guard.sh
 
-# adb 特殊包装：adb shell/exec-out/exec-in 会在设备上执行任意命令——一律确认（不做内容检测，防编码绕过）
+
+# adb 特殊包装：远端危险命令确认，与函数级守卫使用相同动态开关。
 # 真实 adb 被移到 /root/.dsh-real/，绝对路径调用也命中包装器
 cat > "$DSH_BIN/adb" <<'EOF2'
 #!/bin/bash
@@ -158,18 +285,9 @@ if [ -z "$REAL" ]; then
   echo "想看系统日志可以直接用 /system/bin/logcat" >&2
   exit 127
 fi
-is_danger_cmd() {
-  echo "$1" | grep -qE '(^|[^a-z])(rm|rmdir|unlink|truncate|wipe)([^a-z]|$)|(dd|mkfs|fdisk|format|reboot|shutdown|poweroff|halt)([^a-z]|$)|-delete|base64|\| ?(sh|bash)|eval|sh -c|toybox|pm clear|uninstall'
-}
-if [ "${DSH_CONFIRM:-0}" = "1" ] || [ "${DSH_SHELL:-0}" = "1" ]; then
-  FOUND=0; CMDSTR=""
-  for a in "$@"; do
-    if [ "$FOUND" = "1" ]; then CMDSTR="$CMDSTR $a"; fi
-    if [ "$a" = "shell" ] || [ "$a" = "exec-out" ] || [ "$a" = "exec-in" ]; then FOUND=1; fi
-  done
-  if [ -n "$CMDSTR" ] && is_danger_cmd "$CMDSTR"; then
-    /root/dsh-confirm.sh "adb shell:$CMDSTR" || exit 1
-  fi
+source /root/dsh-guard-policy.sh
+if __dsha_adb_danger "$@"; then
+  /root/dsh-confirm.sh "adb $*" || exit 1
 fi
 exec "$REAL" "$@"
 EOF2
@@ -182,27 +300,24 @@ if [ -n "$REAL_ADB" ] && [ ! -e /root/.dsh-real/adb ]; then
   mv "$REAL_ADB" /root/.dsh-real/adb 2>/dev/null || true
 fi
 
-for C in rm rmdir unlink truncate dd mkfs mkfs.ext4 mkfs.vfat fdisk reboot shutdown halt poweroff wipe find; do
-cat > "$DSH_BIN/$C" <<EOF2
+for C in rm rmdir unlink truncate dd mkfs mkfs.ext4 mkfs.vfat fdisk reboot shutdown halt poweroff wipe find mv; do
+cat > "$DSH_BIN/$C" <<'EOF2'
 #!/bin/bash
-SELF=\$(basename "\$0")
+SELF=${0##*/}
 REAL=""
 for p in /usr/local/bin /usr/bin /bin /usr/sbin /sbin; do
-  if [ -x "\$p/\$SELF" ] && [ "\$p/\$SELF" != "\$0" ]; then REAL="\$p/\$SELF"; break; fi
+  if [ -x "$p/$SELF" ] && [ "$p/$SELF" != "$0" ]; then REAL="$p/$SELF"; break; fi
 done
-[ -z "\$REAL" ] && REAL=\$(ls /usr/local/bin/\$SELF /usr/bin/\$SELF /bin/\$SELF 2>/dev/null | head -1)
-if [ -z "\$REAL" ]; then echo "找不到真实命令: \$SELF" >&2; exit 127; fi
-if [ "\${DSH_CONFIRM:-0}" != "1" ] && [ "\${DSH_SHELL:-0}" != "1" ]; then
-  exec "\$REAL" "\$@"   # 未启用确认（安装流程等）直接放行
+if [ -z "$REAL" ]; then echo "找不到真实命令: $SELF" >&2; exit 127; fi
+source /root/dsh-guard-policy.sh
+if __dsha_needs_confirm "$SELF" "$@"; then
+  if [ "$SELF" = mv ]; then /root/dsh-confirm.sh --guard "$SELF $*" || exit 1
+  else /root/dsh-confirm.sh "$SELF $*" || exit 1; fi
 fi
-if /root/dsh-confirm.sh "\$SELF \$*"; then
-  exec "\$REAL" "\$@"
-fi
-echo "已拒绝: \$SELF \$*" >&2
-exit 1
+exec "$REAL" "$@"
 EOF2
 chmod +x "$DSH_BIN/$C"
 done
 
 echo "OK dsh-bin: $(ls "$DSH_BIN" | tr '\n' ' ')"
-echo 11 > "$DSH_BIN/.version"
+echo 12 > "$DSH_BIN/.version"

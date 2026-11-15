@@ -15,6 +15,7 @@ import android.widget.Toast;
 
 import com.deepseekharness.app.HttpShellService;
 import com.deepseekharness.app.core.ConfigStore;
+import com.deepseekharness.app.core.GuardSettings;
 import com.deepseekharness.app.core.HarnessController;
 import com.deepseekharness.app.ui.dialog.OverlayStyleDialog;
 import com.deepseekharness.app.util.Constants;
@@ -45,6 +46,7 @@ public class ConfigPresenter implements ConfigActions {
     }
 
     public void init() {
+        GuardSettings.sync(context, config);
         refreshRootStatus();
         scanRealBlockGuardStatus();
         refreshState();
@@ -158,26 +160,13 @@ public class ConfigPresenter implements ConfigActions {
 
     @Override
     public void onToggleConfirmShell(boolean enabled) {
-        config.setConfirmShell(enabled);
-        new Thread(() -> {
-            try {
-                java.io.File flagPriv = new java.io.File(context.getFilesDir(), ".guard_enabled");
-                java.io.File flagSdcard = new java.io.File("/sdcard/Download/DSHA/.guard_enabled");
-                if (enabled) {
-                    if (!flagPriv.exists()) flagPriv.createNewFile();
-                    if (!flagSdcard.exists()) flagSdcard.createNewFile();
-                } else {
-                    if (flagPriv.exists()) flagPriv.delete();
-                    if (flagSdcard.exists()) flagSdcard.delete();
-                }
-                String cmd = enabled
-                        ? "mkdir -p /data/adb/dsha/rootfs/root/.dsh /sdcard/Download/DSHA; touch /data/adb/dsha/rootfs/root/.dsh/.guard_enabled /sdcard/Download/DSHA/.guard_enabled; chmod 666 /data/adb/dsha/rootfs/root/.dsh/.guard_enabled /sdcard/Download/DSHA/.guard_enabled 2>/dev/null || true"
-                        : "rm -f /data/adb/dsha/rootfs/root/.dsh/.guard_enabled /sdcard/Download/DSHA/.guard_enabled 2>/dev/null || true";
-                Process p = Runtime.getRuntime().exec(new String[]{"su", "-c", cmd});
-                p.waitFor();
-            } catch (Throwable ignored) {}
-        }, "sync-guard-flag").start();
-        toast(enabled ? "已开启危险命令拦截确认" : "已关闭危险命令拦截确认");
+        GuardSettings.setEnabled(context, config, enabled, success -> mainHandler.post(() -> {
+            // 快速连续切换只提示最终值；旧任务不能显示与当前开关相反的成功提示。
+            if (config.isConfirmShell() != enabled) return;
+            toast(success
+                    ? (enabled ? "已开启危险命令拦截确认" : "已关闭危险命令拦截确认")
+                    : "危险命令确认设置已保存，同步失败，请检查 Root 权限后重试");
+        }));
         refreshState();
     }
 

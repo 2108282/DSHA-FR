@@ -72,6 +72,9 @@ public class HarnessController {
         this.proot = new ProotBootstrap(this.ctx);
         this.webProc = new WebProcessManager(proot);
         this.startupDiagnostics = new StartupDiagnostics(this.ctx);
+        if ("ksu_chroot".equals(proot.runtime().id())) {
+            GuardSettings.initialize(this.ctx, config);
+        }
     }
 
     public StartupDiagnostics startupDiagnostics() {
@@ -544,6 +547,10 @@ public class HarnessController {
                     lifecycle.finishStart(generation);
                     reportStatus(generation, onStatus, "未检测到 KernelSU/Magisk 模块或未授予 Root 权限，请在模块管理器中刷入并授权！");
                     return;
+                }
+                // 与设置页共用队列，并在 start.sh 前完成：默认开启及已保存状态不依赖旧环境变量。
+                if (!GuardSettings.sync(ctx, config).get()) {
+                    throw new java.io.IOException("危险命令确认设置同步失败，请检查 Root 权限");
                 }
                 // 确保 3090 设备桥 Token 同步到 rootfs
                 com.deepseekharness.app.HttpShellService.syncTokenToRootfsSync();
