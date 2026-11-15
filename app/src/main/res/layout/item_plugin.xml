@@ -6,6 +6,9 @@
     android:layout_marginBottom="10dp"
     android:orientation="vertical"
     android:padding="16dp"
+    android:clickable="true"
+    android:focusable="true"
+    android:foreground="?android:attr/selectableItemBackground"
     app:cardRadius="18dp">
 
     <!-- 1. 插件头部主行 (gap: 12px; align-items: flex-start) -->
@@ -73,33 +76,32 @@
                 android:textSize="12sp" />
         </LinearLayout>
 
-        <!-- 右侧自绘极简胶囊开关 (44px x 26px, 180ms cubic-bezier 缓动白圆球) -->
-        <com.deepseekharness.app.ui.DshaToggle
-            android:id="@+id/pluginToggle"
-            android:layout_width="44dp"
-            android:layout_height="26dp"
-            android:layout_marginTop="4dp" />
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:gravity="center_horizontal"
+            android:orientation="vertical">
+
+            <!-- 右侧自绘极简胶囊开关 (44px x 26px, 180ms cubic-bezier 缓动白圆球) -->
+            <com.deepseekharness.app.ui.DshaToggle
+                android:id="@+id/pluginToggle"
+                android:layout_width="44dp"
+                android:layout_height="26dp"
+                android:layout_marginTop="4dp" />
+
+            <!-- 仅指示卡片展开状态，点击由卡片统一处理。 -->
+            <ImageView
+                android:id="@+id/pluginExpandIcon"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:layout_marginTop="10dp"
+                android:importantForAccessibility="no"
+                android:src="@drawable/ic_chevron_down" />
+        </LinearLayout>
     </LinearLayout>
 
-    <!-- 2. 全宽更多操作按钮 (height: 34px; margin-top: 10px; border-radius: 14px) -->
-    <Button
-        android:id="@+id/pluginActions"
-        android:layout_width="match_parent"
-        android:layout_height="34dp"
-        android:layout_marginTop="10dp"
-        android:background="@drawable/m3_btn_tonal_expressive"
-        android:elevation="0dp"
-        android:gravity="center"
-        android:minWidth="0dp"
-        android:minHeight="0dp"
-        android:stateListAnimator="@animator/btn_press_scale"
-        android:text="更多 ▸"
-        android:textAllCaps="false"
-        android:textColor="@color/primary"
-        android:textSize="13sp"
-        android:textStyle="bold" />
-
-    <!-- 3. 展开抽屉内嵌详情面板 (padding: 12px 14px; background raised-glass; border-radius 14px) -->
+    <!-- 2. 点击卡片展开下方详情 (padding: 12px 14px; background raised-glass; border-radius 14px) -->
     <LinearLayout
         android:id="@+id/pluginDetailsPanel"
         android:layout_width="match_parent"

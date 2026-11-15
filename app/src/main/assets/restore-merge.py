@@ -816,6 +816,69 @@ def dsh_project_key(cwd):
     return "--%s--" % s[:251]
 
 
+def _validate_ssh_source(src):
+    """Reject links and special files so archive entries cannot redirect SSH restore."""
+    if not os.path.isdir(src) or os.path.islink(src):
+        raise ValueError("备份 .ssh 不是独立目录")
+    for base, dirs, files in os.walk(src, followlinks=False):
+        for name in dirs + files:
+            path = os.path.join(base, name)
+            mode = os.lstat(path).st_mode
+            if os.path.islink(path) or not (os.path.isdir(path) or os.path.isfile(path)):
+                raise ValueError("备份 .ssh 含不安全条目：%s" % name)
+    return True
+
+
+def restore_ssh(stage, root, manifest):
+    """Restore explicitly opted-in SSH data transactionally, preserving old keys."""
+    if not isinstance(manifest, dict) or manifest.get("includeSshKey") is not True:
+        return False
+    src = os.path.join(stage, ".ssh")
+    dst = os.path.join(root, ".ssh")
+    temp = os.path.join(root, ".ssh.restore-stage-%s-%s" % (TS, os.getpid()))
+    if not os.path.lexists(src):
+        raise ValueError("清单声明包含 SSH，但归档中缺少 .ssh")
+    _validate_ssh_source(src)
+    if os.path.lexists(dst) and (os.path.islink(dst) or not os.path.isdir(dst)):
+        raise ValueError("现有 .ssh 不是独立目录，已拒绝覆盖")
+    if os.path.lexists(temp):
+        raise ValueError("SSH 暂存目录已存在，拒绝覆盖")
+
+    backup = None
+    try:
+        shutil.copytree(src, temp, symlinks=False)
+        for base, dirs, files in os.walk(temp):
+            os.chmod(base, 0o700)
+            for name in files:
+                path = os.path.join(base, name)
+                mode = 0o644 if name.endswith(".pub") else 0o700 if name == "askpass.sh" else 0o600
+                os.chmod(path, mode)
+        validate_temp = os.path.isdir(temp) and not os.path.islink(temp)
+        if not validate_temp:
+            raise ValueError("SSH 暂存目录校验失败")
+        backup = move_aside(dst)
+        try:
+            os.rename(temp, dst)
+        except BaseException:
+            if backup:
+                _restore_backup_at_path(backup, dst)
+            raise
+        say("· 已恢复 SSH 主机配置与密钥，权限已收紧为目录 700、私钥 600、公钥 644"
+            + ("；原 .ssh 保留在 " + os.path.basename(backup) if backup else ""))
+        return True
+    except BaseException as e:
+        if backup and not os.path.lexists(dst):
+            if not _restore_backup_at_path(backup, dst):
+                raise OSError("SSH 发布失败；原数据仍保留在 %s；原因：%s"
+                              % (os.path.basename(backup), e)) from e
+        if os.path.lexists(temp):
+            if os.path.isdir(temp) and not os.path.islink(temp):
+                shutil.rmtree(temp, ignore_errors=True)
+            else:
+                os.unlink(temp)
+        raise
+
+
 def restore_workspaces(stage, root):
     """全量恢复：将备份包内的 .dsha-workspaces 恢复到实际工作区目录。
     智能兼容跨设备路径与原生 Linux / 手机共享双轨：
@@ -1410,6 +1473,21 @@ def main():
         ensure_workspace_dirs(root)
         heal_plugin_links(root)
         sync_agents_skills(root)
+    # SSH material is restored only after the selected backup scope committed successfully.
+    # Legacy archives and backups without explicit consent leave the live .ssh untouched.
+    if man and man.get("includeSshKey") is True:
+        if ok_dsh:
+            try:
+                restore_ssh(stage, root, man)
+            except BaseException as e:
+                partial = True
+                retain_stage = True
+                say("· SSH 恢复失败，原 .ssh 保留：%s" % e)
+                if isinstance(e, KeyboardInterrupt):
+                    raise
+        else:
+            partial = True
+            say("· 主备份未成功落地，跳过 SSH 恢复；现有 .ssh 未改动")
     if not retain_stage:
         try:
             shutil.rmtree(stage, ignore_errors=True)

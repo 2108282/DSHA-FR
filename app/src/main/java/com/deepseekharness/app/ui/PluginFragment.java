@@ -546,7 +546,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
             final TextView name, meta, description;
             final ModernBadgeView statusBadge;
             final DshaToggle toggle;
-            final Button actionBtn;
+            final ImageView expandIcon;
             final View detailsPanel;
             final TextView detailText;
             final Button btnUpdate, btnRollback;
@@ -559,7 +559,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
                 meta = view.findViewById(R.id.pluginStatus);
                 description = view.findViewById(R.id.pluginDesc);
                 toggle = view.findViewById(R.id.pluginToggle);
-                actionBtn = view.findViewById(R.id.pluginActions);
+                expandIcon = view.findViewById(R.id.pluginExpandIcon);
                 detailsPanel = view.findViewById(R.id.pluginDetailsPanel);
                 detailText = view.findViewById(R.id.pluginDetailText);
                 btnUpdate = view.findViewById(R.id.btnPluginUpdate);
@@ -615,24 +615,25 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
                 });
             }
 
-            // 5. 更多 ▸ 展开折叠内嵌抽屉
+            // 5. 点击卡片展开折叠内嵌详情；开关与详情中的操作按钮保持独立。
             boolean isExpanded = expandedPlugins.contains(item.name);
             if (holder.detailsPanel != null) {
                 holder.detailsPanel.setVisibility(isExpanded ? View.VISIBLE : View.GONE);
             }
-            if (holder.actionBtn != null) {
-                holder.actionBtn.setText(isExpanded ? "收起 ▴" : "更多 ▸");
-                holder.actionBtn.setOnClickListener(v -> {
-                    int pos = holder.getAdapterPosition();
-                    if (pos == RecyclerView.NO_POSITION) return;
-                    if (expandedPlugins.contains(item.name)) {
-                        expandedPlugins.remove(item.name);
-                    } else {
-                        expandedPlugins.add(item.name);
-                    }
-                    notifyItemChanged(pos);
-                });
+            if (holder.expandIcon != null) {
+                holder.expandIcon.setRotation(isExpanded ? 180f : 0f);
             }
+            holder.itemView.setContentDescription(item.name + (isExpanded ? "，已展开详情" : "，点击查看详情"));
+            holder.itemView.setOnClickListener(v -> {
+                int pos = holder.getAdapterPosition();
+                if (pos == RecyclerView.NO_POSITION) return;
+                if (expandedPlugins.contains(item.name)) {
+                    expandedPlugins.remove(item.name);
+                } else {
+                    expandedPlugins.add(item.name);
+                }
+                notifyItemChanged(pos);
+            });
 
             // 6. 展开抽屉内的详情与 4 个小按钮
             String configPath;

@@ -72,9 +72,12 @@ public class BackupScopeTest {
     public void sessionsScopePacksSessionsAndRegistry() {
         // dsh 1.2：会话文件在 sessions/，UI 入口在 storages/workspace.json 注册表。
         // 只带 sessions/ 恢复后 WebUI 认不出会话，所以注册表必须一起打包合并。
-        assertArrayEquals(new String[] { ".dsh/sessions", ".dsh/storages" },
-                BackupScope.dshPaths(BackupScope.SESSIONS));
-        assertArrayEquals(new String[] { "sessions", "storages" },
-                BackupScope.mergeSubdirs(BackupScope.SESSIONS));
+        assertArrayEquals(new String[] {
+                ".dsh/sessions", ".dsh/storages", ".dsh/attachments",
+                ".dsh/books", ".dsh/library", ".dsh/documents", ".dsh/sessions-index.json"
+        }, BackupScope.dshPaths(BackupScope.SESSIONS));
+        assertArrayEquals(new String[] {
+                "sessions", "storages", "attachments", "books", "library", "documents", "sessions-index.json"
+        }, BackupScope.mergeSubdirs(BackupScope.SESSIONS));
     }
 }
