@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - 'magisk-apk'
+      - 'root-quickchat-gesture'
   workflow_dispatch:
 
 concurrency:
@@ -62,6 +63,9 @@ jobs:
           else
             echo "未检测到 DSHA_KEYSTORE_B64，将按配置使用 Gradle 默认签名"
           fi
+
+      - name: 验证底角手势状态机
+        run: ./gradlew :app:testCornerGesture --stacktrace
 
       - name: 执行 Release 编译打包 (:app:assembleStandardRelease)
         run: |

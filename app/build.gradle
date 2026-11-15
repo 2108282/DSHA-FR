@@ -16,7 +16,7 @@ android {
         minSdk 31
         targetSdk 37
         versionCode 160
-        versionName "0.2.2-rc.2-u1"
+        versionName "0.2.2-rc.2-u1-gesture-3"
         testInstrumentationRunner "com.deepseekharness.app.Rc13Instrumentation"
         ndk {
             abiFilters 'arm64-v8a'
@@ -125,7 +125,41 @@ def prepareStandardAssets = tasks.register("prepareStandardAssets", Exec) {
 }
 tasks.named("preBuild").configure { dependsOn(prepareStandardAssets) }
 
+// Hidden input signatures are compile-only: Android supplies these classes at runtime.
+def compileGestureStubs = tasks.register("compileGestureStubs", JavaCompile) {
+    source rootProject.fileTree("tools/gesture-stubs") { include "**/*.java" }
+    classpath = files(androidComponents.sdkComponents.bootClasspath)
+    destinationDirectory = layout.buildDirectory.dir("gesture-stubs")
+    sourceCompatibility = "17"
+    targetCompatibility = "17"
+}
+
+def gestureStubsJar = tasks.register("gestureStubsJar", Jar) {
+    dependsOn(compileGestureStubs)
+    from(compileGestureStubs.flatMap { it.destinationDirectory })
+    archiveFileName = "gesture-hidden-api-stubs.jar"
+    destinationDirectory = layout.buildDirectory.dir("gesture-stubs-jar")
+}
+
+// Run this pure Java component independently of legacy Android test sources.
+configurations { cornerGestureTestDependencies }
+def compileCornerGestureTests = tasks.register("compileCornerGestureTests", JavaCompile) {
+    source files("src/main/java/com/deepseekharness/app/gesture/CornerGestureRecognizer.java",
+            "src/test/java/com/deepseekharness/app/gesture/CornerGestureRecognizerTest.java")
+    classpath = configurations.cornerGestureTestDependencies
+    destinationDirectory = layout.buildDirectory.dir("corner-gesture-tests")
+    options.release = 17
+}
+tasks.register("testCornerGesture", Test) {
+    dependsOn(compileCornerGestureTests)
+    testClassesDirs = files(compileCornerGestureTests.flatMap { it.destinationDirectory })
+    classpath = testClassesDirs + configurations.cornerGestureTestDependencies
+    useJUnit()
+}
+
 dependencies {
+    cornerGestureTestDependencies 'junit:junit:4.13.2'
+    compileOnly files(gestureStubsJar.flatMap { it.archiveFile })
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
     implementation 'androidx.core:core-ktx:1.12.0'
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.6.2'

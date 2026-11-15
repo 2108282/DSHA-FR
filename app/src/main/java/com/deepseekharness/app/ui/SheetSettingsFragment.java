@@ -39,6 +39,18 @@ public class SheetSettingsFragment extends Fragment {
     private TextView styleValue;
     private LinearLayout styleDots;
     private TextView specValue;
+    private DshaToggle cornerGestureToggle;
+    private TextView cornerGestureStatus;
+    private final Runnable cornerGestureListener = this::refreshCornerGestureState;
+
+    private void refreshCornerGestureState() {
+        if (!isAdded() || cornerGestureToggle == null) return;
+        cornerGestureToggle.setChecked(
+                com.deepseekharness.app.gesture.CornerGesturePreview.isEnabled(requireContext()), false, false);
+        if (cornerGestureStatus != null) {
+            cornerGestureStatus.setText(com.deepseekharness.app.gesture.CornerGesturePreview.getStatus());
+        }
+    }
 
     @Nullable
     @Override
@@ -190,6 +202,17 @@ public class SheetSettingsFragment extends Fragment {
             if (ctsRow != null) {
                 ctsRow.setOnClickListener(x -> ctsToggle.toggle());
             }
+        }
+
+        // Independent Root gesture uses the same row/toggle contract as adjacent settings.
+        cornerGestureToggle = v.findViewById(R.id.sheet_settings_corner_gesture_toggle);
+        cornerGestureStatus = v.findViewById(R.id.sheet_settings_corner_gesture_status);
+        if (cornerGestureToggle != null) {
+            refreshCornerGestureState();
+            cornerGestureToggle.setOnCheckedChangeListener((toggle, isChecked) ->
+                    com.deepseekharness.app.gesture.CornerGesturePreview.setEnabled(requireContext(), isChecked));
+            View cornerRow = v.findViewById(R.id.sheet_settings_corner_gesture_row);
+            if (cornerRow != null) cornerRow.setOnClickListener(x -> cornerGestureToggle.toggle());
         }
 
         // 4. 低位自动恢复默认高度开关（DshaToggle 纯 Skia 自绘）
@@ -393,6 +416,8 @@ public class SheetSettingsFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
+        com.deepseekharness.app.gesture.CornerGesturePreview.addListener(cornerGestureListener);
+        refreshCornerGestureState();
         syncActivityTitle(true);
         if (getView() != null) {
             MonetEngine.applyToViewTree(getView(), MonetEngine.resolveCurrentPalette(requireContext()));
@@ -400,7 +425,16 @@ public class SheetSettingsFragment extends Fragment {
     }
 
     @Override
+    public void onPause() {
+        com.deepseekharness.app.gesture.CornerGesturePreview.removeListener(cornerGestureListener);
+        super.onPause();
+    }
+
+    @Override
     public void onDestroyView() {
+        com.deepseekharness.app.gesture.CornerGesturePreview.removeListener(cornerGestureListener);
+        cornerGestureToggle = null;
+        cornerGestureStatus = null;
         syncActivityTitle(false);
         styleValue = null;
         styleDots = null;

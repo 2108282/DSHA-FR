@@ -72,6 +72,7 @@ public class DshaApp extends Application {
         new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
             try {
                 HarnessService.checkAndSyncService(this);
+                com.deepseekharness.app.gesture.CornerGesturePreview.restore(this);
             } catch (Throwable ignored) {}
         }, 500);
     }

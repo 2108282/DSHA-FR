@@ -498,6 +498,16 @@ public class ConfigStore {
         ctsPrefs().edit().putBoolean("enabled", v).apply();
     }
 
+    // ================= 独立 Root 底角手势 =================
+
+    public boolean isCornerGestureEnabled() {
+        return prefs.getBoolean("corner_gesture_enabled", false);
+    }
+
+    public void setCornerGestureEnabled(boolean enabled) {
+        prefs.edit().putBoolean("corner_gesture_enabled", enabled).apply();
+    }
+
     // ================= 高危操作：物理块设备防砖隔离 =================
 
     /**

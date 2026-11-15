@@ -437,6 +437,69 @@
                 android:layout_marginStart="66dp"
                 android:background="@color/line_soft" />
 
+            <!-- Independent bottom-corner gesture, below Circle to Search redirect. -->
+            <LinearLayout
+                android:id="@+id/sheet_settings_corner_gesture_row"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingHorizontal="16dp"
+                android:paddingVertical="14dp">
+
+                <FrameLayout
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:background="@drawable/bg_settings_icon_box">
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="独立底角手势"
+                        android:src="@drawable/ic_sheet_corner_gesture"
+                        app:tint="@color/primary" />
+                </FrameLayout>
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="独立底角手势"
+                        android:textColor="@color/text"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:id="@+id/sheet_settings_corner_gesture_status"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="1dp"
+                        android:lineSpacingMultiplier="1.3"
+                        android:text="从左右底角滑动，唤起快捷抽屉（需 Root）"
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <com.deepseekharness.app.ui.DshaToggle
+                    android:id="@+id/sheet_settings_corner_gesture_toggle"
+                    android:layout_width="44dp"
+                    android:layout_height="26dp"
+                    android:layout_marginStart="8dp" />
+            </LinearLayout>
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginStart="66dp"
+                android:background="@color/line_soft" />
+
             <!-- 1.4 低位自动恢复默认高度行 -->
             <LinearLayout
                 android:id="@+id/sheet_settings_auto_restore_row"
