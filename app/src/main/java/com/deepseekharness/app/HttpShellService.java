@@ -2358,6 +2358,7 @@ public final class HttpShellService {
         if (prefix.contains("屏幕") || prefix.contains("tap") || prefix.contains("swipe") || prefix.contains("dump") || prefix.contains("launch")) return "操作屏幕中";
         if (prefix.contains("手机") || prefix.contains("系统") || prefix.contains("toast") || prefix.contains("clip") || prefix.contains("vibrate")) return "调用系统中";
         if (prefix.contains("命令") || prefix.contains("bash") || prefix.contains("shell") || prefix.contains("exec") || prefix.contains("terminal")) return "执行命令中";
+        if (prefix.contains("调用工具") || prefix.contains("使用工具") || prefix.contains("工具调用")) return "调用工具中";
         if (prefix.contains("思考") || prefix.contains("think") || prefix.contains("reason")) return "深度思考中";
         if (prefix.contains("智能体") || prefix.contains("分析执行") || prefix.contains("执行任务")) return "分析执行中";
 

@@ -52,7 +52,7 @@ import java.util.concurrent.Executors;
  * 1. 顶部纯自绘 Skia 分段切换: [ ADB 调试互联 | SSH 远程管理 ]；
  * 2. 深度接入 MonetEngine 莫奈色彩体系；
  * 3. 严格禁止任何 emoji 字符，保证原生专业质感；
- * 4. 具备 ADB 有线/无线/权限/设备互联与 SSH 本机密钥/资产对象/一键终端穿透全套能力。
+ * 4. 具备 ADB 有线/无线/设备互联与 SSH 本机密钥/资产对象/一键终端穿透全套能力。
  */
 public final class ExternalConnectFragment extends Fragment {
 
@@ -81,10 +81,8 @@ public final class ExternalConnectFragment extends Fragment {
     private TextView btnCopyWirelessShell;
     private TextView btnCopyWirelessScrcpy;
 
-    private TextView tvPermissionDesc;
-    private ModernSegmentedView segPermission;
-    private DshaToggle toggleChrootDirect;
-    private View rowChrootDirect;
+    private TextView btnCopyChrootCmd;
+    private View rowCopyChrootCmd;
 
     private EditText etTarget;
     private TextView btnConnect;
@@ -202,13 +200,8 @@ public final class ExternalConnectFragment extends Fragment {
         btnCopyWirelessShell = v.findViewById(R.id.ext_btn_copy_wireless_shell);
         btnCopyWirelessScrcpy = v.findViewById(R.id.ext_btn_copy_wireless_scrcpy);
 
-        tvPermissionDesc = v.findViewById(R.id.ext_tv_permission_desc);
-        segPermission = v.findViewById(R.id.ext_seg_permission);
-        if (segPermission != null) {
-            segPermission.setTabs("普通权限 (Shell)", "最高权限 (Root)");
-        }
-        toggleChrootDirect = v.findViewById(R.id.ext_toggle_chroot_direct);
-        rowChrootDirect = v.findViewById(R.id.ext_row_chroot_direct);
+        btnCopyChrootCmd = v.findViewById(R.id.ext_btn_copy_chroot_cmd);
+        rowCopyChrootCmd = v.findViewById(R.id.ext_row_copy_chroot_cmd);
 
         etTarget = v.findViewById(R.id.ext_et_target);
         btnConnect = v.findViewById(R.id.ext_btn_connect);
@@ -245,9 +238,6 @@ public final class ExternalConnectFragment extends Fragment {
 
         if (segProtocol != null) {
             segProtocol.setPrimaryColor(palette.primaryColor);
-        }
-        if (segPermission != null) {
-            segPermission.setPrimaryColor(palette.primaryColor);
         }
         if (palette.isMonetActive) {
             ColorStateList csl = ColorStateList.valueOf(palette.primaryColor);
@@ -297,22 +287,11 @@ public final class ExternalConnectFragment extends Fragment {
                 copyToClipboard("scrcpy -s " + st.ipAddress + ":" + st.port);
             });
         }
-        if (segPermission != null) {
-            segPermission.setOnTabSelectedListener(index -> {
-                if (isUpdatingUi) return;
-                switchPermissionAsync(index);
-            });
+        if (btnCopyChrootCmd != null) {
+            btnCopyChrootCmd.setOnClickListener(x -> copyToClipboard(containerShellCommand()));
         }
-        if (toggleChrootDirect != null) {
-            toggleChrootDirect.setOnCheckedChangeListener((btn, isChecked) -> {
-                if (isUpdatingUi) return;
-                toggleChrootDirectAsync(isChecked);
-            });
-        }
-        if (rowChrootDirect != null) {
-            rowChrootDirect.setOnClickListener(x -> {
-                if (toggleChrootDirect != null) toggleChrootDirect.toggle();
-            });
+        if (rowCopyChrootCmd != null) {
+            rowCopyChrootCmd.setOnClickListener(x -> copyToClipboard(containerShellCommand()));
         }
         if (btnConnect != null) {
             btnConnect.setOnClickListener(x -> connectRemoteAsync());
@@ -369,8 +348,6 @@ public final class ExternalConnectFragment extends Fragment {
         executor.execute(() -> {
             AdbManager.UsbStatus usb = adbManager.getUsbStatus();
             AdbManager.WirelessStatus wireless = adbManager.getWirelessStatus();
-            int permMode = adbManager.getPermissionMode();
-            boolean chrootDirect = adbManager.isChrootDirectEnabled();
             List<AdbManager.AdbDevice> devices = adbManager.getConnectedDevices();
 
             mainHandler.post(() -> {
@@ -400,13 +377,6 @@ public final class ExternalConnectFragment extends Fragment {
                         layoutWirelessInfo.setVisibility(wireless.isEnabled ? View.VISIBLE : View.GONE);
                     }
                     if (tvConnectCmd != null) tvConnectCmd.setText(wireless.connectCommand);
-
-                    if (segPermission != null) segPermission.setSelectedIndex(permMode, false);
-                    updatePermissionDescText(permMode);
-
-                    if (toggleChrootDirect != null) {
-                        toggleChrootDirect.setChecked(chrootDirect, false, false);
-                    }
 
                     renderDeviceList(devices);
                 } finally {
@@ -789,55 +759,8 @@ public final class ExternalConnectFragment extends Fragment {
         });
     }
 
-    private void switchPermissionAsync(int mode) {
-        updatePermissionDescText(mode);
-        executor.execute(() -> {
-            boolean success = adbManager.setPermissionMode(mode);
-            int current = adbManager.getPermissionMode();
-            mainHandler.post(() -> {
-                if (!isAdded()) return;
-                isUpdatingUi = true;
-                try {
-                    if (segPermission != null) {
-                        segPermission.setSelectedIndex(current, false);
-                    }
-                    updatePermissionDescText(current);
-                    String label = (current == 1) ? "最高权限 (Root UID 0)" : "普通权限 (Shell UID 2000)";
-                    ToastHelper.show(requireContext(), "已应用：" + label);
-                } finally {
-                    isUpdatingUi = false;
-                }
-            });
-        });
-    }
-
-    private void toggleChrootDirectAsync(boolean enable) {
-        executor.execute(() -> {
-            boolean success = adbManager.setChrootDirectEnabled(enable);
-            boolean current = adbManager.isChrootDirectEnabled();
-            mainHandler.post(() -> {
-                if (!isAdded()) return;
-                isUpdatingUi = true;
-                try {
-                    if (toggleChrootDirect != null) {
-                        toggleChrootDirect.setChecked(current, false, false);
-                    }
-                    String msg = current ? "已开启直连 Linux 容器终端模式" : "已恢复为 Android 宿主 Shell 模式";
-                    ToastHelper.show(requireContext(), msg);
-                } finally {
-                    isUpdatingUi = false;
-                }
-            });
-        });
-    }
-
-    private void updatePermissionDescText(int mode) {
-        if (tvPermissionDesc == null) return;
-        if (mode == 1) {
-            tvPermissionDesc.setText("当前模式：最高权限 (Root)，连入直接持有 UID 0");
-        } else {
-            tvPermissionDesc.setText("当前模式：普通权限 (Shell)，连入受限于 UID 2000");
-        }
+    private String containerShellCommand() {
+        return "adb shell -t \"su -c '/data/adb/dsha/scripts/term.sh'\"";
     }
 
     private void connectRemoteAsync() {

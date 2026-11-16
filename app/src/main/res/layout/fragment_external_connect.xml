@@ -403,49 +403,9 @@
                         android:layout_marginEnd="16dp"
                         android:background="@color/line_soft" />
 
-                    <!-- 被连接权限调节 -->
+                    <!-- 复制 Linux 容器终端命令 -->
                     <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:paddingHorizontal="16dp"
-                        android:paddingTop="14dp"
-                        android:paddingBottom="16dp">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="被连接调试权限"
-                            android:textColor="@color/text"
-                            android:textSize="15sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/ext_tv_permission_desc"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:text="控制远端接入时获得的操作权限等级"
-                            android:textColor="@color/text_muted"
-                            android:textSize="12sp" />
-
-                        <com.deepseekharness.app.ui.ModernSegmentedView
-                            android:id="@+id/ext_seg_permission"
-                            android:layout_width="match_parent"
-                            android:layout_height="50dp"
-                            android:layout_marginTop="12dp" />
-                    </LinearLayout>
-
-                    <View
-                        android:layout_width="match_parent"
-                        android:layout_height="1dp"
-                        android:layout_marginStart="16dp"
-                        android:layout_marginEnd="16dp"
-                        android:background="@color/line_soft" />
-
-                    <!-- 直连 Linux 容器终端行 -->
-                    <LinearLayout
-                        android:id="@+id/ext_row_chroot_direct"
+                        android:id="@+id/ext_row_copy_chroot_cmd"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:background="?attr/selectableItemBackground"
@@ -465,7 +425,7 @@
                                 android:layout_width="20dp"
                                 android:layout_height="20dp"
                                 android:layout_gravity="center"
-                                android:contentDescription="直连容器"
+                                android:contentDescription="容器终端命令"
                                 android:src="@drawable/ic_terminal"
                                 app:tint="@color/primary" />
                         </FrameLayout>
@@ -486,20 +446,28 @@
                                 android:textStyle="bold" />
 
                             <TextView
-                                android:id="@+id/ext_tv_chroot_status"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="1dp"
-                                android:text="外部连入瞬间穿透进 chroot 容器，异常时自动回退宿主"
+                                android:text="复制命令后在电脑终端执行，Root 授权由 Magisk/KernelSU 管理"
                                 android:textColor="@color/text_muted"
                                 android:textSize="12sp" />
                         </LinearLayout>
 
-                        <com.deepseekharness.app.ui.DshaToggle
-                            android:id="@+id/ext_toggle_chroot_direct"
-                            android:layout_width="44dp"
-                            android:layout_height="26dp"
-                            android:layout_marginStart="8dp" />
+                        <TextView
+                            android:id="@+id/ext_btn_copy_chroot_cmd"
+                            android:layout_width="wrap_content"
+                            android:layout_height="32dp"
+                            android:layout_marginStart="8dp"
+                            android:background="@drawable/m3_btn_tonal_small"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:gravity="center"
+                            android:paddingHorizontal="10dp"
+                            android:text="复制命令"
+                            android:textColor="@color/primary"
+                            android:textSize="11sp"
+                            android:textStyle="bold" />
                     </LinearLayout>
                 </com.deepseekharness.app.ui.ModernCardView>
 

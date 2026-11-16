@@ -15,7 +15,7 @@ import java.util.Set;
  * ADB 外部连接与远程调试底层管理器：
  * 1. 纯 Root 指令驱动（通过 su -c 直通宿主系统），不依赖容器与 DSH 运行状态；
  * 2. 具备被连入感知能力，能通过底层 TCP 套接字分析已连入本机的外部客户端 IP；
- * 3. 支持有线/无线切换、基于 su 直通的 Root 模式与直连 Linux 容器穿透；
+ * 3. 支持有线状态查询与无线调试切换；
  * 4. 支持主动向远端目标设备发起连接、断开及解析已连接设备列表。
  */
 public final class AdbManager {
@@ -153,83 +153,6 @@ public final class AdbManager {
             Thread.sleep(500);
         } catch (InterruptedException ignored) {}
         return getWirelessStatus().isEnabled == enable;
-    }
-
-    /**
-     * 获取当前被连接权限模式：
-     * 0: 普通权限 (Shell UID 2000)
-     * 1: 最高权限 (Root UID 0)
-     */
-    public int getPermissionMode() {
-        String res = execRoot("test -f /data/local/tmp/dsha_root_direct && echo 1 || echo 0").trim();
-        return "1".equals(res) ? 1 : 0;
-    }
-
-    /**
-     * 切换被连接权限模式：
-     * 利用 /data/local/tmp/dsha_root_direct 标志与 mkshrc 直通提升
-     */
-    public boolean setPermissionMode(int mode) {
-        ensureMkshrcHookMounted();
-        if (mode == 1) {
-            execRoot("touch /data/local/tmp/dsha_root_direct && chmod 666 /data/local/tmp/dsha_root_direct");
-        } else {
-            execRoot("rm -f /data/local/tmp/dsha_root_direct");
-        }
-        return getPermissionMode() == mode;
-    }
-
-    /**
-     * 查询是否开启了 ADB 直连 chroot 容器模式
-     */
-    public boolean isChrootDirectEnabled() {
-        String res = execRoot("test -f /data/local/tmp/dsha_chroot_direct && echo 1 || echo 0").trim();
-        return "1".equals(res);
-    }
-
-    /**
-     * 设置是否开启 ADB 直连 chroot 模式
-     */
-    public boolean setChrootDirectEnabled(boolean enable) {
-        ensureMkshrcHookMounted();
-        if (enable) {
-            execRoot("touch /data/local/tmp/dsha_chroot_direct && chmod 666 /data/local/tmp/dsha_chroot_direct");
-        } else {
-            execRoot("rm -f /data/local/tmp/dsha_chroot_direct");
-        }
-        return isChrootDirectEnabled() == enable;
-    }
-
-    /**
-     * 确保宿主 /system/etc/mkshrc 中安全植入直通穿透钩子 (纯 mksh 配置文件，绝不替换系统二进制)
-     */
-    private void ensureMkshrcHookMounted() {
-        String checkCmd = "grep -q 'DSHA_ADB_HOOK' /system/etc/mkshrc 2>/dev/null && echo 1 || echo 0";
-        if ("1".equals(execRoot(checkCmd).trim())) {
-            return;
-        }
-
-        String setupCmd = "mkdir -p /data/adb/dsha/run && "
-                + "cat /system/etc/mkshrc > /data/adb/dsha/run/mkshrc.bak 2>/dev/null || true && "
-                + "cat << 'HOOK_EOF' > /data/adb/dsha/run/mkshrc\n"
-                + "#!/system/bin/sh\n"
-                + "if [ -f /data/adb/dsha/run/mkshrc.bak ]; then . /data/adb/dsha/run/mkshrc.bak; fi\n"
-                + "# DSHA_ADB_HOOK\n"
-                + "if [ -z \"$DSHA_IN_HOOK\" ]; then\n"
-                + "    export DSHA_IN_HOOK=1\n"
-                + "    if [ -f /data/local/tmp/dsha_chroot_direct ] && [ -f /data/adb/dsha/rootfs/bin/bash ]; then\n"
-                + "        if command -v su >/dev/null 2>&1; then exec su -c \"sh /data/adb/dsha/scripts/term.sh $@\";\n"
-                + "        elif [ -f /data/adb/magisk/magisk ]; then exec /data/adb/magisk/magisk su -c \"sh /data/adb/dsha/scripts/term.sh $@\"; fi\n"
-                + "    fi\n"
-                + "    if [ -f /data/local/tmp/dsha_root_direct ] && [ \"$(id -u)\" != \"0\" ]; then\n"
-                + "        if command -v su >/dev/null 2>&1; then exec su;\n"
-                + "        elif [ -f /data/adb/magisk/magisk ]; then exec /data/adb/magisk/magisk su; fi\n"
-                + "    fi\n"
-                + "fi\n"
-                + "HOOK_EOF\n"
-                + "umount -l /system/etc/mkshrc 2>/dev/null || true && "
-                + "mount -o bind /data/adb/dsha/run/mkshrc /system/etc/mkshrc";
-        execRoot(setupCmd);
     }
 
     /**
