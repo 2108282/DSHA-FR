@@ -123,6 +123,29 @@ class OrdinaryMigrationTest(unittest.TestCase):
         self.assertFalse((self.root / "root/dsh-classic-chat-installed").exists())
         self.assertEqual(result, self.migrate(fresh=True))
 
+    def test_fresh_unlinks_absolute_targets_without_following_them(self):
+        protected = self.root / "protected"
+        protected.mkdir()
+        links = [self.manifest.parent / "node_modules" / NAME,
+                 self.root / "usr/local/lib/node_modules" / NAME]
+        for link in links:
+            link.parent.mkdir(parents=True, exist_ok=True)
+            link.symlink_to(protected / "target")
+        original_stat = Path.stat
+        def protected_stat(path, *, follow_symlinks=True):
+            if path in links and follow_symlinks:
+                raise PermissionError("fixture: symlink target is inaccessible")
+            return original_stat(path, follow_symlinks=follow_symlinks)
+        protected.chmod(0)
+        try:
+            with patch.object(Path, "stat", protected_stat):
+                self.module.migrate(self.root, fresh=True)
+            for link in links:
+                self.assertFalse(link.is_symlink())
+            self.assertTrue(protected.exists())
+        finally:
+            protected.chmod(0o700)
+
     def test_deleted_plugin_is_not_reinstalled(self):
         self.migrate(fresh=True)
         self.assertNotIn(NAME, self.migrate()["dependencies"])

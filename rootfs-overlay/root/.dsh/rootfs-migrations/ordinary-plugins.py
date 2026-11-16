@@ -73,7 +73,7 @@ def _migrate(root, fresh=False):
             raise ValueError("插件目录包含重定向软链，停止迁移：" + str(path))
     needs_links = not fresh and (legacy.is_dir() or managed.is_dir())
     for link in links:
-        if needs_links and link.exists() and not link.is_symlink():
+        if needs_links and not link.is_symlink() and link.exists():
             raise ValueError("模块链接位置存在实体目录，停止迁移：" + str(link))
 
     if fresh:
@@ -123,10 +123,10 @@ def _migrate(root, fresh=False):
                 link.symlink_to("/root/.dsh/plugin-src/" + NAME, target_is_directory=True)
     if fresh:
         for link in links:
-            if link.is_dir() and not link.is_symlink():
-                shutil.rmtree(link)
-            else:
+            if link.is_symlink() or link.is_file():
                 link.unlink(missing_ok=True)
+            elif link.is_dir():
+                shutil.rmtree(link)
         (home / "profiles/web/node_modules" / (NAME + ".disabled")).unlink(missing_ok=True)
     if doc is not None:
         text = json.dumps(doc, indent=2, ensure_ascii=False) + "\n"
