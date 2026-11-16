@@ -155,7 +155,6 @@ for d in os.listdir(base):
     "dsh-task-notifier": "link:/root/dsha-task-notifier",
     "dsh-status-overlay": "link:/root/dsha-status-overlay",
     "dsh-mobile-lite": "link:/root/dsh-mobile-lite",
-    "dsh-classic-chat": "link:/root/dsh-classic-chat",
     "dsh-quickchat-gesture": "link:/root/dsh-quickchat-gesture"
   },
   "dsh": {
@@ -167,7 +166,6 @@ for d in os.listdir(base):
         "dsh-task-notifier",
         "dsh-status-overlay",
         "dsh-mobile-lite",
-        "dsh-classic-chat",
         "dsh-quickchat-gesture"
       ],
       "patchReload": "startup"
@@ -330,18 +328,12 @@ EOF_CORDIS
         "--exclude=./root/dsh-quickchat-gesture/.git/*"
         "--exclude=./root/dsh-quickchat-gesture/.client-build"
         "--exclude=./root/dsh-quickchat-gesture/.client-build/*"
-        "--exclude=./root/dsh-classic-chat/node_modules"
-        "--exclude=./root/dsh-classic-chat/node_modules/*"
-        "--exclude=./root/dsh-classic-chat/.git"
-        "--exclude=./root/dsh-classic-chat/.git/*"
-        "--exclude=./root/dsh-classic-chat/docs"
-        "--exclude=./root/dsh-classic-chat/docs/*"
-        "--exclude=./root/dsh-classic-chat/tests"
-        "--exclude=./root/dsh-classic-chat/tests/*"
-        "--exclude=./root/dsh-classic-chat/repro"
-        "--exclude=./root/dsh-classic-chat/repro/*"
-        "--exclude=./root/dsh-classic-chat/benchmarks"
-        "--exclude=./root/dsh-classic-chat/benchmarks/*"
+        # classic-chat 已改为按需安装的普通插件，公开导出不携带旧预装副本。
+        "--exclude=./root/dsh-classic-chat"
+        "--exclude=./root/dsh-classic-chat-installed"
+        "--exclude=./usr/local/lib/node_modules/dsh-classic-chat"
+        "--exclude=./root/dsha-builtin.txt"
+        "--exclude=./root/.dsh/plugin-migration-backups"
         # 排除工作区与个人工程文件 (严禁将用户工作区数据打入公开底包)
         "--exclude=./root/workspaces/*"
         "--exclude=./root/.dsha-workspaces*"
@@ -501,11 +493,10 @@ EOF_CORDIS
         "dsh-task-notifier"
         "dsh-status-overlay"
         "dsh-mobile-lite"
-        "dsh-classic-chat"
         "dsh-quickchat-gesture"
     )
     for p in "${PRE_BUILTIN_PLUGINS[@]}"; do
-        if [ "$p" = "dsh-mobile-lite" ] || [ "$p" = "dsh-classic-chat" ] || [ "$p" = "dsh-quickchat-gesture" ]; then
+        if [ "$p" = "dsh-mobile-lite" ] || [ "$p" = "dsh-quickchat-gesture" ]; then
             base_tgt="/root/$p"
             overlay_tgt="$ROOT_DIR/rootfs-overlay/root/$p"
         else
@@ -578,11 +569,11 @@ EOF_CORDIS
         "dsh-task-notifier"
         "dsh-status-overlay"
         "dsh-mobile-lite"
-        "dsh-classic-chat"
         "dsh-quickchat-gesture"
     )
+    printf '%s\n' "${BUILTIN_PLUGINS[@]}" > "$STAGE_DIR/root/dsha-builtin.txt"
     for p in "${BUILTIN_PLUGINS[@]}"; do
-        if [ "$p" = "dsh-mobile-lite" ] || [ "$p" = "dsh-classic-chat" ] || [ "$p" = "dsh-quickchat-gesture" ]; then
+        if [ "$p" = "dsh-mobile-lite" ] || [ "$p" = "dsh-quickchat-gesture" ]; then
             tgt="/root/$p"
         else
             tgt="/root/dsha-${p#dsh-}"
@@ -595,6 +586,7 @@ EOF_CORDIS
         )
     done
     tar --numeric-owner -rf "$TMP_RAW_TAR" -C "$STAGE_DIR" \
+        ./root/dsha-builtin.txt \
         ./root/.dsh/profiles/web/package.json \
         ./root/.dsh/profiles/web/cordis.patch.yml \
         ./root/.dsh/profiles/web/node_modules/@deepseek-ai/dsh \

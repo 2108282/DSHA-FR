@@ -89,7 +89,6 @@ dsh-device-shell-guide
 dsh-task-notifier
 dsh-status-overlay
 dsh-mobile-lite
-dsh-classic-chat
 dsh-quickchat-gesture
 EOF
 fi

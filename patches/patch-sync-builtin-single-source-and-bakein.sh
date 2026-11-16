@@ -39,9 +39,9 @@ if [ -n "$OVERLAY_SRC" ]; then
     done
 fi
 
-# 2. 确保 dsha-builtin.txt 清单完整包含全部 6 大内置固有插件
+# 2. 确保 dsha-builtin.txt 清单完整包含全部 5 大内置固有插件
 if [ -f "$BUILTIN_TXT" ]; then
-    for bp in dsh-device-shell-guide dsh-task-notifier dsh-status-overlay dsh-mobile-lite dsh-classic-chat dsh-quickchat-gesture; do
+    for bp in dsh-device-shell-guide dsh-task-notifier dsh-status-overlay dsh-mobile-lite dsh-quickchat-gesture; do
         if ! grep -q "$bp" "$BUILTIN_TXT"; then
             echo "$bp" >> "$BUILTIN_TXT"
             echo "  + 补齐清单: $bp"
@@ -53,7 +53,6 @@ dsh-device-shell-guide
 dsh-task-notifier
 dsh-status-overlay
 dsh-mobile-lite
-dsh-classic-chat
 dsh-quickchat-gesture
 EOF
 fi
@@ -68,8 +67,8 @@ PROFILE_NM="$DSH_DIR/profiles/web/node_modules"
 GLOBAL_NM="$ROOTFS/usr/local/lib/node_modules"
 mkdir -p "$PROFILE_NM" "$GLOBAL_NM" 2>/dev/null || true
 
-for bp in dsh-device-shell-guide dsh-task-notifier dsh-status-overlay dsh-mobile-lite dsh-classic-chat dsh-quickchat-gesture; do
-    if [ "$bp" = "dsh-mobile-lite" ] || [ "$bp" = "dsh-classic-chat" ] || [ "$bp" = "dsh-quickchat-gesture" ]; then
+for bp in dsh-device-shell-guide dsh-task-notifier dsh-status-overlay dsh-mobile-lite dsh-quickchat-gesture; do
+    if [ "$bp" = "dsh-mobile-lite" ] || [ "$bp" = "dsh-quickchat-gesture" ]; then
         container_tgt="/root/$bp"
         host_tgt="$ROOT_DIR/$bp"
     else
@@ -110,15 +109,14 @@ try:
     deps['dsh-task-notifier'] = 'link:/root/dsha-task-notifier'
     deps['dsh-status-overlay'] = 'link:/root/dsha-status-overlay'
     deps['dsh-mobile-lite'] = 'link:/root/dsh-mobile-lite'
-    deps['dsh-classic-chat'] = 'link:/root/dsh-classic-chat'
     deps['dsh-quickchat-gesture'] = 'link:/root/dsh-quickchat-gesture'
     bundles = doc.setdefault('dsh', {}).setdefault('profile', {}).setdefault('bundles', [])
-    for b in ['dsh-device-shell-guide', 'dsh-task-notifier', 'dsh-status-overlay', 'dsh-mobile-lite', 'dsh-classic-chat', 'dsh-quickchat-gesture']:
+    for b in ['dsh-device-shell-guide', 'dsh-task-notifier', 'dsh-status-overlay', 'dsh-mobile-lite', 'dsh-quickchat-gesture']:
         if b not in bundles:
             bundles.append(b)
     with open('$PROFILE_PKG', 'w', encoding='utf-8') as f:
         json.dump(doc, f, indent=2, ensure_ascii=False)
-    print('  + profiles/web/package.json 已同步注册全部 6 大内置插件')
+    print('  + profiles/web/package.json 已同步注册全部 5 大内置插件')
 except Exception as e:
     print('  ⚠️ 更新 package.json 出现异常:', e)
 " 2>/dev/null || true

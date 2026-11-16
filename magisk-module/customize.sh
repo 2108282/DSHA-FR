@@ -167,6 +167,14 @@ if unzip -l "$ZIPFILE" 2>/dev/null | grep -q "rootfs-overlay/"; then
     rm -rf "$TMP_OVERLAY" 2>/dev/null || true
 fi
 
+# 保留数据安装也执行通用迁移；这里始终保留用户插件和启用状态。
+for migration in "$ROOTFS_DIR/root/.dsh/rootfs-migrations/"*.py; do
+    [ -f "$migration" ] || continue
+    migration_name=$(basename "$migration")
+    chroot "$ROOTFS_DIR" /usr/bin/python3 "/root/.dsh/rootfs-migrations/$migration_name" \
+        || abort "❌ 容器迁移失败: $migration_name"
+done
+
 # 自动自愈核心运行时中可能存在的 .ignored_ 异常改名与断裂软链
 TARGET_CORE_DIR="$ROOTFS_DIR/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai"
 if [ -d "$TARGET_CORE_DIR" ]; then

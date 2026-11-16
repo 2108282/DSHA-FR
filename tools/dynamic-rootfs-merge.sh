@@ -56,6 +56,12 @@ if [ -d "$OVERLAY_DIR" ]; then
     ln -sfn "/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-mcp-client" "$PROFILE_NM/@deepseek-ai/dsh-mcp-client"
     ln -sfn "/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-mcp-client" "$GLOBAL_NM/@deepseek-ai/dsh-mcp-client"
 
+    # 在离线构建目录执行通用迁移，清理基准底包中的退役预装项。
+    for migration in "$STAGE_DIR/root/.dsh/rootfs-migrations/"*.py; do
+        [ -f "$migration" ] || continue
+        python3 "$migration" --root "$STAGE_DIR" --fresh
+    done
+
     # 动态扫描注入的插件实体，自动完成安装凭证立牌与语法检测
     for pdir in "$STAGE_DIR/root/dsha-"* "$STAGE_DIR/root/dsh-"*; do
         [ -d "$pdir" ] || continue

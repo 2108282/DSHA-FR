@@ -166,6 +166,8 @@ if [ -d "$ROOT_DIR/rootfs-overlay" ] && [ -n "$(find "$ROOT_DIR/rootfs-overlay" 
     cp -af "$ROOT_DIR/rootfs-overlay" "$MODULE_DIR/"
     HAS_OVERLAY=1
 fi
+# zip 默认更新会保留已删除的旧条目；先移除旧产物，避免退役预装插件被带回。
+python3 -c "from pathlib import Path; Path('$OUTPUT_DIR/dsha_ksu_native_full.zip').unlink(missing_ok=True)"
 if [ "$HAS_OVERLAY" = "1" ]; then
     zip -r -0 "$OUTPUT_DIR/dsha_ksu_native_full.zip" META-INF module.prop customize.sh service.sh action.sh uninstall.sh scripts rootfs.tar.gz rootfs-overlay >/dev/null
     rm -rf "$MODULE_DIR/rootfs-overlay" 2>/dev/null || true

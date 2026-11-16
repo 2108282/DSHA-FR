@@ -10,7 +10,7 @@ if [ -d "/root/.dsh/plugin-src" ]; then
     [ -d "$p" ] || continue
     name=$(basename "$p")
     # 内置固有插件有专属单源底层，严禁从 plugin-src 建立覆盖软链
-    if [ "$name" = "dsh-device-shell-guide" ] || [ "$name" = "dsh-task-notifier" ] || [ "$name" = "dsh-status-overlay" ] || [ "$name" = "dsh-mobile-lite" ] || [ "$name" = "dsh-classic-chat" ] || [ "$name" = "dsh-quickchat-gesture" ]; then
+    if [ "$name" = "dsh-device-shell-guide" ] || [ "$name" = "dsh-task-notifier" ] || [ "$name" = "dsh-status-overlay" ] || [ "$name" = "dsh-mobile-lite" ] || [ "$name" = "dsh-quickchat-gesture" ]; then
       continue
     fi
     
@@ -65,7 +65,7 @@ for p in /root/dsha-*; do
 done
 
 # 2.1 确保核心移动端独立插件标准软链接（单源绑定 /root/<name>，不回退 plugin-src）
-for cp in dsh-mobile-lite dsh-classic-chat dsh-quickchat-gesture; do
+for cp in dsh-mobile-lite dsh-quickchat-gesture; do
   tgt="/root/$cp"
   if [ -d "$tgt" ]; then
     ln -sfn "$tgt" "/usr/local/lib/node_modules/$cp"

@@ -58,7 +58,6 @@ DEFAULT_BUILTINS = (
     "dsh-task-notifier",
     "dsh-status-overlay",
     "dsh-mobile-lite",
-    "dsh-classic-chat",
     "dsh-quickchat-gesture",
 )
 
@@ -267,6 +266,9 @@ def entity_dir(name):
     """内置插件名 → 其实体目录（/root/dsha-* 或 /root/<name>），官方包回退到全局安装树，找不到返回 None。"""
     if not valid_name(name):
         return None
+    if name == "dsh-classic-chat":
+        path = os.path.join(DSH_HOME, "plugin-src", name)
+        return path if os.path.isfile(local(os.path.join(path, "package.json"))) else None
     if is_official_bundle(name):
         return find_official_pkg_dir(name)
     cands = ["/root/" + name, "/root/dsha-" + name]
@@ -292,6 +294,7 @@ def builtin_names():
     try:
         with open(local(BUILTIN_LIST_REL), encoding="utf-8") as f:
             names = [ln.strip() for ln in f if ln.strip() and not ln.startswith("#")]
+        names = [name for name in names if name != "dsh-classic-chat"]
         if names:
             return names
     except OSError:
