@@ -8,6 +8,7 @@
     android:padding="16dp"
     android:clickable="true"
     android:focusable="true"
+    android:clipToOutline="true"
     android:foreground="?android:attr/selectableItemBackground"
     app:cardRadius="18dp">
 

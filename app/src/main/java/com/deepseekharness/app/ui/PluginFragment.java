@@ -1,5 +1,8 @@
 package com.deepseekharness.app.ui;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
+import android.animation.ValueAnimator;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
@@ -541,6 +544,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
             final DshaToggle toggle;
             final ImageView expandIcon;
             final View detailsPanel;
+            ValueAnimator expansionAnimator;
             final TextView detailText;
             final Button btnUpdate, btnRollback;
             final Button btnAddr, btnRename, btnExport, btnUninstall;
@@ -562,6 +566,82 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
                 btnExport = view.findViewById(R.id.btnPluginExport);
                 btnUninstall = view.findViewById(R.id.btnPluginUninstall);
             }
+        }
+
+        private void cancelExpansion(Holder holder) {
+            if (holder.expansionAnimator != null) {
+                holder.expansionAnimator.removeAllListeners();
+                holder.expansionAnimator.cancel();
+                holder.expansionAnimator = null;
+            }
+            if (holder.expandIcon != null) holder.expandIcon.animate().cancel();
+        }
+
+        private void setExpanded(Holder holder, boolean expanded, boolean animate) {
+            cancelExpansion(holder);
+            View panel = holder.detailsPanel;
+            if (panel == null) return;
+            ViewGroup.LayoutParams params = panel.getLayoutParams();
+            if (!animate || holder.itemView.getWidth() == 0) {
+                params.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+                panel.setLayoutParams(params);
+                panel.setAlpha(1f);
+                panel.setVisibility(expanded ? View.VISIBLE : View.GONE);
+                if (holder.expandIcon != null) holder.expandIcon.setRotation(expanded ? 180f : 0f);
+                return;
+            }
+
+            int from = panel.getVisibility() == View.VISIBLE ? panel.getHeight() : 0;
+            float fromAlpha = panel.getVisibility() == View.VISIBLE ? panel.getAlpha() : 0f;
+            int to = 0;
+            if (expanded) {
+                int width = holder.itemView.getWidth() - holder.itemView.getPaddingLeft()
+                        - holder.itemView.getPaddingRight();
+                if (params instanceof ViewGroup.MarginLayoutParams) {
+                    ViewGroup.MarginLayoutParams margins = (ViewGroup.MarginLayoutParams) params;
+                    width -= margins.leftMargin + margins.rightMargin;
+                }
+                panel.measure(View.MeasureSpec.makeMeasureSpec(Math.max(0, width), View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+                to = panel.getMeasuredHeight();
+            }
+            params.height = from;
+            panel.setLayoutParams(params);
+            panel.setAlpha(fromAlpha);
+            panel.setVisibility(View.VISIBLE);
+            android.view.animation.Interpolator easing =
+                    new android.view.animation.PathInterpolator(0.2f, 0f, 0f, 1f);
+            ValueAnimator animator = ValueAnimator.ofInt(from, to);
+            holder.expansionAnimator = animator;
+            animator.setDuration(220);
+            animator.setInterpolator(easing);
+            animator.addUpdateListener(frame -> {
+                ViewGroup.LayoutParams current = panel.getLayoutParams();
+                current.height = (int) frame.getAnimatedValue();
+                panel.setLayoutParams(current);
+                panel.setAlpha(fromAlpha + ((expanded ? 1f : 0f) - fromAlpha) * frame.getAnimatedFraction());
+            });
+            animator.addListener(new AnimatorListenerAdapter() {
+                @Override public void onAnimationEnd(Animator animation) {
+                    holder.expansionAnimator = null;
+                    ViewGroup.LayoutParams current = panel.getLayoutParams();
+                    current.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+                    panel.setVisibility(expanded ? View.VISIBLE : View.GONE);
+                    panel.setLayoutParams(current);
+                    panel.setAlpha(1f);
+                }
+            });
+            if (holder.expandIcon != null) {
+                holder.expandIcon.animate().rotation(expanded ? 180f : 0f)
+                        .setDuration(220).setInterpolator(easing).start();
+            }
+            animator.start();
+        }
+
+        @Override
+        public void onViewRecycled(@NonNull Holder holder) {
+            cancelExpansion(holder);
+            super.onViewRecycled(holder);
         }
 
         @NonNull
@@ -610,12 +690,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
 
             // 5. 点击卡片展开折叠内嵌详情；开关与详情中的操作按钮保持独立。
             boolean isExpanded = expandedPlugins.contains(item.name);
-            if (holder.detailsPanel != null) {
-                holder.detailsPanel.setVisibility(isExpanded ? View.VISIBLE : View.GONE);
-            }
-            if (holder.expandIcon != null) {
-                holder.expandIcon.setRotation(isExpanded ? 180f : 0f);
-            }
+            setExpanded(holder, isExpanded, false);
             holder.itemView.setContentDescription(item.name + (isExpanded ? "，已展开详情" : "，点击查看详情"));
             holder.itemView.setOnClickListener(v -> {
                 int pos = holder.getAdapterPosition();
@@ -625,7 +700,9 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
                 } else {
                     expandedPlugins.add(item.name);
                 }
-                notifyItemChanged(pos);
+                boolean expanded = expandedPlugins.contains(item.name);
+                holder.itemView.setContentDescription(item.name + (expanded ? "，已展开详情" : "，点击查看详情"));
+                setExpanded(holder, expanded, true);
             });
 
             // 6. 展开抽屉内的详情与 4 个小按钮
