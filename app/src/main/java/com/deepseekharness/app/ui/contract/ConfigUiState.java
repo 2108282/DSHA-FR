@@ -8,7 +8,6 @@ public class ConfigUiState {
     public final boolean isOverlayStream;
     public final boolean isCapSensors;
     public final boolean isCapLocation;
-    public final boolean isChromiumFlags;
     public final boolean isBlockGuardActive;
     public final boolean isBlockGuardGlobal;
     public final String blockGuardStatusText;
@@ -20,7 +19,6 @@ public class ConfigUiState {
 
     public ConfigUiState(String port, String taskset, boolean isConfirmShell, boolean isIdleFreeze,
                          boolean isOverlayStream, boolean isCapSensors, boolean isCapLocation,
-                         boolean isChromiumFlags,
                          boolean isBlockGuardActive, boolean isBlockGuardGlobal,
                          String blockGuardStatusText,
                          String allFilesStatusText,
@@ -33,7 +31,6 @@ public class ConfigUiState {
         this.isOverlayStream = isOverlayStream;
         this.isCapSensors = isCapSensors;
         this.isCapLocation = isCapLocation;
-        this.isChromiumFlags = isChromiumFlags;
         this.isBlockGuardActive = isBlockGuardActive;
         this.isBlockGuardGlobal = isBlockGuardGlobal;
         this.blockGuardStatusText = blockGuardStatusText;

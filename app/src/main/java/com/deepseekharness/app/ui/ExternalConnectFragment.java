@@ -172,6 +172,11 @@ public final class ExternalConnectFragment extends Fragment {
         initViews(v);
         applyTheme(v);
         bindEvents();
+        ((SwipeFrameLayout) v).setOnSwipeListener(new SwipeFrameLayout.OnSwipeListener() {
+            @Override public void onSwipeLeft() { selectProtocolTab(1, true); }
+            @Override public void onSwipeRight() { selectProtocolTab(0, true); }
+        });
+        selectProtocolTab(savedInstanceState == null ? 0 : savedInstanceState.getInt("protocolTab", 0), false);
         refreshAllAsync();
         refreshSshAllAsync();
     }
@@ -230,6 +235,21 @@ public final class ExternalConnectFragment extends Fragment {
         btnOpenSshConfig = v.findViewById(R.id.ssh_btn_open_config);
     }
 
+    private void selectProtocolTab(int index, boolean animate) {
+        if (index != 0 && index != 1) return;
+        if (segProtocol != null && segProtocol.getSelectedIndex() != index) {
+            segProtocol.setSelectedIndex(index, animate);
+        }
+        if (containerAdb != null) containerAdb.setVisibility(index == 0 ? View.VISIBLE : View.GONE);
+        if (containerSsh != null) containerSsh.setVisibility(index == 1 ? View.VISIBLE : View.GONE);
+    }
+
+    @Override
+    public void onSaveInstanceState(@NonNull Bundle state) {
+        super.onSaveInstanceState(state);
+        if (segProtocol != null) state.putInt("protocolTab", segProtocol.getSelectedIndex());
+    }
+
     private void applyTheme(View root) {
         if (!isAdded()) return;
         Context ctx = requireContext();
@@ -250,11 +270,7 @@ public final class ExternalConnectFragment extends Fragment {
     private void bindEvents() {
         // 协议 Tab 切换
         if (segProtocol != null) {
-            segProtocol.setOnTabSelectedListener(index -> {
-                boolean isAdb = (index == 0);
-                if (containerAdb != null) containerAdb.setVisibility(isAdb ? View.VISIBLE : View.GONE);
-                if (containerSsh != null) containerSsh.setVisibility(isAdb ? View.GONE : View.VISIBLE);
-            });
+            segProtocol.setOnTabSelectedListener(index -> selectProtocolTab(index, true));
         }
 
         // ADB 事件

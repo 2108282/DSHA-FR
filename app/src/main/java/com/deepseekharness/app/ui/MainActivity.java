@@ -130,12 +130,12 @@ public class MainActivity extends AppCompatActivity {
         swipeContainer.setOnSwipeListener(new SwipeFrameLayout.OnSwipeListener() {
             @Override
             public void onSwipeLeft() {
-                if (topLevelSwipeEnabled) selectAdjacentTab(nav, 1);
+                if (topLevelSwipeEnabled) handleTabSwipe(nav, 1);
             }
 
             @Override
             public void onSwipeRight() {
-                if (topLevelSwipeEnabled) selectAdjacentTab(nav, -1);
+                if (topLevelSwipeEnabled) handleTabSwipe(nav, -1);
             }
         });
         nav.setOnItemSelectedListener(item -> {
@@ -152,6 +152,7 @@ public class MainActivity extends AppCompatActivity {
         getSupportFragmentManager().addOnBackStackChangedListener(() -> {
             setTopLevelSwipeEnabled(getSupportFragmentManager().getBackStackEntryCount() == 0);
         });
+        setTopLevelSwipeEnabled(getSupportFragmentManager().getBackStackEntryCount() == 0);
         nav.setOnItemReselectedListener(item -> {
             if (getSupportFragmentManager().getBackStackEntryCount() > 0) {
                 getSupportFragmentManager().popBackStackImmediate(null, FragmentManager.POP_BACK_STACK_INCLUSIVE);
@@ -256,6 +257,13 @@ public class MainActivity extends AppCompatActivity {
                 .setCustomAnimations(enter, exit, R.anim.fragment_pop_enter, R.anim.fragment_pop_exit)
                 .replace(R.id.fragment_container, f)
                 .commit();
+    }
+
+    private void handleTabSwipe(BottomNavigationView nav, int offset) {
+        Fragment current = getSupportFragmentManager().findFragmentById(R.id.fragment_container);
+        // 一个手势只切换一层：插件内层有相邻页时优先消费，到边界后才切底部标签。
+        if (current instanceof PluginFragment && ((PluginFragment) current).selectAdjacentPluginTab(offset)) return;
+        selectAdjacentTab(nav, offset);
     }
 
     private void selectAdjacentTab(BottomNavigationView nav, int offset) {

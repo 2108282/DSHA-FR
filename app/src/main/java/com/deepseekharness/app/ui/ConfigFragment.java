@@ -36,7 +36,6 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
     private DshaToggle idleFreezeToggle;
     private DshaToggle sensorsToggle;
     private DshaToggle locationToggle;
-    private DshaToggle chromiumFlagsToggle;
     private DshaToggle blockGuardActiveToggle;
     private DshaToggle blockGuardGlobalToggle;
     private TextView blockGuardStatusText;
@@ -123,16 +122,6 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
             if (row != null) row.setOnClickListener(v -> locationToggle.toggle());
         }
 
-        chromiumFlagsToggle = view.findViewById(R.id.config_toggle_chromium_flags);
-        if (chromiumFlagsToggle != null) {
-            chromiumFlagsToggle.setOnCheckedChangeListener((toggle, isChecked) -> {
-                if (isBinding) return;
-                actions.onToggleChromiumFlags(isChecked);
-            });
-            View row = view.findViewById(R.id.config_row_chromium_flags);
-            if (row != null) row.setOnClickListener(v -> chromiumFlagsToggle.toggle());
-        }
-
         // 高危操作：物理块设备防砖隔离即时控制 (临时开关)
         blockGuardActiveToggle = view.findViewById(R.id.config_toggle_block_guard_active);
         if (blockGuardActiveToggle != null) {
@@ -207,7 +196,6 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         if (idleFreezeToggle != null) idleFreezeToggle.setOnCheckedChangeListener(null);
         if (sensorsToggle != null) sensorsToggle.setOnCheckedChangeListener(null);
         if (locationToggle != null) locationToggle.setOnCheckedChangeListener(null);
-        if (chromiumFlagsToggle != null) chromiumFlagsToggle.setOnCheckedChangeListener(null);
 
         presenter = null;
         actions = null;
@@ -217,7 +205,6 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         idleFreezeToggle = null;
         sensorsToggle = null;
         locationToggle = null;
-        chromiumFlagsToggle = null;
         translateBtn = null;
         allFilesBtn = null;
         allFilesStatusText = null;
@@ -258,9 +245,6 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         }
         if (locationToggle != null && locationToggle.isChecked() != state.isCapLocation) {
             locationToggle.setChecked(state.isCapLocation, false, false);
-        }
-        if (chromiumFlagsToggle != null && chromiumFlagsToggle.isChecked() != state.isChromiumFlags) {
-            chromiumFlagsToggle.setChecked(state.isChromiumFlags, false, false);
         }
         if (blockGuardActiveToggle != null && blockGuardActiveToggle.isChecked() != state.isBlockGuardActive) {
             blockGuardActiveToggle.setChecked(state.isBlockGuardActive, false, false);

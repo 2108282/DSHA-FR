@@ -1,6 +1,7 @@
 package com.deepseekharness.app.ui;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
@@ -27,6 +28,9 @@ import androidx.fragment.app.Fragment;
 
 import com.deepseekharness.app.R;
 import com.deepseekharness.app.core.ConfigStore;
+import com.deepseekharness.app.util.ChromiumFlagsHelper;
+import com.deepseekharness.app.util.Constants;
+import com.deepseekharness.app.util.ToastHelper;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -39,6 +43,7 @@ public class SheetSettingsFragment extends Fragment {
     private TextView styleValue;
     private LinearLayout styleDots;
     private TextView specValue;
+    private DshaToggle chromiumFlagsToggle;
     private DshaToggle cornerGestureToggle;
     private TextView cornerGestureStatus;
     private final Runnable cornerGestureListener = this::refreshCornerGestureState;
@@ -59,6 +64,24 @@ public class SheetSettingsFragment extends Fragment {
         View v = inflater.inflate(R.layout.fragment_sheet_settings, container, false);
 
         ConfigStore cfg = new ConfigStore(requireContext());
+
+        // Chromium 实验性参数沿用原偏好键与宿主命令行同步逻辑。
+        SharedPreferences preferences = requireContext().getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE);
+        chromiumFlagsToggle = v.findViewById(R.id.sheet_settings_chromium_flags_toggle);
+        if (chromiumFlagsToggle != null) {
+            chromiumFlagsToggle.setChecked(preferences.getBoolean(Constants.KEY_CHROMIUM_FLAGS, false), false, false);
+            chromiumFlagsToggle.setOnCheckedChangeListener((toggle, isChecked) -> {
+                preferences.edit().putBoolean(Constants.KEY_CHROMIUM_FLAGS, isChecked).apply();
+                ChromiumFlagsHelper.syncSystemCommandLine(requireContext().getApplicationContext(), isChecked);
+                ToastHelper.show(requireContext(), isChecked
+                        ? "已开启 Chromium 实验性参数（重启应用后生效）"
+                        : "已关闭 Chromium 实验性参数（重启应用后生效）");
+            });
+            View chromiumFlagsRow = v.findViewById(R.id.sheet_settings_chromium_flags_row);
+            if (chromiumFlagsRow != null) {
+                chromiumFlagsRow.setOnClickListener(x -> chromiumFlagsToggle.toggle());
+            }
+        }
 
         // 0. 抽屉纯净模式开关（纯净实体浏览器窗口，无毛玻璃与半透特效）
         DshaToggle pureModeToggle = v.findViewById(R.id.sheet_settings_pure_mode_toggle);
@@ -158,7 +181,7 @@ public class SheetSettingsFragment extends Fragment {
             }
         }
 
-        // 2.0 莫奈取反独立卡片开关
+        // 2.0 主题样式卡片内的莫奈取反开关
         if (monetInvertToggle != null) {
             monetInvertToggle.setChecked(cfg.isSheetMonetInvert(), false, false);
             monetInvertToggle.setOnCheckedChangeListener((toggle, isChecked) -> {
@@ -364,17 +387,11 @@ public class SheetSettingsFragment extends Fragment {
         if (v == null) return;
         int visibility = isPureMode ? View.GONE : View.VISIBLE;
 
-        // 1. 反色模式行及分割线
-        View invertRow = v.findViewById(R.id.sheet_settings_invert_row);
-        View invertDivider = v.findViewById(R.id.sheet_settings_invert_divider);
-        if (invertRow != null) invertRow.setVisibility(visibility);
-        if (invertDivider != null) invertDivider.setVisibility(visibility);
-
-        // 2. 莫奈取色行及分割线
-        View monetRow = v.findViewById(R.id.sheet_settings_monet_row);
-        View monetDivider = v.findViewById(R.id.sheet_settings_monet_divider);
-        if (monetRow != null) monetRow.setVisibility(visibility);
-        if (monetDivider != null) monetDivider.setVisibility(visibility);
+        // 主题样式整组折叠，避免留下空卡片、标题或分割线。
+        View themeStyleContainer = v.findViewById(R.id.sheet_settings_theme_style_container);
+        View themeStyleLabel = v.findViewById(R.id.sheet_settings_theme_style_label);
+        if (themeStyleContainer != null) themeStyleContainer.setVisibility(visibility);
+        if (themeStyleLabel != null) themeStyleLabel.setVisibility(visibility);
 
         // 莫奈二级选项卡片与标签
         View monetOptionsContainer = v.findViewById(R.id.sheet_settings_monet_options_container);
@@ -393,12 +410,6 @@ public class SheetSettingsFragment extends Fragment {
             if (monetInvertRow != null) monetInvertRow.setVisibility(monetEnabled ? View.VISIBLE : View.GONE);
             if (monetInvertDivider != null) monetInvertDivider.setVisibility(monetEnabled ? View.VISIBLE : View.GONE);
         }
-
-        // 3. 渐变材质行及分割线
-        View liquidRow = v.findViewById(R.id.sheet_settings_liquid_glass_row);
-        View liquidDivider = v.findViewById(R.id.sheet_settings_liquid_glass_divider);
-        if (liquidRow != null) liquidRow.setVisibility(visibility);
-        if (liquidDivider != null) liquidDivider.setVisibility(visibility);
 
         // 4. 背景压暗蒙版
         View dimLabel = v.findViewById(R.id.sheet_settings_dim_label);
@@ -419,6 +430,11 @@ public class SheetSettingsFragment extends Fragment {
         com.deepseekharness.app.gesture.CornerGesturePreview.addListener(cornerGestureListener);
         refreshCornerGestureState();
         syncActivityTitle(true);
+        if (chromiumFlagsToggle != null) {
+            boolean enabled = requireContext().getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE)
+                    .getBoolean(Constants.KEY_CHROMIUM_FLAGS, false);
+            chromiumFlagsToggle.setChecked(enabled, false, false);
+        }
         if (getView() != null) {
             MonetEngine.applyToViewTree(getView(), MonetEngine.resolveCurrentPalette(requireContext()));
         }
@@ -435,6 +451,8 @@ public class SheetSettingsFragment extends Fragment {
         com.deepseekharness.app.gesture.CornerGesturePreview.removeListener(cornerGestureListener);
         cornerGestureToggle = null;
         cornerGestureStatus = null;
+        if (chromiumFlagsToggle != null) chromiumFlagsToggle.setOnCheckedChangeListener(null);
+        chromiumFlagsToggle = null;
         syncActivityTitle(false);
         styleValue = null;
         styleDots = null;

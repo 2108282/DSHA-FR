@@ -237,18 +237,16 @@ public class ModernSegmentedView extends View {
 
         float target = (index == 0) ? 0f : 1f;
 
-        // 若已经在向目标平滑滑动，继续让它跑完，绝不重复 cancel 打断！
-        if (animator != null && animator.isRunning()) {
-            return;
-        }
-
-        if (progress == target) {
-            return;
-        }
-
+        // 相同目标的重复渲染不打断动画；快速反向切换必须重定向动画并派发新选择。
+        if (!changed && animator != null && animator.isRunning()) return;
         if (animator != null) {
             animator.cancel();
             animator = null;
+        }
+
+        if (progress == target) {
+            if (changed && listener != null) listener.onTabSelected(index);
+            return;
         }
 
         if (animate && isAttachedToWindow()) {
@@ -281,6 +279,11 @@ public class ModernSegmentedView extends View {
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
+        if (animator != null) {
+            animator.cancel();
+            animator = null;
+        }
+        progress = selectedIndex == 0 ? 0f : 1f;
         if (thumbShadowBitmap != null && !thumbShadowBitmap.isRecycled()) {
             thumbShadowBitmap.recycle();
             thumbShadowBitmap = null;

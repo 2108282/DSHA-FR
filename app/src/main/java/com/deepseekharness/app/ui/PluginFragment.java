@@ -258,6 +258,15 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
         MonetEngine.applyToViewTree(view, MonetEngine.resolveCurrentPalette(requireContext()));
     }
 
+    boolean selectAdjacentPluginTab(int offset) {
+        if (root == null || presenter == null || actions == null) return false;
+        int current = presenter.isMarket() ? 0 : 1;
+        int target = current + offset;
+        if (target < 0 || target > 1) return false;
+        actions.onSelectTab(target == 0);
+        return true;
+    }
+
     @Override
     public void onSaveInstanceState(@NonNull Bundle state) {
         super.onSaveInstanceState(state);

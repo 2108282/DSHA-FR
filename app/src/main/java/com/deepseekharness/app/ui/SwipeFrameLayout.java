@@ -17,6 +17,7 @@ public class SwipeFrameLayout extends FrameLayout {
     private float downX;
     private float downY;
     private boolean trackingSwipe;
+    private boolean gestureRejected;
     private OnSwipeListener swipeListener;
     private boolean swipeEnabled = true;
 
@@ -39,6 +40,7 @@ public class SwipeFrameLayout extends FrameLayout {
 
     public void setSwipeEnabled(boolean enabled) {
         swipeEnabled = enabled;
+        if (!enabled) trackingSwipe = false;
     }
 
     @Override
@@ -49,15 +51,24 @@ public class SwipeFrameLayout extends FrameLayout {
                 downX = event.getX();
                 downY = event.getY();
                 trackingSwipe = false;
+                gestureRejected = false;
                 break;
             case MotionEvent.ACTION_MOVE:
+                if (gestureRejected) break;
                 float dx = event.getX() - downX;
                 float dy = event.getY() - downY;
-                if (Math.abs(dx) > touchSlop && Math.abs(dx) > Math.abs(dy) * 1.25f) {
+                if (Math.abs(dy) > touchSlop && Math.abs(dy) >= Math.abs(dx)) {
+                    gestureRejected = true;
+                } else if (Math.abs(dx) > touchSlop && Math.abs(dx) > Math.abs(dy) * 1.25f) {
                     trackingSwipe = true;
                     return true;
                 }
                 break;
+            case MotionEvent.ACTION_POINTER_DOWN:
+                gestureRejected = true;
+                trackingSwipe = false;
+                break;
+            case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
                 trackingSwipe = false;
                 break;
@@ -67,9 +78,29 @@ public class SwipeFrameLayout extends FrameLayout {
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        if (!swipeEnabled) return super.onTouchEvent(event);
         switch (event.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                downX = event.getX();
+                downY = event.getY();
+                trackingSwipe = false;
+                gestureRejected = false;
+                return true;
             case MotionEvent.ACTION_MOVE:
-                return trackingSwipe || super.onTouchEvent(event);
+                if (!gestureRejected) {
+                    float dx = event.getX() - downX;
+                    float dy = event.getY() - downY;
+                    if (!trackingSwipe && Math.abs(dy) > touchSlop && Math.abs(dy) >= Math.abs(dx)) {
+                        gestureRejected = true;
+                    } else if (Math.abs(dx) > touchSlop && Math.abs(dx) > Math.abs(dy) * 1.25f) {
+                        trackingSwipe = true;
+                    }
+                }
+                return true;
+            case MotionEvent.ACTION_POINTER_DOWN:
+                gestureRejected = true;
+                trackingSwipe = false;
+                return true;
             case MotionEvent.ACTION_UP:
                 if (trackingSwipe) {
                     float dx = event.getX() - downX;
