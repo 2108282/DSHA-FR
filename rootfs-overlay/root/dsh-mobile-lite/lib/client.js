@@ -1824,6 +1824,65 @@ exports.COMPOSER_AND_STATS_CSS = `/* ===========================================
    dsh-web-mobile: 移动端紧凑化样式（严格遵循上游 @media 媒体查询契约）
    ========================================================================== */
 
+/* ==========================================================================
+   0. 上传按钮基线样式（不受媒体查询门控）
+   --------------------------------------------------------------------------
+   背景：上传按钮由 effects/file-upload.ts 在 composer 卡片里注入，注入本身
+   不分端；但全文件的样式此前都锁在「宽 ≤1023px 且粗指针」的 @media 里，
+   桌面端一条规则都没命中，按钮就以浏览器原生 button 渲染
+   （buttonface 底色 + 2px outset 边框），在浅色输入框上就是一圈黑框。
+   修法：补一段两端通用的基线，尺寸与观感对齐宿主自带工具键
+   [class*="_add"]（28×28、999px 胶囊、--dsw-specific-selector 中性底色、
+   hover 走 --dsw-alias-interactive-bg-hover-solid），并把原生外观彻底关掉。
+   刻意不加 !important：下方 @media 段（6 / 7.11）在源顺序上更靠后，
+   同特异性下依旧由移动端那套透明胶囊 + ::before/::after 规则接管，
+   移动端现有观感与命中区不变。
+   ========================================================================== */
+[data-composer-card] [data-mobile-nav="file-upload"] {
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  min-width: 28px;
+  max-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  max-height: 28px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--dsw-specific-selector, transparent);
+  color: var(--dsw-alias-label-primary, inherit);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+[data-composer-card] [data-mobile-nav="file-upload"]:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover-solid, rgba(127, 127, 127, .12));
+}
+[data-composer-card] [data-mobile-nav="file-upload"]:focus-visible {
+  outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary, currentColor));
+  outline-offset: 2px;
+}
+[data-composer-card] [data-mobile-nav="file-upload"]:disabled {
+  opacity: .5;
+  cursor: default;
+}
+/* 桌面端 ink 跟随宿主的 + 号（IconPlusOutlineMedium 固定 14px）；
+   移动端在下方 7.11 用 !important 抬到 16px，与权限 / + 三点等距。 */
+[data-composer-card] [data-mobile-nav="file-upload"] svg {
+  display: block;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+}
+
 @media (max-width: 1023px) and (pointer: coarse) {
   /* 1. 活跃会话下的输入框紧凑化 */
   [data-phase="active"] [data-composer-card] {
