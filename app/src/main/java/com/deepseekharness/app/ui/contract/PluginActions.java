@@ -8,7 +8,6 @@ import com.deepseekharness.app.core.PluginRepository;
 public interface PluginActions {
     void onSelectTab(boolean showMarket);
     void onRefreshClick();
-    void onWebsiteClick();
     void onLinkChanged(String link);
     void onPasteLinkClick();
     void onInstallLinkClick();

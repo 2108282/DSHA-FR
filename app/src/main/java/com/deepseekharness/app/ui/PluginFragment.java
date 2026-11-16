@@ -56,8 +56,6 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
     private NestedScrollView pluginScroll;
     private ModernSegmentedView modernSegmentedTabs;
     private ImageView btnRefresh;
-    private View pluginWebsiteSection;
-    private Button btnPluginWebsite;
     private View pluginLinkSection;
     private EditText linkInput;
     private TextView linkHint;
@@ -152,8 +150,6 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
             });
         }
         btnRefresh = view.findViewById(R.id.btnRefresh);
-        pluginWebsiteSection = view.findViewById(R.id.pluginWebsiteSection);
-        btnPluginWebsite = view.findViewById(R.id.btnPluginWebsite);
         pluginLinkSection = view.findViewById(R.id.pluginLinkSection);
         linkInput = view.findViewById(R.id.appbar_github_input);
         linkHint = view.findViewById(R.id.pluginLinkHint);
@@ -199,7 +195,6 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
 
         // 3. 事件契约绑定（单行派发，业务与视图完全解耦）
         btnRefresh.setOnClickListener(v -> actions.onRefreshClick());
-        btnPluginWebsite.setOnClickListener(v -> actions.onWebsiteClick());
         btnPluginInstall.setOnClickListener(v -> actions.onInstallLinkClick());
         btnPluginPaste.setOnClickListener(v -> actions.onPasteLinkClick());
         btnImport.setOnClickListener(v -> actions.onImportClick(false));
@@ -282,8 +277,6 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
         pluginScroll = null;
         modernSegmentedTabs = null;
         btnRefresh = null;
-        pluginWebsiteSection = null;
-        btnPluginWebsite = null;
         pluginLinkSection = null;
         linkInput = null;
         linkHint = null;

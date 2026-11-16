@@ -124,6 +124,9 @@ public class SettingsFragment extends Fragment implements SettingsPresenter.View
 
     public void openSubFragment(Fragment fragment) {
         if (!isAdded() || fragment == null) return;
+        if (requireActivity() instanceof MainActivity) {
+            ((MainActivity) requireActivity()).setTopLevelSwipeEnabled(false);
+        }
         getParentFragmentManager().beginTransaction()
                 .setCustomAnimations(
                         R.anim.fragment_enter, R.anim.fragment_exit,
@@ -136,6 +139,9 @@ public class SettingsFragment extends Fragment implements SettingsPresenter.View
     @Override
     public void onOpenSubFragment(int index) {
         if (!isAdded() || index < 0 || index >= TAB_OPTIONS.length) return;
+        if (requireActivity() instanceof MainActivity) {
+            ((MainActivity) requireActivity()).setTopLevelSwipeEnabled(false);
+        }
         getParentFragmentManager().beginTransaction()
                 .setCustomAnimations(
                         R.anim.fragment_enter, R.anim.fragment_exit,

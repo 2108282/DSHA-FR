@@ -5,7 +5,6 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
-import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
 import android.widget.Toast;
@@ -177,16 +176,6 @@ public class PluginPresenter implements PluginActions {
     @Override
     public void onRefreshClick() {
         repository.refresh();
-    }
-
-    @Override
-    public void onWebsiteClick() {
-        try {
-            activity.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://dsha.cc/"))
-                    .addCategory(Intent.CATEGORY_BROWSABLE));
-        } catch (RuntimeException error) {
-            ToastHelper.makeText(context, "无法打开浏览器，请在浏览器中访问 https://dsha.cc/", Toast.LENGTH_SHORT).show();
-        }
     }
 
     @Override

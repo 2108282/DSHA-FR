@@ -26,6 +26,8 @@ public class MainActivity extends AppCompatActivity {
 
     public static volatile MainActivity current;
     private boolean requestingLocalNetwork;
+    private boolean topLevelSwipeEnabled = true;
+    private int tabTransitionDirection = 0;
     private final androidx.activity.result.ActivityResultLauncher<String> localNetworkPermission =
             registerForActivityResult(new androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
                     granted -> {
@@ -124,16 +126,32 @@ public class MainActivity extends AppCompatActivity {
                 }, true);
 
         BottomNavigationView nav = findViewById(R.id.bottom_nav);
+        SwipeFrameLayout swipeContainer = findViewById(R.id.fragment_container);
+        swipeContainer.setOnSwipeListener(new SwipeFrameLayout.OnSwipeListener() {
+            @Override
+            public void onSwipeLeft() {
+                if (topLevelSwipeEnabled) selectAdjacentTab(nav, 1);
+            }
+
+            @Override
+            public void onSwipeRight() {
+                if (topLevelSwipeEnabled) selectAdjacentTab(nav, -1);
+            }
+        });
         nav.setOnItemSelectedListener(item -> {
             // 关键安全守卫：切换顶层 Tab 时，坚决清空 FragmentManager 所有二级页面返回栈，彻底杜绝跨 Tab 返回泄漏与幽灵 Fragment 叠加
             if (getSupportFragmentManager().getBackStackEntryCount() > 0) {
                 getSupportFragmentManager().popBackStackImmediate(null, FragmentManager.POP_BACK_STACK_INCLUSIVE);
             }
+            setTopLevelSwipeEnabled(true);
             switchTab(item.getItemId());
             return true;
         });
 
         // 重选当前 Tab 监听：如果在设置二级页面重复点击设置 Tab，立即回滚返回栈回到设置首页
+        getSupportFragmentManager().addOnBackStackChangedListener(() -> {
+            setTopLevelSwipeEnabled(getSupportFragmentManager().getBackStackEntryCount() == 0);
+        });
         nav.setOnItemReselectedListener(item -> {
             if (getSupportFragmentManager().getBackStackEntryCount() > 0) {
                 getSupportFragmentManager().popBackStackImmediate(null, FragmentManager.POP_BACK_STACK_INCLUSIVE);
@@ -224,12 +242,51 @@ public class MainActivity extends AppCompatActivity {
                     ? new PtyTerminalFragment() : new TerminalFragment();
             if (title != null) title.setText(R.string.nav_terminal);
         }
+        SwipeFrameLayout container = findViewById(R.id.fragment_container);
+        if (container != null) container.setSwipeEnabled(true);
+        FragmentManager fm = getSupportFragmentManager();
+        Fragment currentFragment = fm.findFragmentById(R.id.fragment_container);
+        boolean forward = tabTransitionDirection != 0
+                ? tabTransitionDirection > 0
+                : currentFragment == null || tabPosition(id) > tabPosition(navIdForFragment(currentFragment));
+        tabTransitionDirection = 0;
+        int enter = forward ? R.anim.tab_forward_enter : R.anim.tab_backward_enter;
+        int exit = forward ? R.anim.tab_forward_exit : R.anim.tab_backward_exit;
         getSupportFragmentManager().beginTransaction()
-                .setCustomAnimations(
-                        R.anim.fragment_enter, R.anim.fragment_exit,
-                        R.anim.fragment_pop_enter, R.anim.fragment_pop_exit)
+                .setCustomAnimations(enter, exit, R.anim.fragment_pop_enter, R.anim.fragment_pop_exit)
                 .replace(R.id.fragment_container, f)
                 .commit();
+    }
+
+    private void selectAdjacentTab(BottomNavigationView nav, int offset) {
+        int[] tabs = {R.id.nav_launch, R.id.nav_plugins, R.id.nav_settings, R.id.nav_terminal};
+        int current = nav.getSelectedItemId();
+        int position = tabPosition(current);
+        int next = position + offset;
+        if (position < 0 || next < 0 || next >= tabs.length) return;
+        tabTransitionDirection = offset;
+        nav.setSelectedItemId(tabs[next]);
+    }
+
+    private int tabPosition(int id) {
+        if (id == R.id.nav_launch) return 0;
+        if (id == R.id.nav_plugins) return 1;
+        if (id == R.id.nav_settings) return 2;
+        if (id == R.id.nav_terminal) return 3;
+        return -1;
+    }
+
+    private int navIdForFragment(Fragment fragment) {
+        if (fragment instanceof PluginFragment) return R.id.nav_plugins;
+        if (fragment instanceof SettingsFragment) return R.id.nav_settings;
+        if (fragment instanceof PtyTerminalFragment || fragment instanceof TerminalFragment) return R.id.nav_terminal;
+        return R.id.nav_launch;
+    }
+
+    public void setTopLevelSwipeEnabled(boolean enabled) {
+        topLevelSwipeEnabled = enabled;
+        SwipeFrameLayout container = findViewById(R.id.fragment_container);
+        if (container != null) container.setSwipeEnabled(enabled);
     }
 
     @Override protected void onNewIntent(Intent intent) {

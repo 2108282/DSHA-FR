@@ -63,50 +63,6 @@
             android:orientation="vertical"
             android:visibility="gone">
 
-            <!-- 卡片 1: 发现更多插件 (padding: 18px; border-radius: 18px; Skia 双层阴影) -->
-            <com.deepseekharness.app.ui.ModernCardView
-                android:id="@+id/pluginWebsiteSection"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:orientation="vertical"
-                android:padding="18dp"
-                app:cardRadius="18dp">
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="发现更多插件"
-                    android:textColor="@color/text"
-                    android:textSize="18sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="DSHA 官方与社区扩展插件生态库"
-                    android:textColor="@color/text_muted"
-                    android:textSize="13sp" />
-
-                <Button
-                    android:id="@+id/btnPluginWebsite"
-                    android:layout_width="match_parent"
-                    android:layout_height="46dp"
-                    android:layout_marginTop="14dp"
-                    android:background="@drawable/m3_btn_primary_expressive"
-                    android:elevation="4dp"
-                    android:outlineAmbientShadowColor="#00000000"
-                    android:outlineProvider="background"
-                    android:outlineSpotShadowColor="#3847699F"
-                    android:stateListAnimator="@animator/btn_press_scale"
-                    android:text="前往 dsha.cc 选插件"
-                    android:textAllCaps="false"
-                    android:textColor="@color/accent_on"
-                    android:textSize="15sp"
-                    android:textStyle="bold" />
-            </com.deepseekharness.app.ui.ModernCardView>
-
             <!-- 卡片 2: 填写包名或仓库链接安装 (padding: 18px; border-radius: 18px) -->
             <com.deepseekharness.app.ui.ModernCardView
                 android:id="@+id/pluginLinkSection"
