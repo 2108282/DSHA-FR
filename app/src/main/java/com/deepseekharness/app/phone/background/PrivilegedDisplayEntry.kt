@@ -23,8 +23,8 @@ class PrivilegedDisplayService(context: Context) : IPrivilegedDisplay.Stub() {
         if (Binder.getCallingUid() != appUid && Binder.getCallingUid() != Process.myUid()) {
             return Bundle().apply { putBoolean(Proto.OK, false); putString(Proto.ERROR, "identityChanged") }
         }
-        if (request.getString("revision") != null && request.getString("revision") != Proto.REVISION) {
-            return Bundle().apply { putBoolean(Proto.OK, false); putString(Proto.ERROR, "identityChanged") }
+        if (request.getString(Proto.OP) != Proto.OP_PROBE && request.getString("revision") != Proto.REVISION) {
+            return Bundle().apply { putBoolean(Proto.OK, false); putString(Proto.ERROR, "protocolMismatch"); putString("revision", Proto.REVISION) }
         }
         return core.handle(request)
     }

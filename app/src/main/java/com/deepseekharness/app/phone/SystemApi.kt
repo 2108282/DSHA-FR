@@ -11,7 +11,15 @@ import java.time.format.DateTimeParseException
 data class AppEntry(val label: String, val packageName: String)
 
 /** Outcome of a system action, one sentence for the model. */
-class SysResult(val ok: Boolean, val message: String, val packageName: String? = null, val appLabel: String? = null)
+class SysResult(
+    val ok: Boolean,
+    val message: String,
+    val packageName: String? = null,
+    val appLabel: String? = null,
+    val status: String = if (ok) "dispatched" else "failed",
+    val verified: Boolean = false,
+    val effect: String = if (ok) "possible" else "unknown",
+)
 
 /** Where a URL would open; [error] when it may not be opened at all. */
 class UrlTarget(val error: String? = null, val packageName: String? = null, val appLabel: String? = null)
@@ -30,6 +38,12 @@ interface SystemApi {
     fun notify(title: String, text: String): SysResult
     fun clipboardSet(text: String): SysResult
     fun clipboardGet(): SysResult
+    /** Fixed phone-task domains; never arbitrary shell, Provider URI or SQL. */
+    fun policyTargets(tool: String, args: Map<String, Any?>): List<AppEntry> = emptyList()
+    fun task(tool: String, args: Map<String, Any?>, canWrite: () -> Boolean = { !Thread.currentThread().isInterrupted }): Map<String, Any?> = mapOf(
+        "status" to "unsupported", "effect" to "none", "verified" to false,
+        "text" to "此手机任务接口当前不可用。",
+    )
 }
 
 /** The fixed `intent` kinds (no arbitrary Intents: they could carry any component or extra). */
@@ -46,7 +60,7 @@ sealed interface IntentSpec {
     ) : IntentSpec
     data class Dial(val number: String) : IntentSpec
     data class SmsDraft(val number: String?, val text: String) : IntentSpec
-    data class Share(val text: String, val app: String?) : IntentSpec
+    data class Share(val text: String?, val app: String?, val path: String? = null, val mime: String? = null) : IntentSpec
     data class Navigate(val destination: String?, val lat: Double?, val lng: Double?, val mode: String, val map: String?) : IntentSpec
     data class Settings(val page: String, val app: String?) : IntentSpec
 
@@ -105,8 +119,10 @@ sealed interface IntentSpec {
                 }
                 "share" -> {
                     // l10n:keep agent tool validation
-                    val text = a.str("text") ?: return Either.Left("share 需要 text")
-                    Either.Right(Share(text, a.str("app")))
+                    val text = a.text("text")?.takeIf { it.isNotEmpty() }
+                    val path = a.str("path")
+                    if (text == null && path == null) return Either.Left("share 需要 text 或 path（受控 content URI / 外部存储文件）")
+                    Either.Right(Share(text, a.str("app"), path, a.str("mime")))
                 }
                 "navigate" -> {
                     val dest = a.str("destination")
@@ -270,7 +286,7 @@ sealed interface Either<out L, out R> {
 }
 
 /** Lenient typed access to tool arguments (models send "7" for 7 and 7.0 for 7). */
-class Args(private val map: Map<String, Any?>) {
+class Args(val map: Map<String, Any?>) {
     fun has(key: String) = map[key] != null
 
     fun str(key: String): String? = when (val v = map[key]) {

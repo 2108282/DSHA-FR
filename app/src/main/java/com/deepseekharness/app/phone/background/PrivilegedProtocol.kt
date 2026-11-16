@@ -13,7 +13,26 @@ import java.io.OutputStream
 // accepts only this fixed verb set — no shell commands, paths or display ids from callers.
 
 object Proto {
-    const val REVISION = "dsh-vdisplay-1"
+    const val REVISION = "dsh-vdisplay-2"
+
+    const val SNAPSHOT = "snapshot"
+    const val FINGERPRINT = "fingerprint"
+    const val PRESENTED = "presented"
+    const val TASK_ID = "taskId"
+    const val COMPLETE = "complete"
+    const val SCROLLED = "scrolled"
+    const val AT_END = "atEnd"
+    const val A_ROW = "rowIndex"
+    const val A_ROWS = "rowCount"
+    const val A_START = "listStart"
+    const val A_END = "listEnd"
+    const val A_PARENT = "parent"
+    const val A_PATH = "path"
+    const val A_FINGERPRINT = "fingerprints"
+    const val A_CONTAINER = "containers"
+    const val A_BOUNDS = "bounds"
+    const val A_WINDOW = "windows"
+    const val A_CLASS = "classes"
 
     // request keys
     const val OP = "op"
@@ -42,10 +61,12 @@ object Proto {
     const val OP_CREATE = "create"
     const val OP_LAUNCH = "launch"
     const val OP_OBSERVE = "observe"
+    const val OP_VALIDATE = "validate"
     const val OP_TAP = "tap"
     const val OP_SCROLL = "scroll"
     const val OP_KEY = "key"
     const val OP_TEXT = "text"
+    const val OP_PRESENT = "present"
     const val OP_RELEASE = "release"
     const val OP_DESTROY = "destroy"
     const val OP_GATE = "gate"
@@ -95,7 +116,14 @@ object Proto {
 /** Stable reason codes → one short Chinese sentence for the model (after Phase's set). */
 object Reasons {
     fun of(code: String?): String = when (code) {
-        null -> ""
+        null -> "未取得完整回执"
+        "protocolMismatch" -> "后台协议版本不兼容；请重连特权通道，未执行写操作"
+        "actionRejected" -> "节点拒绝了动作，没有坐标重放"
+        "notScrollable", "scrollUnsupported" -> "指定列表没有兼容滚动动作，未盲滑"
+        "scrollRejected" -> "列表未接受滚动；不能据此断言已经到底"
+        "presentTaskMissing" -> "未找到可交接的原后台任务"
+        "presentUnsupported" -> "系统不支持显式移动原任务到主屏"
+        "presentUnconfirmed" -> "任务移动已请求，但未在主屏确认，尚未报告交还成功"
         // l10n:keep privileged protocol
         "identityChanged" -> "特权通道身份已改变，请重新开始任务"
         // l10n:keep privileged protocol

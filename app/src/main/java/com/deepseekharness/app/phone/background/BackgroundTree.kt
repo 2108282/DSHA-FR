@@ -37,6 +37,17 @@ data class Element(
     val isSecretField: Boolean = false,
     val isEditable: Boolean = false,
     val viewId: String? = null,
+    val rowIndex: Int = -1,
+    val rowCount: Int = -1,
+    val atListStart: Boolean = false,
+    val atListEnd: Boolean = false,
+    val parentId: Int = 0,
+    val path: String = "",
+    val fingerprint: String = "",
+    val containerIdentity: String = "",
+    val bounds: List<Int> = emptyList(),
+    val windowId: Int = -1,
+    val className: String = "",
 )
 
 object BackgroundTree {

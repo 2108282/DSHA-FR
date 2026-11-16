@@ -581,11 +581,17 @@ class PhoneControl private constructor(private val app: Context) : PhoneEnv, Con
         return if (runCatching { background.beginTask(tasks.snapshot().id) }.getOrDefault(false)) PhoneRegistry.backgroundDriver else null
     }
 
-    override fun beforeHandoff(screen: PhoneScreen): String? {
+    override fun beforeHandoff(screen: PhoneScreen): ActionResult? {
         if (screen != PhoneScreen.BACKGROUND || PhoneRegistry.backgroundDriver == null) return null
-        runCatching { background.endTask() }
-        // l10n:keep agent stop reason
-        return "后台屏已释放，App 回到了主屏，用户在主屏上操作。之后请用主屏（s 开头的屏幕号）。"
+        val presented = background.presentTask()
+        if (!presented.ok || !presented.verified) return ActionResult(false, presented.message, status = "unconfirmed")
+        return try {
+            val cleanup = background.endTask()
+            if (!cleanup.ok) return ActionResult(false, "目标已呈现到主屏，但后台资源释放未确认；请先核对状态。", status = "unconfirmed")
+            presented
+        } catch (_: Exception) {
+            ActionResult(false, "目标已呈现到主屏，但后台资源释放未确认；请先核对状态。", status = "unconfirmed")
+        }
     }
 
     override fun a11yState(): A11yState = when {

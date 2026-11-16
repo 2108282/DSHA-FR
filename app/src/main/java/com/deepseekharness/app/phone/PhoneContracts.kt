@@ -22,7 +22,9 @@ enum class PhoneScreen(val prefix: Char) {
 
     companion object {
         /** `"s7"` → MAIN, `"b3"` → BACKGROUND, anything else → null. Never falls back across screens. */
-        fun ofScreenId(id: String): PhoneScreen? = entries.firstOrNull { id.length > 1 && id[0] == it.prefix }
+        fun ofScreenId(id: String): PhoneScreen? = entries.firstOrNull {
+            id.length in 2..80 && id[0] == it.prefix && id.substring(1).all { c -> c in '0'..'9' } && id.substring(1).any { c -> c != '0' }
+        }
     }
 }
 
@@ -101,6 +103,11 @@ data class ActionResult(
     val message: String,
     /** The screen after the action settled (new lines marked `+`), when it could be read. */
     val screen: ScreenSnapshot? = null,
+    /** A dispatched gesture is not proof that the application's business transaction completed. */
+    val status: String = if (ok) "dispatched" else "failed",
+    val verified: Boolean = false,
+    val written: Boolean? = null,
+    val submitted: Boolean? = null,
 )
 
 data class CollectResult(
@@ -110,6 +117,8 @@ data class CollectResult(
     /** Stopped because: end of list / `until` matched / page limit / list lost. */
     val stopReason: String,
     val screen: ScreenSnapshot?,
+    val complete: Boolean = false,
+    val truncated: Boolean = false,
 )
 
 /** Whether a driver can work right now, and if not, a sentence the model can relay. */
@@ -126,6 +135,12 @@ interface PhoneDriver {
     fun availability(): Availability
 
     fun observe(detail: Boolean, image: Boolean): ScreenSnapshot
+
+    /** True only for the latest observation in this driver/service generation. */
+    fun isCurrent(screenId: String): Boolean = false
+
+    /** Invalidate observations when a person takes control; implementations must clear cached targets. */
+    fun invalidate() = Unit
 
     fun collect(screenId: String, listElementId: Int, maxPages: Int, until: String?): CollectResult
 

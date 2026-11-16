@@ -547,6 +547,9 @@ public final class HttpShellService {
             String result;
             if (!authed) {
                 result = "[UNAUTHORIZED]";
+            } else if (retiredPhoneAction(path) != null) {
+                // Compatibility tombstones never execute a phone action or a shell fallback.
+                result = retiredPhoneAction(path);
             } else if (path.startsWith("/app/task/confirm/cancel")) {
                 dismissAllApprovalUi();
                 result = "OK";
@@ -587,20 +590,10 @@ public final class HttpShellService {
                 result = appReadFile(path);
             } else if (path.startsWith("/health")) {
                 result = "OK"; // 存活探测（仍需 token）：客户端可据此区分「桥没起」与「命令失败」
-            } else if (path.startsWith("/app/ui/")) {
-                result = appUi(path);
             } else if (path.startsWith("/app/device")) {
                 result = appDevice();
             } else if (path.startsWith("/app/apps")) {
                 result = appList(path);
-            } else if (path.startsWith("/app/launch")) {
-                result = appLaunch(path);
-            } else if (path.startsWith("/app/clip")) {
-                result = appClip(path);
-            } else if (path.startsWith("/app/share")) {
-                result = appShare(path);
-            } else if (path.startsWith("/app/open")) {
-                result = appOpen(path);
             } else if (path.startsWith("/app/vibrate")) {
                 result = appVibrate(path);
             } else if (path.startsWith("/app/ask")) {
@@ -752,22 +745,7 @@ public final class HttpShellService {
         }
     }
 
-    /** /app/toast?text= ：弹 App 内 Toast */
-    /** 屏幕操作（走无障碍服务）：读屏 / 点按 / 输入 / 按键 / 滑动。
-     *
-     *  这条通道不需要 ADB 也不需要 Shizuku —— 绝大多数用户两者都没有，
-     *  而无障碍是一次授权长期可用，这才是 agent 能真正「操作手机」的现实路径。 */
-    // ==================== 屏幕操作的授权闸门 ====================
-    //
-    // 为什么必须有这道闸：/app/ui/* 能读屏、点按、输入，破坏力其实**超过** shell 命令 ——
-    // 它直接操作用户**已经登录**的应用，绕过所有应用层权限。agent 一旦被 prompt
-    // injection 诱导（读到网页或文件里夹带的指令），就能在支付软件里点按、把私信
-    // 截屏留到磁盘。而 /exec 一直有危险命令守卫，UI 操作在我加完那六个端点之后
-    // 一道闸都没有 —— 这是自查时发现的最大缺口。
-    //
-    // 可用性上的平衡：GUI 自动化要连续操作，每一步都弹窗根本没法用。所以做成
-    // 「一次授权 + 时间窗」：首次弹确认，允许后十分钟内不再问；但前台是支付/银行/
-    // 密码管理类应用时无视时间窗，每次都要确认。
+    // 命令确认租约：/confirm 与原生确认浮层仍共用，手机动作已迁至 MCP。
     private static volatile long uiGrantUntil = 0L;
     private static final long UI_GRANT_MS = 10 * 60 * 1000L;
 
@@ -816,146 +794,26 @@ public final class HttpShellService {
         return false;
     }
 
-    /** 涉钱、涉密的应用：宁可多问一次。取不到包名也按敏感处理。 */
-    private static boolean isSensitiveApp(String pkg) {
-        if (pkg == null || pkg.isEmpty()) return true;
-        String p = pkg.toLowerCase(java.util.Locale.ROOT);
-        String[] keys = {
-                "alipay", "tencent.mm", "unionpay", "jdpay", "wallet", "paypal",
-                "bank", "icbc", "ccb", "abchina", "bankofchina", "cmbchina",
-                "bankcomm", "psbc", "cebbank", "cmbc", "spdb", "citic", "hxb",
-                "keepass", "bitwarden", "lastpass", "1password", "authenticator",
-                "com.android.settings",   // 系统设置：能改权限、开无障碍、卸载应用
-        };
-        for (String k : keys) {
-            if (p.contains(k)) return true;
+    /**
+     * Retired phone routes keep a stable, side-effect-free error for older callers.
+     * Authentication still runs before this lookup; do not forward through a second UI executor.
+     */
+    static String retiredPhoneAction(String target) {
+        String endpoint = target.split("\\?", 2)[0];
+        String replacement;
+        if (endpoint.equals("/app/ui") || endpoint.startsWith("/app/ui/")) {
+            replacement = "mcp__phone__screen / tap / type / scroll / key / tap_xy";
+        } else if (endpoint.startsWith("/app/launch") || endpoint.startsWith("/app/open")) {
+            replacement = "mcp__phone__open";
+        } else if (endpoint.startsWith("/app/clip")) {
+            replacement = "mcp__phone__clipboard";
+        } else if (endpoint.startsWith("/app/share")) {
+            replacement = "mcp__phone__intent(kind=share)";
+        } else {
+            return null;
         }
-        return false;
-    }
-
-    /** @param action 给用户看的具体动作描述 —— 弹窗必须说清 AI 要干什么，
-     *               而不是笼统一句「操作屏幕」，否则用户等于盲签。 */
-    private boolean uiAuthorized(String action) {
-        String pkg = DshaAccessibilityService.currentPackage();
-        boolean sensitive = isSensitiveApp(pkg);
-        if (!sensitive && isLeaseActive()) {
-            return true;
-        }
-        String where = pkg.isEmpty() ? "当前界面" : pkg;
-        String why = sensitive
-                ? "在【" + where + "】里：" + action
-                + "  # 这类应用涉及支付或隐私，每次都需要你确认"
-                : action + "  # 允许后 10 分钟内的屏幕与设备操作不再询问";
-        boolean ok = requestUserConfirm(why);
-        if (ok && !sensitive) {
-            grantAuthLease(UI_GRANT_MS);
-        }
-        return ok;
-    }
-
-    private static String shortText(String s) {
-        if (s == null) return "";
-        String t = s.replace('\n', ' ').trim();
-        return t.length() > 24 ? t.substring(0, 24) + "…" : t;
-    }
-
-    private String appUi(String path) {
-        String q = queryOf(path);
-        try {
-            if (path.startsWith("/app/ui/dump")) {
-                if (!DshaAccessibilityService.isConnected()) {
-                    DshaAccessibilityService.ensureConnected(ctx);
-                }
-                return DshaAccessibilityService.uiDump();
-            }
-            if (path.startsWith("/app/ui/tap")) {
-                String text = getParam(q, "text", "");
-                // 有文字就按文字点：控件位置会随滚动和动画变，文字不会
-                if (!text.isEmpty()) {
-                    if (!DshaAccessibilityService.isConnected()) {
-                        DshaAccessibilityService.ensureConnected(ctx);
-                    }
-                    return DshaAccessibilityService.uiTapText(text);
-                }
-                int x = intParam(q, "x", -1);
-                int y = intParam(q, "y", -1);
-                if (x < 0 || y < 0) return "[ERR] 需要 ?text=要点的文字 或 ?x=&y=坐标";
-                if (!DshaAccessibilityService.isConnected()) {
-                    DshaAccessibilityService.ensureConnected(ctx);
-                }
-                String res = DshaAccessibilityService.uiTap(x, y);
-                if (res != null && res.startsWith("[ERR]")) {
-                    execRootCommand("input tap " + x + " " + y);
-                    return "OK 已通过特权点按 (" + x + "," + y + ")";
-                }
-                return res;
-            }
-            if (path.startsWith("/app/ui/input")) {
-                String text = getParam(q, "text", "");
-                if (text.isEmpty()) return "[ERR] 需要 ?text=";
-                if (!DshaAccessibilityService.isConnected()) {
-                    DshaAccessibilityService.ensureConnected(ctx);
-                }
-                return DshaAccessibilityService.uiInput(text);
-            }
-            if (path.startsWith("/app/ui/key")) {
-                String k = getParam(q, "name", getParam(q, "key", ""));
-                if (!DshaAccessibilityService.isConnected()) {
-                    DshaAccessibilityService.ensureConnected(ctx);
-                }
-                String res = DshaAccessibilityService.uiKey(k);
-                if (res != null && res.startsWith("[ERR]")) {
-                    int code = 4;
-                    if ("home".equalsIgnoreCase(k)) code = 3;
-                    else if ("recent".equalsIgnoreCase(k) || "recents".equalsIgnoreCase(k)) code = 187;
-                    execRootCommand("input keyevent " + code);
-                    return "OK 已通过特权发送按键 " + k;
-                }
-                return res;
-            }
-            if (path.startsWith("/app/ui/screenshot") || path.startsWith("/app/ui/shot")) {
-                if (!DshaAccessibilityService.isConnected()) {
-                    DshaAccessibilityService.ensureConnected(ctx);
-                }
-                String res = DshaAccessibilityService.uiScreenshot();
-                if (res != null && res.startsWith("[ERR]")) {
-                    String timeStr = new java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.ROOT).format(new java.util.Date());
-                    String shotPath = "/sdcard/Download/DSHA/screen-" + timeStr + ".png";
-                    execRootCommand("screencap -p " + shotPath + " && chmod 666 " + shotPath);
-                    return "OK 截屏已保存：" + shotPath;
-                }
-                return res;
-            }
-            if (path.startsWith("/app/ui/swipe")) {
-                int x1 = intParam(q, "x1", -1);
-                int y1 = intParam(q, "y1", -1);
-                int x2 = intParam(q, "x2", -1);
-                int y2 = intParam(q, "y2", -1);
-                if (x1 < 0 || y1 < 0 || x2 < 0 || y2 < 0) {
-                    return "[ERR] 需要 ?x1=&y1=&x2=&y2=（可选 &ms=时长）";
-                }
-                if (!DshaAccessibilityService.isConnected()) {
-                    DshaAccessibilityService.ensureConnected(ctx);
-                }
-                String res = DshaAccessibilityService.uiSwipe(x1, y1, x2, y2, intParam(q, "ms", 300));
-                if (res != null && res.startsWith("[ERR]")) {
-                    execRootCommand("input swipe " + x1 + " " + y1 + " " + x2 + " " + y2 + " " + intParam(q, "ms", 300));
-                    return "OK 已通过特权滑动 (" + x1 + "," + y1 + ")→(" + x2 + "," + y2 + ")";
-                }
-                return res;
-            }
-            return "[ERR] 未知端点（可用：dump/tap/input/key/swipe/screenshot）";
-        } catch (Throwable t) {
-            return "[ERR] " + SensitiveData.redact(String.valueOf(t));
-        }
-    }
-
-    private int intParam(String q, String k, int def) {
-        try {
-            return Integer.parseInt(getParam(q, k, String.valueOf(def)).trim());
-        } catch (Exception e) {
-            return def;
-        }
+        return "[RETIRED_USE_MCP] " + endpoint + " 已退役；请使用 " + replacement
+                + "。本请求未执行手机动作，不提供 HTTP / Root 操作后备。";
     }
 
     /**
@@ -1006,7 +864,7 @@ public final class HttpShellService {
      *
      * <p>所以插件的正确写法是 {@code if (protocol >= N)} 而不是 {@code == N}。
      */
-    private static final int BRIDGE_PROTOCOL = 1;
+    private static final int BRIDGE_PROTOCOL = 2;
 
     /**
      * {@code /app/version}：桥协议与 App 版本，给插件做特性检测。
@@ -1022,41 +880,29 @@ public final class HttpShellService {
     }
 
     private String appHelp() {
-        return "DSHA " + PORT + " 桥端点清单（BRIDGE_PROTOCOL=" + BRIDGE_PROTOCOL + "）\n"
+        return "DSHA " + PORT + " 设备与运行时桥（BRIDGE_PROTOCOL=" + BRIDGE_PROTOCOL + "）\n"
             + "token 取自 /root/.dsh/.bridge_token，下面记为 $T。\n"
             + "带中文/空格的参数一律用 -G --data-urlencode，别手写 URL 编码。\n"
             + "\n"
-            + "== 屏幕操作（无障碍服务，不需要 ADB/Shizuku）==\n"
-            + "读屏  curl -s \"127.0.0.1:" + PORT + "/app/ui/dump?token=$T\"\n"
-            + "      → 每行「[序号] \"文字\" 可点击 中心=(x,y) 区域=l,t,r,b」\n"
-            + "点按  curl -s -G 127.0.0.1:" + PORT + "/app/ui/tap --data-urlencode \"text=设置\" --data-urlencode \"token=$T\"\n"
-            + "      → 优先按文字点：控件位置随滚动/动画变，文字不变。没有文字才用 ?x=&y=\n"
-            + "输入  curl -s -G 127.0.0.1:" + PORT + "/app/ui/input --data-urlencode \"text=内容\" --data-urlencode \"token=$T\"\n"
-            + "      → 填到当前焦点框；没有焦点先 tap 一下输入框\n"
-            + "按键  /app/ui/key?name=back  （back/home/recents/notifications/quicksettings/lock）\n"
-            + "滑动  /app/ui/swipe?x1=500&y1=1500&x2=500&y2=500&ms=300\n"
-            + "截屏  /app/ui/screenshot   → 存 PNG 到 Download/DSHA 并返回路径（不回 base64）\n"
-            + "节奏：每次点按/输入后先 dump 再决定下一步，别凭记忆连点。\n"
+            + "== 手机任务统一使用 MCP ==\n"
+            + "打开应用或链接用 mcp__phone__open；读屏、点击、输入、滚动、截图用相应手机 MCP 工具。\n"
+            + "原生事务优先；没有可用业务接口才用 GUI。请求已发出不等于事务完成，结果未知时先核对，不重复执行。\n"
+            + "协议 2 已退役旧 HTTP 手机动作；旧调用返回 [RETIRED_USE_MCP]，不执行动作。\n"
+            + "不要把设备桥、/exec、ADB 或 Root 命令当手机 MCP 拒绝或不可用时的操作后备。\n"
             + "\n"
-            + "== 设备与应用 ==\n"
+            + "== 独立设备与文件能力（不属于手机操作 MCP）==\n"
             + "/app/device                     机型/系统/电量/网络/屏幕/存储/内存\n"
-            + "/app/apps?q=微信&limit=50       已装应用（默认只列第三方）\n"
-            + "/app/launch?pkg=com.tencent.mm  启动应用\n"
-            + "/app/clip                       读剪贴板（需 App 在前台，系统限制）\n"
-            + "/app/clip + text=…              写剪贴板\n"
             + "/app/readfile?path=/sdcard/…    读外部文件\n"
-            + "/sdcard 已挂载，Download / DCIM 等公共目录可直接读写\n"
+            + "/app/export?path=/root/report.md  导出产物到 Download/DSHA\n"
+            + "/sdcard 已挂载，Download / DCIM 等公共目录可通过文件工具访问\n"
             + "\n"
-            + "== 与用户交互 ==\n"
+            + "== 与用户交互及任务运行时 ==\n"
             + "/app/ask?options=继续|取消 + q=…  弹窗阻塞等回答（最多三个选项）\n"
-            + "/app/notify?title=… + text=…      通知栏\n"
+            + "/app/notify?title=… + text=…      任务结果通知（会结束运行通知，不是 MCP 普通提醒）\n"
             + "/app/toast + text=…               App 内提示\n"
-            + "/app/vibrate?ms=300               震动（长任务跑完叫醒用户）\n"
-            + "/app/share（text= 或 path=）      分享到其它应用\n"
-            + "/app/open?url=https://…           打开链接\n"
-            + "/app/export?path=/root/report.md  把产物交给用户 → 落 Download/DSHA\n"
-            + "建议：需要用户拍板用 /app/ask 而不是干等；长任务结束用 notify 或 vibrate 叫人；\n"
-            + "产出报告用 /app/export，别只留在容器里。\n"
+            + "/app/vibrate?ms=300               震动\n"
+            + "/app/task/*、/app/overlay、/app/freeze/state 为既有插件/运行时调用保留\n"
+            + "/confirm 仅用于现有命令授权闭环；/exec 和 /health 保持原合同\n"
             + "\n"
             + "== 传感器与位置（默认关闭，需用户在配置页勾选）==\n"
             + "/app/location（加 fresh=1 强制重新定位，可能等数秒）\n"
@@ -1064,24 +910,13 @@ public final class HttpShellService {
             + "（light 环境光 lux / accel / gyro / magnet / pressure / proximity /\n"
             + " gravity / rotation 姿态四元数 / steps 开机后步数）\n"
             + "/app/torch?on=1 手电\n"
-            + "这三类返回 DISABLED（用户没开该能力）或 NO_PERMISSION（没授系统权限）时，\n"
-            + "/app/version                          桥协议版本 + App 版本（特性检测用）\n"
-            + "/app/help                             本清单\n"
+            + "返回 DISABLED 或 NO_PERMISSION 时停止该能力，不能用另一通道绕过。\n"
             + "\n"
-            + "== 插件状态 ==\n"
+            + "== 插件状态与特性检测 ==\n"
             + "/app/plugins                          读回上次上报的加载状态\n"
             + "/app/plugins?loaded=a,b&failed=c      上报（插件侧用）\n"
-            + "\n"
-            + "== 设备 shell（ADB 无线调试，用户可能没开）==\n"
-            + "/root/dsh-bin/adb-shell \"命令\"        shell 级（uid=2000）\n"
-            + "包装命令不存在时：python3 /root/.dsh/adb-shell.py \"命令\"\n"
-            + "报连不上/未配对：先看上面的 App 层接口能不能办成；确实必须 shell 才请用户到\n"
-            + "「配置」页开「ADB 设备通道」并配对，别反复试同一条命令。\n"
-            + "不要用 /root/dsh-bin/adb 或裸 adb —— 那是守卫包装脚本，会失败。\n"
-            + "\n"
-            + "== root（--su）==\n"
-            + "默认权限是 shell 级（uid=2000，非 root）。不要主动用 --su；\n"
-            + "只有用户明确要求 root 操作时才尝试，且要先请他到「配置」页勾选「允许 root shell」。\n";
+            + "/app/version                          桥协议版本 + App 版本（按 >= 判断）\n"
+            + "/app/help                             本清单\n";
     }
 
     private String appPlugins(String path) {
@@ -1293,120 +1128,6 @@ public final class HttpShellService {
             }
             if (n == 0) return "（没有匹配的应用）";
             return sb.append("共 ").append(n).append(" 个").toString();
-        } catch (Throwable e) {
-            return "ERROR: " + safeError(e);
-        }
-    }
-
-    /** /app/launch?pkg=包名 ：启动应用（App 层，不需要 ADB） */
-    private String appLaunch(String path) {
-        try {
-            String pkg = getParam(queryOf(path), "pkg", "");
-            if (pkg.isEmpty()) return "NO_PKG";
-            android.content.Intent i = ctx.getPackageManager().getLaunchIntentForPackage(pkg);
-            if (i != null) {
-                i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
-                ctx.startActivity(i);
-                return "OK: 已启动 " + pkg;
-            }
-            // 原生 Intent 启动未命中时，走 Root 强拉兜底（适配特殊无启动入口应用或受限组件）
-            String target = execRootCommand("cmd package resolve-activity --brief " + pkg + " 2>/dev/null | tail -1").trim();
-            if (!target.isEmpty() && target.contains("/") && !target.contains("Error") && !target.contains("No activity")) {
-                execRootCommand("am start -n " + target);
-                return "OK: 已通过特权启动 " + pkg;
-            }
-            String monkeyRes = execRootCommand("monkey -p " + pkg + " -c android.intent.category.LAUNCHER 1 2>/dev/null");
-            if (monkeyRes != null && monkeyRes.contains("Events injected: 1")) {
-                return "OK: 已通过 Launcher 启动 " + pkg;
-            }
-            return "NOT_FOUND: " + pkg + "（该应用没有启动入口或未安装）";
-        } catch (Throwable e) {
-            return "ERROR: " + safeError(e);
-        }
-    }
-
-    /** /app/clip 读剪贴板；/app/clip?text=xxx 写剪贴板 */
-    private String appClip(String path) {
-        final String text = getParam(queryOf(path), "text", "");
-        try {
-            final android.content.ClipboardManager cm = (android.content.ClipboardManager)
-                    ctx.getSystemService(Context.CLIPBOARD_SERVICE);
-            if (cm == null) return "NO_SERVICE";
-            if (!text.isEmpty()) {
-                mainHandler.post(() -> {
-                    try {
-                        cm.setPrimaryClip(android.content.ClipData.newPlainText("DSHA", text));
-                    } catch (Throwable ignored) {
-                    }
-                });
-                return "OK: 已写入剪贴板（" + text.length() + " 字）";
-            }
-            // 读：Android 10+ 只有前台应用能读剪贴板，后台一律拿不到
-            if (MainActivity.current == null) {
-                return "[APP_BACKGROUND] 系统限制：只有 App 在前台时才能读剪贴板，"
-                        + "可先用 /app/notify 提醒用户打开 DSHA";
-            }
-            android.content.ClipData cd = cm.getPrimaryClip();
-            if (cd == null || cd.getItemCount() == 0) return "（剪贴板为空）";
-            CharSequence cs = cd.getItemAt(0).coerceToText(ctx);
-            String s = cs == null ? "" : cs.toString();
-            if (s.length() > 8192) s = s.substring(0, 8192) + "…（已截断）";
-            return s;
-        } catch (Throwable e) {
-            return "ERROR: " + safeError(e);
-        }
-    }
-
-    /** /app/share?text=... 或 /app/share?path=/sdcard/x.txt ：调起系统分享面板 */
-    private String appShare(String path) {
-        try {
-            String q = queryOf(path);
-            String text = getParam(q, "text", "");
-            String file = getParam(q, "path", "");
-            android.content.Intent send = new android.content.Intent(android.content.Intent.ACTION_SEND);
-            if (!file.isEmpty()) {
-                java.io.File f = new java.io.File(file);
-                if (!f.isFile()) return "NOT_FOUND: " + file;
-                // 只允许分享外部存储里的文件（App 私有目录需要 FileProvider 授权）
-                String canon = f.getCanonicalPath();
-                if (!canon.startsWith("/sdcard") && !canon.startsWith("/storage/emulated/0")) {
-                    return "FORBIDDEN: 只能分享 /sdcard 下的文件";
-                }
-                send.setType("*/*");
-                send.putExtra(android.content.Intent.EXTRA_STREAM, android.net.Uri.fromFile(f));
-                send.addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                if (!text.isEmpty()) send.putExtra(android.content.Intent.EXTRA_TEXT, text);
-            } else {
-                if (text.isEmpty()) return "NO_CONTENT";
-                send.setType("text/plain");
-                send.putExtra(android.content.Intent.EXTRA_TEXT, text);
-            }
-            android.content.Intent chooser = android.content.Intent.createChooser(send, "分享");
-            chooser.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
-            ctx.startActivity(chooser);
-            return "OK: 已弹出分享面板";
-        } catch (Throwable e) {
-            return "ERROR: " + safeError(e);
-        }
-    }
-
-    /** /app/open?url=... ：用系统默认应用打开链接（http/https/geo/tel…） */
-    private String appOpen(String path) {
-        try {
-            String url = getParam(queryOf(path), "url", "");
-            if (url.isEmpty()) return "NO_URL";
-            String low = url.toLowerCase();
-            // 只放行常见安全 scheme：file:// 会把 App 私有文件暴露给任意应用
-            if (!low.startsWith("http://") && !low.startsWith("https://")
-                    && !low.startsWith("geo:") && !low.startsWith("tel:")
-                    && !low.startsWith("mailto:") && !low.startsWith("market://")) {
-                return "FORBIDDEN: 只支持 http/https/geo/tel/mailto/market 链接";
-            }
-            android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_VIEW,
-                    android.net.Uri.parse(url));
-            i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
-            ctx.startActivity(i);
-            return "OK: 已打开 " + safeDisplay(url);
         } catch (Throwable e) {
             return "ERROR: " + safeError(e);
         }

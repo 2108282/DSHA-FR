@@ -65,6 +65,7 @@ class PrivilegedDisplayCore(private val context: Context) {
         runCatching { ActivityManager.RunningTaskInfo::class.java.getField("displayId") }.getOrNull()
     }
 
+    private val snapshots = BackgroundRepairSnapshots()
     private val lock = Any()
     @Volatile private var owner: String? = null
     @Volatile private var display: VirtualDisplay? = null
@@ -77,7 +78,7 @@ class PrivilegedDisplayCore(private val context: Context) {
 
     /** The single entry point for both transports. Always returns a response Bundle. */
     fun handle(request: Bundle): Bundle {
-        val response = Bundle()
+        val response = Bundle().apply { putString("revision", Proto.REVISION) }
         val op = request.getString(Proto.OP)
         try {
             if (op == Proto.OP_PROBE) {
@@ -86,6 +87,7 @@ class PrivilegedDisplayCore(private val context: Context) {
                 response.putString("revision", Proto.REVISION)
                 return response
             }
+            if (op != Proto.OP_PROBE && op != Proto.OP_DESTROY && request.getString("revision") != Proto.REVISION) throw Fault("protocolMismatch")
             if (op == Proto.OP_DESTROY) {
                 releaseAll()
                 response.putBoolean(Proto.OK, true)
@@ -120,6 +122,7 @@ class PrivilegedDisplayCore(private val context: Context) {
         val ownerId = request.getString(Proto.OWNER).orEmpty()
         if (op == null || ownerId.isEmpty()) throw Fault("invalidArguments")
         if (op == Proto.OP_RELEASE) {
+            if (owner != null && owner != ownerId) throw Fault("identityChanged")
             if (owner == ownerId) releaseAll()
             response.putBoolean("released", true)
             return
@@ -138,9 +141,17 @@ class PrivilegedDisplayCore(private val context: Context) {
                 sleepChecked(300)
                 observe(pkg, request.getBoolean(Proto.WANT_IMAGE), response)
             }
+            Proto.OP_PRESENT -> {
+                requireDisplay()
+                present(pkg, response)
+            }
             Proto.OP_OBSERVE -> {
                 requireDisplay(); requireForeground(pkg)
                 observe(pkg, request.getBoolean(Proto.WANT_IMAGE), response)
+            }
+            Proto.OP_VALIDATE -> {
+                requireDisplay(); requireForeground(pkg)
+                withTarget(pkg, request) { _, _, _ -> response.putBoolean("validated", true) }
             }
             Proto.OP_TAP -> {
                 requireDisplay(); requireForeground(pkg)
@@ -150,12 +161,14 @@ class PrivilegedDisplayCore(private val context: Context) {
             }
             Proto.OP_SCROLL -> {
                 requireDisplay(); requireForeground(pkg)
-                scroll(request)
+                scroll(pkg, request, response)
                 sleepChecked(250)
                 observe(pkg, false, response)
             }
             Proto.OP_KEY -> {
                 requireDisplay(); requireForeground(pkg)
+                validateSnapshot(request)
+                snapshots.clear()
                 globalKey(request.getString(Proto.DIR))
                 sleepChecked(250)
                 observe(pkg, false, response)
@@ -255,10 +268,11 @@ class PrivilegedDisplayCore(private val context: Context) {
 
     private fun releaseAll() = synchronized(lock) {
         owner = null
+        snapshots.clear()
         var failed = false
         try { display?.release() } catch (_: Throwable) { failed = true } finally { display = null }
         try { reader?.close() } catch (_: Throwable) { failed = true } finally { reader = null }
-        if (failed) { /* best effort */ }
+        if (failed) throw Fault("displayReleaseFailed")
     }
 
     // ---- observation (tree + optional screenshot) --------------------------
@@ -277,7 +291,7 @@ class PrivilegedDisplayCore(private val context: Context) {
             null
         }
         response.putBoolean(Proto.SECURE, secure)
-        if (secure) { response.putBoolean(Proto.POOR, false); response.putInt(Proto.COUNT, 0); return }
+        if (secure) { snapshots.clear(); response.putBoolean(Proto.POOR, false); response.putInt(Proto.COUNT, 0); response.putString("status", "needs_user"); return }
         // The screenshot contains the whole viewport, including nodes beyond the 120-line
         // text limit. Never attach it when secrets were found or the scan was incomplete.
         // The typing unlock changes permission to write, never permission to reveal a secret.
@@ -290,6 +304,7 @@ class PrivilegedDisplayCore(private val context: Context) {
             }
         }
         emitElements(tree?.elements.orEmpty(), response)
+        response.putBoolean(Proto.COMPLETE, tree?.complete == true && !tree.labelsTruncated && tree.elements.size <= 120)
     }
 
     private fun emitElements(elements: List<BgNode>, response: Bundle) {
@@ -298,15 +313,33 @@ class PrivilegedDisplayCore(private val context: Context) {
         response.putInt(Proto.COUNT, n)
         response.putBoolean(Proto.POOR, elements.count { it.label.isNotEmpty() } < 5)
         val role = arrayOfNulls<String>(n); val label = arrayOfNulls<String>(n)
+        val rowIndices = IntArray(n); val rowCounts = IntArray(n)
+        val starts = BooleanArray(n); val ends = BooleanArray(n)
+        val parents = IntArray(n); val paths = arrayOfNulls<String>(n)
+        val fingerprints = arrayOfNulls<String>(n); val containers = arrayOfNulls<String>(n)
+        val windows = IntArray(n); val classes = arrayOfNulls<String>(n); val bounds = IntArray(n * 4)
         val viewIds = arrayOfNulls<String>(n)
         val states = arrayOfNulls<String>(n); val flags = IntArray(n)
         val region = IntArray(n); val indent = IntArray(n)
         for (i in 0 until n) {
             val e = capped[i]
+            rowIndices[i] = e.rowIndex; rowCounts[i] = e.rowCount
+            starts[i] = e.atListStart; ends[i] = e.atListEnd
+            parents[i] = e.parentId; paths[i] = e.path; fingerprints[i] = e.fingerprint
+            containers[i] = e.containerIdentity; windows[i] = e.windowId; classes[i] = e.className
+            bounds[i * 4] = e.bounds.left; bounds[i * 4 + 1] = e.bounds.top
+            bounds[i * 4 + 2] = e.bounds.right; bounds[i * 4 + 3] = e.bounds.bottom
             role[i] = e.role; label[i] = e.label; states[i] = e.states.joinToString("\u0001")
             viewIds[i] = e.viewId
             flags[i] = e.flags; region[i] = e.region; indent[i] = e.indent
         }
+        response.putString(Proto.SNAPSHOT, snapshots.publish(owner ?: throw Fault("identityChanged"), capped.map { it.fingerprint }))
+        response.putIntArray(Proto.A_ROW, rowIndices); response.putIntArray(Proto.A_ROWS, rowCounts)
+        response.putBooleanArray(Proto.A_START, starts); response.putBooleanArray(Proto.A_END, ends)
+        response.putIntArray(Proto.A_PARENT, parents); response.putStringArray(Proto.A_PATH, paths)
+        response.putStringArray(Proto.A_FINGERPRINT, fingerprints); response.putStringArray(Proto.A_CONTAINER, containers)
+        response.putIntArray(Proto.A_WINDOW, windows); response.putStringArray(Proto.A_CLASS, classes)
+        response.putIntArray(Proto.A_BOUNDS, bounds)
         response.putStringArray(Proto.A_ROLE, role)
         response.putStringArray(Proto.A_LABEL, label)
         response.putStringArray(Proto.A_VIEW_ID, viewIds)
@@ -389,6 +422,7 @@ class PrivilegedDisplayCore(private val context: Context) {
         var visited = 0
         var complete = true
         var hasSecrets = false
+        var labelsTruncated = false
         var target: AccessibilityNodeInfo? = null
     }
 
@@ -411,7 +445,7 @@ class PrivilegedDisplayCore(private val context: Context) {
         val tree = TreeRead(targetId)
         try {
             if (root.packageName?.toString() != pkg) throw Fault("displayTargetChanged")
-            walk(root, tree, 0, 600)
+            walk(root, tree, 0, 600, "0", 0, -1)
             assignRegions(tree.elements)
             return tree
         } catch (e: Throwable) {
@@ -420,18 +454,22 @@ class PrivilegedDisplayCore(private val context: Context) {
         } finally { root.recycle() }
     }
 
-    private fun walk(node: AccessibilityNodeInfo?, tree: TreeRead, indent: Int, budget: Int) {
+    private fun walk(node: AccessibilityNodeInfo?, tree: TreeRead, indent: Int, budget: Int, path: String, parentId: Int, inheritedRow: Int) {
         if (node == null) return
         if (tree.visited >= budget) { tree.complete = false; return }
         tree.visited++
         if (node.isVisibleToUser && isSecret(node)) tree.hasSecrets = true
         val actionable = node.isClickable || node.isLongClickable || node.isEditable || node.isCheckable || node.isScrollable
         val text = bestText(node)
+        if (text.replace('\n', ' ').trim().length > BackgroundTree.LINE_CAP) tree.labelsTruncated = true
         val emit = actionable || (text.isNotEmpty() && node.isVisibleToUser)
         var childIndent = indent
+        var childParent = parentId
+        val row = node.collectionItemInfo?.rowIndex ?: inheritedRow
         if (emit && node.isVisibleToUser) {
             val rect = Rect().also { node.getBoundsInScreen(it) }
-            tree.elements.add(toElement(node, text, rect, indent))
+            tree.elements.add(toElement(node, text, rect, indent, path, parentId, row))
+            childParent = tree.elements.size
             // Retain the exact node assigned this screen id, not whichever editor has focus.
             if (tree.elements.size == tree.targetId) tree.target = AccessibilityNodeInfo.obtain(node)
             if (node.isScrollable) childIndent = indent + 1
@@ -440,11 +478,11 @@ class PrivilegedDisplayCore(private val context: Context) {
             if (tree.visited >= budget) { tree.complete = false; break }
             val child = node.getChild(i)
             if (child == null) tree.complete = false
-            try { walk(child, tree, childIndent, budget) } finally { child?.recycle() }
+            try { walk(child, tree, childIndent, budget, "$path/$i", childParent, if (node.isScrollable) -1 else row) } finally { child?.recycle() }
         }
     }
 
-    private fun toElement(node: AccessibilityNodeInfo, text: String, rect: Rect, indent: Int): BgNode {
+    private fun toElement(node: AccessibilityNodeInfo, text: String, rect: Rect, indent: Int, path: String = "", parentId: Int = 0, row: Int = -1): BgNode {
         val cls = node.className?.toString().orEmpty()
         val password = node.isPassword || secretInput(node)
         val hint = node.hintText?.toString().orEmpty()
@@ -476,7 +514,32 @@ class PrivilegedDisplayCore(private val context: Context) {
         if (node.isFocused) flags = flags or Proto.FLAG_FOCUSED
         val viewId = node.viewIdResourceName
         if (SensitiveWords.confirmHit(label, viewId) != null) flags = flags or Proto.FLAG_SENSITIVE
-        return BgNode(role, label, states, flags, indent, rect, node.packageName?.toString(), viewId)
+        val container = BackgroundRepairIdentity.digest(node.windowId, node.packageName, path, viewId, cls, rect.flattenToString())
+        val identity = BackgroundRepairIdentity.digest(container, text, node.contentDescription, node.hintText, flags, node.isEnabled, node.isChecked)
+        return BgNode(role, label, states, flags, indent, rect, node.packageName?.toString(), viewId,
+            parentId, path, node.windowId, cls, identity, container, collectionEdge(node, true), collectionEdge(node, false), row,
+            node.collectionInfo?.takeIf { it.columnCount <= 1 }?.rowCount ?: -1)
+    }
+
+    private fun collectionEdge(node: AccessibilityNodeInfo, start: Boolean): Boolean {
+        val count = node.collectionInfo?.rowCount ?: return false
+        if (!node.isScrollable || count <= 0) return false
+        fun visibleEdge(child: AccessibilityNodeInfo, depth: Int): Boolean {
+            if (depth > 12 || !child.isVisibleToUser) return false
+            val info = child.collectionItemInfo
+            if (info != null && info.rowIndex >= 0 &&
+                (if (start) info.rowIndex == 0 else info.rowIndex + info.rowSpan.coerceAtLeast(1) >= count)) return true
+            for (i in 0 until child.childCount) {
+                val nested = child.getChild(i) ?: continue
+                try { if (visibleEdge(nested, depth + 1)) return true } finally { nested.recycle() }
+            }
+            return false
+        }
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            try { if (visibleEdge(child, 0)) return true } finally { child.recycle() }
+        }
+        return false
     }
 
     private fun role(node: AccessibilityNodeInfo, cls: String): String = when {
@@ -537,38 +600,105 @@ class PrivilegedDisplayCore(private val context: Context) {
 
     // ---- actions -----------------------------------------------------------
 
-    private fun resolveElement(pkg: String, request: Bundle): BgNode {
+    private fun validateSnapshot(request: Bundle) {
+        val index = request.getInt(Proto.ELEMENT, 0).takeIf { it > 0 }
+        if (!snapshots.accepts(request.getString(Proto.OWNER).orEmpty(), request.getString(Proto.SNAPSHOT),
+                index, request.getString(Proto.FINGERPRINT))) throw Fault("staleSnapshot")
+    }
+
+    private fun <T> withTarget(pkg: String, request: Bundle, action: (AccessibilityNodeInfo, BgNode, UiAutomation) -> T): T {
+        validateSnapshot(request)
         val index = request.getInt(Proto.ELEMENT, -1)
         if (index < 1) throw Fault("invalidArguments")
-        val elements = readTree(displayId(), pkg).elements
-        val e = elements.getOrNull(index - 1) ?: throw Fault("elementMissing")
-        val expectRole = request.getString(Proto.EXPECT_ROLE)
-        val expectLabel = request.getString(Proto.EXPECT_LABEL)
-        if (expectRole != null && expectRole != e.role) throw Fault("staleSnapshot")
-        if (expectLabel != null && expectLabel.isNotEmpty() && !e.label.startsWith(expectLabel.take(12))) throw Fault("staleSnapshot")
-        return e
+        val vd = display ?: throw Fault("displayMissing")
+        val conn = TreeConnection(context, pkg)
+        val automation = try { conn.open(vd.display) } catch (_: Throwable) { throw Fault("treeUnavailable") }
+        try {
+            val tree = readTree(automation, displayId(), pkg, index)
+            val node = tree.target ?: throw Fault("elementMissing")
+            try {
+                val entry = tree.elements.getOrNull(index - 1) ?: throw Fault("elementMissing")
+                if (!tree.complete || entry.fingerprint != request.getString(Proto.FINGERPRINT)) throw Fault("staleSnapshot")
+                if (!node.refresh() || !node.isVisibleToUser || !node.isEnabled) throw Fault("staleSnapshot")
+                val rect = Rect().also { node.getBoundsInScreen(it) }
+                val refreshed = toElement(node, bestText(node), rect, entry.indent, entry.path, entry.parentId, entry.rowIndex)
+                if (refreshed.fingerprint != entry.fingerprint) throw Fault("staleSnapshot")
+                return action(node, entry, automation)
+            } finally { node.recycle() }
+        } finally { conn.close() }
     }
 
-    private fun tap(pkg: String, request: Bundle) {
-        val e = resolveElement(pkg, request)
-        val cx = (e.bounds.left + e.bounds.right) / 2
-        val cy = (e.bounds.top + e.bounds.bottom) / 2
-        val long = request.getBoolean(Proto.LONG)
-        injectTap(cx, cy, long)
+    private fun tap(pkg: String, request: Bundle) = withTarget(pkg, request) { node, _, _ ->
+        if (isSecret(node) && !request.getBoolean(Proto.ALLOW_SECRET)) throw Fault("textRequiresManual")
+        snapshots.clear()
+        val action = if (request.getBoolean(Proto.LONG)) AccessibilityNodeInfo.ACTION_LONG_CLICK else AccessibilityNodeInfo.ACTION_CLICK
+        // Do not dispatch a coordinate fallback after an unknown node-action outcome.
+        if (!node.performAction(action)) throw Fault("actionRejected")
     }
 
-    private fun scroll(request: Bundle) {
-        val dir = request.getString(Proto.DIR) ?: "down"
-        val cx = width / 2; val cy = height / 2
-        val span = height / 3
-        val p = when (dir) {
-            "up" -> intArrayOf(cx, cy - span, cx, cy + span)
-            "down" -> intArrayOf(cx, cy + span, cx, cy - span)
-            "left" -> intArrayOf(cx + span, cy, cx - span, cy)
-            "right" -> intArrayOf(cx - span, cy, cx + span, cy)
+    private fun scroll(pkg: String, request: Bundle, response: Bundle) = withTarget(pkg, request) { node, entry, automation ->
+        if (!node.isScrollable) throw Fault("notScrollable")
+        val direction = request.getString(Proto.DIR) ?: "down"
+        val action = when (direction) {
+            "up" -> AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_UP.id
+            "down" -> AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_DOWN.id
+            "left" -> AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_LEFT.id
+            "right" -> AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_RIGHT.id
             else -> throw Fault("invalidArguments")
         }
-        injectSwipe(p[0], p[1], p[2], p[3], 400)
+        val actions = node.actionList.map { it.id }
+        val selected = if (action in actions) action else when (direction) {
+            "down", "right" -> AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
+            else -> AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
+        }
+        if (selected !in actions) throw Fault("scrollUnsupported")
+        val before = readTree(automation, displayId(), pkg).elements.filter { it.path.startsWith(entry.path + "/") }
+            .map { it.fingerprint }
+        snapshots.clear()
+        val accepted = node.performAction(selected)
+        response.putBoolean(Proto.ACCEPTED, accepted)
+        if (!accepted) throw Fault("scrollRejected")
+        var changed = false
+        repeat(8) {
+            if (!changed) {
+                sleepChecked(150)
+                val after = readTree(automation, displayId(), pkg).elements.filter { it.path.startsWith(entry.path + "/") }
+                    .map { it.fingerprint }
+                changed = after != before
+            }
+        }
+        response.putBoolean(Proto.SCROLLED, changed)
+        // Absence of movement does not prove end-of-list (loading/identical rows are possible).
+        response.putBoolean(Proto.AT_END, false)
+        if (!changed) response.putString("status", "unconfirmed")
+    }
+
+    private fun present(pkg: String, response: Bundle) {
+        val source = displayId()
+        val task = activities.getRunningTasks(100).firstOrNull {
+            taskDisplayIdField?.getInt(it) == source && (it.topActivity?.packageName == pkg || it.baseActivity?.packageName == pkg)
+        } ?: throw Fault("presentTaskMissing")
+        val rootId = runCatching { task.javaClass.getField("rootTaskId").getInt(task) }.getOrDefault(task.taskId)
+        val type = Class.forName("android.app.ActivityTaskManager")
+        val manager = type.getMethod("getService").invoke(null)
+        val method = Class.forName("android.app.IActivityTaskManager").methods.firstOrNull {
+            it.name == "moveRootTaskToDisplay" && it.parameterCount == 2
+        } ?: throw Fault("presentUnsupported")
+        snapshots.clear()
+        method.invoke(manager, rootId, Display.DEFAULT_DISPLAY)
+        val deadline = SystemClock.uptimeMillis() + 4000
+        while (true) {
+            val moved = activities.getRunningTasks(100).firstOrNull { taskDisplayIdField?.getInt(it) == Display.DEFAULT_DISPLAY }
+            if (moved != null && moved.taskId == task.taskId && moved.topActivity?.packageName == pkg) {
+                response.putBoolean(Proto.PRESENTED, true)
+                response.putInt(Proto.TASK_ID, task.taskId)
+                response.putInt(Proto.DISPLAY_ID, Display.DEFAULT_DISPLAY)
+                response.putString(Proto.FG_PKG, pkg)
+                return
+            }
+            if (SystemClock.uptimeMillis() >= deadline) throw Fault("presentUnconfirmed")
+            sleepChecked(100)
+        }
     }
 
     private fun globalKey(key: String?) {
@@ -582,21 +712,22 @@ class PrivilegedDisplayCore(private val context: Context) {
     private fun typeText(pkg: String, request: Bundle, response: Bundle) {
         val text = request.getString(Proto.TEXT).orEmpty()
         val index = request.getInt(Proto.ELEMENT, -1)
-        if (index < 1 || text.isEmpty() || text.length > 500 || '\u0000' in text) throw Fault("invalidArguments")
+        if (index < 1 || text.length > 2000 || '\u0000' in text) throw Fault("invalidArguments")
+        validateSnapshot(request)
         val vd = display ?: throw Fault("displayMissing")
         val conn = TreeConnection(context, pkg)
         val automation = try { conn.open(vd.display) } catch (_: Throwable) { throw Fault("textConnectionUnavailable") }
         try {
-            val node = readTree(automation, vd.display.displayId, pkg, index).target ?: throw Fault("elementMissing")
+            val tree = readTree(automation, vd.display.displayId, pkg, index)
+            val entry = tree.elements.getOrNull(index - 1) ?: throw Fault("elementMissing")
+            if (!tree.complete || entry.fingerprint != request.getString(Proto.FINGERPRINT)) throw Fault("staleSnapshot")
+            val node = tree.target ?: throw Fault("elementMissing")
             try {
                 if (!node.refresh()) throw Fault("textTargetChanged")
-                val current = toElement(node, bestText(node), Rect(), 0)
-                val expectRole = request.getString(Proto.EXPECT_ROLE)
-                val expectLabel = request.getString(Proto.EXPECT_LABEL)
-                val expectViewId = request.getString(Proto.EXPECT_VIEW_ID)
-                if (expectRole != null && expectRole != current.role ||
-                    expectLabel != null && expectLabel != current.label ||
-                    expectViewId != null && expectViewId != current.viewId) throw Fault("staleSnapshot")
+                val rect = Rect().also { node.getBoundsInScreen(it) }
+                val current = toElement(node, bestText(node), rect, entry.indent, entry.path, entry.parentId, entry.rowIndex)
+                if (current.fingerprint != entry.fingerprint) throw Fault("staleSnapshot")
+                snapshots.clear()
                 if (isSecret(node) && !request.getBoolean(Proto.ALLOW_SECRET, false)) throw Fault("textRequiresManual")
                 if (!node.isEditable || node.actionList.none { it.id == AccessibilityNodeInfo.ACTION_SET_TEXT })
                     throw Fault("textUnsupported")
@@ -620,10 +751,15 @@ class PrivilegedDisplayCore(private val context: Context) {
                     if (SystemClock.uptimeMillis() >= deadline) throw Fault("textReadbackMismatch")
                     sleepChecked(50)
                 }
-                response.putString(Proto.READBACK, BackgroundTree.cap(text))
+                response.putString(Proto.READBACK, if (isSecret(node)) "«敏感输入已遮蔽»" else BackgroundTree.cap(text))
+                response.putString("status", if (submit) "dispatched" else "completed")
+                response.putBoolean("verified", !submit)
+                response.putBoolean("written", true)
+                response.putBoolean("submitted", false)
                 if (submit) {
                     if (!node.isFocused) throw Fault("textTargetChanged")
                     globalKey("enter")
+                    response.putBoolean("submitted", true)
                 }
             } finally { node.recycle() }
         } finally { conn.close() }
@@ -820,6 +956,16 @@ class BgNode(
     val bounds: android.graphics.Rect,
     val packageName: String?,
     val viewId: String? = null,
+    val parentId: Int = 0,
+    val path: String = "",
+    val windowId: Int = -1,
+    val className: String = "",
+    val fingerprint: String = "",
+    val containerIdentity: String = "",
+    val atListStart: Boolean = false,
+    val atListEnd: Boolean = false,
+    val rowIndex: Int = -1,
+    val rowCount: Int = -1,
 ) {
     var region: Int = 1
 }

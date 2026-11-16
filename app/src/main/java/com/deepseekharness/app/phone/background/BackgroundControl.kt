@@ -231,6 +231,7 @@ class BackgroundControl private constructor(context: Context) {
         }
         val request = Bundle().apply {
             putString(Proto.OP, Proto.OP_GRANT_SECURE_SETTINGS)
+            putString("revision", Proto.REVISION)
             putInt(Proto.USER, Process.myUid() / PER_USER_RANGE)
         }
         val ok = ch != null && runCatching { ch.execute(request).getBoolean(Proto.OK) }.getOrDefault(false)
@@ -255,10 +256,11 @@ class BackgroundControl private constructor(context: Context) {
         synchronized(this) {
             if (mode == "off" || taskId <= endedTaskId.get() || (driverTaskId ?: Long.MIN_VALUE) > taskId) return false
             if (driverTaskId == taskId && driver != null && PhoneRegistry.backgroundDriver === driver) return true
-            if (driver != null) endTask()
+            if (driver != null && !endTask().ok) return false
             val d = BackgroundDisplay(
                 channelProvider = { activeChannel() },
                 releaseChannelProvider = { channel?.takeIf { it.alive() } },
+                taskId = taskId,
             ).also { driver = it }
             // Publish the pending owner before checking cancellation: a stop
             // either records the ended ID first, or sees this owner and releases
@@ -275,22 +277,27 @@ class BackgroundControl private constructor(context: Context) {
         }
     }
 
-    /** Releases the display without destroying content (handoff) and unregisters the driver. */
-    fun endTask(expectedTaskId: Long? = null) {
+    /** Does not release on failure: the caller must only endTask after a verified presentation. */
+    fun presentTask(): com.deepseekharness.app.phone.ActionResult = synchronized(this) {
+        runCatching { driver?.present() }.getOrNull() ?: com.deepseekharness.app.phone.ActionResult(false, "后台任务呈现未确认", status = "unconfirmed")
+    }
+
+    /** Releases resources. Handoff must first call presentTask and verify its receipt. */
+    fun endTask(expectedTaskId: Long? = null): com.deepseekharness.app.phone.ActionResult {
         if (expectedTaskId != null) {
             endedTaskId.accumulateAndGet(expectedTaskId) { previous, ended -> maxOf(previous, ended) }
             // In-flight setup has no display to release. Do not make the stop
             // caller wait for its synchronous IPC; beginTask checks this ID.
-            if (expectedTaskId != driverTaskId) return
+            if (expectedTaskId != driverTaskId) return com.deepseekharness.app.phone.ActionResult(true, "该任务已不占用后台屏", status = "completed", verified = true)
         }
         synchronized(this) {
-            if (expectedTaskId != null && expectedTaskId != driverTaskId) return
+            if (expectedTaskId != null && expectedTaskId != driverTaskId) return com.deepseekharness.app.phone.ActionResult(true, "该任务已不占用后台屏", status = "completed", verified = true)
             val ended = driver
-            driver = null
-            driverTaskId = null
             if (PhoneRegistry.backgroundDriver === ended) PhoneRegistry.backgroundDriver = null
-            ended?.release()
+            val receipt = ended?.release() ?: com.deepseekharness.app.phone.ActionResult(true, "后台没有待释放资源", status = "completed", verified = true)
+            if (receipt.ok) { driver = null; driverTaskId = null }
             notifyChanged()
+            return receipt
         }
     }
 
@@ -333,7 +340,7 @@ class BackgroundControl private constructor(context: Context) {
         if (starterReason != null) return starterReason
         val ch = activeChannel() ?: return AppStrings.get(app, R.string.background_not_ready)
         val response = runCatching {
-            ch.execute(Bundle().apply { putString(Proto.OP, Proto.OP_GATE); putString(Proto.OWNER, "__gate__") })
+            ch.execute(Bundle().apply { putString(Proto.OP, Proto.OP_GATE); putString(Proto.OWNER, "__gate__"); putString("revision", Proto.REVISION) })
         }.getOrNull() ?: return AppStrings.get(app, R.string.background_no_response)
         val ok = response.getBoolean(Proto.OK)
         trustedDisplayOk = ok

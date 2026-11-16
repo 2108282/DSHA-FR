@@ -24,7 +24,7 @@ interface PhoneEnv {
      * Before `handoff` while the agent works on [screen]: for the background display, release it
      * without destroying its content so the app comes to the main screen. A sentence for the model, or null.
      */
-    fun beforeHandoff(screen: PhoneScreen): String? = null
+    fun beforeHandoff(screen: PhoneScreen): ActionResult? = null
     fun sleep(ms: Long) = Thread.sleep(ms)
 }
 
@@ -64,6 +64,7 @@ class PhoneCore(
         val app: String? = null,
         val summary: String? = null,
         val decision: String? = null,
+        val result: Map<String, Any?>? = null,
     )
 
     fun call(name: String, args: Map<String, Any?>): ToolOutput {
@@ -95,7 +96,11 @@ class PhoneCore(
                     "前面的手机操作还没结束，这一步没有执行。稍后再试。"
                 } else {
                     // l10n:keep agent tool result
-                    "这一步超时了，可能执行了也可能没有。不要自动重试同一个动作：先用 screen 看看现在的屏幕。"
+                    if (name in PhoneToolCatalog.SCREEN_TOOLS || name == PhoneToolCatalog.OPEN) {
+                        "界面操作超时了，可能执行了也可能没有。不要自动重试：需要继续操作界面时先用 screen 重新观察。"
+                    } else {
+                        "原生操作超时了，可能执行了也可能没有。不要自动重试；有 request_id 时查询同一 ID 的 operation_status，其他情况核对原生回执或明确报告未知，不要用 screen 代替原生验证。"
+                    }
                 }
                 Out(text, error = true, summary = name, decision = "timeout")
             }
@@ -118,7 +123,20 @@ class PhoneCore(
             out.screen?.let { if (out.text.isNotEmpty()) append("\n\n"); append(it.text) }
         }
         val image = out.screen?.image
-        return ToolOutput(text, out.error, image, if (image != null) out.screen.imageMime else null)
+        val result = out.result ?: linkedMapOf<String, Any?>(
+            "action" to name, "status" to when {
+                out.decision == "timeout" -> "unconfirmed"
+                out.error -> "failed"
+                name in setOf("apps", "screen", "collect") -> "observed"
+                else -> "dispatched"
+            }, "verified" to false,
+        )
+        val shown = result.toMutableMap().apply {
+            put("task_id", tasks.snapshot().id)
+            out.screen?.let { put("screen", it.id) }
+        }
+        val statusText = "状态：${shown["status"]}；verified=${shown["verified"] ?: false}\n"
+        return ToolOutput(statusText + text, out.error, image, if (image != null) out.screen.imageMime else null, shown)
     }
 
     private fun noteRefusal(tool: String, decision: String?) {
@@ -151,7 +169,8 @@ class PhoneCore(
         return when (name) {
             PhoneToolCatalog.APPS -> apps(a)
             PhoneToolCatalog.OPEN -> open(a, scope)
-            PhoneToolCatalog.INTENT -> intent(a)
+            PhoneToolCatalog.INTENT -> intent(a, scope)
+            PhoneToolCatalog.CONTACTS, PhoneToolCatalog.MESSAGES, PhoneToolCatalog.CALENDAR, PhoneToolCatalog.MEDIA -> nativeTask(name, a, scope)
             PhoneToolCatalog.NOTIFY -> notify(a)
             PhoneToolCatalog.CLIPBOARD -> clipboard(a)
             PhoneToolCatalog.SCREEN -> screen(a)
@@ -246,9 +265,23 @@ class PhoneCore(
 
     /** A system action that brought up another app's UI: attach the new main screen when we can read it. */
     private fun afterSystem(r: SysResult, summary: String, app: String?): Out {
+        lastScreen = PhoneScreen.MAIN
         if (r.ok) tasks.setApp(r.appLabel ?: app)
-        val screen = if (r.ok) mainScreenAfter(SETTLE_AFTER_LAUNCH_MS) else null
-        return Out(r.message, error = !r.ok, screen = screen, app = r.appLabel ?: app, summary = summary, decision = if (r.ok) "ok" else "failed")
+        var screen: ScreenSnapshot? = null
+        var observed = false
+        if (r.ok) {
+            val deadline = System.nanoTime() + 4_000_000_000L
+            do {
+                screen = mainScreenAfter(200)
+                observed = r.packageName != null && screen?.packageName == r.packageName
+                if (observed || r.packageName == null || screen == null) break
+            } while (System.nanoTime() < deadline)
+        }
+        val status = if (observed) "observed" else if (r.ok) "unconfirmed" else r.status
+        return Out(r.message + if (observed) "\n已观察到目标界面；不代表应用内事务完成。" else if (r.ok) "\n尚未验证业务结果；不要重复执行写操作。" else "",
+            error = !r.ok, screen = screen, app = r.appLabel ?: app, summary = summary,
+            decision = status, result = mapOf("status" to status, "verified" to false,
+                "effect" to r.effect, "backend" to "android_intent", "target_observed" to observed))
     }
 
     private fun mainScreenAfter(settleMs: Long): ScreenSnapshot? {
@@ -264,7 +297,8 @@ class PhoneCore(
         }
     }
 
-    private fun intent(a: Args): Out {
+    private fun intent(a: Args, scope: SerialWorker.Scope): Out {
+        if (a.str("kind") in setOf("call", "sms_send", "operation_status", "accounts")) return nativeTask("intent", a, scope)
         val spec = when (val p = IntentSpec.parse(a, env.zone())) {
             is Either.Left -> return Out(p.value, error = true)
             is Either.Right -> p.value
@@ -288,8 +322,67 @@ class PhoneCore(
                 }
             }
         }
+        checkNativePolicy("intent", a.map, read = false)?.let { return it }
+        val owner = tasks.activeOwner() ?: return stoppedOut("intent $kind")
+        // Native paths share the same confirmation policy as GUI writes.
+        val verdict = safety.confirmation("执行手机操作：intent $kind${shareTo?.label?.let { " → $it" } ?: ""}", shareTo?.packageName, shareTo?.label, "native-intent")
+        when (val v = safety.resolve(verdict, scope)) {
+            is SafetyGate.Result.No -> return Out(v.message, error = true, decision = v.decision)
+            is SafetyGate.Result.Go -> Unit
+        }
+        if (!tasks.isCurrent(owner) || tasks.isPaused || env.isLocked()) return stoppedOut("intent $kind")
+        checkNativePolicy("intent", a.map, read = false)?.let { return it }
         val r = env.system().intent(spec, shareTo)
-        return afterSystem(r, "intent $kind", r.appLabel ?: shareTo?.label)
+        if (r.ok) {
+            lastScreen = PhoneScreen.MAIN
+            tasks.setApp(r.appLabel ?: shareTo?.label)
+        }
+        // Native dispatch returns its own receipt. A UI tree cannot verify an alarm,
+        // SMS draft, share or navigation transaction; observe only if a later GUI step needs it.
+        return Out(r.message, error = !r.ok, app = r.appLabel ?: shareTo?.label,
+            summary = "intent $kind", decision = r.status,
+            result = mapOf("action" to "intent.$kind", "status" to r.status,
+                "verified" to r.verified, "effect" to r.effect, "backend" to "android_intent"))
+    }
+
+    private fun checkNativePolicy(tool: String, args: Map<String, Any?>, read: Boolean): Out? {
+        for (target in env.system().policyTargets(tool, args)) {
+            val refusal = if (read) safety.checkRead(target.packageName, target.label) else safety.checkOpen(target.packageName, target.label)
+            refusal?.let { return Out(it.message, error = true, app = target.label, decision = "refused:${it.rule}",
+                result = mapOf("status" to "denied", "effect" to "none", "verified" to false, "reason" to it.rule)) }
+        }
+        return null
+    }
+
+    private fun nativeTask(tool: String, a: Args, scope: SerialWorker.Scope): Out {
+        if (env.isLocked()) return locked(tool)
+        val action = if (tool == "intent") a.str("kind") else a.str("action")
+        val write = tool == "intent" && action in setOf("call", "sms_send") ||
+            tool == "calendar" && action in setOf("create", "create_many", "update", "delete")
+        checkNativePolicy(tool, a.map, read = !write)?.let { return it }
+        val owner = tasks.activeOwner() ?: return stoppedOut(tool)
+        if (write) {
+            if (a.str("request_id").isNullOrBlank()) return Out("原生写操作需要唯一 request_id；结果未知时用同一 ID 查询，不要换 ID 重做。", error = true)
+            val text = when (action) {
+                "call" -> "拨出电话：${a.str("number") ?: "未指定号码"}；账户=${a.str("phone_account_id") ?: "唯一可用账户"}"
+                "sms_send" -> "发送短信给 ${a.str("number") ?: "未指定号码"}：${a.text("text")?.take(200).orEmpty()}；SIM=${a.int("subscription_id") ?: "系统选择"}"
+                else -> "执行日历 $action：${a.str("title") ?: a.str("event_id") ?: "指定日程"}"
+            }
+            when (val r = safety.resolve(safety.confirmation(text, null, null, "native-task"), scope)) {
+                is SafetyGate.Result.No -> return Out(r.message, error = true, decision = r.decision)
+                is SafetyGate.Result.Go -> Unit
+            }
+        }
+        if (!tasks.isCurrent(owner) || tasks.isPaused || env.isLocked()) return stoppedOut(tool)
+        val result = env.system().task(tool, a.map) {
+            tasks.isCurrent(owner) && !tasks.isPaused && !env.isLocked() && !Thread.currentThread().isInterrupted && checkNativePolicy(tool, a.map, read = false) == null
+        }
+        val status = result["status"] as? String ?: "unconfirmed"
+        val message = result["text"] as? String ?: "手机任务返回：$status"
+        // Keep data available to clients that only render MCP text content.
+        val data = result["data"]?.let { "\n" + Json.write(it) }.orEmpty()
+        return Out(message + data, error = status in setOf("failed", "denied", "unsupported", "invalid_arguments"),
+            summary = if (tool == "intent") "intent $action" else "$tool $action", decision = status, result = result)
     }
 
     private fun notify(a: Args): Out {
@@ -405,7 +498,8 @@ class PhoneCore(
         val pkg = driver.foregroundPackage()
         safety.checkRead(pkg, null)?.let { return Out(it.message, error = true, app = pkg, summary = summary, decision = "refused:${it.rule}") }
         say(ui.get("phone_reading_list", "DSH 正在滚动读取列表")) // l10n:keep test default
-        val r = driver.collect(sid!!, list, pages, a.str("until"))
+        if (!driver.isCurrent(sid!!)) return stale(driver, sid, summary)
+        val r = driver.collect(sid, list, pages, a.str("until"))
         val screen = r.screen?.let { safety.filterScreen(it) }
         val text = buildString {
             // l10n:keep agent tool result
@@ -422,7 +516,15 @@ class PhoneCore(
                 append(line)
             }
         }.trimEnd()
-        return Out(text, screen = screen, app = screen?.appLabel ?: pkg, summary = summary, decision = "ok")
+        val truncated = r.truncated || r.items.sumOf { it.length + 10 } > MAX_COLLECT_CHARS
+        val complete = r.complete && !truncated
+        val failed = r.stopReason in setOf("staleSnapshot", "unavailable", "denied", "unreadable", "cancelled", "listLost")
+        val status = if (failed) "failed" else if (complete) "completed" else "partial"
+        return Out(text, error = failed, screen = screen, app = screen?.appLabel ?: pkg, summary = summary,
+            decision = status,
+            result = mapOf("status" to status, "verified" to complete,
+                "complete" to complete, "truncated" to truncated, "pages" to r.pages,
+                "stop_reason" to r.stopReason, "dedup_policy" to "driver_list_items"))
     }
 
     /** tap / type / scroll / tap_xy: route, resolve, gate, perform. */
@@ -490,6 +592,7 @@ class PhoneCore(
         }
         if (env.isLocked()) return locked(summary)
         lastScreen = which
+        if (!driver.isCurrent(sid)) return stale(driver, sid, summary)
         val target: TargetInfo? = if (id != null && kind != WriteKind.TAP_XY) {
             driver.target(sid, id) ?: return stale(driver, sid, summary)
         } else {
@@ -508,9 +611,10 @@ class PhoneCore(
             is SafetyGate.Result.No -> return Out(r.message, error = true, app = app, summary = summary, decision = r.decision)
             is SafetyGate.Result.Go -> r.decision
         }
-        if (!tasks.isCurrent(owner) || Thread.currentThread().isInterrupted) return stoppedOut(summary)
+        if (!tasks.isCurrent(owner) || tasks.isPaused || env.isLocked() || Thread.currentThread().isInterrupted) return stoppedOut(summary)
         tasks.setApp(appLabel ?: pkg)
         say(ui.get("phone_acting", "DSH 正在操作 · %1\$s", statusLine(kind, target, if (secret) SafetyRules.MASK else typed))) // l10n:keep test default
+        if (!driver.isCurrent(sid)) return stale(driver, sid, summary)
         val res = driver.perform(action)
         return Out(
             res.message,
@@ -518,7 +622,10 @@ class PhoneCore(
             screen = res.screen?.let { safety.filterScreen(it) },
             app = app,
             summary = summary,
-            decision = if (res.ok) decision else "failed",
+            decision = res.status,
+            result = mapOf("status" to res.status, "verified" to res.verified,
+                "backend" to if (which == PhoneScreen.MAIN) "accessibility" else "virtual_display",
+                "written" to res.written, "submitted" to res.submitted),
         )
     }
 
@@ -606,7 +713,12 @@ class PhoneCore(
         )
         val cause = refusal?.takeIf { (who, _) -> tasks.isCurrent(who) && who.taskId == owner.taskId }?.second
         refusal = null
-        val note = env.beforeHandoff(lastScreen)
+        val presentation = env.beforeHandoff(lastScreen)
+        if (presentation != null && !presentation.ok) return Out(presentation.message,
+            error = true, summary = "交还用户", decision = "unconfirmed",
+            result = mapOf("status" to "unconfirmed", "verified" to false, "reason" to "presentation_failed"))
+        val note = presentation?.message
+        PhoneRegistry.mainDriver?.invalidate()
         if (!tasks.isCurrent(owner)) return stoppedOut("handoff")
         val result = scope.userWait { gate.handoff(reason, HANDOFF_MS, cause) }
         if (!tasks.isCurrent(owner) || Thread.currentThread().isInterrupted) return stoppedOut("handoff")

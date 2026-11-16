@@ -6,6 +6,7 @@ class ToolOutput(
     val isError: Boolean = false,
     val image: ByteArray? = null,
     val imageMime: String? = null,
+    val structured: Map<String, Any?>? = null,
 )
 
 /**
@@ -114,7 +115,9 @@ class McpServer(
                     "mimeType" to out.imageMime,
                 )
             }
-            return linkedMapOf("content" to content, "isError" to out.isError)
+            return linkedMapOf<String, Any?>("content" to content, "isError" to out.isError).apply {
+                out.structured?.let { put("structuredContent", it) }
+            }
         }
 
         fun result(id: Any?, result: Any?): String = Json.write(linkedMapOf("jsonrpc" to "2.0", "id" to id, "result" to result))

@@ -22,6 +22,10 @@ object PhoneToolCatalog {
     const val KEY = "key"
     const val TAP_XY = "tap_xy"
     const val HANDOFF = "handoff"
+    const val CONTACTS = "contacts"
+    const val MESSAGES = "messages"
+    const val CALENDAR = "calendar"
+    const val MEDIA = "media"
 
     class Tool(val name: String, val description: String, val properties: Map<String, Any?>, val required: List<String>) {
         fun toJson(): Map<String, Any?> = linkedMapOf(
@@ -34,7 +38,7 @@ object PhoneToolCatalog {
         )
     }
 
-    val INTENT_KINDS = listOf("alarm", "timer", "calendar", "dial", "sms_draft", "share", "navigate", "settings")
+    val INTENT_KINDS = listOf("alarm", "timer", "calendar", "dial", "sms_draft", "share", "navigate", "settings", "call", "sms_send", "operation_status", "accounts")
     val SETTINGS_PAGES = listOf(
         "home", "wifi", "bluetooth", "mobile_network", "airplane", "display", "sound", "battery",
         "location", "date", "language", "storage", "nfc", "app_notifications",
@@ -55,6 +59,37 @@ object PhoneToolCatalog {
 
     // l10n:keep agent tool catalog
     private val SCREEN_ID = str("屏幕号，如 s7（主屏）或 b3（后台屏），取自最近一次返回的屏幕")
+
+    private fun arrayOfType(type: String, description: String) = linkedMapOf<String, Any?>(
+        "type" to "array", "items" to mapOf("type" to type), "description" to description,
+    )
+
+    private val taskTools: List<Tool> = listOf(
+        Tool(CONTACTS, "为电话/短信任务查询联系人及号码。search按query找人，get按contact_id读取；重名或多号码不要猜。", linkedMapOf(
+            "action" to enum(listOf("search", "get"), "操作"), "query" to str("姓名或号码片段"),
+            "contact_id" to str("查询返回的原始联系人ID"), "offset" to int("分页起点", 0), "limit" to int("最多50条", 1, 50),
+        ), listOf("action")),
+        Tool(MESSAGES, "先threads按number或地址query查会话ID，再search/read读取指定thread_id；仅任务所需范围。发送使用intent sms_send。", linkedMapOf(
+            "action" to enum(listOf("threads", "search", "read"), "操作"), "thread_id" to str("search/read必须明确会话ID"),
+            "number" to str("threads精确号码"),
+            "query" to str("可选正文关键词"), "offset" to int("分页起点", 0), "limit" to int("最多50条", 1, 50),
+        ), listOf("action")),
+        Tool(CALENDAR, "通用Android日历事务：查询/读/创建/批量/改/删，事件与提醒事务写入后回查；写操作必须唯一request_id，未确认先回查不可重建。", linkedMapOf(
+            "action" to enum(listOf("list_calendars", "search", "read", "create", "create_many", "update", "delete"), "操作"),
+            "request_id" to str("写操作唯一ID"), "calendar_id" to str("list_calendars返回的真实ID"),
+            "event_id" to str("真实事件ID，不能猜"), "query" to str("查询关键词"), "title" to str("标题"),
+            "description" to str("备注"), "location" to str("地点"),
+            "start_time" to str("带时区偏移ISO时间；全天YYYY-MM-DD"), "end_time" to str("结束时间，全天排他结束日期"),
+            "all_day" to bool("全天"), "timezone" to str("IANA时区"), "scope" to enum(listOf("event", "series"), "重复事件删除需series"),
+            "reminder_minutes" to arrayOfType("integer", "提前提醒分钟数组"),
+            "events" to linkedMapOf("type" to "array", "description" to "最多30条，同一日历；每项使用title/start_time/end_time/all_day/reminder_minutes", "items" to mapOf("type" to "object")),
+            "offset" to int("分页起点", 0), "limit" to int("最多50条", 1, 50),
+        ), listOf("action")),
+        Tool(MEDIA, "为分享等手机任务查找共享媒体/文件，返回可授权content URI；不扫描私有目录。", linkedMapOf(
+            "action" to enum(listOf("search"), "操作"), "kind" to enum(listOf("images", "audio", "video", "files"), "媒体类型"),
+            "query" to str("文件名关键词"), "offset" to int("分页起点", 0), "limit" to int("最多50条", 1, 50),
+        ), listOf("action", "kind", "query")),
+    )
 
     val tools: List<Tool> = listOf(
         Tool(
@@ -82,11 +117,11 @@ object PhoneToolCatalog {
         Tool(
             INTENT,
             // l10n:keep agent tool catalog
-            "用系统意图办事（最后一步用户在对方界面确认），能办就别点界面。字段按 kind：" +
+            "直接调用原生接口，无需先screen，结果不自动读屏；仅后续确需界面操作才screen。dispatched不是业务完成；未确认写操作不可重做。call/sms_send需request_id，operation_status查询同ID结果；accounts列SIM/通话账户。字段按kind：" +
                 // l10n:keep agent tool catalog
                 "alarm(hour,minute,days?,message?)、timer(seconds,message?)、calendar(title,begin,end?,all_day?,location?,description?)、" +
                 // l10n:keep agent tool catalog
-                "dial(number)、sms_draft(number?,text)、share(text,app?)、navigate(destination|lat+lng,mode?,map?)、settings(page,app?)。",
+                "dial(number)、call(number,phone_account_id?,request_id)、sms_draft(number?,text)、sms_send(number,text,subscription_id,request_id)、share(text?|path?,mime?,app?)、navigate(destination|lat+lng)、settings(page,app?)。日历优先calendar工具。",
             linkedMapOf(
                 // l10n:keep agent tool catalog
                 "kind" to enum(INTENT_KINDS, "事务类型"),
@@ -131,7 +166,12 @@ object PhoneToolCatalog {
                 // l10n:keep agent tool catalog
                 "mode" to enum(NAV_MODES, "出行方式，默认 drive"),
                 // l10n:keep agent tool catalog
-                "map" to enum(listOf("amap", "baidu"), "地图，默认先高德再百度"),
+                "map" to str("兼容旧参数；执行统一使用Android geo URI"),
+                "path" to str("外部存储文件绝对路径或media返回的content URI"),
+                "mime" to str("可选分享MIME类型"),
+                "request_id" to str("原生写操作唯一ID；结果未知时查询同ID，不换ID重做"),
+                "phone_account_id" to str("call的系统电话账户ID，多账户时需明确选择"),
+                "subscription_id" to int("sms_send明确指定的SIM订阅ID", 0),
                 // l10n:keep agent tool catalog
                 "page" to enum(SETTINGS_PAGES, "设置页；app_notifications 还需 app"),
             ),
@@ -170,7 +210,7 @@ object PhoneToolCatalog {
         Tool(
             COLLECT,
             // l10n:keep agent tool catalog
-            "只读：自动滚动列表收集全部条目（按文字去重），读长列表只用这一次。",
+            "滚动读取指定列表。只采集此列表条目，返回complete/truncated/stop_reason；部分结果不能当全部。",
             linkedMapOf(
                 "screen" to SCREEN_ID,
                 // l10n:keep agent tool catalog
@@ -193,7 +233,7 @@ object PhoneToolCatalog {
         Tool(
             TYPE,
             // l10n:keep agent tool catalog
-            "在输入框输入文字（替换原内容），返回回读和新屏幕。submit:true 后按回车 / 发送，要确认。密码、验证码、支付框默认拒绝，被拒绝就 handoff。",
+            "替换输入框文字（空串清空，最多2000字），返回written/submitted和新屏幕。submit按用户确认设置执行；写入成功而提交失败时不要重复输入。密码/验证码/支付框默认handoff。",
             linkedMapOf(
                 "screen" to SCREEN_ID,
                 // l10n:keep agent tool catalog
@@ -229,7 +269,7 @@ object PhoneToolCatalog {
         Tool(
             TAP_XY,
             // l10n:keep agent tool catalog
-            "按标号截图的像素坐标点击，只在元素里找不到目标时用；每次都要用户确认。",
+            "按最近标号截图像素坐标点击，仅元素无法定位时后备，遵循用户确认模式；页面或截图变化则拒绝。",
             linkedMapOf(
                 // l10n:keep agent tool catalog
                 "observation" to str("那张截图的屏幕号"),
@@ -248,7 +288,7 @@ object PhoneToolCatalog {
             linkedMapOf("reason" to str("要用户做什么，一句话")),
             listOf("reason"),
         ),
-    )
+    ) + taskTools
 
     val names: List<String> = tools.map { it.name }
 

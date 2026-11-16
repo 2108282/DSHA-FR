@@ -66,6 +66,31 @@ class SystemActions(private val app: Context) : SystemApi {
     private val main = Handler(Looper.getMainLooper())
     private val nm = app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
     private val ids = AtomicInteger(4100)
+    private val taskNative by lazy { com.deepseekharness.app.phone.tasks.TaskNativeFacade(app.applicationContext) }
+
+    override fun task(tool: String, args: Map<String, Any?>, canWrite: () -> Boolean): Map<String, Any?> = taskNative.execute(tool, args, canWrite)
+
+    override fun policyTargets(tool: String, args: Map<String, Any?>): List<AppEntry> {
+        val targets = LinkedHashSet<String>()
+        fun activity(intent: Intent) { pm.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName?.takeIf { it != "android" }?.let(targets::add) }
+        fun provider(authority: String) { pm.resolveContentProvider(authority, 0)?.packageName?.let(targets::add) }
+        when (tool) {
+            "contacts" -> provider("com.android.contacts")
+            "messages" -> { provider("sms"); android.provider.Telephony.Sms.getDefaultSmsPackage(app)?.let(targets::add) }
+            "calendar" -> { provider("com.android.calendar"); activity(Intent(Intent.ACTION_INSERT, CalendarContract.Events.CONTENT_URI)) }
+            "media" -> provider("media")
+            "intent" -> when (args["kind"]) {
+                "call", "dial" -> activity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:")))
+                "sms_send", "sms_draft" -> { provider("sms"); android.provider.Telephony.Sms.getDefaultSmsPackage(app)?.let(targets::add); activity(Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:"))) }
+                "alarm" -> activity(Intent(AlarmClock.ACTION_SET_ALARM))
+                "timer" -> activity(Intent(AlarmClock.ACTION_SET_TIMER))
+                "calendar" -> { provider("com.android.calendar"); activity(Intent(Intent.ACTION_INSERT, CalendarContract.Events.CONTENT_URI)) }
+                "settings" -> activity(Intent(Settings.ACTION_SETTINGS))
+                "navigate" -> activity(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=place")))
+            }
+        }
+        return targets.map { AppEntry(labelOf(it) ?: it, it) }
+    }
     @Volatile private var appsCache: Pair<Long, List<AppEntry>>? = null
 
     override fun apps(): List<AppEntry> {
@@ -181,49 +206,56 @@ class SystemActions(private val app: Context) : SystemApi {
             // l10n:keep agent tool result
             startResolved(i, "写短信", "已打开短信草稿" + (spec.number?.let { "（发给 $it）" } ?: "") + "，没有发送；由用户确认后点发送。", noticeWhat = AppStrings.get(app, R.string.phone_notice_sms))
         }
-        is IntentSpec.Share -> {
-            val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, spec.text)
-            if (shareTo != null) {
+        is IntentSpec.Share -> share(spec, shareTo)
+        is IntentSpec.Navigate -> navigate(spec)
+        is IntentSpec.Settings -> settings(spec, shareTo)
+    }
+
+    private fun share(spec: IntentSpec.Share, shareTo: AppEntry?): SysResult {
+            val send = Intent(Intent.ACTION_SEND)
+            spec.text?.let { send.putExtra(Intent.EXTRA_TEXT, it) }
+            if (spec.path != null) {
+                val uri = try { shareUri(spec.path) } catch (e: Exception) {
+                    return SysResult(false, "文件不可分享：${e.message}", status = "denied", effect = "none")
+                }
+                val mime = spec.mime ?: app.contentResolver.getType(uri) ?: "application/octet-stream"
+                send.setType(mime).putExtra(Intent.EXTRA_STREAM, uri)
+                send.clipData = ClipData.newRawUri("DSH share", uri)
+                send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } else send.setType("text/plain")
+            return if (shareTo != null) {
                 send.setPackage(shareTo.packageName)
                 // l10n:keep agent tool result
-                startResolved(send, "分享到「${shareTo.label}」", "已把文字分享到「${shareTo.label}」，由用户选择联系人并发送。", shareTo.label, AppStrings.get(app, R.string.phone_notice_share_to, shareTo.label))
+                startResolved(send, "分享到「${shareTo.label}」", "已提交分享内容到「${shareTo.label}」，由用户选择联系人并发送。", shareTo.label, AppStrings.get(app, R.string.phone_notice_share_to, shareTo.label))
             } else {
                 // l10n:keep agent tool result
                 start(Intent.createChooser(send, AppStrings.get(app, R.string.phone_share_chooser)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), "分享", "已打开分享面板，由用户选择发给谁。", null, null, AppStrings.get(app, R.string.phone_notice_share))
             }
         }
-        is IntentSpec.Navigate -> navigate(spec)
-        is IntentSpec.Settings -> settings(spec, shareTo)
+
+    /** Share only URI grants we actually hold or canonical files under public external storage. */
+    private fun shareUri(path: String): Uri {
+        if (path.startsWith("content:")) {
+            val uri = Uri.parse(path)
+            val allowed = setOf("media", "com.android.providers.media.documents", "com.android.providers.downloads.documents")
+            require(uri.authority in allowed) { "不支持此 content 来源；请先用 media 选择任务文件" }
+            app.contentResolver.openAssetFileDescriptor(uri, "r")?.use { } ?: error("无法读取文件")
+            return uri
+        }
+        val file = java.io.File(path).canonicalFile
+        val roots = listOf(java.io.File("/sdcard").canonicalFile, java.io.File("/storage/emulated/0").canonicalFile)
+        require(file.isFile && roots.any { file.path.startsWith(it.path + "/") }) { "仅支持外部存储文件" }
+        return androidx.core.content.FileProvider.getUriForFile(app, "${app.packageName}.updates", file)
     }
 
     private fun navigate(n: IntentSpec.Navigate): SysResult {
-        val candidates = ArrayList<Triple<String, String?, String>>() // uri, package, name
-        // l10n:keep agent tool result
-        val amap = Triple(NavUris.amap(n), NavUris.AMAP, "高德地图")
-        // l10n:keep agent tool result
-        val baidu = Triple(NavUris.baidu(n), NavUris.BAIDU, "百度地图")
-        when (n.map) {
-            "amap" -> candidates += amap
-            "baidu" -> candidates += baidu
-            else -> {
-                candidates += amap
-                candidates += baidu
-            }
-        }
-        for ((uri, pkg, name) in candidates) {
-            if (pkg != null && !isInstalled(pkg)) continue
-            val i = Intent(Intent.ACTION_VIEW, Uri.parse(uri)).setPackage(pkg)
-            if (pm.resolveActivity(i, 0) == null) continue
-            // l10n:keep agent tool result
-            return start(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), "导航", "已在「$name」打开到「${n.destination ?: "${n.lat},${n.lng}"}」的路线，由用户确认后开始导航。", pkg, name, AppStrings.get(app, R.string.phone_notice_navigate))
-        }
         val geo = Intent(Intent.ACTION_VIEW, Uri.parse(NavUris.geo(n)))
         if (pm.resolveActivity(geo, 0) == null) {
             // l10n:keep agent tool result
-            return SysResult(false, "手机上没有能导航的地图应用（高德、百度都没装）。")
+            return SysResult(false, "手机上没有能处理 geo 地点链接的地图应用。")
         }
         // l10n:keep agent tool result
-        val note = if (n.map != null) "没装指定的地图，" else ""
+        val note = if (n.map != null) "本接口使用 Android 通用 geo 链接，" else ""
         // l10n:keep agent tool result
         return start(geo.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), "导航", "${note}已用地图应用打开「${n.destination ?: "${n.lat},${n.lng}"}」，由用户选路线。", null, null, AppStrings.get(app, R.string.phone_notice_navigate))
     }
@@ -296,21 +328,25 @@ class SystemActions(private val app: Context) : SystemApi {
             return SysResult(false, "系统不允许 DSH 执行「$what」：${e.message ?: "没有权限"}。")
         }
         val exempt = AppVisibility.visible || PhoneRegistry.mainDriver != null || Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
-        if (exempt) return SysResult(true, done, pkg, label)
+        if (exempt) return SysResult(true, "已提交请求：$done（业务完成仍需观察或回查。）", pkg, label, status = "dispatched", effect = "possible")
         postOpen(intent, noticeWhat)
         return SysResult(
             true,
             // l10n:keep agent tool result
-            "$done（DSH 不在前台，系统可能拦下后台弹出的界面；已发通知「$what」，用户点一下就能打开。）",
+            "已提交请求但未确认界面出现：$done（DSH 不在前台，系统可能拦下后台弹出的界面；已发通知「$what」，用户点一下就能打开。）",
             pkg,
             label,
+            status = "unconfirmed",
+            effect = "possible",
         )
     }
 
     private fun postOpen(intent: Intent, what: String) {
         ensureChannel(CHANNEL_OPEN, AppStrings.get(app, R.string.phone_open_channel), NotificationManager.IMPORTANCE_HIGH)
         val id = ids.incrementAndGet()
-        val pi = PendingIntent.getActivity(app, id, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        // Never put an already-dispatched write Intent in the notification: tapping could replay it.
+        val review = Intent(app, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        val pi = PendingIntent.getActivity(app, id, review, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         nm.notify(TAG, id, builder(CHANNEL_OPEN).setContentTitle(AppStrings.get(app, R.string.phone_open_notice, what)).setContentText(AppStrings.get(app, R.string.phone_tap_open)).setContentIntent(pi).setAutoCancel(true).build())
     }
 
@@ -333,7 +369,7 @@ class SystemActions(private val app: Context) : SystemApi {
             .build()
         nm.notify(TAG, ids.incrementAndGet(), n)
         // l10n:keep agent tool result
-        return SysResult(true, "已发通知「${SafetyRules.quoteText(title, 30)}」。")
+        return SysResult(true, "已发布通知「${SafetyRules.quoteText(title, 30)}」，不代表用户已阅读。", status = "dispatched", effect = "applied")
     }
 
     override fun clipboardSet(text: String): SysResult {
@@ -345,7 +381,7 @@ class SystemActions(private val app: Context) : SystemApi {
             true
         } == true
         // l10n:keep agent tool result
-        return if (ok) SysResult(true, "已写入剪贴板（${text.length} 字）。") else SysResult(false, "写剪贴板失败。")
+        return if (ok) SysResult(true, "已写入剪贴板（${text.length} 字）。", status = "dispatched", verified = false, effect = "applied") else SysResult(false, "写剪贴板失败。")
     }
 
     override fun clipboardGet(): SysResult {
@@ -357,7 +393,7 @@ class SystemActions(private val app: Context) : SystemApi {
         if (text.isNullOrEmpty()) {
             return if (visible || Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
                 // l10n:keep agent tool result
-                SysResult(true, "剪贴板是空的。")
+                SysResult(true, "剪贴板是空的。", status = "observed", verified = true, effect = "none")
             } else {
                 // l10n:keep agent tool result
                 SysResult(false, "读不到剪贴板：系统只允许前台应用读，DSH 不在前台。请用户切回 DSH 再说，或直接把内容发给你。")
@@ -366,7 +402,7 @@ class SystemActions(private val app: Context) : SystemApi {
         // l10n:keep agent tool result
         val shown = if (text.length > 20_000) text.take(20_000) + "\n…（后面还有 ${text.length - 20_000} 字）" else text
         // l10n:keep agent tool result
-        return SysResult(true, "剪贴板内容：\n$shown")
+        return SysResult(true, "剪贴板内容：\n$shown", status = "observed", verified = true, effect = "none")
     }
 
     private fun <T> onMain(block: () -> T): T? {

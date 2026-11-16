@@ -56,6 +56,8 @@ class PhoneControlFragment : Fragment() {
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private var isBinding = false
+    private val taskPermissionRows = mutableListOf<Pair<PhoneTaskPermissionUi.Group, TextView>>()
+    private val taskPermissions = PhoneTaskPermissionUi(this) { refreshTaskPermissionRows() }
 
     private var masterToggle: DshaToggle? = null
     private var bridgeStatusText: TextView? = null
@@ -204,6 +206,23 @@ class PhoneControlFragment : Fragment() {
         }
         prepCard.addView(testRow)
         root.addView(prepCard)
+
+        // Android permissions are managed here by the person, never during a phone tool call.
+        root.addView(sectionHeader("原生任务权限"))
+        val permissionCard = card()
+        taskPermissionRows.clear()
+        taskPermissions.groups.forEachIndexed { index, group ->
+            if (index > 0) permissionCard.addView(divider())
+            val (row, status) = actionRow(
+                iconRes = R.drawable.ic_key,
+                title = group.title,
+                subtitle = taskPermissions.summary(group),
+                actionLabel = "管理"
+            ) { showTaskPermissionGroup(group) }
+            taskPermissionRows.add(group to status)
+            permissionCard.addView(row)
+        }
+        root.addView(permissionCard)
 
         // ==================== 3. 确认方式与不打扰模式（后台虚拟屏） ====================
         root.addView(sectionHeader("确认方式与后台虚拟屏"))
@@ -373,12 +392,14 @@ class PhoneControlFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+        taskPermissionRows.clear()
         syncActivityTitle(false)
         super.onDestroyView()
     }
 
     private fun refreshState() {
         val ctx = context ?: return
+        refreshTaskPermissionRows()
         val pc = PhoneControl.get(ctx)
         val p = pc.policies()
         val snap = pc.tasks.snapshot()
@@ -454,6 +475,84 @@ class PhoneControlFragment : Fragment() {
         val btnCancel: Button,
         val btnConfirm: Button,
     )
+
+    private fun refreshTaskPermissionRows() {
+        if (!isAdded) return
+        taskPermissionRows.forEach { (group, status) -> status.text = taskPermissions.summary(group) }
+    }
+
+    private fun showTaskPermissionGroup(group: PhoneTaskPermissionUi.Group) {
+        val holder = createPluginStyleDialog(
+            iconRes = R.drawable.ic_key,
+            titleText = group.title,
+            subTitleText = "原生任务权限",
+            badge1Text = "手动授权",
+            badge2Text = null,
+            footNote = "只申请你点选任务所需的权限。授权不会自动执行任务，也不会改变安全确认方式或解除限制。闹钟普通权限不需要运行时授权。",
+            cancelText = "关闭",
+            confirmText = "应用设置"
+        )
+        holder.bodySlot.addView(TextView(requireContext()).apply {
+            text = group.explanation
+            textSize = 13f
+            setTextColor(ContextCompat.getColor(requireContext(), R.color.text_muted))
+            setPadding(0, 0, 0, dp(10))
+        })
+        group.tasks.forEachIndexed { index, task ->
+            if (index > 0) holder.bodySlot.addView(divider())
+            val state = taskPermissions.state(task)
+            val (row, _) = actionRow(
+                iconRes = R.drawable.ic_key,
+                title = task.title,
+                subtitle = taskPermissions.taskSummary(task),
+                actionLabel = if (state.complete) "详情" else "授权"
+            ) {
+                holder.dialog.dismiss()
+                showTaskPermissionRequest(task)
+            }
+            holder.bodySlot.addView(row)
+        }
+        holder.btnCancel.setOnClickListener { holder.dialog.dismiss() }
+        holder.btnConfirm.setOnClickListener {
+            holder.dialog.dismiss()
+            taskPermissions.openAppSettings()
+        }
+        holder.dialog.show()
+    }
+
+    private fun showTaskPermissionRequest(task: PhoneTaskPermissionUi.Task) {
+        val state = taskPermissions.state(task)
+        val canRequest = (state.missing - state.settingsOnly.toSet()).isNotEmpty()
+        val holder = createPluginStyleDialog(
+            iconRes = R.drawable.ic_key,
+            titleText = task.title,
+            subTitleText = "原生任务权限",
+            badge1Text = if (state.complete) "已授予" else "有权限缺失",
+            badge2Text = null,
+            footNote = if (state.settingsOnly.isNotEmpty()) "部分权限已被拒绝且系统可能不再弹窗，或受系统策略限制。请在应用详情 → 权限中手动检查；短信权限即使在此处也可能不可授予。" else "权限由 Android 系统授予。可随时在应用详情中撤回；工具执行时不会自动弹出授权。",
+            cancelText = "取消",
+            confirmText = if (state.complete) "应用设置" else if (canRequest) "申请缺失权限" else "打开应用设置"
+        )
+        holder.bodySlot.addView(TextView(requireContext()).apply {
+            text = buildString {
+                append(task.explanation).append("\n\n")
+                task.permissions.distinct().forEach { permission ->
+                    append(if (permission in state.granted) "已授予 · " else "缺失 · ")
+                    append(taskPermissions.permissionName(permission)).append('\n')
+                }
+            }.trimEnd()
+            textSize = 13f
+            setLineSpacing(0f, 1.3f)
+            setTextColor(ContextCompat.getColor(requireContext(), R.color.text))
+        })
+        holder.btnCancel.setOnClickListener { holder.dialog.dismiss() }
+        holder.btnConfirm.setOnClickListener {
+            holder.dialog.dismiss()
+            if (state.complete || !canRequest) taskPermissions.openAppSettings()
+            else taskPermissions.requestMissing(task)
+        }
+        holder.dialog.show()
+    }
 
     private fun createPluginStyleDialog(
         @DrawableRes iconRes: Int,

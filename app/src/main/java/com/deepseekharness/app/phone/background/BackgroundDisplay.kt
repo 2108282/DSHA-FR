@@ -21,12 +21,15 @@ import com.deepseekharness.app.phone.TargetInfo
 class BackgroundDisplay(
     private val channelProvider: () -> PrivilegedChannel?,
     private val releaseChannelProvider: () -> PrivilegedChannel?,
+    taskId: Long,
 ) : PhoneDriver {
 
     override val screen: PhoneScreen = PhoneScreen.BACKGROUND
 
     @Volatile private var currentPackage: String? = null
-    private var counter = 0
+    private val owner = BackgroundRepairIdentity.owner(taskId)
+    private var token: String? = null
+    private var completeTree = false
     private var lastScreenId: String? = null
     private var lastElements: List<Element> = emptyList()
     private var previousLabels: Set<String> = emptySet()
@@ -49,13 +52,13 @@ class BackgroundDisplay(
     override fun open(packageName: String): ActionResult {
         val request = Bundle().apply {
             putString(Proto.OP, Proto.OP_LAUNCH)
-            putString(Proto.OWNER, "task")
+            putString(Proto.OWNER, owner); putString("revision", Proto.REVISION)
             putString(Proto.PKG, packageName)
             putInt(Proto.SHORT_SIDE, 720)
             putInt(Proto.WANT_IMAGE, 0)
         }
         currentPackage = packageName
-        val response = channel().execute(request)
+        val response = execute(request)
         // l10n:keep agent screen protocol
         return toResult(response, "已在后台屏打开")
     }
@@ -64,36 +67,88 @@ class BackgroundDisplay(
         val pkg = currentPackage ?: return idleSnapshot()
         val request = Bundle().apply {
             putString(Proto.OP, Proto.OP_OBSERVE)
-            putString(Proto.OWNER, "task")
+            putString(Proto.OWNER, owner); putString("revision", Proto.REVISION)
             putString(Proto.PKG, pkg)
             putBoolean(Proto.DETAIL, detail)
             putBoolean(Proto.WANT_IMAGE, image)
         }
-        return snapshot(channel().execute(request), markNew = false)
+        val response = execute(request)
+        if (!response.getBoolean(Proto.OK)) throw IllegalStateException(Reasons.of(response.getString(Proto.ERROR)))
+        return snapshot(response, markNew = false)
     }
 
     override fun collect(screenId: String, listElementId: Int, maxPages: Int, until: String?): CollectResult {
-        val seen = LinkedHashSet<String>()
+        if (!isCurrent(screenId)) return CollectResult(emptyList(), 0, "staleSnapshot：请重新读屏", null)
+        var list = lastElements.getOrNull(listElementId - 1)
+            ?: return CollectResult(emptyList(), 0, "elementMissing", null)
+        if (list.role != "列表" && "可滚动" !in list.states)
+            return CollectResult(emptyList(), 0, "notScrollable：指定编号不是列表", null)
+        var startsAtTop = list.atListStart
+        var complete = false
+        val container = list.containerIdentity
+        val rows = ArrayList<String>()
+        val indexedRows = LinkedHashMap<Int, String>()
+        var previousPage = emptyList<String>()
+        // Re-observe the selected container; cached labels alone are not a live read.
+        val initial = observe(false, false)
+        val refreshed = lastElements.singleOrNull { it.containerIdentity == container }
+            ?: return CollectResult(emptyList(), 0, "listChanged", initial)
+        list = refreshed
+        startsAtTop = list.atListStart
         var pages = 0
-        var stop = "listEnd"
-        var last: ScreenSnapshot? = null
+        var stop = "pageLimit：部分结果"
+        var last: ScreenSnapshot? = initial
+        val deadline = android.os.SystemClock.uptimeMillis() + 90_000
         while (pages < maxPages.coerceIn(1, 30)) {
-            val snap = observe(detail = false, image = false)
-            last = snap
-            val before = seen.size
-            for (e in lastElements) if (e.label.isNotEmpty()) seen.add(e.label)
+            if (Thread.currentThread().isInterrupted || android.os.SystemClock.uptimeMillis() > deadline) {
+                stop = "cancelledOrTimeout：部分结果"; break
+            }
+            if (!completeTree) { stop = "treeTruncated：无法确认列表完整性"; break }
+            val descendants = lastElements.filter { it.path.startsWith(list.path + "/") }
+            // Group descendants by the first child of the list, preserving duplicate rows.
+            val page = descendants.groupBy { it.path.removePrefix(list.path + "/").substringBefore('/') }
+                .values.map { children -> children.map { it.label }.filter { it.isNotBlank() }.distinct().joinToString(" · ") }
+                .filter { it.isNotEmpty() }
+            var overlap = minOf(previousPage.size, page.size)
+            while (overlap > 0 && previousPage.takeLast(overlap) != page.take(overlap)) overlap--
+            val indexed = descendants.filter { it.rowIndex >= 0 }.groupBy { it.rowIndex }
+            if (indexed.isNotEmpty()) {
+                indexed.forEach { (index, nodes) -> indexedRows[index] = nodes.map { it.label }.filter { it.isNotBlank() }.distinct().joinToString(" · ") }
+                rows.clear(); rows.addAll(indexedRows.toSortedMap().values)
+            } else {
+                // Without stable collection row indexes, duplicate text is ambiguous: preserve it.
+                rows.addAll(page)
+            }
+            previousPage = page
             pages++
-            if (until != null && seen.any { it.contains(until) }) { stop = "untilMatched"; break }
-            if (seen.size == before) { stop = "listEnd"; break }
-            if (pages >= maxPages) { stop = "pageLimit"; break }
-            perform(PhoneAction.Scroll(screenId, listElementId, PhoneAction.Direction.DOWN))
+            if (until != null && rows.any { it.contains(until, ignoreCase = true) }) { stop = "untilMatched：已找到目标，非全量"; break }
+            if (rows.sumOf { it.length } >= 16_000) { stop = "outputLimit：部分结果"; break }
+            if (list.atListEnd) { complete = startsAtTop && list.rowCount > 0 && list.rowCount <= indexedRows.size && (0 until list.rowCount).all { it in indexedRows }; stop = if (complete) "listEnd：集合行数与末行已核对" else "listEnd：缺少全量行索引证明，部分结果"; break }
+            if (pages >= maxPages.coerceIn(1, 30)) break
+            val result = perform(PhoneAction.Scroll(lastScreenId!!, list.id, PhoneAction.Direction.DOWN))
+            last = result.screen
+            if (!result.ok) { stop = "scrollFailed：${result.message}；部分结果"; break }
+            if (result.status == "unconfirmed") { stop = "scrollUnconfirmed：未证明移动或到底，部分结果"; break }
+            val nextList = lastElements.singleOrNull { it.containerIdentity == container }
+            if (nextList == null) { stop = "listChanged：列表身份变化，部分结果"; break }
+            list = nextList
         }
-        return CollectResult(seen.toList(), pages, stop, last)
+        return CollectResult(rows, pages, stop, last, complete = complete, truncated = !complete)
     }
 
+    override fun isCurrent(screenId: String): Boolean = token != null && screenId == lastScreenId
+
+    override fun invalidate() { token = null; lastScreenId = null; lastElements = emptyList() }
+
     override fun target(screenId: String, elementId: Int): TargetInfo? {
-        if (screenId != lastScreenId) return null
+        if (!isCurrent(screenId)) return null
         val e = lastElements.getOrNull(elementId - 1) ?: return null
+        val checked = runCatching { execute(Bundle().apply {
+            putString(Proto.OP, Proto.OP_VALIDATE); putString(Proto.OWNER, owner)
+            putString(Proto.PKG, currentPackage); putString(Proto.SNAPSHOT, token)
+            putInt(Proto.ELEMENT, elementId); putString(Proto.FINGERPRINT, e.fingerprint)
+        }) }.getOrNull()
+        if (checked == null || !checked.getBoolean("validated") || !checked.getBoolean(Proto.OK)) { invalidate(); return null }
         return TargetInfo(
             screenId = screenId,
             elementId = elementId,
@@ -111,8 +166,10 @@ class BackgroundDisplay(
     override fun perform(action: PhoneAction): ActionResult {
         // l10n:keep agent screen protocol
         val pkg = currentPackage ?: return ActionResult(false, "后台屏还没有打开应用")
+        if (!isCurrent(action.screenId)) return ActionResult(false, "后台屏幕编号已过期，请重新读屏")
         val request = Bundle().apply {
-            putString(Proto.OWNER, "task")
+            putString(Proto.SNAPSHOT, token)
+            putString(Proto.OWNER, owner); putString("revision", Proto.REVISION)
             putString(Proto.PKG, pkg)
         }
         when (action) {
@@ -134,6 +191,14 @@ class BackgroundDisplay(
             is PhoneAction.Scroll -> {
                 request.putString(Proto.OP, Proto.OP_SCROLL)
                 request.putString(Proto.DIR, action.direction.name.lowercase())
+                if (action.elementId != null && lastElements.getOrNull(action.elementId!! - 1) == null)
+                    return ActionResult(false, "指定列表不存在，未改滑其他列表")
+                val list = action.elementId?.let { id -> lastElements.getOrNull(id - 1) }
+                    ?: lastElements.filter { it.role == "列表" || "可滚动" in it.states }
+                        .maxByOrNull { e -> if (e.bounds.size == 4) (e.bounds[2] - e.bounds[0]) * (e.bounds[3] - e.bounds[1]) else 0 }
+                    ?: return ActionResult(false, "当前快照没有可滚动列表；不盲滑全屏")
+                request.putInt(Proto.ELEMENT, list.id)
+                fingerprint(list.id, request)
             }
             is PhoneAction.Key -> {
                 val dir = when (action.key) {
@@ -149,26 +214,30 @@ class BackgroundDisplay(
             is PhoneAction.TapXY -> return ActionResult(false, "后台屏按元素编号操作，不用坐标")
         }
         // l10n:keep agent screen protocol
-        return toResult(channel().execute(request), "已在后台屏执行")
+        return toResult(execute(request), "后台动作请求已执行；请核对返回屏幕")
     }
 
     override fun foregroundPackage(): String? = currentPackage
 
-    fun release() {
-        runCatching {
-            // Cleanup may use an existing session, but must not connect or start a new process.
+    fun release(): ActionResult {
+        val response = runCatching {
+            // Cleanup may use an existing session, but must not start a new privileged process.
             releaseChannelProvider()?.execute(Bundle().apply {
-                putString(Proto.OP, Proto.OP_RELEASE); putString(Proto.OWNER, "task")
+                putString(Proto.OP, Proto.OP_RELEASE); putString(Proto.OWNER, owner)
+                putString("revision", Proto.REVISION)
             })
-        }
+        }.getOrNull()
+        invalidate()
         currentPackage = null
-        lastScreenId = null
-        lastElements = emptyList()
         previousLabels = emptySet()
+        val verified = response != null && response.getString("revision") == Proto.REVISION && response.getBoolean(Proto.OK) && response.getBoolean("released")
+        return ActionResult(verified, if (verified) "后台显示资源已释放" else "后台资源释放未确认；原任务呈现状态不因此改变",
+            status = if (verified) "completed" else "unconfirmed", verified = verified)
     }
 
     private fun fingerprint(elementId: Int, request: Bundle) {
         val e = lastElements.getOrNull(elementId - 1) ?: return
+        request.putString(Proto.FINGERPRINT, e.fingerprint)
         request.putString(Proto.EXPECT_ROLE, e.role)
         request.putString(Proto.EXPECT_LABEL, e.label)
         e.viewId?.let { request.putString(Proto.EXPECT_VIEW_ID, it) }
@@ -179,17 +248,23 @@ class BackgroundDisplay(
         val message = if (ok) okMessage else Reasons.of(response.getString(Proto.ERROR))
         val snap = if (response.containsKey(Proto.COUNT) || response.getBoolean(Proto.SECURE))
             snapshot(response, markNew = true) else null
-        return ActionResult(ok, message, snap)
+        val status = response.getString("status") ?: if (ok) "dispatched" else "failed"
+        return ActionResult(ok, message + response.getString(Proto.READBACK)?.let { "\n输入回读：$it" }.orEmpty(), snap,
+            status = status, verified = response.getBoolean(Proto.PRESENTED) || response.getBoolean("verified"),
+            written = if (response.containsKey("written")) response.getBoolean("written") else null,
+            submitted = if (response.containsKey("submitted")) response.getBoolean("submitted") else null)
     }
 
     private fun snapshot(response: Bundle, markNew: Boolean): ScreenSnapshot {
-        val id = "b${++counter}"
+        val id = BackgroundRepairIdentity.screen()
+        token = response.getString(Proto.SNAPSHOT)
+        completeTree = response.getBoolean(Proto.COMPLETE)
         val pkg = response.getString(Proto.FG_PKG) ?: currentPackage
         val appLabel = response.getString(Proto.APP_LABEL)
         if (response.getBoolean(Proto.SECURE)) {
-            lastScreenId = id; lastElements = emptyList(); previousLabels = emptySet()
+            token = null; lastScreenId = id; lastElements = emptyList(); previousLabels = emptySet()
             // l10n:keep agent screen protocol
-            val text = "屏幕 $id · 后台屏 · 受保护页面（支付或密码），已交还用户"
+            val text = "屏幕 $id · 后台屏 · 受保护页面，需要用户处理；尚未交还，请调用 handoff"
             return ScreenSnapshot(id, text, appLabel, pkg, secure = true)
         }
         val elements = buildElements(response, markNew)
@@ -236,10 +311,49 @@ class BackgroundDisplay(
                     isSecretField = f and Proto.FLAG_SECRET != 0,
                     isEditable = f and Proto.FLAG_EDITABLE != 0,
                     viewId = viewIds?.getOrNull(i),
+                    packageName = response.getString(Proto.FG_PKG) ?: currentPackage,
+                    rowIndex = response.getIntArray(Proto.A_ROW)?.getOrNull(i) ?: -1,
+                    rowCount = response.getIntArray(Proto.A_ROWS)?.getOrNull(i) ?: -1,
+                    atListStart = response.getBooleanArray(Proto.A_START)?.getOrNull(i) ?: false,
+                    atListEnd = response.getBooleanArray(Proto.A_END)?.getOrNull(i) ?: false,
+                    parentId = response.getIntArray(Proto.A_PARENT)?.getOrNull(i) ?: 0,
+                    path = response.getStringArray(Proto.A_PATH)?.getOrNull(i).orEmpty(),
+                    fingerprint = response.getStringArray(Proto.A_FINGERPRINT)?.getOrNull(i).orEmpty(),
+                    containerIdentity = response.getStringArray(Proto.A_CONTAINER)?.getOrNull(i).orEmpty(),
+                    bounds = response.getIntArray(Proto.A_BOUNDS)?.drop(i * 4)?.take(4).orEmpty(),
+                    windowId = response.getIntArray(Proto.A_WINDOW)?.getOrNull(i) ?: -1,
+                    className = response.getStringArray(Proto.A_CLASS)?.getOrNull(i).orEmpty(),
                 ),
             )
         }
         return out
+    }
+
+    private fun execute(request: Bundle): Bundle {
+        request.putString("revision", Proto.REVISION)
+        val response = channel().execute(request)
+        if (response.getString("revision") != Proto.REVISION) {
+            token = null
+            return Bundle().apply {
+                putBoolean(Proto.OK, false); putString(Proto.ERROR, "protocolMismatch")
+                putString("revision", Proto.REVISION)
+            }
+        }
+        if (!response.getBoolean(Proto.OK)) token = null
+        return response
+    }
+
+    /** Moves the existing task; releasing the virtual display is a separate operation. */
+    fun present(): ActionResult {
+        val pkg = currentPackage ?: return ActionResult(false, "后台没有待交接的应用")
+        val response = execute(Bundle().apply {
+            putString(Proto.OP, Proto.OP_PRESENT); putString(Proto.OWNER, owner); putString(Proto.PKG, pkg)
+        })
+        token = null
+        val verified = response.getBoolean(Proto.OK) && response.getBoolean(Proto.PRESENTED) &&
+            response.getInt(Proto.DISPLAY_ID, -1) == 0 && response.getString(Proto.FG_PKG) == pkg
+        return ActionResult(verified, if (verified) "已将原任务 ${response.getInt(Proto.TASK_ID)} 呈现到主屏" else
+            "交接未确认：${Reasons.of(response.getString(Proto.ERROR))}", status = if (verified) "completed" else "unconfirmed", verified = verified)
     }
 
     private fun regionOf(code: Int): Region = when (code) {
@@ -249,7 +363,7 @@ class BackgroundDisplay(
     }
 
     private fun idleSnapshot(): ScreenSnapshot {
-        val id = "b${++counter}"
+        val id = BackgroundRepairIdentity.screen()
         lastScreenId = id; lastElements = emptyList()
         // l10n:keep agent screen protocol
         return ScreenSnapshot(id, "屏幕 $id · 后台屏 · 空闲，用 open 打开应用", null, null)

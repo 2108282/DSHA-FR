@@ -71,8 +71,13 @@ public final class WebProcSel {
      */
     public static boolean looksLikeWeb(String cmdline) {
         if (cmdline == null || cmdline.isEmpty()) return false;
-        // 仅排除启动器可执行文件本体
-        if (cmdline.endsWith("/libproot.so") || cmdline.equals("proot")) {
+        // Check argv[0], since launchers can carry the entire future Node command as arguments.
+        // This only classifies text; it never operates on any process.
+        String executable = cmdline.trim().split("[\\s\\u0000]+", 2)[0];
+        String name = executable.substring(executable.lastIndexOf('/') + 1);
+        if (name.equals("proot") || name.equals("proroot")
+                || name.startsWith("libproot") || name.startsWith("libproroot")
+                || name.equals("chroot") || name.equals("nsenter")) {
             return false;
         }
         return (cmdline.contains("bin.js") && cmdline.contains("web"))
