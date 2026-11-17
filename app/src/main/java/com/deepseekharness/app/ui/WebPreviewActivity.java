@@ -60,6 +60,8 @@ public class WebPreviewActivity extends AppCompatActivity implements WebFullscre
     private TextView errorDetail;
     private ProgressBar progress;
     private WebView webView;
+    private final WebMicrophonePermission microphonePermission = new WebMicrophonePermission(
+            this, () -> webView, () -> this.baseUrl);
     private ValueCallback<Uri[]> fileCallback;
     private String authUrl;
     private String authCookie;
@@ -195,7 +197,7 @@ public class WebPreviewActivity extends AppCompatActivity implements WebFullscre
             settings.setLoadWithOverviewMode(true);
             settings.setUseWideViewPort(true);
             view.setWebViewClient(new PreviewClient());
-            view.setWebChromeClient(new PreviewChromeClient());
+            view.setWebChromeClient(new PreviewChromeClient(view));
             view.setDownloadListener((url, agent, disposition, mime, length) -> {
                 if (!WebPreviewPolicy.sameService(baseUrl, view.getUrl())) return;
                 String name = android.webkit.URLUtil.guessFileName(url, disposition, mime);
@@ -248,6 +250,7 @@ public class WebPreviewActivity extends AppCompatActivity implements WebFullscre
         }
 
         @Override public void onPageStarted(WebView view, String url, Bitmap favicon) {
+            microphonePermission.navigating(view);
             if (webView != view) return;
             pageFailed = false;
             errorPanel.setVisibility(View.GONE);
@@ -308,6 +311,18 @@ public class WebPreviewActivity extends AppCompatActivity implements WebFullscre
     }
 
     private class PreviewChromeClient extends WebChromeClient {
+        private final WebView view;
+
+        PreviewChromeClient(WebView view) { this.view = view; }
+
+        @Override public void onPermissionRequest(android.webkit.PermissionRequest request) {
+            microphonePermission.request(view, request);
+        }
+
+        @Override public void onPermissionRequestCanceled(android.webkit.PermissionRequest request) {
+            microphonePermission.cancelled(request);
+        }
+
         @Override public void onProgressChanged(WebView view, int value) {
             if (webView == view && !pageFailed) progress.setProgress(value);
         }
@@ -375,6 +390,7 @@ public class WebPreviewActivity extends AppCompatActivity implements WebFullscre
     }
 
     private void destroyWebView() {
+        microphonePermission.cancel();
         cancelFileSelection();
         WebUploads.clean(uploads);
         WebView previous = webView;

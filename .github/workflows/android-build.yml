@@ -67,6 +67,9 @@ jobs:
       - name: 验证底角手势状态机
         run: ./gradlew :app:testCornerGesture --stacktrace
 
+      - name: 验证 WebView 麦克风来源策略
+        run: ./gradlew :app:testWebMicrophone --stacktrace
+
       - name: 执行 Release 编译打包 (:app:assembleStandardRelease)
         run: |
           if ! ./gradlew :app:assembleStandardRelease --stacktrace > /tmp/build_all.log 2>&1; then

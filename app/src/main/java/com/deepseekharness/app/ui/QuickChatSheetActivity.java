@@ -103,6 +103,11 @@ import java.util.Locale;
 @SuppressLint({"SetJavaScriptEnabled", "ClickableViewAccessibility"})
 public class QuickChatSheetActivity extends AppCompatActivity {
 
+    private final WebMicrophonePermission microphonePermission = new WebMicrophonePermission(
+            this, () -> sIsRemoteActive ? sRemoteWebView : sLocalWebView,
+            () -> sIsRemoteActive ? new ConfigStore(this).getActiveRemoteDshUrl()
+                    : "http://127.0.0.1:" + sLoadedPort + "/");
+
     public static final int ICON_CLOSE = 1;
     public static final int ICON_SETTINGS = 2;
     public static final int ICON_NEW_CHAT = 3;
@@ -1827,7 +1832,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         }
 
         web.setWebViewClient(createSheetWebViewClient());
-        web.setWebChromeClient(new SheetChromeClient());
+        web.setWebChromeClient(new SheetChromeClient(web));
         web.addJavascriptInterface(new NativeBridgeInterface(), "DshaNativeBridge");
 
         web.setDownloadListener((url, userAgent, contentDisposition, mimetype, contentLength) -> {
@@ -1877,6 +1882,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
     }
 
     private void updateWebViewSlotVisibility() {
+        microphonePermission.cancel();
         if (sLocalWebView != null) {
             sLocalWebView.setVisibility(sIsRemoteActive ? View.GONE : View.VISIBLE);
             if (!sIsRemoteActive) {
@@ -2009,6 +2015,10 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         } else if (sRemoteWebView.getContext() instanceof MutableContextWrapper) {
             ((MutableContextWrapper) sRemoteWebView.getContext()).setBaseContext(this);
         }
+        // Cached remote views may still hold callbacks owned by a destroyed Activity.
+        sRemoteWebView.setWebViewClient(createSheetWebViewClient());
+        sRemoteWebView.setWebChromeClient(new SheetChromeClient(sRemoteWebView));
+        sRemoteWebView.addJavascriptInterface(new NativeBridgeInterface(), "DshaNativeBridge");
         String curUrl = sRemoteWebView.getUrl();
         boolean isBlank = curUrl == null || curUrl.isEmpty() || "about:blank".equals(curUrl);
         if (remoteUrl != null && (!remoteUrl.equals(sLoadedRemoteUrl) || !sRemoteWebLoaded || isBlank)) {
@@ -2099,7 +2109,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 ((MutableContextWrapper) sLocalWebView.getContext()).setBaseContext(this);
             }
             sLocalWebView.setWebViewClient(createSheetWebViewClient());
-            sLocalWebView.setWebChromeClient(new SheetChromeClient());
+            sLocalWebView.setWebChromeClient(new SheetChromeClient(sLocalWebView));
             sLocalWebView.addJavascriptInterface(new NativeBridgeInterface(), "DshaNativeBridge");
         }
 
@@ -2120,7 +2130,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 ((MutableContextWrapper) sRemoteWebView.getContext()).setBaseContext(this);
             }
             sRemoteWebView.setWebViewClient(createSheetWebViewClient());
-            sRemoteWebView.setWebChromeClient(new SheetChromeClient());
+            sRemoteWebView.setWebChromeClient(new SheetChromeClient(sRemoteWebView));
             sRemoteWebView.addJavascriptInterface(new NativeBridgeInterface(), "DshaNativeBridge");
         }
 
@@ -3076,6 +3086,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             @Override
             public void onPageStarted(WebView view, String url, Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
+                microphonePermission.navigating(view);
                 injectTransparentBackground(view);
             }
 
@@ -3175,6 +3186,18 @@ public class QuickChatSheetActivity extends AppCompatActivity {
     }
 
     private class SheetChromeClient extends WebChromeClient {
+        private final WebView view;
+
+        SheetChromeClient(WebView view) { this.view = view; }
+
+        @Override public void onPermissionRequest(android.webkit.PermissionRequest request) {
+            microphonePermission.request(view, request);
+        }
+
+        @Override public void onPermissionRequestCanceled(android.webkit.PermissionRequest request) {
+            microphonePermission.cancelled(request);
+        }
+
         @Override
         public boolean onConsoleMessage(android.webkit.ConsoleMessage message) {
             android.util.Log.d("DSHA_SHEET_CONSOLE", message.message() + " (" + message.sourceId() + ":" + message.lineNumber() + ")");

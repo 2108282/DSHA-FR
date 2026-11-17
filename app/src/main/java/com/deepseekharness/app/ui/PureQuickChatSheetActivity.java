@@ -93,6 +93,11 @@ import java.util.List;
 @SuppressLint({"SetJavaScriptEnabled", "ClickableViewAccessibility"})
 public class PureQuickChatSheetActivity extends AppCompatActivity {
 
+    private final WebMicrophonePermission microphonePermission = new WebMicrophonePermission(
+            this, () -> sIsRemoteActive ? sRemoteWebView : sLocalWebView,
+            () -> sIsRemoteActive ? new ConfigStore(this).getActiveRemoteDshUrl()
+                    : "http://127.0.0.1:" + sLoadedPort + "/");
+
     public static final int ICON_CLOSE = QuickChatSheetActivity.ICON_CLOSE;
     public static final int ICON_SETTINGS = QuickChatSheetActivity.ICON_SETTINGS;
     public static final int ICON_NEW_CHAT = QuickChatSheetActivity.ICON_NEW_CHAT;
@@ -754,7 +759,7 @@ public class PureQuickChatSheetActivity extends AppCompatActivity {
         }
 
         web.setWebViewClient(createSheetWebViewClient());
-        web.setWebChromeClient(new SheetChromeClient());
+        web.setWebChromeClient(new SheetChromeClient(web));
         web.addJavascriptInterface(new NativeBridgeInterface(), "DshaNativeBridge");
 
         web.setDownloadListener((url, userAgent, contentDisposition, mimetype, contentLength) -> {
@@ -804,7 +809,7 @@ public class PureQuickChatSheetActivity extends AppCompatActivity {
                 ((MutableContextWrapper) sLocalWebView.getContext()).setBaseContext(this);
             }
             sLocalWebView.setWebViewClient(createSheetWebViewClient());
-            sLocalWebView.setWebChromeClient(new SheetChromeClient());
+            sLocalWebView.setWebChromeClient(new SheetChromeClient(sLocalWebView));
             sLocalWebView.addJavascriptInterface(new NativeBridgeInterface(), "DshaNativeBridge");
         }
 
@@ -822,7 +827,7 @@ public class PureQuickChatSheetActivity extends AppCompatActivity {
                 ((MutableContextWrapper) sRemoteWebView.getContext()).setBaseContext(this);
             }
             sRemoteWebView.setWebViewClient(createSheetWebViewClient());
-            sRemoteWebView.setWebChromeClient(new SheetChromeClient());
+            sRemoteWebView.setWebChromeClient(new SheetChromeClient(sRemoteWebView));
             sRemoteWebView.addJavascriptInterface(new NativeBridgeInterface(), "DshaNativeBridge");
         }
 
@@ -850,6 +855,7 @@ public class PureQuickChatSheetActivity extends AppCompatActivity {
     }
 
     private void updateWebViewSlotVisibility() {
+        microphonePermission.cancel();
         if (sLocalWebView != null) {
             sLocalWebView.setVisibility(sIsRemoteActive ? View.GONE : View.VISIBLE);
             if (!sIsRemoteActive) {
@@ -933,7 +939,13 @@ public class PureQuickChatSheetActivity extends AppCompatActivity {
         if (targetUrl == null || targetUrl.isEmpty()) return;
         if (sRemoteWebView == null) {
             sRemoteWebView = createConfiguredWebView();
+        } else if (sRemoteWebView.getContext() instanceof MutableContextWrapper) {
+            ((MutableContextWrapper) sRemoteWebView.getContext()).setBaseContext(this);
         }
+        // Cached remote views may still hold callbacks owned by a destroyed Activity.
+        sRemoteWebView.setWebViewClient(createSheetWebViewClient());
+        sRemoteWebView.setWebChromeClient(new SheetChromeClient(sRemoteWebView));
+        sRemoteWebView.addJavascriptInterface(new NativeBridgeInterface(), "DshaNativeBridge");
         if (!targetUrl.equals(sLoadedRemoteUrl) || !sRemoteWebLoaded) {
             sLoadedRemoteUrl = targetUrl;
             sRemoteWebLoaded = false;
@@ -998,6 +1010,7 @@ public class PureQuickChatSheetActivity extends AppCompatActivity {
             @Override
             public void onPageStarted(WebView view, String url, Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
+                microphonePermission.navigating(view);
                 if (progressBar != null) progressBar.setVisibility(View.VISIBLE);
                 if (errorHint != null) errorHint.setVisibility(View.GONE);
             }
@@ -1051,6 +1064,18 @@ public class PureQuickChatSheetActivity extends AppCompatActivity {
     }
 
     private class SheetChromeClient extends WebChromeClient {
+        private final WebView view;
+
+        SheetChromeClient(WebView view) { this.view = view; }
+
+        @Override public void onPermissionRequest(android.webkit.PermissionRequest request) {
+            microphonePermission.request(view, request);
+        }
+
+        @Override public void onPermissionRequestCanceled(android.webkit.PermissionRequest request) {
+            microphonePermission.cancelled(request);
+        }
+
         @Override
         public void onProgressChanged(WebView view, int newProgress) {
             super.onProgressChanged(view, newProgress);

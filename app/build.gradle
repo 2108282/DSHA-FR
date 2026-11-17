@@ -157,7 +157,24 @@ tasks.register("testCornerGesture", Test) {
     useJUnit()
 }
 
+// Isolate microphone origin tests from legacy Android-dependent unit tests.
+configurations { webMicrophoneTestDependencies }
+def compileWebMicrophoneTests = tasks.register("compileWebMicrophoneTests", JavaCompile) {
+    source files("src/main/java/com/deepseekharness/app/util/WebMicrophonePolicy.java",
+            "src/test/java/com/deepseekharness/app/util/WebMicrophonePolicyTest.java")
+    classpath = configurations.webMicrophoneTestDependencies
+    destinationDirectory = layout.buildDirectory.dir("web-microphone-tests")
+    options.release = 17
+}
+tasks.register("testWebMicrophone", Test) {
+    dependsOn(compileWebMicrophoneTests)
+    testClassesDirs = files(compileWebMicrophoneTests.flatMap { it.destinationDirectory })
+    classpath = testClassesDirs + configurations.webMicrophoneTestDependencies
+    useJUnit()
+}
+
 dependencies {
+    webMicrophoneTestDependencies 'junit:junit:4.13.2'
     cornerGestureTestDependencies 'junit:junit:4.13.2'
     compileOnly files(gestureStubsJar.flatMap { it.archiveFile })
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.0.4'
