@@ -14,4 +14,8 @@ public interface ConfigActions {
     void onToggleBlockGuardGlobal(boolean enabled);
     void onTestFreeze();
     void onTestWake();
+    void onViewFreezeLog();
+    void onDeleteFreezeLog();
+    void onOpenFreezeLogLocation();
+    void onOpenFreezeWhitelistLocation();
 }

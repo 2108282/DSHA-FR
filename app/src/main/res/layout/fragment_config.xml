@@ -799,6 +799,31 @@
                     android:textSize="13sp"
                     android:textStyle="bold" />
             </LinearLayout>
+
+            <Button
+                android:id="@+id/config_btn_view_freeze_log"
+                android:layout_width="match_parent"
+                android:layout_height="46dp"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/m3_btn_tonal_expressive"
+                android:stateListAnimator="@animator/btn_press_scale"
+                android:text="查看冻结日志"
+                android:textAllCaps="false"
+                android:textColor="@color/primary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+            <Button
+                android:id="@+id/config_btn_freeze_whitelist"
+                android:layout_width="match_parent"
+                android:layout_height="46dp"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/m3_btn_tonal_expressive"
+                android:stateListAnimator="@animator/btn_press_scale"
+                android:text="打开白名单位置与教程"
+                android:textAllCaps="false"
+                android:textColor="@color/primary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
         </com.deepseekharness.app.ui.ModernCardView>
 
         <TextView

@@ -16,6 +16,8 @@ import android.widget.Toast;
 import com.deepseekharness.app.HttpShellService;
 import com.deepseekharness.app.core.ConfigStore;
 import com.deepseekharness.app.core.GuardSettings;
+import com.deepseekharness.app.core.FreezeLogRepository;
+import com.deepseekharness.app.core.FreezeWhitelistRepository;
 import com.deepseekharness.app.core.HarnessController;
 import com.deepseekharness.app.ui.dialog.OverlayStyleDialog;
 import com.deepseekharness.app.util.Constants;
@@ -26,6 +28,11 @@ public class ConfigPresenter implements ConfigActions {
         void onRender(ConfigUiState state);
         void onGoBack();
         void onRequestLocationPermission();
+        void onFreezeLogBusy(boolean busy);
+        void onShowFreezeLog(String text);
+        void onFreezeLogDeleted();
+        void onOpenFreezeLocation(String path);
+        void onFreezeWhitelistBusy(boolean busy);
     }
 
     private final Activity activity;
@@ -37,6 +44,13 @@ public class ConfigPresenter implements ConfigActions {
     private volatile boolean realRootIsolated = true;
     private volatile boolean realHostPenetrated = false;
     private volatile boolean hasScannedRealMount = false;
+    private boolean freezeLogBusy = false;
+    private boolean freezeWhitelistBusy = false;
+    private volatile boolean disposed = false;
+
+    public void dispose() {
+        disposed = true;
+    }
 
     public ConfigPresenter(Activity activity, ViewCallback callback) {
         this.activity = activity;
@@ -67,6 +81,7 @@ public class ConfigPresenter implements ConfigActions {
     }
 
     public void refreshState() {
+        if (disposed) return;
         SharedPreferences sp = context.getSharedPreferences(Constants.PREFS, Context.MODE_PRIVATE);
 
         String port = config.getPort();
@@ -120,7 +135,9 @@ public class ConfigPresenter implements ConfigActions {
                 allFilesStatus, a11yStatus, currentRootStatus,
                 freezeCode, freezeStatusText
         );
-        mainHandler.post(() -> callback.onRender(state));
+        mainHandler.post(() -> {
+            if (!disposed && !activity.isFinishing() && !activity.isDestroyed()) callback.onRender(state);
+        });
     }
 
     @Override
@@ -385,6 +402,84 @@ public class ConfigPresenter implements ConfigActions {
             }
             refreshState();
         });
+    }
+
+    @Override
+    public void onViewFreezeLog() {
+        accessFreezeLog(0);
+    }
+
+    @Override
+    public void onDeleteFreezeLog() {
+        accessFreezeLog(1);
+    }
+
+    @Override
+    public void onOpenFreezeLogLocation() {
+        accessFreezeLog(2);
+    }
+
+    private void accessFreezeLog(int operation) {
+        if (disposed || freezeLogBusy) return;
+        freezeLogBusy = true;
+        callback.onFreezeLogBusy(true);
+        new Thread(() -> {
+            String text = null;
+            String error = null;
+            try {
+                if (operation == 1) FreezeLogRepository.delete(context.getCacheDir());
+                else if (operation == 2) {
+                    text = FreezeLogRepository.location(context.getCacheDir());
+                    if (!disposed && com.deepseekharness.app.util.RootFileLocation.openWithRoot(context.getCacheDir(), text)) text = null;
+                }
+                else text = FreezeLogRepository.read(context.getCacheDir());
+            } catch (Exception failure) {
+                if (failure instanceof InterruptedException) Thread.currentThread().interrupt();
+                error = failure.getMessage() != null ? failure.getMessage() : "请检查 Root 权限";
+            }
+            final String result = text;
+            final String failure = error;
+            mainHandler.post(() -> {
+                freezeLogBusy = false;
+                if (disposed || activity.isFinishing() || activity.isDestroyed()) return;
+                callback.onFreezeLogBusy(false);
+                if (failure != null) {
+                    toast("冻结日志操作失败：" + failure);
+                } else if (operation == 1) {
+                    callback.onFreezeLogDeleted();
+                    toast("日志已删除，后续检查会重新生成");
+                } else if (operation == 2) {
+                    if (result != null) callback.onOpenFreezeLocation(result);
+                } else callback.onShowFreezeLog(result);
+            });
+        }, "freeze-log-operation").start();
+    }
+
+    @Override
+    public void onOpenFreezeWhitelistLocation() {
+        if (disposed || freezeWhitelistBusy) return;
+        freezeWhitelistBusy = true;
+        callback.onFreezeWhitelistBusy(true);
+        new Thread(() -> {
+            String path = null;
+            String error = null;
+            try {
+                path = FreezeWhitelistRepository.prepareLocation(context.getCacheDir());
+                if (!disposed && com.deepseekharness.app.util.RootFileLocation.openWithRoot(context.getCacheDir(), path)) path = null;
+            } catch (Exception failure) {
+                if (failure instanceof InterruptedException) Thread.currentThread().interrupt();
+                error = failure.getMessage() != null ? failure.getMessage() : "请检查 Root 权限";
+            }
+            final String result = path;
+            final String failure = error;
+            mainHandler.post(() -> {
+                freezeWhitelistBusy = false;
+                if (disposed || activity.isFinishing() || activity.isDestroyed()) return;
+                callback.onFreezeWhitelistBusy(false);
+                if (failure != null) toast("打开白名单位置失败：" + failure);
+                else if (result != null) callback.onOpenFreezeLocation(result);
+            });
+        }, "open-freeze-whitelist").start();
     }
 
     private void toast(String msg) {

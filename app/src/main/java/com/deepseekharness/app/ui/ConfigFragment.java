@@ -53,6 +53,14 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
     private TextView freezeStatusText;
     private Button btnTestFreeze;
     private Button btnTestWake;
+    private Button btnViewFreezeLog;
+    private androidx.appcompat.app.AlertDialog freezeLogDialog;
+    private Button btnFreezeWhitelist;
+    private androidx.appcompat.app.AlertDialog freezeActionDialog;
+    private View freezeLogRoot;
+    private TextView freezeLogContent;
+    private Button freezeLogDelete;
+    private Button freezeLogLocation;
 
     private boolean isBinding = false;
 
@@ -160,6 +168,8 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         freezeStatusText = view.findViewById(R.id.config_freeze_status);
         btnTestFreeze = view.findViewById(R.id.config_btn_test_freeze);
         btnTestWake = view.findViewById(R.id.config_btn_test_wake);
+        btnViewFreezeLog = view.findViewById(R.id.config_btn_view_freeze_log);
+        btnFreezeWhitelist = view.findViewById(R.id.config_btn_freeze_whitelist);
 
         if (allFilesBtn != null) allFilesBtn.setOnClickListener(v -> actions.onOpenAllFilesSettings());
         if (rootAuthBtn != null) rootAuthBtn.setOnClickListener(v -> actions.onCheckRootClick());
@@ -167,6 +177,8 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
 
         if (btnTestFreeze != null) btnTestFreeze.setOnClickListener(v -> actions.onTestFreeze());
         if (btnTestWake != null) btnTestWake.setOnClickListener(v -> actions.onTestWake());
+        if (btnViewFreezeLog != null) btnViewFreezeLog.setOnClickListener(v -> actions.onViewFreezeLog());
+        if (btnFreezeWhitelist != null) btnFreezeWhitelist.setOnClickListener(v -> actions.onOpenFreezeWhitelistLocation());
 
         translateBtn.setOnClickListener(v ->
                 ToastHelper.makeText(requireContext(), "插件市场翻译组件已内置，后续版本开放自定义模型接口", Toast.LENGTH_SHORT).show());
@@ -184,6 +196,9 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         if (getView() != null) {
             MonetEngine.applyToViewTree(getView(), MonetEngine.resolveCurrentPalette(requireContext()));
         }
+        if (freezeLogRoot != null) {
+            MonetEngine.applyToViewTree(freezeLogRoot, MonetEngine.resolveCurrentPalette(requireContext()));
+        }
         if (presenter != null) {
             presenter.refreshState();
         }
@@ -197,6 +212,16 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         if (sensorsToggle != null) sensorsToggle.setOnCheckedChangeListener(null);
         if (locationToggle != null) locationToggle.setOnCheckedChangeListener(null);
 
+        if (presenter != null) presenter.dispose();
+        if (freezeLogDialog != null) freezeLogDialog.dismiss();
+        freezeLogDialog = null;
+        if (freezeActionDialog != null) freezeActionDialog.dismiss();
+        freezeActionDialog = null;
+        freezeLogRoot = null;
+        freezeLogContent = null;
+        freezeLogDelete = null;
+        freezeLogLocation = null;
+        btnFreezeWhitelist = null;
         presenter = null;
         actions = null;
         tasksetInput = null;
@@ -216,6 +241,7 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
         freezeStatusText = null;
         btnTestFreeze = null;
         btnTestWake = null;
+        btnViewFreezeLog = null;
         super.onDestroyView();
     }
 
@@ -278,6 +304,114 @@ public class ConfigFragment extends Fragment implements ConfigPresenter.ViewCall
                 freezeDotView.setBackgroundResource(R.drawable.dot_inactive);
             }
         }
+    }
+
+    @Override
+    public void onFreezeLogBusy(boolean busy) {
+        if (btnViewFreezeLog != null) btnViewFreezeLog.setEnabled(!busy);
+        if (freezeLogDelete != null) freezeLogDelete.setEnabled(!busy);
+        if (freezeLogLocation != null) freezeLogLocation.setEnabled(!busy);
+    }
+
+    @Override
+    public void onShowFreezeLog(String text) {
+        if (!isAdded() || getView() == null) return;
+        if (freezeLogDialog != null) freezeLogDialog.dismiss();
+        View root = getLayoutInflater().inflate(R.layout.dialog_freeze_log, null);
+        TextView content = root.findViewById(R.id.freeze_log_content);
+        content.setText(text);
+        Button delete = root.findViewById(R.id.freeze_log_delete);
+        Button location = root.findViewById(R.id.freeze_log_location);
+        Button close = root.findViewById(R.id.freeze_log_close);
+        androidx.appcompat.app.AlertDialog dialog = new DshaDialogBuilder(requireContext()).setView(root).create();
+        freezeLogDialog = dialog;
+        freezeLogRoot = root;
+        freezeLogContent = content;
+        freezeLogDelete = delete;
+        freezeLogLocation = location;
+        delete.setOnClickListener(v -> confirmFreezeLogDeletion());
+        location.setOnClickListener(v -> { if (actions != null) actions.onOpenFreezeLogLocation(); });
+        close.setOnClickListener(v -> dialog.dismiss());
+        dialog.setOnDismissListener(ignored -> {
+            if (freezeLogDialog == dialog) {
+                freezeLogDialog = null;
+                freezeLogRoot = null;
+                freezeLogContent = null;
+                freezeLogDelete = null;
+                freezeLogLocation = null;
+            }
+        });
+        MonetEngine.applyToViewTree(root, MonetEngine.resolveCurrentPalette(requireContext()));
+        dialog.show();
+        if (dialog.getWindow() != null) {
+            android.graphics.Rect bounds = requireActivity().getWindowManager().getCurrentWindowMetrics().getBounds();
+            android.view.WindowInsets insets = requireActivity().getWindowManager().getCurrentWindowMetrics().getWindowInsets();
+            android.graphics.Insets bars = insets.getInsetsIgnoringVisibility(android.view.WindowInsets.Type.systemBars());
+            int height = Math.round((bounds.height() - bars.top - bars.bottom) * .9f);
+            dialog.getWindow().setGravity(android.view.Gravity.CENTER);
+            dialog.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT, height);
+        }
+        android.widget.ScrollView scroll = root.findViewById(R.id.freeze_log_scroll);
+        scroll.post(() -> scroll.fullScroll(View.FOCUS_DOWN));
+    }
+
+    private void confirmFreezeLogDeletion() {
+        if (!isAdded() || actions == null || freezeActionDialog != null) return;
+        View root = getLayoutInflater().inflate(R.layout.dialog_confirm_action, null);
+        ((TextView) root.findViewById(R.id.dialogActionTitle)).setText("删除冻结日志？");
+        ((TextView) root.findViewById(R.id.dialogActionMessage)).setText(
+                "现有日志记录将被删除，无法恢复。冻结守护继续运行，后续检查会重新生成日志。");
+        Button confirm = root.findViewById(R.id.btnActionConfirm);
+        confirm.setText("确认删除");
+        androidx.appcompat.app.AlertDialog dialog = new DshaDialogBuilder(requireContext()).setView(root).create();
+        freezeActionDialog = dialog;
+        confirm.setOnClickListener(v -> {
+            dialog.dismiss();
+            if (actions != null) actions.onDeleteFreezeLog();
+        });
+        root.findViewById(R.id.btnActionCancel).setOnClickListener(v -> dialog.dismiss());
+        dialog.setOnDismissListener(ignored -> { if (freezeActionDialog == dialog) freezeActionDialog = null; });
+        MonetEngine.applyToViewTree(root, MonetEngine.resolveCurrentPalette(requireContext()));
+        dialog.show();
+    }
+
+    @Override
+    public void onFreezeLogDeleted() {
+        if (freezeLogContent != null) freezeLogContent.setText("日志已删除，后续检查会重新生成。");
+    }
+
+    @Override
+    public void onFreezeWhitelistBusy(boolean busy) {
+        if (btnFreezeWhitelist != null) btnFreezeWhitelist.setEnabled(!busy);
+    }
+
+    @Override
+    public void onOpenFreezeLocation(String path) {
+        if (!isAdded() || getView() == null) return;
+        if (com.deepseekharness.app.util.RootFileLocation.open(requireContext(), path)) return;
+        // Root路径交给具备Root权限的文件管理器；系统文件选择器不保证能浏览该目录。
+        View root = getLayoutInflater().inflate(R.layout.dialog_confirm_action, null);
+        ((TextView) root.findViewById(R.id.dialogActionTitle)).setText("打开文件位置");
+        ((TextView) root.findViewById(R.id.dialogActionMessage)).setText(
+                "未找到可打开此位置的文件管理器。请使用已授权 Root 的文件管理器进入：\n"
+                + path + (com.deepseekharness.app.core.FreezeWhitelistRepository.PATH.equals(path)
+                ? "\n\n白名单规则示例和教程保存在同目录《冻结白名单教程.md》。" : ""));
+        Button copy = root.findViewById(R.id.btnActionConfirm);
+        copy.setText("复制路径");
+        ((Button) root.findViewById(R.id.btnActionCancel)).setText("关闭");
+        androidx.appcompat.app.AlertDialog dialog = new DshaDialogBuilder(requireContext()).setView(root).create();
+        if (freezeActionDialog != null) freezeActionDialog.dismiss();
+        freezeActionDialog = dialog;
+        copy.setOnClickListener(v -> {
+            android.content.ClipboardManager clipboard = (android.content.ClipboardManager) requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+            if (clipboard != null) clipboard.setPrimaryClip(android.content.ClipData.newPlainText("文件路径", path));
+            ToastHelper.show(requireContext(), "路径已复制");
+            dialog.dismiss();
+        });
+        root.findViewById(R.id.btnActionCancel).setOnClickListener(v -> dialog.dismiss());
+        dialog.setOnDismissListener(ignored -> { if (freezeActionDialog == dialog) freezeActionDialog = null; });
+        MonetEngine.applyToViewTree(root, MonetEngine.resolveCurrentPalette(requireContext()));
+        dialog.show();
     }
 
     @Override
