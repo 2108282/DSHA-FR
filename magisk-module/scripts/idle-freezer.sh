@@ -5,7 +5,7 @@
 # 特性：
 # 1. 动态双模阈值：息屏加速至 5 分钟 (300秒) 冻结；亮屏维持 30 分钟 (1800秒) 冻结；
 # 2. 息屏内核电源锁：息屏期间临时持有 wake_lock，确保 5 分钟走时不被 CPU 挂起打断；
-# 3. 达标即冻结：达到闲置阈值立即执行 freeze_process_tree，释放唤醒锁并退出自身；
+# 3. 每 10 分钟检查一次：检查时达到闲置阈值即冻结，释放唤醒锁并退出自身；
 # 4. 毫秒级极速唤醒：所有广播通知全面后台异步化 (&)，解冻主进程耗时 < 0.2s；
 # 5. 内存换页与 ZRAM 压缩协同，唤醒时自动恢复物理内存保护；
 # 6. 精确记录北京时间操作日志。
@@ -34,14 +34,15 @@ FREEZER_LOG="$RUN_DIR/idle-freezer.log"
 STATE_FILE="$RUN_DIR/freezer.state"
 START_LOCK="$RUN_DIR/freezer_start.lock"
 WAKE_LOCK="$RUN_DIR/freezer_wake.lock"
+WHITELIST_FILE="$RUN_DIR/idle-freeze-whitelist.conf"
 
 SCRIPT_PATH="/data/adb/dsha/scripts/idle-freezer.sh"
 [ -f "$SCRIPT_PATH" ] || SCRIPT_PATH="$(readlink -f "$0" 2>/dev/null || echo "$0")"
 
 IDLE_THRESHOLD_SCREEN_ON=1800    # 亮屏闲置阈值：30 分钟 (秒)
 IDLE_THRESHOLD_SCREEN_OFF=300    # 息屏闲置阈值：5 分钟 (秒)
-CHECK_INTERVAL_SCREEN_ON=60      # 亮屏心跳：60 秒
-CHECK_INTERVAL_SCREEN_OFF=30     # 息屏心跳：30 秒
+CHECK_INTERVAL_SCREEN_ON=600     # 亮屏检查：10 分钟
+CHECK_INTERVAL_SCREEN_OFF=600    # 息屏检查：10 分钟
 WAKELOCK_NAME="dsha_freezer"
 
 acquire_wakelock() {
@@ -74,8 +75,122 @@ notify_core_state() {
     ) &
 }
 
+# 仅在需要输出日志时读取 JSON 元数据；宿主侧借用容器运行时，不依赖 Android 安装 jq/node。
+# 只读取标题/审批标识，绝不把对话正文或完整命令参数写入日志。
+describe_json_source() {
+    local mode="$1" source_file="$2" json_path="$2"
+    [ -n "$ROOTFS" ] && json_path="${source_file#"$ROOTFS"}"
+    if [ -n "$ROOTFS" ]; then
+        chroot "$ROOTFS" /usr/local/bin/node - "$mode" "$json_path" 2>/dev/null
+    else
+        node - "$mode" "$json_path" 2>/dev/null
+    fi <<'FREEZER_METADATA_JS'
+const fs = require('node:fs');
+const [mode, file] = process.argv.slice(2);
+const clean = value => typeof value === 'string'
+    ? value.replace(/[\x00-\x1f\x7f-\x9f\u2028\u2029]/g, ' ').slice(0, 160) : '';
+try {
+    if (fs.statSync(file).size > 2 * 1024 * 1024) process.exit(0);
+    const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (mode === 'session') {
+        const record = data.record ?? data;
+        const title = record.rows?.title?.val;
+        const text = clean(typeof title === 'string' ? title : title?.title);
+        if (text) process.stdout.write(`标题: ${text}`);
+    } else {
+        const fields = [];
+        const tool = clean(data.tool);
+        const session = clean(data.sessionId ?? data.session_id);
+        const request = clean(data.requestId ?? data.request_id);
+        if (tool) fields.push(`工具: ${tool}`);
+        fields.push(session ? `会话ID: ${session}` : '会话ID: 审批状态文件未提供');
+        if (request) fields.push(`审批ID: ${request}`);
+        process.stdout.write(fields.join(' | '));
+    }
+} catch {}
+FREEZER_METADATA_JS
+}
+
+# 每轮只加载一次自定义规则；整行首尾空白可省略，规则不作为 Shell 或正则执行。
+load_worker_whitelist() {
+    WORKER_WHITELIST=""
+    WHITELIST_ERROR=""
+    [ -e "$WHITELIST_FILE" ] || return 0
+    if [ ! -f "$WHITELIST_FILE" ] || [ ! -r "$WHITELIST_FILE" ]; then
+        WHITELIST_ERROR="白名单不是可读普通文件"
+        return 0
+    fi
+    local bytes=$(wc -c < "$WHITELIST_FILE" 2>/dev/null)
+    case "$bytes" in ''|*[!0-9]*) WHITELIST_ERROR="无法读取白名单大小"; return 0 ;; esac
+    if [ "$bytes" -gt 16384 ]; then
+        WHITELIST_ERROR="白名单超过16KiB，已忽略全部自定义规则"
+        return 0
+    fi
+    # awk 保留规则中的空格和正则字符；非法文件整体拒绝，不能只应用一部分。
+    local parsed
+    parsed=$(LC_ALL=C awk '
+        { sub(/\r$/, ""); sub(/^[ \t]+/, ""); sub(/[ \t]+$/, "") }
+        /^$/ || /^#/ { next }
+        {
+            if (length($0) > 512 || $0 ~ /[[:cntrl:]]/ || ++count > 128) { bad=1; exit }
+            if (index($0, "name:") == 1) {
+                value=substr($0, 6)
+                if (!length(value) || length(value) > 80 || index(value, "/")) { bad=1; exit }
+            } else if (index($0, "script:/") != 1) { bad=1; exit }
+            rules=rules $0 "\n"
+        }
+        END { if (bad) exit 1; printf "%s", rules }
+    ' "$WHITELIST_FILE" 2>/dev/null)
+    if [ "$?" -ne 0 ]; then
+        WHITELIST_ERROR="白名单格式无效，已忽略全部自定义规则"
+    else
+        WORKER_WHITELIST="$parsed"
+    fi
+}
+
+# 使用 NUL 分隔的 argv 精确匹配脚本路径，避免子串/通配符误放行其他工作。
+worker_whitelist_match() {
+    local cpid="$1" comm="$2" rule="" value=""
+    MATCHED_WORKER_RULE=""
+    [ -n "$WORKER_WHITELIST" ] || return 1
+    while IFS= read -r rule; do
+        case "$rule" in
+            name:*)
+                value="${rule#name:}"
+                [ "$comm" = "$value" ] || continue
+                ;;
+            script:*)
+                value="${rule#script:}"
+                # BusyBox awk 不可靠支持 NUL 记录分隔；逐字节转十六进制后按00分割argv。
+                local wanted_hex=$(printf '%s' "$value" | od -An -v -tx1 | tr -d ' \n')
+                od -An -v -tx1 "/proc/$cpid/cmdline" 2>/dev/null | FREEZER_MATCH_HEX="$wanted_hex" awk '
+                    BEGIN { wanted=ENVIRON["FREEZER_MATCH_HEX"]; arg="" }
+                    { for (i=1; i<=NF; i++) {
+                        if ($i == "00") {
+                            if (arg == wanted) found=1
+                            arg=""
+                        } else arg=arg $i
+                    } }
+                    END { exit !found }
+                ' || continue
+                ;;
+            *) continue ;;
+        esac
+        MATCHED_WORKER_RULE="$rule"
+        return 0
+    done <<FREEZER_WHITELIST_RULES
+$WORKER_WHITELIST
+FREEZER_WHITELIST_RULES
+    return 1
+}
+
 # 检测主进程是否有活跃的工作子进程（排除僵尸进程 Z 与自身白名单）
 has_active_workers() {
+    ACTIVE_WORKER_COUNT=0
+    ACTIVE_WORKER_DETAILS=""
+    IGNORED_WORKER_COUNT=0
+    IGNORED_WORKER_DETAILS=""
+    load_worker_whitelist
     local mpid="$1"
     [ -z "$mpid" ] && return 1
     local lan_pid=""
@@ -93,12 +208,28 @@ has_active_workers() {
             continue
         fi
 
-        local cstat=$(awk '{print $3}' "/proc/$cpid/stat" 2>/dev/null)
+        # comm 允许含空格/括号，从 stat 最后一个右括号后提取进程状态。
+        local cstat=$(sed 's/.*) //' "/proc/$cpid/stat" 2>/dev/null | cut -d ' ' -f1)
         if [ -n "$cstat" ] && [ "$cstat" != "Z" ]; then
-            return 0
+            local raw_comm=$(cat "/proc/$cpid/comm" 2>/dev/null)
+            local comm=$(printf '%s' "$raw_comm" | tr '\n\r\t|' '    ' | cut -c1-80)
+            if worker_whitelist_match "$cpid" "$raw_comm"; then
+                IGNORED_WORKER_COUNT=$((IGNORED_WORKER_COUNT + 1))
+                if [ "$IGNORED_WORKER_COUNT" -le 8 ]; then
+                    IGNORED_WORKER_DETAILS="${IGNORED_WORKER_DETAILS}${IGNORED_WORKER_DETAILS:+; }PID=$cpid 进程=${comm:-未知} 规则=$MATCHED_WORKER_RULE"
+                fi
+                continue
+            fi
+            ACTIVE_WORKER_COUNT=$((ACTIVE_WORKER_COUNT + 1))
+            # 只保留前 8 个对象，避免常驻子进程较多时刷满日志。
+            if [ "$ACTIVE_WORKER_COUNT" -le 8 ]; then
+                local exe=$(readlink "/proc/$cpid/exe" 2>/dev/null)
+                exe="${exe##*/}"
+                ACTIVE_WORKER_DETAILS="${ACTIVE_WORKER_DETAILS}${ACTIVE_WORKER_DETAILS:+; }PID=$cpid PPID=$mpid 状态=$cstat 进程=${comm:-未知} 可执行文件=${exe:-不可读}"
+            fi
         fi
     done
-    return 1
+    [ "$ACTIVE_WORKER_COUNT" -gt 0 ]
 }
 
 # 挂起主进程及其残留休眠子进程
@@ -240,8 +371,6 @@ do_daemon() {
     echo "$$" > "$FREEZER_PID_FILE"
     trap 'release_wakelock' EXIT INT TERM
 
-    local last_check_log=0
-
     while true; do
         local screen_on=1
         local check_interval=$CHECK_INTERVAL_SCREEN_ON
@@ -293,37 +422,45 @@ do_daemon() {
 
         if [ -f "$DSH_DIR/.approval_status.json" ]; then
             if grep -q '"active":true' "$DSH_DIR/.approval_status.json" 2>/dev/null; then
-                if [ $(( $(date +%s) - last_check_log )) -ge 300 ]; then
-                    log_msg "CHECK" "闲置检测: 检测到活跃审批任务挂起，跳过冻结避让中"
-                    last_check_log=$(date +%s)
-                fi
+                local approval_details=$(describe_json_source approval "$DSH_DIR/.approval_status.json")
+                log_msg "CHECK" "未冻结: 等待活跃审批 | 主进程PID: $MAIN_PID | ${approval_details:-审批元数据不可读} | 状态文件: $DSH_DIR/.approval_status.json"
                 continue
             fi
         fi
 
-        if has_active_workers "$MAIN_PID"; then
-            if [ $(( $(date +%s) - last_check_log )) -ge 300 ]; then
-                log_msg "CHECK" "闲置检测: 检测到主进程有活跃工作子进程正在执行，跳过冻结避让中"
-                last_check_log=$(date +%s)
-            fi
+        local workers_active=0
+        has_active_workers "$MAIN_PID" && workers_active=1
+        if [ -n "$WHITELIST_ERROR" ]; then
+            log_msg "WHITELIST" "$WHITELIST_ERROR | 配置: $WHITELIST_FILE"
+        fi
+        if [ "$IGNORED_WORKER_COUNT" -gt 0 ]; then
+            log_msg "WHITELIST" "自定义白名单忽略 $IGNORED_WORKER_COUNT 个工作子进程 (最多列8个，冻结时仍会挂起) | $IGNORED_WORKER_DETAILS"
+        fi
+        if [ "$workers_active" = "1" ]; then
+            log_msg "CHECK" "未冻结: 存在非白名单且非僵尸的工作子进程 (等待/挂起态也会阻止冻结) | 数量: $ACTIVE_WORKER_COUNT (最多列8个) | $ACTIVE_WORKER_DETAILS"
             continue
         fi
 
         local NOW=$(date +%s)
         local LAST_WRITE=0
+        local activity_source=""
 
         local LATEST_SESSION=$(ls -t "$DSH_DIR/storages/session_projcache/sessions/session-"*.json \
                                "$DSH_DIR/storages/session_projcache/sessions/"*.json 2>/dev/null | head -1)
         if [ -n "$LATEST_SESSION" ] && [ -f "$LATEST_SESSION" ]; then
             LAST_WRITE=$(stat -c %Y "$LATEST_SESSION" 2>/dev/null || echo 0)
+            [ "${LAST_WRITE:-0}" -gt 0 ] && activity_source="session"
         fi
 
         if [ "${LAST_WRITE:-0}" -le 0 ] && [ -f "$DSH_DIR/agy/agy-recent.json" ]; then
             LAST_WRITE=$(stat -c %Y "$DSH_DIR/agy/agy-recent.json" 2>/dev/null || echo 0)
+            [ "${LAST_WRITE:-0}" -gt 0 ] && activity_source="agy"
         fi
 
         if [ "${LAST_WRITE:-0}" -le 0 ]; then
-            LAST_WRITE=$NOW
+            # 保留原有保守策略，但明确说明无法计时，避免误报“刚有对话活动”。
+            log_msg "CHECK" "未冻结: 无法取得有效活动时间戳，按原策略保持运行 | 主进程PID: $MAIN_PID | 会话目录: $DSH_DIR/storages/session_projcache/sessions | 回退账本: $DSH_DIR/agy/agy-recent.json"
+            continue
         fi
 
         local IDLE_SEC=$((NOW - LAST_WRITE))
@@ -345,14 +482,18 @@ do_daemon() {
             release_wakelock
             exit 0
         else
-            if [ $((NOW - last_check_log)) -ge 300 ]; then
-                if [ "$screen_on" = "0" ]; then
-                    log_msg "CHECK" "闲置检测 (息屏中): 当前已闲置 $IDLE_SEC 秒 (息屏阈值 300 秒 / 5分钟)，暂不满足，保持避让"
-                else
-                    log_msg "CHECK" "闲置检测 (亮屏中): 当前已闲置 $IDLE_SEC 秒 (亮屏阈值 1800 秒 / 30分钟)，暂不满足，继续运行"
-                fi
-                last_check_log=$NOW
+            local source_details=""
+            if [ "$activity_source" = "session" ]; then
+                local session_id="${LATEST_SESSION##*/}"
+                session_id="${session_id%.json}"
+                local session_title=$(describe_json_source session "$LATEST_SESSION")
+                source_details="会话ID: $session_id | ${session_title:-标题不可用} | 文件: $LATEST_SESSION"
+            else
+                source_details="活动来源: agy 调用账本 (无会话时间戳，无法归属具体对话) | 文件: $DSH_DIR/agy/agy-recent.json"
             fi
+            local screen_label="亮屏"
+            [ "$screen_on" = "0" ] && screen_label="息屏"
+            log_msg "CHECK" "未冻结: $screen_label 闲置 $IDLE_SEC 秒，未满阈值 $idle_threshold 秒 | 最近写入时间戳: $LAST_WRITE | $source_details"
         fi
     done
 }
@@ -404,7 +545,7 @@ case "$1" in
             fi
         done
 
-        log_msg "START" "闲置冻结守护已拉起 (心跳: 30s/60s自适应, 阈值: 息屏5分钟/亮屏30分钟)"
+        log_msg "START" "闲置冻结守护已拉起 (检查周期: 10分钟, 阈值: 息屏5分钟/亮屏30分钟，达标后在检查时冻结)"
         sh "$SCRIPT_PATH" daemon >/dev/null 2>&1 &
         echo "$!" > "$FREEZER_PID_FILE"
 
