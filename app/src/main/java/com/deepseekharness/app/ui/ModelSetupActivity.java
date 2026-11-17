@@ -225,11 +225,7 @@ public final class ModelSetupActivity extends AppCompatActivity {
                 if (msg.contains("无法") || msg.contains("失败") || msg.contains("拒绝")
                         || msg.contains("answered") || msg.contains("401") || msg.contains("403")
                         || msg.contains("Error") || msg.contains("error")) {
-                    new DshaDialogBuilder(this)
-                            .setTitle(t("提示", "Notice"))
-                            .setMessage(msg)
-                            .setPositiveButton(t("知道了", "OK"), null)
-                            .show();
+                    createModelNotice(t("提示", "Notice"), msg, t("知道了", "OK"), null).show();
                 }
             }
         });
@@ -1315,6 +1311,22 @@ public final class ModelSetupActivity extends AppCompatActivity {
     // 下级页面 4: 可用模型自动发现多选合并 (采用 Skia ModernCardView 现代弹窗)
     // =========================================================================
 
+    private AlertDialog createModelNotice(String title, String message, String buttonText, Runnable confirmed) {
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_model_notice, null);
+        AlertDialog dialog = new DshaDialogBuilder(this).setView(dialogView).create();
+        ((TextView) dialogView.findViewById(R.id.tv_dialog_model_notice_title)).setText(title);
+        ((TextView) dialogView.findViewById(R.id.tv_dialog_model_notice_message)).setText(message);
+        Button close = dialogView.findViewById(R.id.btnDialogConfirm);
+        close.setText(buttonText);
+        close.setOnClickListener(v -> {
+            if (confirmed != null) confirmed.run();
+            dialog.dismiss();
+        });
+        // 弹窗不属于 Activity 的内容树，须单独应用当前莫奈配色；深色沿用主题资源。
+        MonetEngine.applyToViewTree(dialogView, MonetEngine.resolveCurrentPalette(this));
+        return dialog;
+    }
+
     private void fetchModels() {
         capture();
         try {
@@ -1335,11 +1347,7 @@ public final class ModelSetupActivity extends AppCompatActivity {
                     : t("请先填写有效的 HTTP/HTTPS API 地址。", "Enter a valid HTTP/HTTPS endpoint first.");
             updateStatusBanner(msg);
             ToastHelper.makeText(this, msg, Toast.LENGTH_LONG).show();
-            new DshaDialogBuilder(this)
-                    .setTitle(t("获取模型提示", "Notice"))
-                    .setMessage(msg)
-                    .setPositiveButton(t("知道了", "OK"), null)
-                    .show();
+            createModelNotice(t("获取模型提示", "Notice"), msg, t("知道了", "OK"), null).show();
         }
     }
 
@@ -1347,15 +1355,15 @@ public final class ModelSetupActivity extends AppCompatActivity {
         long serial = result.serial;
         JsonArray found = result.models;
         if (found == null || found.isEmpty()) {
-            new DshaDialogBuilder(this)
-                    .setTitle(t("未发现模型", "No models found"))
-                    .setMessage(t("服务商没有返回可用模型。现有模型目录保持不变。",
-                            "The provider returned no available models. The current catalog is unchanged."))
-                    .setPositiveButton(t("关闭", "Close"), (dialog, which) -> draft.consumeDiscovery(serial))
-                    .setOnCancelListener(dialog -> {
-                        if (!isChangingConfigurations()) draft.consumeDiscovery(serial);
-                    })
-                    .show();
+            AlertDialog emptyDialog = createModelNotice(
+                    t("未发现模型", "No models found"),
+                    t("服务商没有返回可用模型。现有模型目录保持不变。",
+                            "The provider returned no available models. The current catalog is unchanged."),
+                    t("关闭", "Close"), () -> draft.consumeDiscovery(serial));
+            emptyDialog.setOnCancelListener(dialog -> {
+                if (!isChangingConfigurations()) draft.consumeDiscovery(serial);
+            });
+            emptyDialog.show();
             return;
         }
 
