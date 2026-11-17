@@ -102,10 +102,11 @@
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <!-- 2. 可用模型多选列表 -->
-        <androidx.core.widget.NestedScrollView
+        <!-- 2. 列表最高 260dp；窗口较矮时优先收缩，给标题和底部按钮留出空间。 -->
+        <com.deepseekharness.app.ui.MaxHeightNestedScrollView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
             android:layout_marginTop="6dp"
             android:maxHeight="260dp"
             android:overScrollMode="never"
@@ -116,7 +117,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical" />
-        </androidx.core.widget.NestedScrollView>
+        </com.deepseekharness.app.ui.MaxHeightNestedScrollView>
 
         <!-- 3. 底部操作按钮 -->
         <LinearLayout

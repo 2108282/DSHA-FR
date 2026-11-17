@@ -69,10 +69,11 @@
             </LinearLayout>
         </LinearLayout>
 
-        <!-- 2. 服务商选择列表 (限制最大高度可滚动) -->
-        <androidx.core.widget.NestedScrollView
+        <!-- 2. 限制列表高度；窗口较矮时优先收缩，保留底部取消按钮。 -->
+        <com.deepseekharness.app.ui.MaxHeightNestedScrollView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
             android:layout_marginTop="14dp"
             android:maxHeight="320dp"
             android:overScrollMode="never"
@@ -83,7 +84,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical" />
-        </androidx.core.widget.NestedScrollView>
+        </com.deepseekharness.app.ui.MaxHeightNestedScrollView>
 
         <!-- 3. 底部操作按钮 -->
         <Button
