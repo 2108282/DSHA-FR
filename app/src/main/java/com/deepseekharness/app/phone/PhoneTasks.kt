@@ -133,10 +133,19 @@ class PhoneTasks(
         inFlight++
     }
 
-    fun callEnded() = synchronized(lock) {
-        if (inFlight > 0) inFlight--
-        // The idle clock starts when the last result went back, however long the call took.
-        if (active) lastCallAt = clock()
+    fun callEnded() {
+        synchronized(lock) {
+            if (inFlight > 0) inFlight--
+            // The idle clock starts when the last result went back, however long the call took.
+            if (active) lastCallAt = clock()
+        }
+        fire()
+    }
+
+    /** One deadline, measured again after calls and pause/resume; no timer while work is in flight. */
+    fun idleDelayMs(): Long? = synchronized(lock) {
+        if (!active || paused || inFlight > 0) null
+        else (idleMs - (clock() - lastCallAt) + 1).coerceAtLeast(1L)
     }
 
     /** Tool calls between [callStarted] and [callEnded] right now. */

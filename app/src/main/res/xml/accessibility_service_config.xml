@@ -2,14 +2,14 @@
 <!-- 无障碍服务配置。
      不限定 packageNames：agent 的屏幕操作要能作用于任意应用（限定了就只能操作
      系统设置，等于没有这项能力）。隐私靠「按需拉取」保证 —— 服务自身不做任何
-     持续记录：onAccessibilityEvent 里除了用户主动开启的配对码窗口，其余一律直接
-     返回；读屏只在 agent 调用 /app/ui/dump 的那一刻发生，结果直接回给会话，
-     不落盘、不上传。
-     canPerformGestures 是点按与滑动的前提，没有它就得依赖 ADB 或 Shizuku。
-     canTakeScreenshot 是 /app/ui/screenshot 截屏的前提：不声明会被系统直接拒绝
-     （errorCode=ERROR_TAKE_SCREENSHOT_*），声明后 Android 11+ 才能 takeScreenshot。 -->
+     持续记录。省略 accessibilityEventTypes，Android 默认值为 0；仅主屏驱动调用期间
+     动态订阅窗口、内容、滚动和文字事件，用来等待动作后的界面稳定。空闲回调直接返回。
+     API 33+ 同时禁用并清理框架节点缓存；API 31/32 更新服务配置可清客户端缓存，
+     但没有公开接口关闭系统内部缓存维护事件，不保证完全零事件。
+     canPerformGestures 是点按与滑动的前提；事件订阅不影响手势与悬浮窗能力。
+     canTakeScreenshot 是 MCP screen 附图的前提：不声明会被系统直接拒绝
+     （errorCode=ERROR_TAKE_SCREENSHOT_*）。 -->
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:accessibilityFlags="flagRetrieveInteractiveWindows|flagReportViewIds"
     android:canPerformGestures="true"

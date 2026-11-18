@@ -108,7 +108,7 @@ internal class MainScreenDriver(private val service: PhoneA11yService, private v
     // ---- PhoneDriver ------------------------------------------------------------------------------
 
     override fun availability(): Availability = when {
-        PhoneA11yService.instance == null ->
+        PhoneA11yService.instance !== service ->
             // l10n:keep agent screen result
             Availability(false, "DSH 的无障碍服务没有连接。请用户到 系统设置 → 无障碍 里重新打开「DSH 手机操控」。", AppStrings.get(service, R.string.phone_availability_disconnected))
         // l10n:keep agent screen result
@@ -118,9 +118,19 @@ internal class MainScreenDriver(private val service: PhoneA11yService, private v
         else -> Availability(true)
     }
 
-    override fun foregroundPackage(): String? = TreeCapture.foregroundPackage(service, screenBox())
+    /** Serialize before subscribing so queued callers do not keep events on while idle.
+     * The service scope is nested by open() -> foregroundPackage(); its last exit owns cleanup.
+     */
+    private inline fun <T> withUiOperation(block: () -> T): T = synchronized(lock) {
+        service.withUiEvents(block)
+    }
 
-    override fun observe(detail: Boolean, image: Boolean): ScreenSnapshot = synchronized(lock) {
+    override fun foregroundPackage(): String? = withUiOperation {
+        if (!availability().ok) return null
+        TreeCapture.foregroundPackage(service, screenBox())
+    }
+
+    override fun observe(detail: Boolean, image: Boolean): ScreenSnapshot = withUiOperation {
         val start = SystemClock.uptimeMillis()
         val generation = abortGen
         availability().let { if (!it.ok) return blank(it.reason!!) }
@@ -164,7 +174,7 @@ internal class MainScreenDriver(private val service: PhoneA11yService, private v
         } finally { cap.recycle() }
     }
 
-    override fun target(screenId: String, elementId: Int): TargetInfo? = synchronized(lock) {
+    override fun target(screenId: String, elementId: Int): TargetInfo? = withUiOperation {
         val snap = latest ?: return null
         if (!isCurrent(screenId)) return null
         val el = snap.screen.element(elementId) ?: return null
@@ -185,13 +195,14 @@ internal class MainScreenDriver(private val service: PhoneA11yService, private v
     override fun perform(action: PhoneAction): ActionResult {
         // l10n:keep agent screen result
         if (Looper.myLooper() == Looper.getMainLooper()) return ActionResult(false, "内部错误：手机动作不能在主线程执行。")
-        synchronized(lock) {
+        withUiOperation {
             availability().let { if (!it.ok) return ActionResult(false, it.reason!!) }
             // l10n:keep agent screen result
             if (overlay.paused) return ActionResult(false, "用户在悬浮条上按了暂停。等用户点「继续」后再操作，不要换别的方式绕过。")
-            // l10n:keep agent screen result
-            if (!awaitInputIdle()) return ActionResult(false, "用户正在悬浮条上输入插话，稍等再操作。")
             val gen = abortGen
+            // l10n:keep agent screen result
+            if (!awaitInputIdle(gen)) return ActionResult(false, "用户正在悬浮条上输入插话，稍等再操作。")
+            if (cancelled(gen)) return ActionResult(false, "操作已停止，没有执行。")
             if (action !is PhoneAction.Key && !isCurrent(action.screenId)) {
                 return ActionResult(false, "屏幕编号 ${action.screenId} 已过期，没有执行；请先 screen。")
             }
@@ -208,7 +219,7 @@ internal class MainScreenDriver(private val service: PhoneA11yService, private v
     override fun open(packageName: String): ActionResult {
         // l10n:keep agent screen result
         if (Looper.myLooper() == Looper.getMainLooper()) return ActionResult(false, "内部错误：手机动作不能在主线程执行。")
-        synchronized(lock) {
+        withUiOperation {
             availability().let { if (!it.ok) return ActionResult(false, it.reason!!) }
             // l10n:keep agent screen result
             if (packageName == ownPackage && !lifted.ownApp) return ActionResult(false, "DSH 自己不需要打开。")
@@ -243,7 +254,7 @@ internal class MainScreenDriver(private val service: PhoneA11yService, private v
 
     override fun collect(screenId: String, listElementId: Int, maxPages: Int, until: String?): CollectResult {
         if (Looper.myLooper() == Looper.getMainLooper()) return CollectResult(emptyList(), 0, "unconfirmed", null)
-        synchronized(lock) {
+        withUiOperation {
             availability().let { if (!it.ok) return CollectResult(emptyList(), 0, "unavailable", null) }
             val snap = latest
             if (snap == null || !isCurrent(screenId)) {
@@ -629,11 +640,12 @@ internal class MainScreenDriver(private val service: PhoneA11yService, private v
     /** Equal, or equal once the field's own formatting (spaces, dashes) is ignored. */
     private fun sameText(got: String?, expected: String): Boolean = MainRepair.sameText(got, expected)
 
-    private fun awaitInputIdle(): Boolean {
+    private fun awaitInputIdle(gen: Long): Boolean {
         val deadline = SystemClock.uptimeMillis() + 8_000
         while (overlay.editing) {
+            if (cancelled(gen)) return true // Let perform report cancellation and release events.
             if (SystemClock.uptimeMillis() > deadline) return false
-            clock.pause(150)
+            clock.pause(150) { cancelled(gen) }
         }
         return true
     }

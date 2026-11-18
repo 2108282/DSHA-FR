@@ -33,6 +33,44 @@ open class PhoneA11yService : AccessibilityService() {
     private var driver: MainScreenDriver? = null
         private var receiverRegistered = false
     private var overlayContext: Context? = null
+    @Volatile private var listening = false
+    private val uiEvents = UiEventScope(::setListening)
+
+    /** Called only under UiEventScope's short transition lock, never under a UI-thread wait. */
+    private fun setListening(active: Boolean) {
+        listening = active
+        try {
+            val info = serviceInfo
+            if (active) checkNotNull(info) { "Accessibility connection has closed" }
+            if (info != null) {
+                info.eventTypes = if (active) UI_EVENT_TYPES else 0
+                // AOSP 31/32 sendServiceInfo() clears the client cache, even if the mask is
+                // unchanged. There is no public cache-disable API on those versions; their
+                // server-side cache-maintenance events can continue after the first query.
+                serviceInfo = info
+            }
+        } finally {
+            if (Build.VERSION.SDK_INT >= 33) {
+                // Repeat on every final exit: an in-flight node query can re-enable the
+                // server-side cache after teardown first disabled it.
+                if (!setCacheEnabled(active)) Log.w(TAG, "could not set accessibility cache enabled=$active")
+            }
+        }
+    }
+
+    // Keep package-private Java calls out of inline bytecode: Kotlin cannot generate
+    // synthetic accessors into a Java class compiled separately by javac.
+    private fun enterUiEvents(): Long = uiEvents.enter()
+    private fun exitUiEvents(token: Long) = uiEvents.exit(token)
+
+    internal inline fun <T> withUiEvents(block: () -> T): T {
+        val token = enterUiEvents()
+        try {
+            return block()
+        } finally {
+            exitUiEvents(token)
+        }
+    }
 
     /** A dedicated manager whose default token comes from the live accessibility connection. */
     internal fun overlayWindowContext(): Context = overlayContext ?: run {
@@ -57,6 +95,7 @@ open class PhoneA11yService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         invalidateOverlayWindowContext()
+        uiEvents.connect()
         val o = ControlOverlay(this)
         val d = MainScreenDriver(this, o)
         overlay = o
@@ -74,7 +113,8 @@ open class PhoneA11yService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        clock.tick(event?.packageName)
+        if (!listening || event == null || event.eventType and UI_EVENT_TYPES == 0) return
+        clock.tick(event.packageName)
     }
 
     /**
@@ -119,6 +159,9 @@ open class PhoneA11yService : AccessibilityService() {
         if (instance === this) instance = null
         invalidateOverlayWindowContext()
         d?.abort()
+        // Do not acquire the driver's operation lock here: the worker may be waiting for
+        // the main thread to update the overlay or finish a screenshot.
+        runCatching { uiEvents.close() }.onFailure { Log.w(TAG, "disable UI events during teardown", it) }
         o?.destroy()
         d?.close()
                 if (receiverRegistered) { runCatching { unregisterReceiver(screenOff) }; receiverRegistered = false }
@@ -130,6 +173,9 @@ open class PhoneA11yService : AccessibilityService() {
 
     companion object {
         private const val TAG = "DshA11y"
+        private const val UI_EVENT_TYPES = AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED or AccessibilityEvent.TYPE_WINDOWS_CHANGED or
+            AccessibilityEvent.TYPE_VIEW_SCROLLED or AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED
 
         /** The connected service, if any. */
         @Volatile var instance: PhoneA11yService? = null

@@ -31,6 +31,9 @@ import androidx.core.content.ContextCompat
 import androidx.core.widget.ImageViewCompat
 import androidx.core.widget.NestedScrollView
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.withResumed
 import com.deepseekharness.app.DshaAccessibilityService
 import com.deepseekharness.app.R
 import com.deepseekharness.app.phone.ConfirmMode
@@ -43,6 +46,10 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * 手机操控完整配置二级页：
@@ -65,6 +72,12 @@ class PhoneControlFragment : Fragment() {
     private var activeTaskText: TextView? = null
 
     private var a11yStatusText: TextView? = null
+    private var restoreToggle: DshaToggle? = null
+    private var restoreStatusText: TextView? = null
+    private var restoreEnableGeneration = 0L
+    private var restoreEnableRequested = false
+    private var restoreGrantJob: Job? = null
+    private var restoreGrantError: String? = null
     private var confirmModeValueText: TextView? = null
     private var bgToggle: DshaToggle? = null
     private var bgStatusText: TextView? = null
@@ -157,6 +170,7 @@ class PhoneControlFragment : Fragment() {
             subtitle = "让 DSH 看屏幕、点按、输入和发系统意图，随时可暂停或停止"
         ) { checked ->
             if (isBinding) return@toggleRow
+            if (!checked) cancelRestoreEnable()
             PhoneControl.get(ctx).setEnabled(checked)
             ToastHelper.show(
                 ctx,
@@ -174,26 +188,27 @@ class PhoneControlFragment : Fragment() {
         val prepCard = card()
         val (a11yRow, a11ySub) = actionRow(
             iconRes = R.drawable.ic_check_circle,
-            title = "无障碍服务（Root 自动守护）",
+            title = "无障碍服务",
             subtitle = "正在检查状态…",
-            actionLabel = "一键激活"
+            actionLabel = "设置"
         ) {
-            Thread {
-                val ok = DshaAccessibilityService.ensureConnected(ctx)
-                mainHandler.post {
-                    if (!isAdded) return@post
-                    if (ok) {
-                        ToastHelper.show(ctx, "无障碍服务已通过 Root 自动激活并开启自愈守护")
-                    } else {
-                        ToastHelper.show(ctx, "正在打开系统无障碍设置…")
-                        runCatching { startActivity(PhoneControl.get(ctx).accessibilitySettingsIntent()) }
-                    }
-                    refreshState()
-                }
-            }.start()
+            runCatching { startActivity(PhoneControl.get(ctx).accessibilitySettingsIntent()) }
+                .onFailure { ToastHelper.show(ctx, "无法打开无障碍设置：${it.message}") }
         }
         a11yStatusText = a11ySub
         prepCard.addView(a11yRow)
+        prepCard.addView(divider())
+        val (restoreRow, restoreSwitch, restoreText) = toggleRow(
+            iconRes = R.drawable.ic_check_circle,
+            title = "自动恢复无障碍",
+            subtitle = "按需检查与恢复；无常驻轮询，空闲时不订阅 UI 事件"
+        ) { checked ->
+            if (isBinding) return@toggleRow
+            toggleAutoRestore(checked)
+        }
+        restoreToggle = restoreSwitch
+        restoreStatusText = restoreText
+        prepCard.addView(restoreRow)
         prepCard.addView(divider())
 
         val (testRow, _) = actionRow(
@@ -392,6 +407,9 @@ class PhoneControlFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+        cancelRestoreEnable()
+        restoreToggle = null
+        restoreStatusText = null
         taskPermissionRows.clear()
         syncActivityTitle(false)
         super.onDestroyView()
@@ -416,6 +434,7 @@ class PhoneControlFragment : Fragment() {
             }
 
             val enabled = pc.isEnabled()
+            if (!enabled && restoreEnableRequested) cancelRestoreEnable()
             masterToggle?.setChecked(enabled, false, false)
             bridgeStatusText?.text = if (enabled) {
                 if (pc.bridgeListening) "🟢 MCP 桥已就绪 (@dsha.phone.bridge) · 13 个原生工具已挂载"
@@ -424,13 +443,31 @@ class PhoneControlFragment : Fragment() {
                 "⚪ 已关闭 · 模型不可见任何手机操控工具"
             }
 
-            val a11yConn = DshaAccessibilityService.isConnected()
-            val keeperGranted = pc.status()["a11yKeeper"]?.let { (it as? Map<*, *>)?.get("granted") as? Boolean } == true
+            val a11yConn = com.deepseekharness.app.phone.a11y.PhoneA11yService.isConnected()
+            val keeper = pc.keeperStatus()
+            val keeperGranted = keeper["granted"] == true
+            val restoreEnabled = keeper["enabled"] == true
             a11yStatusText?.text = when {
-                a11yConn && keeperGranted -> "🟢 已连接 · Root 自动恢复已开启"
-                a11yConn -> "🟢 已连接（点右侧按钮可开启 Root 掉线自动恢复）"
-                DshaAccessibilityService.enabled(ctx) -> "🟡 系统设置已开但未连接 · 点右侧「一键激活」重连"
-                else -> "🔴 未开启 · 点右侧「一键激活」通过 Root 自动开启"
+                a11yConn -> "🟢 已连接 · 空闲时不订阅 UI 事件，仅在屏幕操作期间接收"
+                DshaAccessibilityService.enabled(ctx) -> "🟡 系统设置已开但未连接 · 可到系统设置重新开启"
+                else -> "⚪ 未开启 · 点「设置」由你开启无障碍服务"
+            }
+            // 授权中显示本次开启意图，仍可关闭以取消后续开启。
+            restoreToggle?.setChecked(restoreEnabled || restoreEnableRequested, false, false)
+            val grantRunning = DshaAccessibilityService.isRestoreGrantInFlight()
+            val grantError = restoreGrantError ?: DshaAccessibilityService.restoreGrantError()
+            val restoreError = keeper["error"] as? String
+            restoreStatusText?.text = when {
+                !enabled -> "已暂停 · 手机操控总开关已关闭"
+                restoreEnableRequested -> "正在请求 Root 授权…可关闭以取消自动开启"
+                restoreEnabled && restoreError != null -> restoreError
+                restoreEnabled -> "已开启 · 按需检查与恢复，无常驻轮询；空闲时不订阅 UI 事件"
+                grantRunning -> "已关闭 · 上次授权尚在结束，不会自动开启，请稍后重试"
+                restoreGrantError != null || (!keeperGranted && grantError != null) ->
+                    "已关闭 · $grantError · 可重新开启重试"
+                restoreError != null -> "已关闭 · $restoreError · 可重新开启重试"
+                keeperGranted -> "已关闭 · 开启后按需检查与恢复，无常驻轮询"
+                else -> "已关闭 · 开启时申请 Root 授权，成功后自动启用；空闲时不订阅 UI 事件"
             }
 
             confirmModeValueText?.text = when (p.confirmMode) {
@@ -812,14 +849,89 @@ class PhoneControlFragment : Fragment() {
 
     // ==================== 各功能弹窗实现（全部采用插件安装弹窗卡片样式） ====================
 
+    private fun cancelRestoreEnable() {
+        restoreEnableGeneration++
+        restoreEnableRequested = false
+        restoreGrantJob?.cancel()
+        restoreGrantJob = null
+    }
+
+    private fun toggleAutoRestore(enable: Boolean) {
+        val ctx = context ?: return
+        val pc = PhoneControl.get(ctx)
+        cancelRestoreEnable()
+        restoreGrantError = null
+        if (!enable) {
+            pc.setAutoRestore(false)
+            refreshState()
+            return
+        }
+        if (!pc.isEnabled()) {
+            ToastHelper.show(ctx, "请先开启手机操控")
+            refreshState()
+            return
+        }
+        if (pc.keeperStatus()["granted"] == true) {
+            if (!pc.setAutoRestore(true)) {
+                restoreGrantError = "未能开启，请检查手机操控开关与自动恢复权限"
+                ToastHelper.show(ctx, restoreGrantError!!)
+            }
+            refreshState()
+            return
+        }
+        if (DshaAccessibilityService.isRestoreGrantInFlight()) {
+            ToastHelper.show(ctx, "上次授权尚在结束，请稍后重新开启")
+            refreshState()
+            return
+        }
+
+        val owner = viewLifecycleOwner
+        if (!owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+            refreshState()
+            return
+        }
+        val generation = restoreEnableGeneration
+        val app = ctx.applicationContext
+        restoreEnableRequested = true
+        refreshState()
+        restoreGrantJob = owner.lifecycleScope.launch {
+            // IO 线程只请求权限；取消无法撤回已弹出的 Root 请求，但绝不在此开启恢复。
+            val error = withContext(Dispatchers.IO) {
+                try {
+                    DshaAccessibilityService.grantRestorePermission(app)
+                } catch (e: Exception) {
+                    "授权失败：${e.message ?: e.javaClass.simpleName}"
+                } finally {
+                    // 已取消的请求也只更新授权状态，不保留开启 continuation。
+                    pc.emitStatus()
+                }
+            }
+            // Root 管理器可能暂时遮住页面，返回前台后才消费开启意图。
+            owner.lifecycle.withResumed {
+                // 不捕获旧 view，也不沿用已取消或离开原页面的请求。
+                if (generation != restoreEnableGeneration || !restoreEnableRequested ||
+                    viewLifecycleOwnerLiveData.value !== owner || !pc.isEnabled()
+                ) {
+                    if (generation == restoreEnableGeneration) cancelRestoreEnable()
+                    return@withResumed
+                }
+                restoreEnableRequested = false
+                restoreGrantJob = null
+                restoreGrantError = error
+                if (error == null && !pc.setAutoRestore(true)) {
+                    restoreGrantError = "未能开启，请检查手机操控开关与自动恢复权限"
+                }
+                ToastHelper.show(app, restoreGrantError ?: "自动恢复已开启，将按需检查与恢复无障碍")
+                refreshState()
+            }
+        }
+    }
+
     private fun runScreenSelfTest() {
         val ctx = context ?: return
         val pc = PhoneControl.get(ctx)
         ToastHelper.show(ctx, "正在读取当前屏幕…")
         Thread {
-            if (!DshaAccessibilityService.isConnected()) {
-                DshaAccessibilityService.ensureConnected(ctx)
-            }
             val res = pc.testScreen()
             mainHandler.post {
                 if (!isAdded) return@post

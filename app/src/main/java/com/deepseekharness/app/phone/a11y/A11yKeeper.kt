@@ -1,9 +1,7 @@
 package com.deepseekharness.app.phone.a11y
 
 import android.Manifest
-import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.SystemClock
 import android.provider.Settings
@@ -18,8 +16,8 @@ import com.deepseekharness.app.phone.PhoneControl
  * unbound (the system's 「无法运行」 state) so the system binds it afresh. It writes that list and
  * ACCESSIBILITY_ENABLED, no other setting, and backs off so it can't loop.
  *
- * Checked when [PhoneControl] comes up (the app's start), after an update ([Receiver]), when a
- * task starts or needs the main screen, and on [PhoneControl]'s 2-second tick.
+ * Checked only when an MCP call needs the main-screen driver. Enabling the feature, app startup,
+ * updates and task timers never restore the service or acquire Root permission.
  */
 object A11yKeeper {
     private const val TAG = "DshA11yKeeper"
@@ -27,7 +25,57 @@ object A11yKeeper {
     /** Between taking the service out and putting it back: the system must see both. */
     private const val REBIND_GAP_MS = 1_000L
 
+    private const val PREFS = "dsh_phone"
+    private const val K_ENABLED = "a11yAutoRestore"
+    private const val K_ERROR = "a11yRestoreError"
+
+    fun error(context: Context): String? =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(K_ERROR, null)
+
+    private fun recordError(context: Context, message: String?) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(K_ERROR, message).apply()
+    }
+
+    private fun suspendLocked(context: Context, message: String) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putBoolean(K_ENABLED, false).putString(K_ERROR, message).apply()
+        resetLocked()
+    }
+
+    // Keep the switch independent of check's serialization: its rebind gap must not hold up UI.
+    private val stateLock = Any()
+    private var generation = 0L
     private var plan: KeeperPlan? = null
+
+    fun enabled(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(K_ENABLED, false)
+
+    fun setEnabled(context: Context, enabled: Boolean) {
+        synchronized(stateLock) {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putBoolean(K_ENABLED, enabled).remove(K_ERROR).apply()
+            resetLocked()
+        }
+    }
+
+    /** Call after changing the master switch, including off/on during a pending rebind. */
+    fun reset(context: Context) {
+        synchronized(stateLock) {
+            // A master-switch shutdown makes any prior failure stale; the next explicit
+            // enable starts with a clean status while the auto-restore preference stays independent.
+            if (!PhoneControl.switchedOn(context)) {
+                context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(K_ERROR).apply()
+            }
+            resetLocked()
+        }
+    }
+
+    private fun resetLocked() {
+        generation++
+        plan?.reset()
+    }
+
+    private fun active(app: Context): Boolean = PhoneControl.switchedOn(app) && enabled(app)
 
     fun granted(context: Context): Boolean =
         context.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED
@@ -40,147 +88,95 @@ object A11yKeeper {
     @Synchronized
     fun check(context: Context): Boolean {
         val app = context.applicationContext
-        val plan = plan ?: KeeperPlan(app.packageName, "com.deepseekharness.app.DshaAccessibilityService").also { plan = it }
-        val on = PhoneControl.switchedOn(app)
-        val connected = PhoneA11yService.isConnected()
-        if (on && !connected && !granted(app)) {
-            runCatching { com.deepseekharness.app.DshaAccessibilityService.ensureConnected(app) }
+        val attempt = synchronized(stateLock) {
+            val plan = plan ?: KeeperPlan(app.packageName, "com.deepseekharness.app.DshaAccessibilityService").also { plan = it }
+            val on = active(app)
+            val connected = PhoneA11yService.isConnected()
+            if (!on) return false
+            // Missing or revoked permission is never a reason to launch su in the background.
+            if (!granted(app)) {
+                suspendLocked(app, "自动恢复已停止：缺少修改系统设置权限，请重新打开「自动恢复无障碍」以申请授权。")
+                return false
+            }
+            val now = SystemClock.elapsedRealtime()
+            if (!connected && plan.exhausted(now)) {
+                val cause = error(app) ?: "系统在多次恢复后仍未连接无障碍服务"
+                suspendLocked(app, "已停止自动恢复（达到 ${KeeperPlan.MAX_ATTEMPTS} 次上限）：$cause")
+                return false
+            }
+            val list = try { if (connected) null else read(app) } catch (e: Exception) {
+                suspendLocked(app, "无法读取无障碍设置：${e.message ?: e.javaClass.simpleName}")
+                return false
+            }
+            // This check lives inside a bounded MCP call, so allow a short binding grace
+            // before rebind instead of requiring a persistent background polling loop.
+            val step = plan.next(on, true, list, connected, now, bindingGraceMs = 1_000L)
+            if (connected) recordError(app, null)
+            Attempt(plan, step, generation)
         }
-        val granted = on && !connected && granted(app)
-        val list = if (granted) read(app) else null
-        val step = plan.next(on, granted, list, connected, SystemClock.elapsedRealtime())
         try {
-            when (step) {
-                KeeperPlan.Step.ADD -> write(app, plan.withMe(list), enable = true)
+            when (attempt.step) {
+                KeeperPlan.Step.ADD -> synchronized(stateLock) {
+                    if (!current(app, attempt) || !granted(app)) return false
+                    if (!PhoneA11yService.isConnected()) {
+                        write(app, attempt.plan.withMe(read(app)), enable = true)
+                        recordError(app, null)
+                    }
+                }
                 KeeperPlan.Step.REBIND -> {
-                    write(app, plan.withoutMe(list), enable = false)
+                    synchronized(stateLock) {
+                        if (!current(app, attempt) || !granted(app)) return false
+                        if (PhoneA11yService.isConnected()) return false
+                        write(app, attempt.plan.withoutMe(read(app)), enable = false)
+                    }
                     SystemClock.sleep(REBIND_GAP_MS)
                     // The person can turn phone control off or revoke the grant while we wait.
-                    if (!PhoneControl.switchedOn(app) || !granted(app)) return false
-                    write(app, plan.withMe(read(app)), enable = true)
+                    synchronized(stateLock) {
+                        if (!current(app, attempt) || !granted(app)) return false
+                        write(app, attempt.plan.withMe(read(app)), enable = true)
+                        recordError(app, null)
+                    }
                 }
-                KeeperPlan.Step.NONE -> return granted
+                KeeperPlan.Step.NONE -> Unit
             }
-            Log.i(TAG, "accessibility service ${if (step == KeeperPlan.Step.ADD) "re-added" else "rebound"}")
+            if (attempt.step == KeeperPlan.Step.ADD || attempt.step == KeeperPlan.Step.REBIND) {
+                Log.i(TAG, "accessibility service ${if (attempt.step == KeeperPlan.Step.ADD) "re-added" else "rebound"}")
+            }
         } catch (e: Exception) {
             Log.w(TAG, "restore failed", e)
+            synchronized(stateLock) {
+                if (current(app, attempt)) {
+                    val reason = "恢复失败：${e.message ?: e.javaClass.simpleName}"
+                    if (e is SecurityException) suspendLocked(app, reason) else recordError(app, reason)
+                }
+            }
         }
-        return granted
+        return synchronized(stateLock) {
+            current(app, attempt) && !PhoneA11yService.isConnected() && !attempt.plan.exhausted(SystemClock.elapsedRealtime())
+        }
+    }
+
+    private data class Attempt(val plan: KeeperPlan, val step: KeeperPlan.Step, val generation: Long)
+
+    // stateLock is held by callers, including each settings write, so disabling cannot race it.
+    private fun current(app: Context, attempt: Attempt): Boolean {
+        if (!active(app)) {
+            resetLocked()
+            return false
+        }
+        return generation == attempt.generation
     }
 
     private fun read(app: Context): String? =
         Settings.Secure.getString(app.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
 
     private fun write(app: Context, list: String, enable: Boolean) {
-        check(Settings.Secure.putString(app.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, list))
-        if (enable) check(Settings.Secure.putInt(app.contentResolver, Settings.Secure.ACCESSIBILITY_ENABLED, 1))
-    }
-
-    /** MY_PACKAGE_REPLACED: the updated app starts here, and may start without its service. */
-    class Receiver : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
-            val pending = goAsync()
-            Thread({
-                try {
-                    check(context)
-                } finally {
-                    pending.finish()
-                }
-            }, "dsh-a11y-keeper").start()
+        check(Settings.Secure.putString(app.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES, list)) {
+            "系统拒绝更新无障碍服务列表"
+        }
+        if (enable) check(Settings.Secure.putInt(app.contentResolver, Settings.Secure.ACCESSIBILITY_ENABLED, 1)) {
+            "系统拒绝开启无障碍总开关"
         }
     }
-}
 
-/**
- * The keeper's decisions, apart from Android so they are unit-tested. ENABLED_ACCESSIBILITY_SERVICES
- * is `pkg/cls` or `pkg/.Short` entries joined by ':'; edits touch only ours and keep every other
- * entry as it was.
- */
-class KeeperPlan(private val pkg: String, private val cls: String) {
-    enum class Step { NONE, ADD, REBIND }
-
-    private val me = "$pkg/$cls"
-    private var unboundSince = NEVER
-    private var heldSince = NEVER
-    private var writes = 0
-    private var nextAt = 0L
-
-    /**
-     * What to do at [now]: [on] — phone control is switched on in DSHA; [granted] —
-     * WRITE_SECURE_SETTINGS is held; [list] — the setting as read; [connected] — our service is bound.
-     */
-    fun next(on: Boolean, granted: Boolean, list: String?, connected: Boolean, now: Long): Step {
-        if (!on) {
-            unboundSince = NEVER
-            heldSince = NEVER
-            writes = 0
-            nextAt = 0L
-            return Step.NONE
-        }
-        if (connected) {
-            unboundSince = NEVER
-            if (heldSince == NEVER) heldSince = now
-            // Held a while: whatever took it away before was not a fight, start the backoff over.
-            if (now - heldSince >= STABLE_MS) {
-                writes = 0
-                nextAt = 0L
-            }
-            return Step.NONE
-        }
-        heldSince = NEVER
-        if (!granted) {
-            unboundSince = NEVER
-            return Step.NONE
-        }
-        val step = if (!listed(list)) {
-            Step.ADD
-        } else {
-            if (unboundSince == NEVER) unboundSince = now
-            // Listed and not bound yet: the system is still binding, or gave up on it.
-            if (now - unboundSince < UNBOUND_MS) return Step.NONE
-            Step.REBIND
-        }
-        if (now < nextAt) return Step.NONE
-        writes = (writes + 1).coerceAtMost(8)
-        nextAt = now + backoff(writes)
-        unboundSince = NEVER
-        return step
-    }
-
-    fun listed(list: String?): Boolean = list.orEmpty().split(':').any(::ours)
-
-    /** [list] with ours at the end (unchanged when it is there already). */
-    fun withMe(list: String?): String = when {
-        listed(list) -> list.orEmpty()
-        list.isNullOrEmpty() -> me
-        else -> "$list:$me"
-    }
-
-    /** [list] without ours. */
-    fun withoutMe(list: String?): String = list.orEmpty().split(':').filterNot(::ours).joinToString(":")
-
-    private fun ours(entry: String): Boolean {
-        val e = entry.trim()
-        val slash = e.indexOf('/')
-        if (slash <= 0 || e.substring(0, slash) != pkg) return false
-        val c = e.substring(slash + 1)
-        return c == cls || (c.startsWith('.') && pkg + c == cls)
-    }
-
-    companion object {
-        private const val NEVER = Long.MIN_VALUE
-
-        /** Listed but unbound this long: the system won't bind it by itself. */
-        const val UNBOUND_MS = 10_000L
-
-        /** Bound this long: the next loss starts the backoff over. */
-        const val STABLE_MS = 60_000L
-
-        private const val FIRST_WAIT_MS = 5_000L
-        private const val MAX_WAIT_MS = 10 * 60_000L
-
-        /** After the [n]th write in a row: 5 s, 10 s, 20 s … at most 10 minutes. */
-        fun backoff(n: Int): Long = minOf(FIRST_WAIT_MS shl (n - 1).coerceIn(0, 7), MAX_WAIT_MS)
-    }
 }

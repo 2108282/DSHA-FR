@@ -130,8 +130,8 @@ class PhoneControl private constructor(private val app: Context) : PhoneEnv, Con
     @Volatile private var policiesCache: PhonePolicies? = null
     @Volatile private var statusLine: String? = null
     @Volatile private var lastStatus: Map<String, Any?>? = null
-    @Volatile private var keptTask = 0L
-    @Volatile private var tickFuture: java.util.concurrent.ScheduledFuture<*>? = null
+    // Owned by ticker: one deadline for an active task, never a periodic poll.
+    private var idleFuture: java.util.concurrent.ScheduledFuture<*>? = null
     private var screenReceiver: BroadcastReceiver? = null
     private val sinks = CopyOnWriteArraySet<(Map<String, Any?>) -> Unit>()
     val background: BackgroundControl = BackgroundControl.get(app)
@@ -145,7 +145,6 @@ class PhoneControl private constructor(private val app: Context) : PhoneEnv, Con
         (app as? Application)?.let { AppVisibility.register(it) }
         tasks.addListener { onTask(it) }
         ticker.execute {
-            keep()
             if (isEnabled()) ensureChrootBridge()
         }
     }
@@ -157,6 +156,7 @@ class PhoneControl private constructor(private val app: Context) : PhoneEnv, Con
     /** Off takes effect at once (bridge closed, task stopped); on needs an engine restart (the UI does it). */
     fun setEnabled(enabled: Boolean): Boolean {
         prefs.edit().putBoolean(K_ENABLED, enabled).apply()
+        A11yKeeper.reset(app)
         if (!enabled) {
             // l10n:keep agent stop reason
             tasks.stop("手机操控已关闭")
@@ -164,10 +164,7 @@ class PhoneControl private constructor(private val app: Context) : PhoneEnv, Con
             ticker.execute { syncChrootState(false, null) }
         } else {
             tasks.clearStop()
-            ticker.execute {
-                keep()
-                ensureChrootBridge()
-            }
+            ticker.execute { ensureChrootBridge() }
         }
         emitStatus()
         return true
@@ -328,18 +325,8 @@ class PhoneControl private constructor(private val app: Context) : PhoneEnv, Con
 
     private fun onTask(s: PhoneTasks.Snapshot) {
         prompts.check()
-        if (s.active) {
-            if (tickFuture == null || tickFuture?.isDone == true) {
-                tickFuture = ticker.scheduleWithFixedDelay({ tick() }, 2, 2, TimeUnit.SECONDS)
-            }
-            if (s.id != keptTask) {
-                keptTask = s.id
-                ticker.execute(::keep)
-            }
-        }
+        ticker.execute { scheduleIdleDeadline() }
         if (!s.active) {
-            tickFuture?.cancel(false)
-            tickFuture = null
             tasks.runIfInactive(s) {
                 if (s.stopped && tasks.isStopped()) core.worker.interruptCurrent()
                 statusLine = null
@@ -417,9 +404,9 @@ class PhoneControl private constructor(private val app: Context) : PhoneEnv, Con
      * whatever is in front (DSH's own settings page included; the own-app rule is for tool calls).
      */
     fun testScreen(): Map<String, Any?> {
-        val driver = PhoneRegistry.mainDriver
-            ?: return mapOf("ok" to false, "reason" to if (a11yEnabledInSettings()) AppStrings.get(app, R.string.phone_a11y_connecting) else AppStrings.get(app, R.string.phone_a11y_off))
         val outcome = core.worker.run(8_000, 15_000) {
+            val driver = driver(PhoneScreen.MAIN)
+                ?: return@run null to if (a11yEnabledInSettings()) AppStrings.get(app, R.string.phone_a11y_connecting) else AppStrings.get(app, R.string.phone_a11y_off)
             val av = driver.availability()
             if (!av.ok) null to (av.userReason ?: av.reason ?: AppStrings.get(app, R.string.phone_a11y_unavailable)) else driver.observe(detail = false, image = false) to null
         }
@@ -459,9 +446,13 @@ class PhoneControl private constructor(private val app: Context) : PhoneEnv, Con
     }
 
     /** 自动恢复无障碍: whether it may work (the permission), the one-tap way to it, the command for the other. */
-    private fun keeperStatus(): Map<String, Any?> {
+    fun keeperStatus(): Map<String, Any?> {
         val granted = A11yKeeper.granted(app)
         return linkedMapOf(
+            "enabled" to A11yKeeper.enabled(app),
+            "error" to A11yKeeper.error(app),
+            "grantRunning" to com.deepseekharness.app.DshaAccessibilityService.isRestoreGrantInFlight(),
+            "grantError" to com.deepseekharness.app.DshaAccessibilityService.restoreGrantError(),
             "granted" to granted,
             "path" to runCatching { background.grantPath(granted) }.getOrDefault(SecureSettingsGrant.SETUP),
             "command" to SecureSettingsGrant.command(app.packageName),
@@ -478,7 +469,6 @@ class PhoneControl private constructor(private val app: Context) : PhoneEnv, Con
         SecureSettingsGrant.SHIZUKU, SecureSettingsGrant.ADB -> {
             background.grantSecureSettings(path)
             val ok = A11yKeeper.granted(app)
-            if (ok) ticker.execute(::keep)
             emitStatus()
             val failed = if (path == SecureSettingsGrant.ADB) R.string.background_adb_disconnected else R.string.a11y_keeper_grant_failed
             mapOf("ok" to ok, "reason" to if (ok) null else AppStrings.get(app, failed))
@@ -490,8 +480,11 @@ class PhoneControl private constructor(private val app: Context) : PhoneEnv, Con
         else -> mapOf("ok" to false, "reason" to AppStrings.get(app, R.string.a11y_keeper_needs_setup))
     }
 
-    private fun keep() {
-        runCatching { A11yKeeper.check(app) }
+    fun setAutoRestore(enabled: Boolean): Boolean {
+        if (enabled && (!isEnabled() || !A11yKeeper.granted(app))) return false
+        A11yKeeper.setEnabled(app, enabled)
+        emitStatus()
+        return true
     }
 
     /** Installed from a browser or file manager rather than a store (Android 13+ restricted settings apply). */
@@ -533,14 +526,17 @@ class PhoneControl private constructor(private val app: Context) : PhoneEnv, Con
         main.post { sinks.forEach { runCatching { it(s) } } }
     }
 
-    /** Every 2 s: end idle tasks; 自动恢复无障碍; push status changes we can't observe (accessibility connecting). */
-    private fun tick() {
-        try {
-            tasks.expireIdle()
-            A11yKeeper.check(app)
-            pushIfChanged(force = false)
-        } catch (_: Exception) {
-        }
+    /** Ticker thread only. Idle cleanup has a single deadline; it never checks accessibility. */
+    private fun scheduleIdleDeadline() {
+        idleFuture?.cancel(false)
+        idleFuture = null
+        val delay = tasks.idleDelayMs() ?: return
+        idleFuture = ticker.schedule({
+            idleFuture = null
+            // A call, touch or clock adjustment may have moved the deadline. Re-arm from
+            // current state instead of expiring a successor task or polling every two seconds.
+            if (!tasks.expireIdle()) scheduleIdleDeadline()
+        }, delay, TimeUnit.MILLISECONDS)
     }
 
     // ── ControlListener (the overlay's 暂停 / 停止 / 插话, the service's own stops) ──
@@ -573,9 +569,12 @@ class PhoneControl private constructor(private val app: Context) : PhoneEnv, Con
      * connect). The main one may be on its way back (自动恢复无障碍): give it a few seconds.
      */
     override fun driver(screen: PhoneScreen): PhoneDriver? {
-        if (screen == PhoneScreen.MAIN && PhoneRegistry.mainDriver == null && A11yKeeper.check(app)) {
+        if (screen == PhoneScreen.MAIN && PhoneRegistry.mainDriver == null) {
             val until = SystemClock.elapsedRealtime() + KEEPER_WAIT_MS
-            while (PhoneRegistry.mainDriver == null && SystemClock.elapsedRealtime() < until) Thread.sleep(100)
+            while (PhoneRegistry.mainDriver == null && isEnabled() && A11yKeeper.check(app)) {
+                if (SystemClock.elapsedRealtime() >= until) break
+                Thread.sleep(100)
+            }
         }
         if (screen != PhoneScreen.BACKGROUND) return PhoneRegistry.driver(screen)
         return if (runCatching { background.beginTask(tasks.snapshot().id) }.getOrDefault(false)) PhoneRegistry.backgroundDriver else null
