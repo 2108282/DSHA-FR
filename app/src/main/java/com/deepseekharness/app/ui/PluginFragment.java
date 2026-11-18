@@ -483,7 +483,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
             tvCompat.setText("• 安装后生效：安装成功后请至启动页重启 DSH 核心服务\n• 隔离安全：独立安装至插件目录，不污染物理宿主系统");
         }
 
-        AlertDialog dialog = new AlertDialog.Builder(requireContext(), R.style.Dialog_DSHA_Alert)
+        AlertDialog dialog = new DshaDialogBuilder(requireContext())
                 .setView(dialogView)
                 .setCancelable(true)
                 .setOnCancelListener(d -> repository.discardPreview())

@@ -30,7 +30,7 @@ public final class WebDownloads {
             boolean working = "downloading".equals(state.phase()) || "saving".equals(state.phase());
             if (working) {
                 if (dialog == null) {
-                    dialog = new AlertDialog.Builder(activity)
+                    dialog = new DshaDialogBuilder(activity)
                             .setTitle("保存网页文件")
                             .setMessage("")
                             .setNegativeButton("取消", (d, w) -> model.cancel())
@@ -58,7 +58,7 @@ public final class WebDownloads {
                     }
                 } else if ("done".equals(state.phase()) || "error".equals(state.phase())) {
                     if ("error".equals(state.phase()) && model.canRetrySave()) {
-                        dialog = new AlertDialog.Builder(activity)
+                        dialog = new DshaDialogBuilder(activity)
                                 .setTitle("文件尚未保存")
                                 .setMessage(state.message())
                                 .setPositiveButton("更换位置重试", (d, w) -> model.retrySave())

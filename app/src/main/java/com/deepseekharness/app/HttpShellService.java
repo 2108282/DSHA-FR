@@ -1196,7 +1196,7 @@ public final class HttpShellService {
                     try {
                         if (act.isFinishing() || act.isDestroyed()) return;
                         androidx.appcompat.app.AlertDialog.Builder b =
-                                new androidx.appcompat.app.AlertDialog.Builder(act)
+                                new com.deepseekharness.app.ui.DshaDialogBuilder(act)
                                         .setTitle(info.title).setMessage(info.detail);
                         b.setPositiveButton(info.primaryBtn, (d, w) -> resolveAsk(opts[0], myEpoch));
                         if (opts.length > 1) {

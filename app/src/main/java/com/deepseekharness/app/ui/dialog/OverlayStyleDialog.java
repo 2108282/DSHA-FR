@@ -252,7 +252,7 @@ public final class OverlayStyleDialog {
                 .putBoolean(OverlayController.K_CONFIRM, confirmHere.isChecked())
                 .apply();
 
-        new AlertDialog.Builder(context)
+        new com.deepseekharness.app.ui.DshaDialogBuilder(context)
                 .setTitle("悬浮条外观与行为")
                 .setView(scroll)
                 .setPositiveButton("保存", (d, w) -> {

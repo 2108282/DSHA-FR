@@ -14,6 +14,7 @@ import android.widget.LinearLayout;
 
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
+import androidx.core.graphics.ColorUtils;
 
 import com.deepseekharness.app.R;
 
@@ -88,6 +89,14 @@ public class ModernCardView extends LinearLayout {
         // 严格对齐 CSS rgba(26,34,48, .06) 与 rgba(26,34,48, .04) 淡青灰微光晕
         setOutlineAmbientShadowColor(isDark ? 0x59000000 : 0x1A1A2230);
         setOutlineSpotShadowColor(isDark ? 0x40000000 : 0x121A2230);
+    }
+
+    public void applyDialogPalette(int primaryColor, boolean monetActive) {
+        int baseBg = ContextCompat.getColor(getContext(), R.color.card_glass);
+        int baseStroke = ContextCompat.getColor(getContext(), R.color.line_soft);
+        bgPaint.setColor(monetActive ? ColorUtils.blendARGB(baseBg, primaryColor, 0.045f) : baseBg);
+        strokePaint.setColor(monetActive ? ColorUtils.blendARGB(baseStroke, primaryColor, 0.12f) : baseStroke);
+        invalidate();
     }
 
     public void setCardRadius(float radiusDp) {

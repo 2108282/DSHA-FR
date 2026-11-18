@@ -323,6 +323,7 @@ public final class ThemeNotifyFragment extends Fragment {
         LinearLayout menuLayout = new LinearLayout(context);
         menuLayout.setOrientation(LinearLayout.VERTICAL);
         menuLayout.setPadding(0, dp(6), 0, dp(6));
+        MonetEngine.PaletteInfo popupPalette = DshaPopupTheme.apply(context, scrollView);
         scrollView.addView(menuLayout);
 
         PopupWindow popupWindow = new PopupWindow(
@@ -335,7 +336,6 @@ public final class ThemeNotifyFragment extends Fragment {
         popupWindow.setElevation(dp(10));
         popupWindow.setOutsideTouchable(true);
 
-        scrollView.setBackgroundResource(R.drawable.bg_dropdown_popup);
 
         for (Map.Entry<String, String> entry : options.entrySet()) {
             final String key = entry.getKey();
@@ -346,9 +346,8 @@ public final class ThemeNotifyFragment extends Fragment {
             item.setOrientation(LinearLayout.HORIZONTAL);
             item.setGravity(Gravity.CENTER_VERTICAL);
             item.setPadding(dp(16), dp(11), dp(16), dp(11));
-            TypedValue tvBg = new TypedValue();
-            context.getTheme().resolveAttribute(android.R.attr.selectableItemBackground, tvBg, true);
-            item.setBackgroundResource(tvBg.resourceId);
+            item.setBackground(DshaPopupTheme.itemBackground(
+                    context, popupPalette.primaryColor, popupPalette.containerColor, isSelected, 12));
             item.setClickable(true);
             item.setFocusable(true);
 
@@ -367,7 +366,7 @@ public final class ThemeNotifyFragment extends Fragment {
             TextView tv = new TextView(context);
             tv.setText(label);
             tv.setTextSize(14);
-            tv.setTextColor(context.getColor(isSelected ? R.color.primary : R.color.text));
+            tv.setTextColor(isSelected ? popupPalette.primaryColor : context.getColor(R.color.text));
             if (isSelected) {
                 tv.setTypeface(null, android.graphics.Typeface.BOLD);
             }
@@ -378,7 +377,7 @@ public final class ThemeNotifyFragment extends Fragment {
             if (isSelected) {
                 ImageView check = new ImageView(context);
                 check.setImageResource(R.drawable.ic_check_mini);
-                check.setImageTintList(android.content.res.ColorStateList.valueOf(context.getColor(R.color.primary)));
+                check.setImageTintList(android.content.res.ColorStateList.valueOf(popupPalette.primaryColor));
                 item.addView(check, new LinearLayout.LayoutParams(dp(18), dp(18)));
             } else {
                 View placeholder = new View(context);

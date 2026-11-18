@@ -1,7 +1,7 @@
 package com.deepseekharness.app.viewer;
 
 import android.app.Activity;
-import android.app.AlertDialog;
+import androidx.appcompat.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
@@ -411,7 +411,7 @@ public class FileViewerActivity extends Activity {
             if (!e.isDirectory) {
                 String text = ArchiveBrowser.readEntryText(currentFile, e.path);
                 if (text != null) {
-                    new AlertDialog.Builder(this)
+                    new com.deepseekharness.app.ui.DshaDialogBuilder(this)
                             .setTitle(e.name)
                             .setMessage(text.length() > 3000 ? text.substring(0, 3000) + "\n\n(已截断显示)" : text)
                             .setPositiveButton("确定", null)

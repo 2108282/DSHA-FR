@@ -141,6 +141,13 @@ def gestureStubsJar = tasks.register("gestureStubsJar", Jar) {
     destinationDirectory = layout.buildDirectory.dir("gesture-stubs-jar")
 }
 
+// Keep new native dialogs on the shared themed builder; reject accidental one-off modal surfaces.
+tasks.register("checkDialogEntrypoints", Exec) {
+    commandLine(System.getenv("DSHA_PYTHON") ?: "python3", "-B",
+            rootProject.file("tools/check-dialog-entrypoints.py").absolutePath)
+}
+tasks.named("preBuild").configure { dependsOn("checkDialogEntrypoints") }
+
 // Run this pure Java component independently of legacy Android test sources.
 configurations { cornerGestureTestDependencies }
 def compileCornerGestureTests = tasks.register("compileCornerGestureTests", JavaCompile) {

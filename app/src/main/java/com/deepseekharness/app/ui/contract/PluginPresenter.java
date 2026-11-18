@@ -363,7 +363,7 @@ public class PluginPresenter implements PluginActions {
             });
         }
 
-        AlertDialog dialog = new AlertDialog.Builder(activity, R.style.Dialog_DSHA_Alert)
+        AlertDialog dialog = new com.deepseekharness.app.ui.DshaDialogBuilder(activity)
                 .setView(dialogView)
                 .setCancelable(true)
                 .create();
@@ -441,7 +441,7 @@ public class PluginPresenter implements PluginActions {
 
             android.widget.TextView msgView = dialogView.findViewById(com.deepseekharness.app.R.id.dialogStatusMessage);
             if (msgView != null) msgView.setText(repoState.message);
-            AlertDialog dialog = new AlertDialog.Builder(activity)
+            AlertDialog dialog = new com.deepseekharness.app.ui.DshaDialogBuilder(activity)
                     .setView(dialogView)
                     .setCancelable(true)
                     .create();
@@ -466,7 +466,7 @@ public class PluginPresenter implements PluginActions {
             return;
         }
         if (item.official && !enabled) {
-            new AlertDialog.Builder(activity)
+            new com.deepseekharness.app.ui.DshaDialogBuilder(activity)
                     .setTitle("禁用官方核心？")
                     .setMessage(item.name + " 是 Web 运行所需的核心，禁用后页面可能无法启动。")
                     .setPositiveButton("禁用", (d, which) -> repository.setEnabled(item, false))
@@ -511,7 +511,7 @@ public class PluginPresenter implements PluginActions {
                     : item.description);
         }
 
-        AlertDialog dialog = new AlertDialog.Builder(activity, R.style.Dialog_DSHA_Alert)
+        AlertDialog dialog = new com.deepseekharness.app.ui.DshaDialogBuilder(activity)
                 .setView(dialogView)
                 .setCancelable(true)
                 .create();
@@ -556,7 +556,7 @@ public class PluginPresenter implements PluginActions {
             ToastHelper.makeText(context, "没有可回退的历史版本", Toast.LENGTH_SHORT).show();
             return;
         }
-        new AlertDialog.Builder(activity)
+        new com.deepseekharness.app.ui.DshaDialogBuilder(activity)
                 .setTitle("回退插件版本？")
                 .setMessage("是否将 " + item.name + " 回退至上一版本 v" + item.rollbackVersion + "？\n\n回退后将保留启用状态，重启 Web 后生效。")
                 .setPositiveButton("确认回退", (d, which) -> repository.rollback(item))

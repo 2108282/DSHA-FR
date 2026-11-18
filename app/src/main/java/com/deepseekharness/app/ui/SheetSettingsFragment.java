@@ -538,7 +538,7 @@ public class SheetSettingsFragment extends Fragment {
         // 浮层根容器：16dp 圆角卡片底，精细边框与微阴影
         LinearLayout root = new LinearLayout(context);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundResource(R.drawable.bg_dropdown_popup);
+        MonetEngine.PaletteInfo popupPalette = DshaPopupTheme.apply(context, root);
         root.setElevation(dp(context, 8));
         int padV = dp(context, 6);
         root.setPadding(0, padV, 0, padV);
@@ -564,15 +564,14 @@ public class SheetSettingsFragment extends Fragment {
             item.setClickable(true);
             item.setFocusable(true);
 
-            TypedValue tv = new TypedValue();
-            context.getTheme().resolveAttribute(android.R.attr.selectableItemBackground, tv, true);
-            item.setBackgroundResource(tv.resourceId);
+            item.setBackground(DshaPopupTheme.itemBackground(
+                    context, popupPalette.primaryColor, popupPalette.containerColor, isSelected, 12));
 
-            // 选项文字：选中时主题色高亮且加粗，未选中时深色常规字体
+            // 选项文字：选中时强调色高亮且加粗，未选中时使用主题正文色
             TextView label = new TextView(context);
             label.setText(title);
             label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
-            label.setTextColor(context.getColor(isSelected ? R.color.primary : R.color.text));
+            label.setTextColor(isSelected ? popupPalette.primaryColor : context.getColor(R.color.text));
             if (isSelected) {
                 label.setTypeface(null, android.graphics.Typeface.BOLD);
             }
@@ -595,7 +594,7 @@ public class SheetSettingsFragment extends Fragment {
             if (isSelected) {
                 ImageView check = new ImageView(context);
                 check.setImageResource(R.drawable.ic_check_mini);
-                check.setImageTintList(android.content.res.ColorStateList.valueOf(context.getColor(R.color.primary)));
+                check.setImageTintList(android.content.res.ColorStateList.valueOf(popupPalette.primaryColor));
                 int checkSize = dp(context, 18);
                 LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(checkSize, checkSize);
                 check.setLayoutParams(clp);

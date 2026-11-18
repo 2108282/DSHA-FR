@@ -327,7 +327,7 @@ public final class PtyTerminalFragment extends Fragment
         Button btnCancel = dialogView.findViewById(R.id.btnDialogCancel);
         Button btnConfirm = dialogView.findViewById(R.id.btnDialogConfirm);
 
-        AlertDialog dialog = new AlertDialog.Builder(requireContext(), R.style.Dialog_DSHA_Alert)
+        AlertDialog dialog = new DshaDialogBuilder(requireContext())
                 .setView(dialogView)
                 .setCancelable(true)
                 .create();

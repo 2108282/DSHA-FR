@@ -439,7 +439,7 @@ public final class ExternalConnectFragment extends Fragment {
             btnConfirm.setBackgroundTintList(ColorStateList.valueOf(palette.primaryColor));
         }
 
-        androidx.appcompat.app.AlertDialog dialog = new androidx.appcompat.app.AlertDialog.Builder(ctx)
+        androidx.appcompat.app.AlertDialog dialog = new DshaDialogBuilder(ctx)
                 .setView(dialogView)
                 .setCancelable(true)
                 .create();
@@ -1081,7 +1081,7 @@ public final class ExternalConnectFragment extends Fragment {
         cbSave.setPadding(Math.round(4f * density), Math.round(4f * density), 0, Math.round(4f * density));
         layout.addView(cbSave);
 
-        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(ctx)
+        androidx.appcompat.app.AlertDialog dialog = new DshaDialogBuilder(ctx)
                 .setView(layout)
                 .setPositiveButton("测试连接", null)
                 .setNegativeButton("取消", null)
@@ -1089,7 +1089,7 @@ public final class ExternalConnectFragment extends Fragment {
 
         dialog.show();
 
-        dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
+        dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
             String password = etPassword.getText().toString().trim();
             if (TextUtils.isEmpty(password)) {
                 ToastHelper.show(ctx, "请输入远程主机密码");
@@ -1253,7 +1253,7 @@ public final class ExternalConnectFragment extends Fragment {
         etCode.setPadding(Math.round(14f * density), Math.round(10f * density), Math.round(14f * density), Math.round(10f * density));
         layout.addView(etCode);
 
-        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(ctx)
+        androidx.appcompat.app.AlertDialog dialog = new DshaDialogBuilder(ctx)
                 .setView(layout)
                 .setPositiveButton("配对并连接", null)
                 .setNegativeButton("取消", null)
@@ -1261,7 +1261,7 @@ public final class ExternalConnectFragment extends Fragment {
 
         dialog.show();
 
-        dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
+        dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
             String code = etCode.getText().toString().trim();
             if (code.length() < 6) {
                 ToastHelper.show(ctx, "请输入完整的 6 位配对码");

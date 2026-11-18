@@ -469,7 +469,7 @@ public class CredentialsActivity extends AppCompatActivity {
             MonetEngine.applyToViewTree(card, MonetEngine.resolveCurrentPalette(this));
         } catch (Throwable ignored) {}
 
-        androidx.appcompat.app.AlertDialog dialog = new androidx.appcompat.app.AlertDialog.Builder(this)
+        androidx.appcompat.app.AlertDialog dialog = new DshaDialogBuilder(this)
                 .setView(root)
                 .create();
 

@@ -163,7 +163,7 @@ public final class DiagnosticActivity extends AppCompatActivity implements Diagn
             ToastHelper.makeText(this, "未初始化核心控制器", Toast.LENGTH_SHORT).show();
             return;
         }
-        AlertDialog progress = new AlertDialog.Builder(this)
+        AlertDialog progress = new DshaDialogBuilder(this)
                 .setTitle("正在自愈")
                 .setMessage("正在修复存储直通、网络 DNS 与 3095 设备桥…")
                 .setCancelable(false)
@@ -213,7 +213,7 @@ public final class DiagnosticActivity extends AppCompatActivity implements Diagn
             ToastHelper.makeText(this, "未初始化核心控制器", Toast.LENGTH_SHORT).show();
             return;
         }
-        AlertDialog progress = new AlertDialog.Builder(this)
+        AlertDialog progress = new DshaDialogBuilder(this)
                 .setTitle("正在自愈")
                 .setMessage("正在执行智能插件找回与自愈脚本…")
                 .setCancelable(false)

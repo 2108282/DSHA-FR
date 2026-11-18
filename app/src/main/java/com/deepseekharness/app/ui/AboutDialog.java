@@ -23,7 +23,7 @@ public final class AboutDialog {
             version = ctx.getPackageManager().getPackageInfo(ctx.getPackageName(), 0).versionName;
         } catch (Exception ignored) {
         }
-        new AlertDialog.Builder(ctx)
+        new DshaDialogBuilder(ctx)
                 .setTitle("DSHA-FR")
                 .setMessage("DeepSeek Harness 安卓启动器\n" + ctx.getString(com.deepseekharness.app.R.string.edition_description) + "\n\n"
                         + "1. 本仓库地址：" + GITHUB_ROOT_URL + "\n"

@@ -179,6 +179,7 @@ public final class ModelSetupActivity extends AppCompatActivity {
         editName = findViewById(R.id.edit_name);
         editEndpoint = findViewById(R.id.edit_endpoint);
         selectProtocol = findViewById(R.id.select_protocol);
+        selectProtocol.setPrompt(t("选择连接协议", "Choose connection protocol"));
         editKey = findViewById(R.id.edit_key);
 
         containerHeadersSection = findViewById(R.id.container_headers_section);

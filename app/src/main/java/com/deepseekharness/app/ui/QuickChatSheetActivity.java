@@ -9,7 +9,7 @@ import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
 import android.annotation.SuppressLint;
-import android.app.AlertDialog;
+import androidx.appcompat.app.AlertDialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
@@ -4599,7 +4599,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             if (!e.isDirectory) {
                 String text = com.deepseekharness.app.viewer.ArchiveBrowser.readEntryText(file, e.path);
                 if (text != null) {
-                    new AlertDialog.Builder(this)
+                    new DshaDialogBuilder(this)
                             .setTitle(e.name)
                             .setMessage(text.length() > 3000 ? text.substring(0, 3000) + "\n\n(截断显示)" : text)
                             .setPositiveButton("确定", null)

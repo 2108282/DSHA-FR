@@ -9,19 +9,30 @@ import com.deepseekharness.app.R;
 /** 原生内页共用卡片、分组和固定页脚，业务事件由页面自己绑定。 */
 final class CardPage {
   final Context context;
-  final LinearLayout root, content, footer;
+  final ModernCardView root;
+  final LinearLayout content, footer;
   final ScrollView scroll;
 
   CardPage(Context context, String title, String subtitle) {
     this.context = context;
-    root = column();
-    root.setBackgroundColor(context.getColor(R.color.surface));
-    scroll = new ScrollView(context);
+    root = new ModernCardView(context);
+    root.setOrientation(LinearLayout.VERTICAL);
+    root.setPadding(0, 0, 0, 0);
+    scroll = new ScrollView(context) {
+      @Override
+      protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        int limit = Math.round(getResources().getDisplayMetrics().heightPixels * .62f);
+        if (MeasureSpec.getMode(heightMeasureSpec) != MeasureSpec.UNSPECIFIED) {
+          limit = Math.min(limit, MeasureSpec.getSize(heightMeasureSpec));
+        }
+        super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(limit, MeasureSpec.AT_MOST));
+      }
+    };
     scroll.setFillViewport(true);
     content = column();
     content.setPadding(dp(18), dp(16), dp(18), dp(24));
     scroll.addView(content);
-    root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+    root.addView(scroll, new LinearLayout.LayoutParams(-1, -2));
     TextView heading = text(title, 24, R.color.text);
     heading.setTypeface(null, android.graphics.Typeface.BOLD);
     content.addView(heading);
