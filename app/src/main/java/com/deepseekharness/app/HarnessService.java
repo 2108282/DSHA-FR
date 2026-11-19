@@ -21,7 +21,7 @@ import com.deepseekharness.app.util.SensitiveData;
 /**
  * 前台保活服务：
  *  - startForeground 常驻通知，防止 Android LMK 回收进程；
- *  - 维护 3090 设备能力桥（HttpShellService / AppBridge）；
+ *  - 维护 3095 设备能力桥（HttpShellService）；
  *  - 动态 WakeLock 调度（仅在长任务执行时持锁，任务结束与熄屏自动休眠）；
  *  - 纯粹的前台保活，不设置误杀守护进程的看门狗。
  */
@@ -82,7 +82,7 @@ public class HarnessService extends Service {
             stopSelf();
             return;
         }
-        // 3090 桥（Agent 调用设备能力）随前台服务拉起
+        // 3095 桥（Agent 调用设备与运行时能力）随前台服务拉起
         ensureBridgeRunning();
     }
 
@@ -511,13 +511,5 @@ public class HarnessService extends Service {
                 if (nm != null) nm.cancel(NOTIF_ID);
             }
         } catch (Throwable ignored) {}
-    }
-
-    public static void syncPersistentNotificationState(Context ctx, boolean enabled) {
-        if (enabled) {
-            checkAndSyncService(ctx);
-        } else {
-            stopServiceIfNecessary(ctx);
-        }
     }
 }

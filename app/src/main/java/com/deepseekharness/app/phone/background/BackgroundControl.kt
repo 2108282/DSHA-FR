@@ -13,9 +13,9 @@ import java.util.concurrent.atomic.AtomicLong
 /**
  * The 不打扰模式 surface the core's `PhonePlugin` calls into: the `background` block of `status`,
  * and the actions behind `setBackgroundMode`, `requestShizukuPermission`, `adbStartPairing`,
- * `adbPair`, `adbConnect`. It owns the shared Shizuku/Sui, self-ADB and explicit root starters,
- * probes whether a trusted virtual display and input injection work here, and registers
- * [BackgroundDisplay] in [PhoneRegistry] only while a task runs. Method names match the
+ * `adbPair`, `adbConnect`. It owns the self-ADB and root starters plus a disabled Shizuku/Sui
+ * compatibility starter, probes whether a trusted virtual display and input injection work here,
+ * and registers [BackgroundDisplay] in [PhoneRegistry] only while a task runs. Method names match the
  * `dsh/phone` channel.
  */
 class BackgroundControl private constructor(context: Context) {
@@ -154,7 +154,7 @@ class BackgroundControl private constructor(context: Context) {
         when (selected) {
             "off" -> { notifyChanged(); return mapOf("ok" to true) }
             "shizuku", "sui" -> shizuku.ensureListeners()
-            // 不打扰模式's only su; tasks just connect() to what it leaves.
+            // Start or reuse the selected root process; activeChannel also reconnects it if needed.
             "root" -> root.start(mayStart)
         }
         notifyChanged()

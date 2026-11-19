@@ -2,7 +2,7 @@ plugins {
     id 'com.android.application'
 }
 
-// 两版共用功能和离线环境；只有 low 携带兼容旧 Android 的 Gecko 内核。
+// 当前仅构建 standard 变体，使用系统 WebView。
 
 android {
     namespace 'com.deepseekharness.app'

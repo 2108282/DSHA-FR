@@ -6,7 +6,7 @@ import com.deepseekharness.app.util.Query;
  * Small, Android-free LAN credential and request-line helpers.
  *
  * <p>The LAN credential is deliberately separate from the dsh BrowserAuth
- * cookie and from the 3090 bridge token. Only an exact {@code token} query
+ * cookie and from the 3095 bridge token. Only an exact {@code token} query
  * parameter or the DSHA LAN cookie is accepted; arbitrary headers are not
  * credentials for this proxy.</p>
  */

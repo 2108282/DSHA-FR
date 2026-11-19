@@ -2,14 +2,12 @@ package com.deepseekharness.app.core;
 import com.deepseekharness.app.util.Compat;
 
 import android.content.Context;
-import android.os.Looper;
 import android.util.Log;
 
 import com.deepseekharness.app.runtime.ProotBootstrap;
 import com.deepseekharness.app.runtime.WebProcessManager;
 import com.deepseekharness.app.util.DshAuthUrl;
 import com.deepseekharness.app.util.Fmt;
-import com.deepseekharness.app.util.ShellQuote;
 import com.deepseekharness.app.util.WebLifecycle;
 import com.deepseekharness.app.util.WebProcSel;
 
@@ -28,7 +26,6 @@ import java.util.function.Consumer;
 
 /**
  * 业务编排核心：环境准备 + 启动/停止 dsh Web + BrowserAuth 鉴权链接捕获。
- * 安装六步、备份恢复、插件市场等是后续按 seam 回填的独立协作者，不再堆进这一个类。
  */
 public class HarnessController {
 
@@ -89,7 +86,7 @@ public class HarnessController {
         return proot;
     }
 
-    /** 别名：供 3090 桥等原版调用方使用。 */
+    /** 历史别名，供设备桥等调用方访问运行时。 */
     public ProotBootstrap getProot() {
         return proot;
     }
@@ -244,52 +241,39 @@ public class HarnessController {
 
     /** Web 是否在运行（针对 ksu_chroot 严禁在主线程执行网络 Socket 或 su，子线程毫秒级探活）。 */
     public boolean isWebRunning() {
-        if ("ksu_chroot".equals(proot.runtime().id())) {
-            // 0. 休眠冻结判定：若处于休眠中，主进程只是被 SIGSTOP 挂起，绝对视为运行态
-            if (isFrozen || new java.io.File("/data/adb/dsha/run/freezer.state").exists()) {
-                if (!isFrozen) isFrozen = true;
-                return true;
-            }
+        // 0. 休眠冻结判定：若处于休眠中，主进程只是被 SIGSTOP 挂起，绝对视为运行态
+        if (isFrozen || new java.io.File("/data/adb/dsha/run/freezer.state").exists()) {
+            if (!isFrozen) isFrozen = true;
+            return true;
+        }
 
-            // 1. 主线程调用：绝不能执行网络或同步 su，返回已知状态并异步触发刷新
-            if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
-                asyncRefreshStatus();
-                return lastKnownWebRunning;
-            }
+        // 1. 主线程调用：绝不能执行网络或同步 su，返回已知状态并异步触发刷新
+        if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+            asyncRefreshStatus();
+            return lastKnownWebRunning;
+        }
 
-            // 2. 子线程调用：使用 150ms 快速 Socket 探活
-            int currentPort = getPort();
-            try (java.net.Socket s = new java.net.Socket()) {
-                s.connect(new java.net.InetSocketAddress("127.0.0.1", currentPort), 150);
-                if (!lastKnownWebRunning) {
-                    lastKnownWebRunning = true;
-                    notifyStatusChanged();
-                }
-                return true;
-            } catch (Throwable ignored) {
-            }
-
-            // 连接失败
-            if (lastKnownWebRunning) {
-                lastKnownWebRunning = false;
-                synchronized (lifecycle) {
-                    webAuthUrl = "";
-                }
+        // 2. 子线程调用：使用 150ms 快速 Socket 探活
+        int currentPort = getPort();
+        try (java.net.Socket s = new java.net.Socket()) {
+            s.connect(new java.net.InetSocketAddress("127.0.0.1", currentPort), 150);
+            if (!lastKnownWebRunning) {
+                lastKnownWebRunning = true;
                 notifyStatusChanged();
             }
-            return false;
+            return true;
+        } catch (Throwable ignored) {
         }
-        try {
-            java.io.File pidFile = new java.io.File(proot.getRootfsDir(),
-                    WebProcSel.pidFileRel(WebProcSel.PID_WEB));
-            if (!pidFile.exists()) return false;
-            String pid = new String(Compat.readAllBytes(pidFile),
-                    java.nio.charset.StandardCharsets.UTF_8).trim();
-            String r = proot.execAndRead("kill -0 " + pid + " 2>/dev/null && echo YES || echo NO");
-            return r != null && r.contains("YES");
-        } catch (Throwable e) {
-            return false;
+
+        // 连接失败
+        if (lastKnownWebRunning) {
+            lastKnownWebRunning = false;
+            synchronized (lifecycle) {
+                webAuthUrl = "";
+            }
+            notifyStatusChanged();
         }
+        return false;
     }
 
     /** 若服务已在后台运行但内存中鉴权链接丢失，尝试从本地私有沙盒恢复鉴权链接（纯本地读，零 Root 零弹窗）。 */
@@ -314,7 +298,7 @@ public class HarnessController {
         } catch (Throwable ignored) {}
     }
 
-    /** 进程级单例（3090 桥、保活服务等共享同一实例）。 */
+    /** 进程级单例，供设备桥与保活服务共享。 */
     private static volatile HarnessController instance;
 
     public static HarnessController get(Context ctx) {
@@ -457,25 +441,6 @@ public class HarnessController {
         }
     }
 
-    /** dsh 实际启动命令（写 pid 文件要在 exec 之前，exec 不换 pid）。 */
-    public String runCoreCommand() {
-        String apiKey = config.getApiKey();
-        String apiExport = apiKey.isEmpty()
-                ? ""
-                : "export DEEPSEEK_API_KEY=" + ShellQuote.arg(apiKey) + " && ";
-        return "export DSH_HOME=/root/.dsh && "
-                + apiExport
-                + "export DSH_PERMISSION_MODE=" + ShellQuote.arg(config.getPermissionMode()) + " && "
-                + "export DSH_CONFIRM=" + (config.isConfirmShell() ? "1" : "0") + " && "
-                + "export BROWSER=true && "
-                + "cd /root && "
-                + "echo $$ > " + WebProcSel.PID_WEB + " 2>/dev/null; "
-                // 先写 PID 再查哨兵：停止方先写哨兵再读 PID，两边不会同时漏过。
-                + "[ ! -e " + WebProcSel.STOP_SENTINEL + " ] || exit 0; "
-                + "exec dsh web --patch /root/.dsh/heartbeat-patch.yml --no-open --host 127.0.0.1 --port "
-                + config.getPortInt() + " 2>&1";
-    }
-
     /**
      * 后台启动 dsh：先清残留进程（避免端口冲突），确保运行时与 rootfs 就绪后拉起 dsh web，
      * 独立线程捕获 BrowserAuth 鉴权链接。
@@ -542,113 +507,20 @@ public class HarnessController {
             if (!lifecycle.isCurrent(generation)) return;
             startupDiagnostics.stage(generation, "检查环境与依赖");
 
-            if ("ksu_chroot".equals(proot.runtime().id())) {
-                if (!proot.isEnvironmentReady()) {
-                    lifecycle.finishStart(generation);
-                    reportStatus(generation, onStatus, "未检测到 KernelSU/Magisk 模块或未授予 Root 权限，请在模块管理器中刷入并授权！");
-                    return;
-                }
-                // 与设置页共用队列，并在 start.sh 前完成：默认开启及已保存状态不依赖旧环境变量。
-                if (!GuardSettings.sync(ctx, config).get()) {
-                    throw new java.io.IOException("危险命令确认设置同步失败，请检查 Root 权限");
-                }
-                // 确保 3090 设备桥 Token 同步到 rootfs
-                com.deepseekharness.app.HttpShellService.syncTokenToRootfsSync();
-                try {
-                    com.deepseekharness.app.phone.PhoneControl.get(ctx).ensureChrootBridge();
-                } catch (Throwable ignored) {}
-                try {
-                    if (com.deepseekharness.app.HttpShellService.instance() == null) {
-                        new com.deepseekharness.app.HttpShellService(ctx).start();
-                    }
-                } catch (Throwable e) {
-                    Log.w("DSHA", "3090 桥启动失败: "
-                            + com.deepseekharness.app.util.SensitiveData.redact(String.valueOf(e)));
-                }
-
-                startupDiagnostics.stage(generation, "调用 start.sh 启动守护进程");
-                reportStatus(generation, onStatus, "正在拉起 KernelSU 原生守护进程 → 127.0.0.1:" + config.getPortInt() + "…");
-                
-                // 关键根治：启动前必须执行心跳补丁与补齐技能空目录，彻底消灭上游 100ms 暴力磁盘扫描与 2s WebSocket 心跳
-                ensureHeartbeatPatch();
-
-                String tasksetVal = config.getTaskset();
-                boolean isGlobal = config.isBlockGuardGlobal();
-                try {
-                    String tsCmd = "mkdir -p /data/adb/dsha/run 2>/dev/null; "
-                            + "echo '" + tasksetVal + "' > /data/adb/dsha/run/taskset 2>/dev/null; "
-                            + "echo '" + (isGlobal ? "1" : "0") + "' > /data/adb/dsha/run/block_guard_global 2>/dev/null";
-                    Runtime.getRuntime().exec(new String[]{"su", "-c", tsCmd}).waitFor();
-                } catch (Throwable ignored) {}
-
-                String startCmd = "/data/adb/dsha/scripts/start.sh " + config.getPortInt()
-                        + (tasksetVal.isEmpty() ? "" : " " + com.deepseekharness.app.util.ShellQuote.arg(tasksetVal));
-                Process p = Runtime.getRuntime().exec(new String[]{
-                        "su", "-mm", "-c", startCmd
-                });
-                startupDiagnostics.stage(generation, "等待鉴权链接");
-                Thread drainer = new Thread(() -> drainWebOutput(p, generation, onStatus), "dsh-drain");
-                drainer.setDaemon(true);
-                drainer.start();
-
-                // 启动辅助轮询（如果 start.sh 标准输出未在首轮捕获，从日志继续抓取）
-                pollWebAuthUrlIfEmpty(generation, onStatus);
-
-                io.schedule(() -> {
-                    synchronized (lifecycle) {
-                        if (lifecycle.finishStart(generation)) {
-                            reportStatus(generation, onStatus, "等待鉴权链接超时，可查看日志或手动重启");
-                        }
-                    }
-                }, 45, TimeUnit.SECONDS);
-                draining = true;
+            if (!proot.isEnvironmentReady()) {
+                lifecycle.finishStart(generation);
+                reportStatus(generation, onStatus, "未检测到 KernelSU/Magisk 模块或未授予 Root 权限，请在模块管理器中刷入并授权！");
                 return;
             }
-
-            proot.ensureRuntimeFiles();
-            if (!proot.isEnvironmentReady()) {
-                if (!proot.hasOfflineBundle()) {
-                    lifecycle.finishStart(generation);
-                    reportStatus(generation, onStatus, "没有内置离线环境包：请用完整 APK（含 offline-rootfs）安装");
-                    return;
-                }
-                reportStatus(generation, onStatus, "正在解压内置环境（首次约需几分钟，请勿退出）…");
-                proot.extractOfflineBundle((done, total) -> { });
-                reportStatus(generation, onStatus, "环境解压完成，正在启动 dsh web…");
+            // 与设置页共用队列，并在 start.sh 前完成：默认开启及已保存状态不依赖旧环境变量。
+            if (!GuardSettings.sync(ctx, config).get()) {
+                throw new java.io.IOException("危险命令确认设置同步失败，请检查 Root 权限");
             }
-            if (!lifecycle.isCurrent(generation)) return;
-            // 内置四插件注册：仅在首次启动或未初始化时执行，已就绪则跳过，节省启动耗时
+            // 将 3095 设备桥 Token 同步到模块 rootfs
+            com.deepseekharness.app.HttpShellService.syncTokenToRootfsSync();
             try {
-                File profPkg = new File(proot.getRootfsDir(), "root/.dsh/profiles/web/package.json");
-                if (!profPkg.isFile()) {
-                    String r = proot.registerBuiltinPlugins();
-                    if (r != null && (r.contains("BUILTIN_REGISTER_OK")
-                            || r.contains("BUILTIN_REGISTER_PARTIAL")
-                            || r.contains("FAIL"))) {
-                        Log.i("DSHA", "内置插件注册: " + r.trim());
-                    }
-                }
-            } catch (Throwable ignored) {
-            }
-            // 只有当前启动任务能清哨兵；延迟进入容器的旧 shell 不再自行删除它。
-            synchronized (lifecycle) {
-                if (!lifecycle.isCurrent(generation)) return;
-                File sentinel = stopSentinel();
-                if (sentinel.exists() && !sentinel.delete()) {
-                    throw new java.io.IOException("无法清除停止标记");
-                }
-                // 日志也归当前代次管理，旧 shell 不再截断新会话的日志。
-                try {
-                    Compat.write(new File(proot.getRootfsDir(), "root/dsh-web.log"), new byte[0]);
-                } catch (Exception ignored) {
-                }
-            }
-            ensureHeartbeatPatch();
-            startupDiagnostics.stage(generation, "创建 Web 进程");
-            Process p = proot.execRootfs(runCoreCommand());
-            startupDiagnostics.stage(generation, "等待鉴权链接");
-            // 3090 桥就绪：agent 在容器里调设备能力（/exec /confirm /status）走这条通道。
-            // 跨实例互斥，DeviceBridgeService 已起过则是幂等 no-op。
+                com.deepseekharness.app.phone.PhoneControl.get(ctx).ensureChrootBridge();
+            } catch (Throwable ignored) {}
             try {
                 if (com.deepseekharness.app.HttpShellService.instance() == null) {
                     new com.deepseekharness.app.HttpShellService(ctx).start();
@@ -657,19 +529,42 @@ public class HarnessController {
                 Log.w("DSHA", "3090 桥启动失败: "
                         + com.deepseekharness.app.util.SensitiveData.redact(String.valueOf(e)));
             }
-            reportStatus(generation, onStatus, "dsh web 进程已创建 → 127.0.0.1:" + config.getPortInt()
-                    + "（等待鉴权链接…）");
+
+            startupDiagnostics.stage(generation, "调用 start.sh 启动守护进程");
+            reportStatus(generation, onStatus, "正在拉起 KernelSU 原生守护进程 → 127.0.0.1:" + config.getPortInt() + "…");
+
+            // 关键根治：启动前必须执行心跳补丁与补齐技能空目录，彻底消灭上游 100ms 暴力磁盘扫描与 2s WebSocket 心跳
+            ensureHeartbeatPatch();
+
+            String tasksetVal = config.getTaskset();
+            boolean isGlobal = config.isBlockGuardGlobal();
+            try {
+                String tsCmd = "mkdir -p /data/adb/dsha/run 2>/dev/null; "
+                        + "echo '" + tasksetVal + "' > /data/adb/dsha/run/taskset 2>/dev/null; "
+                        + "echo '" + (isGlobal ? "1" : "0") + "' > /data/adb/dsha/run/block_guard_global 2>/dev/null";
+                Runtime.getRuntime().exec(new String[]{"su", "-c", tsCmd}).waitFor();
+            } catch (Throwable ignored) {}
+
+            String startCmd = "/data/adb/dsha/scripts/start.sh " + config.getPortInt()
+                    + (tasksetVal.isEmpty() ? "" : " " + com.deepseekharness.app.util.ShellQuote.arg(tasksetVal));
+            Process p = Runtime.getRuntime().exec(new String[]{
+                    "su", "-mm", "-c", startCmd
+            });
+            startupDiagnostics.stage(generation, "等待鉴权链接");
             Thread drainer = new Thread(() -> drainWebOutput(p, generation, onStatus), "dsh-drain");
             drainer.setDaemon(true);
             drainer.start();
-            // 启动完成以鉴权链接为准，不等常驻进程退出；无链接也不能永久占锁。
+
+            // 启动辅助轮询（如果 start.sh 标准输出未在首轮捕获，从日志继续抓取）
+            pollWebAuthUrlIfEmpty(generation, onStatus);
+
             io.schedule(() -> {
                 synchronized (lifecycle) {
                     if (lifecycle.finishStart(generation)) {
                         reportStatus(generation, onStatus, "等待鉴权链接超时，可查看日志或手动重启");
                     }
                 }
-            }, 60, TimeUnit.SECONDS);
+            }, 45, TimeUnit.SECONDS);
             draining = true;
         } catch (Exception e) {
             Log.e("DSHA", "startWeb failed", e);
@@ -836,7 +731,7 @@ public class HarnessController {
     /**
      * Java 侧直接做一次 BrowserAuth cookie 交换：GET 鉴权链接，取回 dsh-auth-* cookie。
      * 返回 {@code "name=value"} 或 null。用于 WebView 的确定性注入鉴权。
-     * 拿到 cookie 后若开了 LAN 模式，同步启动局域网反向代理（3081）。
+     * 只返回 cookie；局域网代理由 Web 启动流程单独管理。
      */
     public String exchangeDshAuthCookie() {
         return exchangeDshAuthCookie(lifecycle.generation());
@@ -914,7 +809,7 @@ public class HarnessController {
             }
             stopTask = io.submit(() -> {
                 try {
-                    webProc.stop(); // 仍用原 PID 判据，绝不直接 destroy proot。
+                    webProc.stop(); // 委托原生模块 stop.sh 停止 Web。
                     com.deepseekharness.app.LanProxyService.stop(previous);
                     execRootCmd("sh /data/adb/dsha/scripts/idle-freezer.sh stop");
                 } finally {
@@ -965,21 +860,17 @@ public class HarnessController {
         return lifecycle.generation();
     }
 
-    /** 撤销解压标记：下次启动重新走 ExtractActivity 解压（配置保留）。 */
+    /** 撤销 App 私有目录的离线解压标记，不自动触发重新解压。 */
     public void resetExtraction() {
         proot.markNotExtracted();
     }
 
-    /** proot 冒烟测试，返回诊断文本。 */
+    /** 原生 Chroot 冒烟测试，返回诊断文本。 */
     public String smokeTest() {
         return proot.smokeTest();
     }
 
-    /**
-     * 检测本机局域网 IPv4 地址（免权限，NetworkInterface 枚举，给 LAN 代理分享用）。
-     * 优先 WiFi/以太网接口（wlan/eth/radio），避免选到 USB 共享网络等非目标网卡的地址
-     * —— 否则复制出去的局域网地址另一台设备永远连不上。
-     */
+    /** 保存休眠开关，并异步同步模块标记和 idle-freezer.sh 状态。 */
     public void applyIdleFreeze(boolean enabled) {
         config.setIdleFreezeEnabled(enabled);
         new Thread(() -> {

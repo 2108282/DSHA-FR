@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""把 proot 的 .l2s 链「实体化」成真实文件，让 tar 能正常打包 .dsh。
+"""把旧 PRoot 数据中的 .l2s 链「实体化」成真实文件，让 tar 能正常打包 .dsh。
 
 为什么需要：
   Android 私有目录禁真硬链接，proot 只能用 --link2symlink 把 link() 模拟成
@@ -10,8 +10,8 @@
     · tar 遍历到这些链时报 ELOOP（Too many levels of symbolic links）→ 备份必失败
     · 发布后临时目录被清理时目标直接悬空 → 读取报 ENOENT
 
-  写入侧已由 fs-write-patch.sh 治本（一律 rename，不再产生新链），本脚本负责
-  已经产生的存量：把每个链读出真实内容、原子替换成普通文件。
+  当前原生 chroot 使用真实硬链接，不再随 APK 分发旧写入补丁。本脚本负责
+  旧环境留下的存量：把每个链读出真实内容、原子替换成普通文件。
 
 安全设计（这里动的是用户的会话与附件，必须保守）：
   · 只碰「symlink 且解析路径里含 .l2s.」的条目，pnpm 那些正常符号链接一概不动

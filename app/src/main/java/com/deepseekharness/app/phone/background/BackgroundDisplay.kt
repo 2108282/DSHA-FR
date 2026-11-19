@@ -14,7 +14,7 @@ import com.deepseekharness.app.phone.TargetInfo
 
 /**
  * BACKGROUND [PhoneDriver] (screen ids `b<n>`): reads and drives the trusted virtual display
- * through whichever privileged channel is live (Shizuku or self-ADB). Registered in
+ * through the live root or self-ADB channel. Registered in
  * [com.deepseekharness.app.phone.PhoneRegistry].backgroundDriver only while a task uses it.
  * All calls are serialised by the bridge; this class never retries a dispatched action.
  */

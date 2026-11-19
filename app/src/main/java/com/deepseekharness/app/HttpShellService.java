@@ -35,10 +35,10 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 极简 HTTP 服务（host 侧，端口 3090），把 Shizuku shell 能力桥接给 rootfs 里的助手。
+ * 宿主侧 HTTP 设备与运行时桥（端口 3095），保留经鉴权的 Root 命令与确认接口。
  * rootfs 内的 agent 可用 bash 工具执行：
- *   curl -s "http://127.0.0.1:3090/exec?cmd=<urlencoded>"
- * 返回 JSON：{"result":"...输出...[EXIT=0]"}
+ *   curl -s "http://127.0.0.1:3095/app/help?token=$T"
+ * 其中 T 取自 /root/.dsh/.bridge_token；返回 JSON：{"result":"..."}
  *
  * 安全：命中危险命令（删除/格式化/卸载/重启等）时，若设置开启"需确认"，
  * 前台弹窗 / 后台高优先级通知（允许/拒绝按钮），60 秒超时默认拒绝。
@@ -62,8 +62,8 @@ public final class HttpShellService {
     }
 
     private static volatile HttpShellService instance;
-    /** 全局「已有桥在监听」标志。HarnessService 与 DeviceBridgeService 各自 new 一个
-     *  实例并都调 start()，实例字段 running 挡不住跨实例的重复启动 —— 第二个实例会
+    /** 全局「已有桥在监听」标志。应用初始化与前台服务都可能创建实例并调用
+     *  start()，实例字段 running 挡不住跨实例的重复启动 —— 第二个实例会
      *  因端口占用绑定失败，进而把活着的那个从 instance 里抹掉（通知按钮全废）。
      *  （吸收上游 PR#24） */
     private static final java.util.concurrent.atomic.AtomicBoolean STARTED =
@@ -126,10 +126,9 @@ public final class HttpShellService {
     /** 连接处理线程池（请求可能阻塞等用户确认 60s，必须并发处理，否则一个确认卡死全部请求） */
     private java.util.concurrent.ExecutorService pool;
     /** 鉴权 token（随机生成，rootfs 内 agent 通过它访问；外部网络无法到达 127.0.0.1）。
-     *  每次 start 都会和 rootfs 文件对账：文件存在则沿用，缺失/内容异常则轮换重写，
-     *  防止重解压 rootfs 后内存 token 与文件不一致导致 agent 无法认证。 */
+     *  初始化依次读取内存、App 首选项与可访问的 token 文件，均无有效值时生成；
+     *  rootfs 写回由 syncTokenToRootfsSync() 单独完成，鉴权失败时也会重读文件核验。 */
     private static volatile String authToken = "";
-    /** token 持久化位置（rootfs 内 agent 可读，建议 0600） */
 
     public HttpShellService(Context ctx) {
         this.ctx = ctx;
@@ -139,7 +138,7 @@ public final class HttpShellService {
         return instance;
     }
 
-    /** 确保 3090 桥独立常驻启动（不依赖 ADB 开关，跨实例互斥保护）。 */
+    /** 确保 3095 桥独立常驻启动（不依赖 ADB 开关，跨实例互斥保护）。 */
     public static void ensureStarted(Context ctx) {
         if (!STARTED.get() && ctx != null) {
             try {
@@ -183,7 +182,7 @@ public final class HttpShellService {
                 return chrootToken;
             }
         } catch (Throwable ignored) {}
-        // 3. 兜底旧 PRoot 沙盒路径
+        // 3. 通过运行时兼容入口取得 rootfs 路径（当前仍指向原生 chroot 底座）
         try {
             HarnessController hc = HarnessController.get(c);
             if (hc != null && hc.getProot() != null && hc.getProot().getRootfsDir() != null) {
@@ -342,8 +341,8 @@ public final class HttpShellService {
             try {
                 // 安全：仅绑定回环（loopback），外部网络无法访问！
                 // 关键：必须显式绑 IPv4 127.0.0.1 —— InetAddress.getLoopbackAddress()
-                // 在 Android（IPv6 优先）上返回 ::1，桥只监听 [::1]:3090，而 rootfs 内
-                // 所有客户端（adb-shell.py / dsh-confirm.sh / 内置插件）都连 127.0.0.1
+                // 在 Android（IPv6 优先）上可能返回 ::1；若只监听 [::1]:3095，而 rootfs 内
+                // 客户端使用 127.0.0.1，就会连接失败
                 // → Connection refused → 确认弹窗永不出现，命令被判 USER_REJECTED。
                 server = new ServerSocket();
                 server.setReuseAddress(true);
@@ -360,7 +359,7 @@ public final class HttpShellService {
         }, "http-shell-accept");
         t.setDaemon(true);
         t.start();
-        // 附加监听 [::1]:3090：脚本/插件若用 localhost（可能解析成 IPv6）也能命中。
+        // 附加监听 [::1]:3095：脚本/插件若用 localhost（可能解析成 IPv6）也能命中。
         // 绑不上（无 IPv6 栈/被占）时静默跳过，IPv4 主监听已足够。
         Thread t6 = new Thread(() -> {
             try {
@@ -430,13 +429,12 @@ public final class HttpShellService {
         }
         dismissConfirmDialog();
         cancelConfirmNotification();
-        STARTED.set(false); // 放开，允许后续重新启动（DeviceBridgeService 会自愈拉起）
+        STARTED.set(false); // 释放跨实例启动标志，允许后续 start() / ensureStarted() 重新拉起
     }
 
-    /** 校验查询串/头中的 token（常量时间比较 + URL 解码容错） */
-    /** 当前桥 token；桥还没起来时返回空串（调用方按「不带 token」处理）。
-     *  WebView 首帧 URL 与局域网代理都要用它 —— dsh 的 Web 服务已加 token 鉴权
-     *  （webserver-auth-patch.sh），不带 token 会 403。 */
+    /** 当前桥 token；首次读取会按需初始化，初始化失败时返回空串。
+     *  WebView 首帧 URL 与局域网代理都要用它 —— dsh 的 Web 服务使用 token 鉴权，
+     *  不带 token 会 403。 */
     public static String currentToken() {
         try {
             String t = authToken.isEmpty() ? ensureToken() : authToken;
@@ -447,13 +445,12 @@ public final class HttpShellService {
     }
 
     /** 自检用：当前内存里的桥 token 快照（空串 = 桥还没起来过）。
-     *  故意不触发生成 —— 自检本身不该有副作用，写文件那是
-     *  {@link #resetTokenAfterRestore()} 的活儿。 */
+     *  故意不触发生成或同步，避免自检改变凭据。 */
     static String tokenSnapshot() {
         return authToken == null ? "" : authToken;
     }
 
-    /** 恢复备份后重新对齐 3090 桥的 token。
+    /** 恢复备份后重载 3095 桥的 token。
      *
      *  <p>老备份包里带着**备份那台机器**的 {@code .dsh/.bridge_token}（新版备份已经把它
      *  排除了）。恢复出来之后 rootfs 里是旧 token，而 App 进程内的 {@link #authToken}
@@ -461,9 +458,9 @@ public final class HttpShellService {
      *  于是 App 用自己的 token 拼 WebView 首帧 URL，dsh 后端却按恢复出来的旧 token 校验，
      *  用户看到的就是「DSHA：需要 token，请在 DSHA 应用内打开」。
      *
-     *  <p>处理：删掉恢复出来的 token 文件、清空内存缓存，再让 ensureToken 重新生成并写回，
-     *  两侧重新对齐。dsh 后端自己也缓存了 token（webserver-auth-patch 里的
-     *  {@code __dshaTokenCache}），所以要重启 Web 才彻底生效 —— 恢复流程本来就提示重启。 */
+     *  <p>处理：删除可访问的 token 文件并清空内存缓存，再通过 ensureToken 恢复或生成
+     *  App 凭据；rootfs 写回由 syncTokenToRootfsSync() 单独负责。历史上 dsh 后端也会缓存鉴权 token，
+     *  所以要重启 Web 才彻底生效 —— 恢复流程本来就提示重启。 */
     public static void resetTokenAfterRestore() {
         try {
             java.io.File tf = tokenFileIfPossible();
@@ -659,7 +656,7 @@ public final class HttpShellService {
         }
     }
 
-    // ================= App 层交互端点（agent 通过 3090 桥调用） =================
+    // ================= App 层交互端点（agent 通过 3095 桥调用） =================
 
     /** /app/notify?title=&text= ：发通知栏提醒（三轨灵动胶囊接力与前台 Toast） */
     private String appNotify(String path) {
@@ -841,7 +838,7 @@ public final class HttpShellService {
      * </ul>
      */
     /**
-     * {@code /app/help}：3090 桥的完整端点清单，纯文本、给 agent 读。
+     * {@code /app/help}：3095 桥的完整端点清单，纯文本、给 agent 读。
      *
      * <p><b>为什么要有这个端点</b>：这份清单原来整份写在 device-shell-guide 的注入提示词里
      * （12KB，约几千 token），而它是<b>每一轮对话都要付的成本</b> —— 哪怕这轮根本不碰设备。
@@ -1547,7 +1544,7 @@ public final class HttpShellService {
     /** 只请求用户确认（不执行命令），返回是否允许；/confirm 端点用。
      *  通知、灵动岛与统一 Skia 确认卡片双轨联动：
      *  - 优先通过无障碍或 Root 弹出底部统一 UI 卡片（带允许一次/本任务允许/10分钟临时授权/拒绝请求 4 选项）；
-     *  - 同时通过通知栏与灵动岛推送高优先级确认，卡片不可用或用户在通知栏操作时无缝决策；
+     *  - 卡片不可用时，通过通知栏与灵动岛推送高优先级确认；
      *  - 谁先点谁生效，全通道级联瞬时销毁。 */
     private boolean requestUserConfirm(String cmd) {
         if (!confirmBusy.compareAndSet(false, true)) {
@@ -2392,26 +2389,6 @@ public final class HttpShellService {
             NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm != null) nm.createNotificationChannel(ch);
         }
-    }
-
-    public void postTaskRunning(String title, String text) {
-        showRunningNotification(title, text);
-    }
-
-    public void postTaskDone(String title, String text) {
-        appNotify("/app/notify?title=" + Uri.encode(title) + "&text=" + Uri.encode(text));
-    }
-
-    public void postTaskAsk(String text) {
-        appTaskAsk("/app/task/ask?text=" + Uri.encode(text));
-    }
-
-    public void postTaskCancel() {
-        cancelRunningNotification();
-    }
-
-    public void requestApprovalFromShell(String cmd, long epoch) {
-        showConfirmNotification(cmd, epoch);
     }
 
     private static String jsonEscape(String s) {

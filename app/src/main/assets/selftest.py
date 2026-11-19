@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """DSHA 一键自检 & 修补。
 
-把过去要人工一条条粘的终端命令固化成一次运行：环境、3090 桥、ADB 通道、
+把过去要人工一条条粘的终端命令固化成一次运行：环境、设备桥（优先 3095，兼容 3090）、ADB 通道、
 设备引导插件、write 补丁、会话健康、内置插件、备份、守卫、版本标记。
 每项给 PASS / FAIL / SKIP，FAIL 带下一步怎么办。
 
@@ -139,8 +139,8 @@ def read(path, limit=4096):
 def env_stage():
     """环境走到哪一步了。
 
-    很多检查项的前置条件是「跑过某个流程」：守卫脚本是启动 Web 时装的，
-    write/会话补丁也是启动 Web 时打的，ADB 脚本是开 ADB 通道时注入的。
+    很多检查项的前置条件是「跑过某个流程」；这里用 Web 日志或会话目录粗分阶段。
+    write/会话补丁和 ADB 脚本检查保留兼容旧环境，不代表当前 APK 仍负责安装它们。
     在还没走到那一步的环境里报 FAIL，等于把「你还没用这个功能」说成
     「你的功能坏了」—— 这是最常见的一类误诊。
     """
@@ -219,7 +219,7 @@ def check_tools():
         add("PASS", "基础命令", "%d 项必需命令齐备%s" % (len(need), note))
 
 
-# ===================== 2. 3090 桥 =====================
+# ===================== 2. 设备桥（3095 优先，3090 兼容） =====================
 def check_bridge():
     token = read(DSH_HOME + "/.bridge_token").strip()
     if not token:
@@ -246,7 +246,7 @@ def check_bridge():
                 pass
         if ok_hosts: break
     if not ok_hosts:
-        # 没开 ADB 设备通道时桥本来就不会启动，这种情况不算失败
+        # 兼容旧版按 ADB 开关判定严重程度；当前桥由 App 独立启动，不依赖该开关
         adb_on = arg("adb-on", "1") == "1"
         status = read(DSH_HOME + "/.bridge_status").strip()
         if status.startswith("fail"):
@@ -588,13 +588,13 @@ def check_write_patch():
             add("SKIP", "write 补丁", "还没启动过 Web —— 补丁是启动时打的，启动一次即会自动补上")
             return
         add("FAIL", "write 补丁", "未打 —— 重开一次 App（启动自愈会补），或到启动页点一次启动")
-    # 会话日志发布补丁：没打的话每轮对话结束就 ENOENT（会话文件发布后即悬空）
+    # 旧 PRoot 会话发布补丁的兼容检查；历史硬链接模拟曾导致文件发布后悬空、读取报 ENOENT
     starget = next((p for p in SESSION_PKG_CANDIDATES if os.path.isfile(p)), None)
     if starget is None:
         add("SKIP", "会话发布补丁", "找不到 dsh-session-persistence-jsonl")
     else:
         _ssrc = read(starget, 400000)
-        # 标记版本必须与 fs-write-patch.sh 保持同步！补丁那边升到 FIX4 时，
+        # 兼容旧补丁产物时必须识别其实际标记。历史补丁升到 FIX4 时，
         # 这里还在查 FIX2 —— 于是形成双向死锁：脚本看到 FIX4 报
         # SESSION_PATCH_ALREADY 直接跳过，自检看不到 FIX2 报「未打」，
         # 提示用户「重开 App 会自动补」，重开一百次也没用（本来就是好的）。
@@ -627,13 +627,13 @@ def check_write_patch():
 
 # ===================== 5.5 proot l2s 残留 =====================
 def check_l2s():
-    """proot 的 .l2s 链会让 tar 失败 —— 备份 100% 挂在这里。
+    """检查旧 PRoot 数据残留的 .l2s 链，避免迁移后备份仍碰到失效链接。
 
     机制：Android 私有目录禁真硬链接，proot 用 --link2symlink 把 link() 模拟成
     「目标 → .l2s.<名>.<hash>.tmp0001 → ….0001」，同时劫持了 stat/lstat（伪造
     st_nlink）。tar 必须 lstat 判断类型，于是报 ELOOP / EPERM。
-    写入侧已由 fs-write-patch.sh 治本（一律 rename），这里查存量。
-    注意：不能用 os.path.islink 判断 —— 它内部走 lstat，对这些链恒返回 False。
+    当前原生 chroot 不再产生这种模拟链，这里仍兼容检查旧数据存量。
+    注意：旧 PRoot 内的 os.path.islink 会走被劫持的 lstat，曾对这些链返回 False。
     """
     if not os.path.isdir(DSH_HOME):
         add("SKIP", "l2s 残留", "还没有 .dsh 目录")
@@ -1070,9 +1070,8 @@ def check_activity():
 
 
 def check_runtime():
-    """当前容器运行时。**选的**和**实际生效的**可能不同 ——
-    proroot 缺文件或连续失败会被自动降回 proot，用户界面上看不出来，
-    而「为什么没变快」这个问题只有这里能回答。
+    """比较调用方传入的实际运行时与偏好值，仅报告差异，不负责切换运行时。
+    未传参数时仍沿用历史 proot 默认值，名称表保留对旧环境的兼容。
     """
     actual = arg("runtime") or "proot"
     pref = arg("runtime-pref") or "proot"

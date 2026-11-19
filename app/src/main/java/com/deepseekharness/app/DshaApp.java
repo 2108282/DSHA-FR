@@ -8,7 +8,7 @@ import com.deepseekharness.app.util.Constants;
 
 /**
  * 应用入口：全局初始化。
- * 骨架阶段只建一个任务通知渠道；完整版另有配对/确认渠道（见原 Constants.CHANNEL_*）。
+ * 初始化设备桥、手机控制与界面支持，并创建保活、运行状态、任务结果和安全确认通知渠道。
  */
 public class DshaApp extends Application {
 
@@ -24,7 +24,7 @@ public class DshaApp extends Application {
         sInstance = this;
         com.deepseekharness.app.util.ChromiumFlagsHelper.apply(this);
         com.deepseekharness.app.ui.ThemeController.apply(this);
-        // 保证 3090 桥独立常驻（免 ADB / 免 Shizuku 原生通用通道），不依赖 ADB 开关
+        // 保证 3095 设备与运行时桥随应用启动，不依赖 ADB 开关
         HttpShellService.ensureStarted(this);
         try {
             com.deepseekharness.app.phone.PhoneControl.get(this);

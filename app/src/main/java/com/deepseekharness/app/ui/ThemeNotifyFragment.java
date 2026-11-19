@@ -118,7 +118,7 @@ public final class ThemeNotifyFragment extends Fragment {
             styleRow.setOnClickListener(anchor -> showNotificationStyleDropdown(anchor, cfg, styleText));
         }
 
-        // ==================== 2. 莫奈取色开关 (只做开关，不做功能) ====================
+        // ==================== 2. 莫奈取色开关（保存偏好并刷新当前 Activity 配色） ====================
         DshaToggle monetToggle = v.findViewById(R.id.theme_notify_toggle_monet);
         View monetInvertRow = v.findViewById(R.id.theme_notify_row_monet_invert);
         View monetInvertDivider = v.findViewById(R.id.theme_notify_monet_invert_divider);

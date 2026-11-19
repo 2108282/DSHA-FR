@@ -23,7 +23,7 @@ object PrivilegedPathPolicy {
     fun legacyReason(mode: String, actualReason: String?, rootCompatibilityReason: String): String? =
         if (mode == "root" && actualReason == null) rootCompatibilityReason else actualReason
 
-    /** A screen-off keeps root's idle process: tasks never run su, Shizuku/Sui and ADB reopen by themselves. */
+    /** Screen-off keeps root's idle process; closes the other starters so they must reconnect. */
     fun closesOnInterrupt(starter: String): Boolean = starter != "root"
 
     /** Sui and the legacy Shizuku grant name share one UserService connection. */

@@ -88,10 +88,6 @@ public final class LanProxyService {
         stop();
     }
 
-    public static void stopLanListener() {
-        stop();
-    }
-
     /** 检测局域网 3081 端口是否处于监听可用状态（轻量探测，毫秒级返回） */
     public static boolean isBound() {
         try (Socket s = new Socket()) {
@@ -176,17 +172,5 @@ public final class LanProxyService {
 
     private static boolean isValidLanToken(String value) {
         return value != null && value.length() >= 4 && value.length() <= 64 && value.matches("[A-Za-z0-9_-]+");
-    }
-
-    // 兼容方法存根（保留以防外部类编译失败）
-    public static boolean setDshAuthCookie(String cookie, long generation) {
-        return true;
-    }
-
-    public static void clearDshAuth(long generation) {
-    }
-
-    public static boolean hasDshAuth(long generation) {
-        return true;
     }
 }

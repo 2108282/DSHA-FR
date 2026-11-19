@@ -108,7 +108,7 @@ exit 1
 EOF
 chmod +x /root/dsh-confirm.sh
 
-# 函数级守卫：由 bash 工具 lib 补丁（ensureBashGuardPatch）在每条命令前 source 加载。
+# 生成可由 shell 显式 source 的函数级守卫 /root/dsh-guard.sh。
 # 不用 BASH_ENV —— 它会污染插件初始化时的子 shell，导致 dsh web 加载插件失败。
 # 函数优先于 PATH 查找，PATH 被覆盖/哈希缓存都无法绕过命令名拦截
 cat > /root/dsh-guard-policy.sh <<'POLICY_EOF'

@@ -8,8 +8,8 @@ import android.os.Process
 import java.io.IOException
 
 /**
- * su runs only from [start] and [grantSecureSettings], both behind an explicit user action on the
- * plugin's IO worker. Tasks only [connect] to what an earlier start left alive.
+ * su runs only from [start] and [grantSecureSettings]. BackgroundControl may call [start] when
+ * restoring a saved root mode or reconnecting a selected root channel; [connect] only reuses it.
  */
 class RootStarter(private val context: Context, private val onChanged: () -> Unit) {
     private val guard = Any()

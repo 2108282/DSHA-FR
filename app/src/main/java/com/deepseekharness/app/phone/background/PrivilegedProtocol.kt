@@ -7,8 +7,8 @@ import java.io.InputStream
 import java.io.OutputStream
 
 // The one request/response contract the privileged engine speaks, independent of how
-// it is reached: a Shizuku Binder (IPrivilegedDisplay) or an adb `app_process` stdin/
-// stdout stream (PrivilegedDisplayMain). Both carry the same [Bundle]; the engine
+// it is reached: the legacy Binder (IPrivilegedDisplay) or a root/self-ADB `app_process`
+// stdin/stdout stream (PrivilegedDisplayMain). Both carry the same [Bundle]; the engine
 // ([PrivilegedDisplayCore]) only ever sees a Bundle in and a Bundle out. The engine
 // accepts only this fixed verb set — no shell commands, paths or display ids from callers.
 

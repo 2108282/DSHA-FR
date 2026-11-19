@@ -460,9 +460,9 @@ class PhoneControl private constructor(private val app: Context) : PhoneEnv, Con
     }
 
     /**
-     * 自动恢复无障碍 → the one tap: the shell-uid engine grants WRITE_SECURE_SETTINGS over Shizuku or
-     * self-ADB. Shizuku without its own permission asks for that first (`pending`) and grants once
-     * the person allows. Blocks; the plugin thread.
+     * 自动恢复无障碍 → grants WRITE_SECURE_SETTINGS through the available self-ADB channel and
+     * checks the resulting permission. Legacy Shizuku branches remain, but the compatibility starter
+     * reports them unavailable. Blocks on the calling worker.
      */
     fun grantSecureSettings(): Map<String, Any?> = when (val path = background.grantPath(A11yKeeper.granted(app))) {
         SecureSettingsGrant.GRANTED -> mapOf("ok" to true)

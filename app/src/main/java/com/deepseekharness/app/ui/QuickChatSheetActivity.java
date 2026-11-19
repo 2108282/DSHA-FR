@@ -1109,7 +1109,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         });
         leftGroup.addView(btnClose);
 
-        // [② >_ 终端按钮（保持原有图标与样式不变，点击在 本机3095桥 和 远端连接 之间无缝互换）]
+        // [② >_ 连接切换按钮：切换本机与远端 DSH 页面]
         btnSettings = createHeaderIconButton(ICON_SETTINGS, textColor, "切换本机/远端 DSH 连接");
         LinearLayout.LayoutParams settingsLp = (LinearLayout.LayoutParams) btnSettings.getLayoutParams();
         settingsLp.setMarginStart(dpToPx(4));
@@ -3356,10 +3356,6 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             if (mem != null && !mem.isEmpty()) return mem;
         }
         return null;
-    }
-
-    private void reloadWithLatestToken() {
-        forceReloadWithLatestToken();
     }
 
     @Override

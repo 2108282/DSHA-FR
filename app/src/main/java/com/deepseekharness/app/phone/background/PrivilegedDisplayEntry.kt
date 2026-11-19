@@ -10,9 +10,9 @@ import android.os.Looper
 import android.os.Process
 
 /**
- * The Shizuku UserService entry: Shizuku instantiates this class (shell or root uid) and
- * hands the app its Binder. Only this app's uid may call it; the real engine is
- * [PrivilegedDisplayCore], shared byte-for-byte with the adb path.
+ * Legacy Shizuku UserService Binder entry, retained for compatibility; [ShizukuStarter]
+ * currently does not connect it. Only this app's uid or the service's own uid may call it;
+ * the engine is [PrivilegedDisplayCore], also used by the root and self-ADB stream entry.
  */
 @androidx.annotation.Keep
 class PrivilegedDisplayService(context: Context) : IPrivilegedDisplay.Stub() {
@@ -31,10 +31,9 @@ class PrivilegedDisplayService(context: Context) : IPrivilegedDisplay.Stub() {
 }
 
 /**
- * The self-ADB entry, started as `CLASSPATH=<apk> app_process /system/bin <thisClass>` over an
- * adb shell stream. It speaks the same request/response [Bundle]s as the Shizuku binder, but
- * framed over stdin/stdout ([Frames] + [Bundles]) because an adb-launched process has no Binder
- * the app can look up. One privileged engine, two transports.
+ * The root/self-ADB entry, started as `CLASSPATH=<apk> app_process /system/bin <thisClass>`.
+ * It speaks the same request/response [Bundle]s as the legacy Binder entry, but framed over
+ * stdin/stdout ([Frames] + [Bundles]) because the app has no Binder to look up for this process.
  */
 object PrivilegedDisplayMain {
     @JvmStatic

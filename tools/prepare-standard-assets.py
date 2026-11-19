@@ -50,12 +50,16 @@ def main():
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
     source, output = Path(args.source).resolve(), Path(args.output).resolve()
-    if source == output or source in output.parents:
-        raise ValueError("生成目录不能放在原始资产目录内")
+    if source == output or source in output.parents or output in source.parents:
+        raise ValueError("原始资产目录与生成目录不能相同或互相包含")
+    if not source.is_dir():
+        raise ValueError("原始资产目录不存在")
     output.mkdir(parents=True, exist_ok=True)
     rootfs = source / "offline-rootfs.bin"
     excluded = {"offline-rootfs.bin", "runtime-python/python-runtime.tgz",
                 "glibc-python.tar.gz", "adb-wheels.tar.gz"}
+    # 此目录完全由本任务生成；记录本轮输出，避免已删除资产在增量构建中残留。
+    expected = {"offline-rootfs.bin"} if rootfs.is_file() else set()
     for path in source.rglob("*"):
         relative = path.relative_to(source)
         if not path.is_file() or "__pycache__" in relative.parts or path.suffix == ".pyc" \
@@ -64,9 +68,7 @@ def main():
         destination = output / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(path, destination)
-    # 清理旧构建生成的两个兼容版资产，不触碰输入目录。
-    for name in ("python3.14", "python-runtime.tgz"):
-        (output / "runtime-python" / name).unlink(missing_ok=True)
+        expected.add(relative.as_posix())
     # 用 bin 扩展名避免 aapt 展开 gzip；读取端按 magic 判断格式。
     for name in ("glibc-python", "adb-wheels"):
         src = source / (name + ".tar.gz")
@@ -74,6 +76,17 @@ def main():
             src = source / (name + ".bin")
         if src.is_file():
             shutil.copyfile(src, output / (name + ".bin"))
+            expected.add(name + ".bin")
+    # 仅清理受管生成目录，不碰原始资产或它之外的符号链接目标。
+    for path in sorted(output.rglob("*"), key=lambda p: len(p.parts), reverse=True):
+        relative = path.relative_to(output).as_posix()
+        if path.is_symlink():
+            if relative not in expected:
+                path.unlink()
+        elif path.is_file() and relative not in expected:
+            path.unlink()
+        elif path.is_dir() and not any(path.iterdir()):
+            path.rmdir()
     if not rootfs.is_file():
         (output / "offline-rootfs.bin").unlink(missing_ok=True)
         (output.parent / "standard-assets-report.json").unlink(missing_ok=True)

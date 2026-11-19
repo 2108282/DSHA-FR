@@ -46,7 +46,7 @@ import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Runs as shell uid (inside the Shizuku UserService, or the adb-launched app_process).
+ * Runs as root or shell uid in the app_process started by RootStarter or AdbStarter.
  * Owns at most one trusted virtual display at a time (one per task) and all the
  * privileged primitives against it. Thread-safe via a single lock; every op has its own
  * deadline. Never throws across the call boundary: faults become a stable [Proto.ERROR] code.
@@ -774,19 +774,6 @@ class PrivilegedDisplayCore(private val context: Context) {
         sendMotion(MotionEvent.ACTION_UP, x, y, down)
     }
 
-    private fun injectSwipe(sx: Int, sy: Int, ex: Int, ey: Int, duration: Int) {
-        val down = SystemClock.uptimeMillis()
-        sendMotion(MotionEvent.ACTION_DOWN, sx, sy, down)
-        val steps = (duration / 16).coerceAtLeast(1)
-        for (step in 1..steps) {
-            sleepChecked((duration / steps).toLong())
-            val f = step.toFloat() / steps
-            val mx = (sx + (ex - sx) * f).toInt(); val my = (sy + (ey - sy) * f).toInt()
-            if (step < steps) sendMotion(MotionEvent.ACTION_MOVE, mx, my, down)
-        }
-        sendMotion(MotionEvent.ACTION_UP, ex, ey, down)
-    }
-
     private fun sendMotion(action: Int, x: Int, y: Int, downTime: Long) {
         val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action, x.toFloat(), y.toFloat(), 0)
         event.source = InputDevice.SOURCE_TOUCHSCREEN
@@ -799,8 +786,8 @@ class PrivilegedDisplayCore(private val context: Context) {
         inject(event)
     }
 
-    // Runs in the shell-uid privileged process (Shizuku UserService or app_process),
-    // which the app hidden-API policy that lint models doesn't apply to.
+    // Runs in the root- or shell-uid app_process, where the app hidden-API policy
+    // that lint models doesn't apply.
     @SuppressLint("BlockedPrivateApi")
     private fun inject(event: InputEvent) {
         val id = display?.display?.displayId ?: throw Fault("displayMissing")

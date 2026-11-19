@@ -209,9 +209,6 @@ public class PureQuickChatSheetActivity extends AppCompatActivity {
     private int currentHeight;
     private int maxHeight;
     private int minHeight;
-    private float touchDownY;
-    private int heightAtTouchDown;
-    private boolean isDragging = false;
     private boolean isDismissing = false;
     private boolean isKeyboardElevated = false;
     private ViewTreeObserver.OnGlobalLayoutListener keyboardLayoutListener;

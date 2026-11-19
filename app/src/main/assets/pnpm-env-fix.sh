@@ -1,12 +1,12 @@
 #!/bin/bash
-# DSHA：修 pnpm 在 proot 容器里的两类顽固故障。
+# DSHA：兼容旧 PRoot 数据的 pnpm 配置与安装残留清理。
 #
 # 故障一：硬链接。pnpm 默认把包从 content-addressable store 用 **硬链接** 铺到
 # node_modules/.pnpm（它自己启动时就会打印 "Packages are hard linked from the
-# content-addressable store"）。而 Android 私有目录禁止真硬链接，proot 只能用
+# content-addressable store"）。旧 PRoot 在 Android 私有目录中无法使用真硬链接，只能用
 # --link2symlink 模拟成 .l2s 符号链接链 —— 临时文件一清理，目标就悬空，表现为
 # 各种莫名的 ENOENT。改成 package-import-method=copy 直接绕开：
-# 在 proot 下硬链接本来就是模拟的，也没真省空间。
+# 这是旧 PRoot 的兼容策略；当前原生 chroot 支持真实硬链接，此脚本仍会显式设置 copy。
 #
 # 故障二：git-hosted 包的残留。pnpm 装 GitHub 来源的插件时会在
 # store/v*/tmp/_tmp_<pid>_<hash>/ 里 clone、跑 prepare、再入库。中途失败的话

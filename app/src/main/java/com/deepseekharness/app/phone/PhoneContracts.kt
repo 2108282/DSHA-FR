@@ -5,7 +5,7 @@ package com.deepseekharness.app.phone
 //
 //   PhoneBridge (MCP over a unix socket) ── SafetyGate ──┬── main screen:  PhoneA11yService  (accessibility)
 //                                                        └── background:   BackgroundDisplay (virtual display
-//                                                                          via Shizuku or self-ADB)
+//                                                                          via root or self-ADB)
 //   UserGate: who asks the person (overlay on the main screen, heads-up notification otherwise).
 //
 // Everything here is plain Kotlin with blocking calls: the bridge runs every

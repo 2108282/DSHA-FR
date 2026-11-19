@@ -427,66 +427,8 @@ public final class BackupManager {
         return null;
     }
 
-    /**
-     * 把 Download/DSHA 下的备份拷进 App 缓存，返回可读副本。
-     * 直接 File 读在 scoped storage 下会 EACCES（文件 owner 是 media_rw），
-     * 先用 MediaStore 的 content uri 打开。拷进缓存也保证恢复期间原文件被移动/删除也不影响。
-     */
-    private static File copyToAppCache(Context ctx, File backup) throws Exception {
-        // 能直接读（旧设备/授权过）就直接用原文件，省一次拷贝
-        try (FileInputStream probe = new FileInputStream(backup)) {
-            return backup;
-        } catch (Exception directFailed) {
-            // 走 MediaStore
-            String name = backup.getName();
-            android.database.Cursor cur = null;
-            try {
-                // 用 Files collection：tar.gz 不被 Downloads collection 索引（findLatestBackup 已踩）
-                // Android 6-10 没有 MediaStore.VOLUME_EXTERNAL（API 29），退回字面量 "external"
-                Uri collection = MediaStore.Files.getContentUri(
-                        android.os.Build.VERSION.SDK_INT >= 29
-                                ? MediaStore.VOLUME_EXTERNAL : "external");
-                cur = ctx.getContentResolver().query(collection,
-                        new String[]{MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DISPLAY_NAME},
-                        MediaStore.MediaColumns.RELATIVE_PATH + " LIKE ?",
-                        new String[]{"%DSHA%"}, null);
-                Uri hit = null;
-                if (cur != null) {
-                    while (cur.moveToNext()) {
-                        String n = cur.getString(1);
-                        if (n != null && n.equals(name)) {
-                            long id = cur.getLong(0);
-                            hit = MediaStore.Files.getContentUri(
-                                    android.os.Build.VERSION.SDK_INT >= 29
-                                            ? MediaStore.VOLUME_EXTERNAL : "external")
-                                    .buildUpon().appendPath(String.valueOf(id)).build();
-                            break;
-                        }
-                    }
-                }
-                if (hit == null) throw new java.io.IOException(
-                        "MediaStore 里没找到 " + name + "（Download/DSHA 下）");
-                File cache = new File(ctx.getCacheDir(), "restore-" + name);
-                try (InputStream in = ctx.getContentResolver().openInputStream(hit);
-                     OutputStream out = new FileOutputStream(cache)) {
-                    if (in == null) throw new java.io.IOException("无法打开备份的 content uri");
-                    byte[] buf = new byte[8192];
-                    int n;
-                    while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
-                }
-                return cache;
-            } finally {
-                if (cur != null) cur.close();
-            }
-        }
-    }
-
     // ==================== 恢复 ====================
 
-    /**
-     * 从归档恢复：宽松解压到 stage → restore-merge.py 合并 → 验证 .dsh 落地。
-     * 返回人话报告；失败抛异常（带清晰原因）。
-     */
     /**
      * 从归档恢复（SAF content uri 版）：宽松解压到 stage → restore-merge.py 合并 → 验证 .dsh 落地。
      * 返回人话报告；失败抛异常（带清晰原因）。
@@ -570,7 +512,7 @@ public final class BackupManager {
         return restoreFromStaged(ctx, c, src);
     }
 
-    /** 从归档恢复（本地 File 版，MediaStore 拷贝兜底后调用）。 */
+    /** 将本地文件转为 file URI，复用 URI 恢复入口。 */
     public static String restoreFromBackup(Context ctx, HarnessController c, File backup)
             throws Exception {
         return restoreFromBackup(ctx, c, Uri.fromFile(backup));
@@ -698,7 +640,7 @@ public final class BackupManager {
         f.delete();
     }
 
-    // ==================== 通用导出（3090 /app/export 用） ====================
+    // ==================== 通用导出（3095 /app/export 用） ====================
 
     public static String exportToDownloads(Context ctx, File src, String name) {
         try {

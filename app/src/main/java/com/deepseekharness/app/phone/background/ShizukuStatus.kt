@@ -1,6 +1,9 @@
 package com.deepseekharness.app.phone.background
 
-/** The shared Shizuku API, served by the Shizuku app or by Sui; `installed` (the old field) means either is there. */
+/**
+ * Legacy Shizuku/Sui status model; [ShizukuStarter] currently reports both providers unavailable.
+ * The old `installed` field covers either provider, while `appInstalled` refers to the Shizuku app.
+ */
 data class ShizukuStatus(
     val installed: Boolean,
     val running: Boolean,

@@ -23,19 +23,18 @@ import kotlin.concurrent.thread
 
 /**
  * The phone bridge: a unix-domain socket in the abstract namespace that the guest relay
- * connects to. proot passes abstract addresses through untranslated (filesystem socket paths are
- * rewritten into the rootfs and may exceed sun_path), so a Node process inside proot reaches it.
+ * connects to from the native chroot, without a filesystem socket path inside the rootfs.
  *
- * Every connection must come from this app's uid (SO_PEERCRED) and start with a hello line
- * carrying this launch's token; then it is MCP over newline-delimited JSON-RPC, served by
- * [McpServer]. A per-launch random socket name keeps other apps from squatting it.
+ * Local connections must come from this app's uid or uid 0 (SO_PEERCRED) and start with a hello
+ * line carrying this launch's token; then it is MCP over newline-delimited JSON-RPC, served by
+ * [McpServer]. The bridge tries a fixed socket name first, then random names if it is occupied.
  *
- * Fallback: loopback TCP + token, opened only when asked (see [PhoneControl]); the
- * peer uid is checked through /proc/net/tcp when readable. Any app can reach loopback, so this
- * is weaker and used only on devices where the abstract socket turns out unreachable.
+ * Fallback: loopback TCP + token, opened when requested or when abstract socket binding fails;
+ * [PhoneControl] can also add it later. The peer uid is checked through /proc/net/tcp when readable.
+ * Any app can reach loopback, so the TCP listener still requires the launch token.
  *
- * Same-uid code (anything in the rootfs) gets past both checks by design: the real gate is the
- * person's tap on the confirmation.
+ * Same-uid and root code can pass the uid check by design; they must still supply the token.
+ * Tool actions remain subject to the configured safety and confirmation rules.
  */
 class PhoneBridge(
     private val server: McpServer,

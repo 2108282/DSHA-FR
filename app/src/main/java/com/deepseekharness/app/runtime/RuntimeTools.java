@@ -9,7 +9,7 @@ import java.io.InputStream;
 import java.util.Arrays;
 import java.util.Map;
 
-/** 统一准备插件与终端的证书和命令入口，无需先手动运行安装第 2 步。 */
+/** 为 App 私有 rootfs 的离线解压兼容入口准备证书、插件脚本与命令包装器。 */
 final class RuntimeTools {
     static final String CERT_PATH = "/usr/local/share/dsha/ca-certificates.crt";
     private static final Object LOCK = new Object();

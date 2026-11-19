@@ -142,8 +142,8 @@ object PhoneGuest {
     }
 
     /**
-     * MCP stdio ⇄ the app's bridge. Tries the abstract unix socket (proot passes abstract
-     * addresses through untranslated), then loopback TCP if this launch offers it. Sends one hello
+     * MCP stdio ⇄ the app's bridge. Tries the abstract unix socket from the native chroot,
+     * then loopback TCP if this launch offers it. Sends one hello
      * line with the token, then copies bytes both ways. No tool definitions live here: they come
      * from the APK. Written without the dollar sign so the Kotlin raw string needs no escaping.
      */

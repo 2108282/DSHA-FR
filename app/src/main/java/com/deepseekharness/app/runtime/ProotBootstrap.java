@@ -3,38 +3,25 @@ import com.deepseekharness.app.util.Compat;
 import com.deepseekharness.app.util.ShellQuote;
 
 import android.content.Context;
-import android.system.Os;
 import android.util.Base64;
 import android.util.Log;
-
-import org.json.JSONArray;
-import org.json.JSONObject;
 
 import com.deepseekharness.app.util.SensitiveData;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Enumeration;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 /**
- * proot 启动 + rootfs 生命周期（下载/解压/离线包）。
- *
- * <p>关键设计：proot、loader、libtalloc 伪装成 lib*.so 放进 jniLibs，Android 安装时
- * 自动解压到 nativeLibraryDir（可执行目录，绕过 app 私有目录的 noexec）。运行时通过
- * PROOT_LOADER / PROOT_TMP_DIR / LD_LIBRARY_PATH 引导 proot 找到 loader 与依赖库，
- * 直接 exec {@code nativeLibraryDir/libproot.so}。
+ * 原生 chroot 运行时入口；保留历史类名与仍可达的离线环境兼容入口。
  */
 public class ProotBootstrap {
 
@@ -45,47 +32,20 @@ public class ProotBootstrap {
     private final Context ctx;
     private final File baseDir;
     private final File rootfsDir;
-    private final File libDir;
-    private final File tmpDir;
-    private final String nativeLibDir;
     private final File offlineMarkerFile;
-
-    private static volatile Boolean hardlinkOk = null;
 
     public ProotBootstrap(Context c) {
         ctx = c.getApplicationContext();
         baseDir = new File(ctx.getFilesDir(), "linux");
         rootfsDir = new File(baseDir, "ubuntu");
-        libDir = new File(baseDir, "lib");
-        tmpDir = new File(baseDir, "tmp");
-        nativeLibDir = ctx.getApplicationInfo().nativeLibraryDir;
         offlineMarkerFile = new File(baseDir, ".offline-extracted");
     }
 
-    public Context getContext() {
-        return ctx;
-    }
-
     public File getRootfsDir() {
-        if ("ksu_chroot".equals(runtime().id())) {
-            return new File("/data/adb/dsha/rootfs");
-        }
-        return rootfsDir;
+        return new File("/data/adb/dsha/rootfs");
     }
 
-    public boolean isOfflineExtracted() {
-        return offlineMarkerFile.exists();
-    }
-
-    public boolean hasBash() {
-        if ("ksu_chroot".equals(runtime().id())) {
-            return ContainerRuntime.KsuChroot.checkAvailable();
-        }
-        return new File(rootfsDir, "usr/bin/bash").exists()
-                || new File(rootfsDir, "bin/bash").exists();
-    }
-
-    /** 内置离线包的版本标记（每次离线包变更 +1，覆盖安装靠它触发重解压）。 */
+    /** 内置离线包的版本标记，供显式离线解压入口比较版本。 */
     public static final String OFFLINE_VERSION_ASSET = "offline-rootfs.version";
 
     /** 已解压 rootfs 的版本记录文件（app 私有目录，覆盖安装保留）。 */
@@ -95,7 +55,7 @@ public class ProotBootstrap {
 
     /**
      * 已解压 rootfs 的版本是否与 APK 内置离线包一致。
-     * 不一致（覆盖安装换了内置包）时视为「环境未就绪」，启动会清旧 rootfs 重新解压。
+     * 仅供显式解压入口决定是否清理 App 私有目录中的旧副本，不参与原生模块的就绪判定。
      */
     public boolean rootfsVersionMatches() {
         try {
@@ -112,10 +72,7 @@ public class ProotBootstrap {
     }
 
     public boolean isEnvironmentReady() {
-        if ("ksu_chroot".equals(runtime().id())) {
-            return ContainerRuntime.KsuChroot.checkAvailable();
-        }
-        return isOfflineExtracted() && hasBash() && rootfsVersionMatches();
+        return ContainerRuntime.KsuChroot.checkAvailable();
     }
 
     public void markOfflineExtracted() {
@@ -133,21 +90,10 @@ public class ProotBootstrap {
         }
     }
 
-    /** 撤销解压标记：下次启动走 ExtractActivity 重新解压（配置保留在 .dsh，不删除）。 */
+    /** 撤销 App 私有目录中的离线解压标记，不清理原生模块环境或自动触发解压。 */
     public void markNotExtracted() {
         //noinspection ResultOfMethodCallIgnored
         offlineMarkerFile.delete();
-    }
-
-    /** 清除整个容器环境（rootfs + 运行时文件），下次启动重新解压。配置/对话在 .dsh，不受影响。 */
-    public void uninstall() {
-        try {
-            new ProcessBuilder("/system/bin/rm", "-rf", baseDir.getAbsolutePath())
-                    .redirectErrorStream(true).start().waitFor();
-        } catch (Exception e) {
-            deleteRecursively(baseDir);
-        }
-        hardlinkOk = null; // 下次解压重新探测
     }
 
     private void deleteRecursively(File f) {
@@ -170,325 +116,9 @@ public class ProotBootstrap {
 
     // ================= 运行时文件 =================
 
-    private File findNativeLib(String name) {
-        if (com.deepseekharness.app.BuildConfig.LOW_ANDROID) {
-            if (name.equals("libproot.so")) name = "libproot_legacy.so";
-            else if (name.equals("libprootloader.so")) name = "libprootloader_legacy.so";
-        }
-        File direct = new File(nativeLibDir, name);
-        if (direct.isFile()) return direct;
-        File libRoot = new File(nativeLibDir).getParentFile();
-        if (libRoot != null && libRoot.isDirectory()) {
-            File[] subs = libRoot.listFiles();
-            if (subs != null) {
-                for (File sub : subs) {
-                    if (sub.isDirectory()) {
-                        File f = new File(sub, name);
-                        if (f.isFile()) return f;
-                    }
-                }
-            }
-        }
-        return direct;
-    }
-
-    private String prootPath() {
-        File f = findNativeLib("libproot.so");
-        return f.exists() ? f.getAbsolutePath() : "native_chroot";
-    }
-
-    private void copyExec(File src, File dst) {
-        if (src.isFile() && !dst.exists()) {
-            try (InputStream in = new FileInputStream(src);
-                 FileOutputStream out = new FileOutputStream(dst)) {
-                byte[] buf = new byte[8192];
-                int n;
-                while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
-            } catch (IOException ignored) {
-            }
-            chmod(dst);
-        }
-    }
-
-    private void chmod(File f) {
-        f.setReadable(true, false);
-        f.setExecutable(true, false);
-        try {
-            Os.chmod(f.getAbsolutePath(), 0755);
-        } catch (Throwable ignored) {
-        }
-    }
-
-    /** 复制 proot 的 NEEDED 依赖（libtalloc.so.2、libandroid-shmem.so），匹配 SONAME。 */
+    /** 原生运行时由模块准备，保留历史调用入口。 */
     public void ensureRuntimeFiles() {
-        if ("ksu_chroot".equals(runtime().id())) {
-            return;
-        }
-        baseDir.mkdirs();
-        tmpDir.mkdirs();
-        libDir.mkdirs();
-        ensureDshRuntimePatches();
-        patchClientCombos();
-        if (hasBash()) ensureNetworkTools();
-    }
-
-    private void ensureNetworkTools() {
-        try { RuntimeTools.prepare(ctx, rootfsDir); }
-        catch (IOException error) { Log.w("DSHA", "运行工具准备失败：" + SensitiveData.redact(String.valueOf(error))); }
-    }
-
-    // ================= dsh 运行补丁（dsh 1.2-alpha 在 Android proot 下的兼容） =================
-
-    /**
-     * 启动 dsh 前把两个已知兼容问题修掉（幂等，重装/升级后自动恢复）：
-     *
-     * 1. {@code /etc/resolv.conf} 为空 → node 的 DNS 解析 EAI_AGAIN（curl 是 Android
-     *    二进制走 netd 不受影响，Ubuntu 的 node 读 rootfs 的 resolv.conf）。
-     * 2. dsh-session-persistence-jsonl 用 {@code link(tmp, final)} 原子发布 session 日志，
-     *    而 SELinux 禁 app 私有目录的 link(2)；proot 的 --link2symlink 转出的 symlink 链
-     *    在 dsh 的 rm(tmp) 清理后悬空 → 发消息报 ENOENT。换成 rename（同目录原子替换，
-     *    SELinux 允许），写入即正常。dsh 装了两份（顶层 + dsh 嵌套），都要 patch。
-     */
-    public void ensureDshRuntimePatches() {
-        try {
-            File resolv = new File(rootfsDir, "etc/resolv.conf");
-            String r = resolv.isFile()
-                    ? new String(Compat.readAllBytes(resolv),
-                    java.nio.charset.StandardCharsets.UTF_8) : "";
-            if (!r.contains("nameserver")) {
-                Compat.write(resolv, "nameserver 8.8.8.8\nnameserver 223.5.5.5\n"
-                                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
-                Log.i("DSHA", "已写入容器 /etc/resolv.conf（node DNS 修复）");
-            }
-        } catch (Throwable e) {
-            Log.w("DSHA", "resolv.conf 写入失败: " + SensitiveData.redact(String.valueOf(e)));
-        }
-        String[][] jsonlCopies = {
-                {"usr/local/lib/node_modules/@deepseek-ai/dsh-session-persistence-jsonl/lib/index.js",
-                        "usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-session-persistence-jsonl/lib/index.js"},
-        };
-        for (String[] rels : jsonlCopies) {
-            for (String rel : rels) {
-                try {
-                    patchLinkToRename(new File(rootfsDir, rel));
-                } catch (Throwable ignored) {
-                }
-            }
-        }
-        // WebUI 目录选择器/终端直达手机存储：在 /root 下建「手机存储」软链 → /sdcard。
-        // dsh 的 browse 目录选择器浏览 home(/root) 时会列出软链并对目标 stat（/sdcard 由
-        // proot bind 可见），于是主目录里出现可进入的「手机存储」，工作区可建到 dsha 目录
-        // 外的任意位置（配合「所有文件访问权限」即可读写）。幂等。
-        try {
-            File rootHome = new File(rootfsDir, "root");
-            if (rootHome.isDirectory()) {
-                File sdcardLink = new File(rootHome, "手机存储");
-                if (!sdcardLink.exists()) {
-                    try {
-                        Compat.symlink("/sdcard", sdcardLink);
-                        Log.i("DSHA", "已建 /root/手机存储 -> /sdcard 软链（WebUI 选工作区直达手机存储）");
-                    } catch (Throwable ignored) {
-                    }
-                }
-            }
-        } catch (Throwable ignored) {
-        }
-        flattenL2sChains();
-        patchLanSettingsPersistence();
-        ensureDshCorePatches();
-    }
-
-    /**
-     * 补丁：dsh 客户端 settings 持久化强制 host。
-     *
-     * <p>dsh 客户端的 {@code ctx.remote.$host.isLoopback} 用 {@code window.location.hostname}
-     * 判定「本页是否回环」——局域网代理页面上地址是 192.168.x.x，必然非回环 → persistence 变
-     * memory → settings.describe 不加载 →「settings are unavailable in this browser」，
-     * 提供方目录/模型配置在局域网设备上全不可用。而请求经 LAN 代理转发时 Host/Origin 已被改
-     * 成 127.0.0.1，host 侧 isTrustedApiRequest 是接受的，所以只需把客户端 persistence 固定为
-     * "host"。幂等：已 patch（字符串已变）或版本不同（找不到原串）就跳过。
-     */
-    private void patchLanSettingsPersistence() {
-        try {
-            File f = new File(rootfsDir,
-                    "usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/"
-                            + "@deepseek-ai/dsh-client-ui-settings/lib/client.js");
-            if (!f.isFile()) return;
-            String c = new String(Compat.readAllBytes(f),
-                    java.nio.charset.StandardCharsets.UTF_8);
-            String target = "const persistence = ctx.remote.$host.isLoopback ? \"host\" : \"memory\";";
-            if (!c.contains(target)) return; // 已 patch 或 dsh 版本改了写法
-            String replacement = "const persistence = \"host\"; // DSHA patch: LAN 代理场景强制 host 持久化";
-            Compat.write(f, c.replace(target, replacement).getBytes(
-                    java.nio.charset.StandardCharsets.UTF_8));
-            Log.i("DSHA", "已 patch dsh 客户端 settings persistence→host（局域网可用）");
-        } catch (Throwable e) {
-            Log.w("DSHA", "settings persistence patch 失败（不影响启动）: "
-                    + SensitiveData.redact(String.valueOf(e)));
-        }
-    }
-
-    /**
-     * 移植上游 3 秒极速启动补丁：网页脚本拼接缓存 (client-combo-cache)。
-     * 解决手机端 CPU 逐字符计算源码换行耗时 40 秒的致命性能瓶颈，使启动鉴权瞬间完成。
-     */
-    private void patchClientCombos() {
-        try {
-            File rootfs = getRootfsDir();
-            File module = new File(rootfs, "usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-client-modules/lib/index.js");
-            if (!module.isFile() || Compat.isSymbolicLink(module)) return;
-            String source = Compat.readAll(module);
-            if (source.contains("DSHA_COMBO_CACHE_V1")) return; // 已打补丁，跳过
-
-            String patchJson = readAssetString("client-combo-patch.json");
-            if (patchJson.isEmpty()) return;
-            org.json.JSONObject spec = new org.json.JSONObject(patchJson);
-            org.json.JSONArray patches = spec.getJSONArray("patches");
-            String patched = source;
-            for (int i = 0; i < patches.length(); i++) {
-                org.json.JSONObject p = patches.getJSONObject(i);
-                patched = com.deepseekharness.app.util.ExactTextPatch.apply(patched, p.getString("before"), p.getString("after"));
-            }
-            File cacheDir = new File(rootfs, "usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/dsha-client-combo-cache");
-            if (!cacheDir.exists()) cacheDir.mkdirs();
-            extractAssetFile("client-combo-cache/package.json", new File(cacheDir, "package.json"));
-            extractAssetFile("client-combo-cache/index.js", new File(cacheDir, "index.js"));
-            if (!source.equals(patched)) {
-                Compat.write(module, patched.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-                Log.i("DSHA", "已打网页脚本拼接极速缓存补丁 (client-combo-cache)");
-            }
-        } catch (Throwable e) {
-            Log.w("DSHA", "网页拼接优化补丁跳过或失败: " + e.getMessage());
-        }
-    }
-
-    /** 内置 .l2s 摊平脚本（proot --link2symlink 残留链会让目录删除/备份 ELOOP 失败）。 */
-    public static final String L2S_FLATTEN_SCRIPT = "flatten-l2s.py";
-
-    /**
-     * 摊平 proot --link2symlink 留下的 .l2s 链（幂等，启动 Web 前跑）。
-     *
-     * <p>为什么需要：Android 私有目录禁真硬链接，proot 用 --link2symlink 把 link() 模拟成
-     * {@code 目标 → .l2s.<名>.<hash>.tmp0001 → ….0001} 的符号链接链。老的会话/工作区文件
-     * 里散落这种链后，目录删除（rm -rf）与备份（tar）会因 ELOOP 失败 —— 这正是
-     * 「工作区删不掉」的根源之一。flatten-l2s.py 把可解析的链实体化成真实文件，
-     * 悬空的只报告不动，安全幂等。写入侧已由 fs-write-patch 治本，这里只清存量。
-     */
-    private void flattenL2sChains() {
-        try {
-            if (!isEnvironmentReady()) return;
-            File marker = new File(rootfsDir, "root/.dsh/.l2s_flatten_done");
-            if (marker.isFile()) return;
-            String script = readAssetString(L2S_FLATTEN_SCRIPT);
-            if (script.isEmpty()) return;
-            String b64 = Base64.encodeToString(script.getBytes(
-                    java.nio.charset.StandardCharsets.UTF_8), Base64.NO_WRAP);
-            String inject = "set -e; mkdir -p /root/.dsh; "
-                    + "printf '%s' '" + b64 + "' | base64 -d > /root/.dsh/" + L2S_FLATTEN_SCRIPT + "; "
-                    + "chmod +x /root/.dsh/" + L2S_FLATTEN_SCRIPT + "; ";
-            // 覆盖 .dsh（会话/附件）与工作区目录两类最容易堆积 .l2s 的地方
-            String workdir = ctx.getSharedPreferences(com.deepseekharness.app.util.Constants.PREFS,
-                            android.content.Context.MODE_PRIVATE)
-                    .getString(com.deepseekharness.app.util.Constants.KEY_WORKDIR,
-                            com.deepseekharness.app.util.Constants.DEFAULT_WORKDIR);
-            String wdArg = com.deepseekharness.app.util.ShellQuote.arg(workdir);
-            String cmd = inject
-                    + "python3 /root/.dsh/" + L2S_FLATTEN_SCRIPT + " --root /root/.dsh 2>&1; "
-                    + "test -d " + wdArg + " && python3 /root/.dsh/" + L2S_FLATTEN_SCRIPT
-                    + " --root " + wdArg + " 2>&1 || true";
-            String out = execAndRead(cmd, 120_000);
-            if (out != null && out.contains("flattened=")
-                    && !out.contains("flattened=0 dangling=0 removed=0")) {
-                Log.i("DSHA", "l2s 摊平完成: " + out.trim().replace("\n", " | "));
-            }
-            try { marker.createNewFile(); } catch (Throwable ignored) {}
-        } catch (Throwable e) {
-            Log.w("DSHA", "l2s 摊平失败（不影响启动）: "
-                    + SensitiveData.redact(String.valueOf(e)));
-        }
-    }
-    /** 幂等 patch：session 持久化的 link(tmp,final) → rename(tmp,final)（见 ensureDshRuntimePatches 说明）。 */
-    private void patchLinkToRename(File f) throws Exception {
-        if (!f.isFile()) return;
-        String c = new String(Compat.readAllBytes(f),
-                java.nio.charset.StandardCharsets.UTF_8);
-        // 如果底包已经内置了 DSHA_ATOMIC_PUBLISH_V1，说明已经优雅实现了原子发布且声明了 link，绝不能二次 patch 导致 Identifier link has already been declared 语法错误
-        if (c.contains("DSHA_ATOMIC_PUBLISH_V1")) return;
-        boolean callsLink = c.contains("await link(tmp, finalPath);");
-        boolean callsRename = c.contains("await rename(tmp, finalPath);") || c.contains("await __dshaPublishLog(tmp, finalPath);");
-        if (!callsLink && !callsRename) return; // 版本不匹配或已无关
-        
-        String patched = c;
-        if (callsLink) {
-            patched = patched.replace("await link(tmp, finalPath);", "await rename(tmp, finalPath);");
-        }
-        
-        // 关键修复：确保 node:fs/promises 导入同时包含 rename 和 link（dsh 0.1.5 的 defaultFileSystem 仍必须引用 link）
-        int fsPromisesIdx = patched.indexOf("from \"node:fs/promises\"");
-        if (fsPromisesIdx > 0) {
-            int importStart = patched.lastIndexOf("import {", fsPromisesIdx);
-            if (importStart >= 0) {
-                String importBlock = patched.substring(importStart, fsPromisesIdx);
-                // 确保有 link（修复被误换成 rename 导致 link is not defined 的致命 bug）
-                if (!importBlock.contains("link")) {
-                    patched = patched.substring(0, importStart + 8) + " link," + patched.substring(importStart + 8);
-                    fsPromisesIdx += 6;
-                }
-                // 确保有 rename
-                importStart = patched.lastIndexOf("import {", fsPromisesIdx);
-                importBlock = patched.substring(importStart, fsPromisesIdx);
-                if (!importBlock.contains("rename")) {
-                    patched = patched.substring(0, importStart + 8) + " rename," + patched.substring(importStart + 8);
-                }
-            }
-        }
-        if (!patched.equals(c)) {
-            Compat.write(f, patched.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            Log.i("DSHA", "已 patch dsh session 持久化 link→rename (确保 rename 与 link 均存在): " + f.getAbsolutePath());
-        }
-    }
-
-    /**
-     * 执行 dsh 核心自愈补丁：
-     *  1. fs-write-patch.sh: 解决 proot 下 link() 失败，一律 rename/copyFile 原子发布（含 write 工具、会话持久化与图片附件）
-     *  2. dsh-token-patch.sh: 适配 dsh 0.1.2 ~ 0.1.5-rc.2 的 Launch Token 落盘与双轨鉴权、局域网代理放行
-     *  3. webserver-auth-patch.sh: Web 守卫放行官方 token= 与 dsh-auth- Cookie
-     * 脚本全幂等，升级 dsh 核心被覆盖后下一次启动自动打回，零人工干预。
-     */
-    private void ensureDshCorePatches() {
-        try {
-            File marker = new File(rootfsDir, "root/.dsh/.core_patches_done");
-            if (marker.isFile()) return;
-            runAssetBashScript("fs-write-patch.sh", 90_000);
-            runAssetBashScript("dsh-token-patch.sh", 60_000);
-            runAssetBashScript("webserver-auth-patch.sh", 60_000);
-            try { marker.createNewFile(); } catch (Throwable ignored) {}
-        } catch (Throwable e) {
-            Log.w("DSHA", "dsh 核心自愈补丁执行异常: " + SensitiveData.redact(String.valueOf(e)));
-        }
-    }
-
-    /** 运行 assets 里的 bash 补丁脚本（幂等写入容器并执行）。 */
-    public String runAssetBashScript(String assetName, long timeoutMs) {
-        if (!isEnvironmentReady()) return "ENV_NOT_READY";
-        try {
-            String script = readAssetString(assetName);
-            if (script.isEmpty()) return "ASSET_MISSING:" + assetName;
-            String b64 = Base64.encodeToString(script.getBytes(
-                    java.nio.charset.StandardCharsets.UTF_8), Base64.NO_WRAP);
-            String cmd = "set -e; mkdir -p /root/.dsh; "
-                    + "printf '%s' '" + b64 + "' | base64 -d > /root/.dsh/" + assetName + "; "
-                    + "chmod +x /root/.dsh/" + assetName + "; "
-                    + "bash /root/.dsh/" + assetName + " 2>&1";
-            String out = execAndRead(cmd, timeoutMs);
-            if (out != null && !out.isEmpty()) {
-                Log.i("DSHA", "资产补丁 [" + assetName + "] 执行完成: " + out.trim().replace("\n", " | "));
-            }
-            return out;
-        } catch (Throwable e) {
-            Log.w("DSHA", "资产补丁 [" + assetName + "] 执行失败: " + SensitiveData.redact(String.valueOf(e)));
-            return "ERROR: " + SensitiveData.redact(String.valueOf(e));
-        }
+        // no-op: Magisk / KernelSU 模块管理运行时文件。
     }
 
     // ================= 内置插件注册 =================
@@ -593,39 +223,6 @@ public class ProotBootstrap {
         return yaml.replaceAll("(?s)# >>> DSHA managed[^\n]*\n.*?# <<< DSHA managed <<<(?:\n|$)", "").trim();
     }
 
-    private void extractAssetFile(String assetPath, File dest) {
-        if (dest.getParentFile() != null && !dest.getParentFile().exists()) dest.getParentFile().mkdirs();
-        try (InputStream in = ctx.getAssets().open(assetPath);
-             java.io.FileOutputStream out = new java.io.FileOutputStream(dest)) {
-            byte[] buf = new byte[8192];
-            int n;
-            while ((n = in.read(buf)) != -1) {
-                out.write(buf, 0, n);
-            }
-        } catch (Throwable ignored) {}
-    }
-
-    private void extractAssetDir(String assetDir, File targetDir) {
-        try {
-            String[] list = ctx.getAssets().list(assetDir);
-            if (list == null || list.length == 0) {
-                extractAssetFile(assetDir, targetDir);
-            } else {
-                if (!targetDir.exists()) targetDir.mkdirs();
-                for (String child : list) {
-                    String subAsset = assetDir.isEmpty() ? child : assetDir + "/" + child;
-                    File subTarget = new File(targetDir, child);
-                    extractAssetDir(subAsset, subTarget);
-                }
-            }
-        } catch (Throwable ignored) {}
-    }
-
-    /** 纯前端架构：内置插件实体与软链接由 Magisk 模块原生管理，APK 纯前端不再插手容器文件系统。 */
-    public void ensureBuiltinPluginEntities() {
-        // no-op: 模块端全权自治，纯前端绝不越界操作 rootfs 符号链接与文件
-    }
-
     /** 注入注册脚本（幂等覆盖）并按需带参数运行。 */
     private String runBuiltinScript(String extraArgs) {
         synchronized (PLUGIN_SCRIPT_LOCK) {
@@ -693,39 +290,22 @@ public class ProotBootstrap {
     /** 把本地文件推入容器（containerPath 为容器内绝对路径，如 /root/.dsh/import-upload.bin）。 */
     public boolean pushFileIntoContainer(java.io.File src, String containerPath) {
         if (src == null || !src.isFile() || containerPath == null) return false;
-        ContainerRuntime rt = runtime();
-        if ("ksu_chroot".equals(rt.id())) {
-            try {
-                java.io.File target = containerFile(containerPath);
-                Process p = Runtime.getRuntime().exec(new String[]{
-                        "su", "-mm", "-c", "mkdir -p " + ShellQuote.arg(target.getParentFile().getAbsolutePath())
-                        + " && cat > " + ShellQuote.arg(target.getAbsolutePath())
-                });
-                try (java.io.FileInputStream in = new java.io.FileInputStream(src);
-                     java.io.OutputStream out = p.getOutputStream()) {
-                    byte[] buf = new byte[65536];
-                    int n;
-                    while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
-                    out.flush();
-                }
-                return p.waitFor() == 0;
-            } catch (Throwable e) {
-                Log.w("DSHA", "推文件进原生 rootfs 失败: " + SensitiveData.redact(String.valueOf(e)));
-                return false;
-            }
-        }
         try {
             java.io.File target = containerFile(containerPath);
-            if (target.getParentFile() != null) target.getParentFile().mkdirs();
+            Process p = Runtime.getRuntime().exec(new String[]{
+                    "su", "-mm", "-c", "mkdir -p " + ShellQuote.arg(target.getParentFile().getAbsolutePath())
+                    + " && cat > " + ShellQuote.arg(target.getAbsolutePath())
+            });
             try (java.io.FileInputStream in = new java.io.FileInputStream(src);
-                 java.io.FileOutputStream out = new java.io.FileOutputStream(target)) {
-                byte[] buf = new byte[1 << 16];
+                 java.io.OutputStream out = p.getOutputStream()) {
+                byte[] buf = new byte[65536];
                 int n;
                 while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
+                out.flush();
             }
-            return true;
+            return p.waitFor() == 0;
         } catch (Throwable e) {
-            Log.w("DSHA", "推文件进容器失败: " + SensitiveData.redact(String.valueOf(e)));
+            Log.w("DSHA", "推文件进原生 rootfs 失败: " + SensitiveData.redact(String.valueOf(e)));
             return false;
         }
     }
@@ -733,39 +313,21 @@ public class ProotBootstrap {
     /** 从容器取出文件到本地（containerPath 为容器内绝对路径）。 */
     public boolean pullFileFromContainer(String containerPath, java.io.File dest) {
         if (containerPath == null || dest == null) return false;
-        ContainerRuntime rt = runtime();
-        if ("ksu_chroot".equals(rt.id())) {
-            try {
-                java.io.File src = containerFile(containerPath);
-                Process p = Runtime.getRuntime().exec(new String[]{
-                        "su", "-mm", "-c", "cat " + ShellQuote.arg(src.getAbsolutePath())
-                });
-                if (dest.getParentFile() != null) dest.getParentFile().mkdirs();
-                try (java.io.InputStream in = p.getInputStream();
-                     java.io.FileOutputStream out = new java.io.FileOutputStream(dest)) {
-                    byte[] buf = new byte[65536];
-                    int n;
-                    while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
-                }
-                return p.waitFor() == 0;
-            } catch (Throwable e) {
-                Log.w("DSHA", "从原生 rootfs 取文件失败: " + SensitiveData.redact(String.valueOf(e)));
-                return false;
-            }
-        }
         try {
             java.io.File src = containerFile(containerPath);
-            if (!src.isFile()) return false;
+            Process p = Runtime.getRuntime().exec(new String[]{
+                    "su", "-mm", "-c", "cat " + ShellQuote.arg(src.getAbsolutePath())
+            });
             if (dest.getParentFile() != null) dest.getParentFile().mkdirs();
-            try (java.io.FileInputStream in = new java.io.FileInputStream(src);
+            try (java.io.InputStream in = p.getInputStream();
                  java.io.FileOutputStream out = new java.io.FileOutputStream(dest)) {
-                byte[] buf = new byte[1 << 16];
+                byte[] buf = new byte[65536];
                 int n;
                 while ((n = in.read(buf)) != -1) out.write(buf, 0, n);
             }
-            return true;
+            return p.waitFor() == 0;
         } catch (Throwable e) {
-            Log.w("DSHA", "从容器取文件失败: " + SensitiveData.redact(String.valueOf(e)));
+            Log.w("DSHA", "从原生 rootfs 取文件失败: " + SensitiveData.redact(String.valueOf(e)));
             return false;
         }
     }
@@ -793,14 +355,10 @@ public class ProotBootstrap {
     // ================= Android 组补丁（id -Gn 报错） =================
 
     /**
-     * 把 Android 的 GID 名字补进 rootfs 的 {@code /etc/group}（幂等）。
-     *
-     * <p>为什么：proot 不隔离 group —— 容器进程的真实组是 Android 的
-     * （1004=input、1007=log、1011=adb…），而 Ubuntu 的 {@code /etc/group} 里没有这些 ID。
-     * 登录 shell 会执行 {@code $(groups)}（/etc/bash.bashrc 的 sudo 检测），
-     * 逐个解析失败就刷一屏 {@code id: cannot find name for group ID 1004}。
-     * 补上映射后 {@code id -Gn} / {@code groups} 正常返回名字，错误消失。
-     * 名字与 AOSP android_filesystem_config.h 一致，避免误读。
+     * 为旧 App 私有 rootfs 的 {@code /etc/group} 补充 Android GID 名称（幂等）。
+     * 私有副本不存在时直接返回；原生模块的组表不由此方法管理。
+     * 兼容副本中的 shell 查询缺失 GID 时可能报 {@code cannot find name for group ID}，
+     * 此处合并历史映射与当前 App 进程的 supplementary groups。
      */
     public void ensureAndroidGroups() {
         try {
@@ -828,8 +386,7 @@ public class ProotBootstrap {
                     {"all_a428", "50428"},
                     {"u0_a428", "20428"},
             };
-            // 静态已知映射 + 动态读本进程全部真实组（PTY 的 bash 继承 App 进程的组，
-            // ROM 自定义组如 99909997 枚举补不完，直接读 /proc/self/status 全覆盖）
+            // 合并已知映射与当前 App 进程的组；ROM 自定义组从 /proc/self/status 读取。
             java.util.LinkedHashMap<String, String> groups = new java.util.LinkedHashMap<>();
             for (String[] g : known) groups.put(g[0], g[1]);
             for (int gid : readSelfGroupList()) {
@@ -900,108 +457,28 @@ public class ProotBootstrap {
         }
     }
 
-    // ================= 硬链接探测 =================
-
-    /**
-     * rootfs 所在文件系统是否支持真实硬链接。支持时 proot 不加 {@code --link2symlink}
-     * （该扩展会把 dsh 新建文件变成悬空链接）。Android app 私有目录（ext4/f2fs）支持，
-     * 探测失败才保留扩展。
-     */
-    private boolean hardlinkSupported() {
-        Boolean cached = hardlinkOk;
-        if (cached != null) return cached;
-        synchronized (ProotBootstrap.class) {
-            if (hardlinkOk != null) return hardlinkOk;
-            boolean ok = false;
-            File dir = rootfsDir.isDirectory() ? rootfsDir : baseDir;
-            File src = new File(dir, ".dsha-linkprobe");
-            File dst = new File(dir, ".dsha-linkprobe.hl");
-            try {
-                dir.mkdirs();
-                src.delete();
-                dst.delete();
-                Compat.write(src, new byte[]{'o', 'k'});
-                Compat.link(src, dst);
-                ok = dst.isFile() && dst.length() == 2;
-            } catch (Throwable e) {
-                ok = false;
-                Log.w("DSHA", "硬链接探测失败，保留 --link2symlink: "
-                        + SensitiveData.redact(String.valueOf(e)));
-            } finally {
-                src.delete();
-                dst.delete();
-            }
-            hardlinkOk = ok;
-            Log.i("DSHA", "硬链接支持=" + ok);
-            return ok;
-        }
-    }
-
-    private void applyL2sEnv(ProcessBuilder pb) {
-        if (hardlinkSupported()) return;
-        try {
-            File l2s = new File(rootfsDir, ".l2s");
-            //noinspection ResultOfMethodCallIgnored
-            l2s.mkdirs();
-            pb.environment().put("PROOT_L2S_DIR", l2s.getAbsolutePath());
-        } catch (Throwable ignored) {
-        }
-    }
-
     // ================= 运行时选择 =================
 
     public ContainerRuntime runtime() {
-        return new ContainerRuntime.KsuChroot(ctx);
-    }
-
-    private List<String> baseProotArgv() {
-        return runtime().baseArgv(rootfsDir, hardlinkSupported());
-    }
-
-    /** proot 运行环境（两个 exec 入口共用）。 */
-    private void applyProotEnv(ProcessBuilder pb) {
-        ensureNetworkTools();
-        ContainerRuntime rt = runtime();
-        try {
-            rt.applyEnv(pb, baseDir, libDir, tmpDir);
-        } catch (Throwable ignored) {
-        }
-        // guest 侧环境
-        pb.environment().put("HOME", "/root");
-        pb.environment().put("PATH",
-                "/root/dsh-bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin");
-        pb.environment().put("TMPDIR", "/tmp");
-        pb.environment().put("DEBIAN_FRONTEND", "noninteractive");
-        RuntimeTools.applyEnvironment(pb.environment());
+        return new ContainerRuntime.KsuChroot();
     }
 
     // ================= 执行 =================
 
     /** 在 rootfs 内执行 bash 命令，返回进程（stderr 并入 stdout）。 */
     public Process execRootfs(String bashCommand) throws IOException {
-        ContainerRuntime rt = runtime();
-        if ("ksu_chroot".equals(rt.id())) {
-            List<String> argv = new ArrayList<>();
-            argv.add("su");
-            argv.add("-mm");
-            argv.add("-c");
-            String fullCmd = "chroot " + getRootfsDir().getAbsolutePath() + " /usr/bin/env -i "
-                    + "HOME=/root USER=root LOGNAME=root "
-                    + "PATH=/root/dsh-bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin "
-                    + "TERM=xterm-256color LANG=C.UTF-8 LC_ALL=C.UTF-8 "
-                    + "/bin/bash -c " + ShellQuote.arg(bashCommand);
-            argv.add(fullCmd);
-            ProcessBuilder pb = new ProcessBuilder(argv).redirectErrorStream(true);
-            Compat.redirectStdinDevNull(pb);
-            return pb.start();
-        }
-        List<String> argv = baseProotArgv();
-        argv.add("/bin/bash");
+        List<String> argv = new ArrayList<>();
+        argv.add("su");
+        argv.add("-mm");
         argv.add("-c");
-        argv.add(bashCommand);
+        String fullCmd = "chroot " + getRootfsDir().getAbsolutePath() + " /usr/bin/env -i "
+                + "HOME=/root USER=root LOGNAME=root "
+                + "PATH=/root/dsh-bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin "
+                + "TERM=xterm-256color LANG=C.UTF-8 LC_ALL=C.UTF-8 "
+                + "/bin/bash -c " + ShellQuote.arg(bashCommand);
+        argv.add(fullCmd);
         ProcessBuilder pb = new ProcessBuilder(argv).redirectErrorStream(true);
         Compat.redirectStdinDevNull(pb);
-        applyProotEnv(pb);
         return pb.start();
     }
 
@@ -1034,21 +511,9 @@ public class ProotBootstrap {
         }
     }
 
-    /**
-     * 用 proot 运行时执行并读回输出。
-     * python 等依赖 Android linker 的二进制在 proot 真实 linker64 下最稳。执行完恢复用户的运行时选择。
-     */
+    /** 保留历史方法名；固定原生 chroot 后直接使用当前运行时。 */
     public String execAndReadWithProot(String bashCommand, long timeoutMs) {
-        ensureRuntimeFiles();
-        android.content.SharedPreferences sp = ctx.getSharedPreferences(
-                "deepseekharness", android.content.Context.MODE_PRIVATE);
-        String saved = sp.getString("container_runtime", "proot");
-        try {
-            sp.edit().putString("container_runtime", "proot").apply();
-            return execAndRead(bashCommand, timeoutMs);
-        } finally {
-            sp.edit().putString("container_runtime", saved).apply();
-        }
+        return execAndRead(bashCommand, timeoutMs);
     }
 
     /** 同步执行 rootfs 命令，退出码非 0 抛异常。 */
@@ -1071,30 +536,15 @@ public class ProotBootstrap {
     // ================= PTY 终端（Termux terminal-view） =================
 
     /**
-     * 交互式 bash 会话（持久进程，可读写 stdin/stdout；cd/export 状态保持，供内置终端）。
-     * 与 execRootfs 的差别：不带 -c、不重定向 stdin 到 /dev/null，且补 DSH_CONFIRM 交互确认。
+     * 委托模块 term.sh 创建交互式 bash 会话，保留 stdin/stdout 供终端读写。
+     * 与 execRootfs 执行单条命令不同，此入口传入交互确认环境变量。
      */
     public Process execRootfsInteractive() throws IOException {
-        ContainerRuntime rt = runtime();
-        if ("ksu_chroot".equals(rt.id())) {
-            List<String> argv = new ArrayList<>();
-            argv.add(ContainerRuntime.KsuChroot.findSuBinary());
-            argv.add("-c");
-            argv.add("/data/adb/dsha/scripts/term.sh");
-            ProcessBuilder pb = new ProcessBuilder(argv).redirectErrorStream(true);
-            pb.environment().put("DSH_CONFIRM", "1");
-            pb.environment().put("DSH_INTERACTIVE", "1");
-            return pb.start();
-        }
-        ensureRuntimeFiles();
-        ensureBundledPython();
-        ensureBundledPnpm();
-        ensureAndroidGroups(); // 登录 shell 的 $(groups) 依赖 /etc/group 里有 Android GID，先补齐
-        java.util.List<String> argv = baseProotArgv();
-        argv.add("/bin/bash");
+        List<String> argv = new ArrayList<>();
+        argv.add(ContainerRuntime.KsuChroot.findSuBinary());
+        argv.add("-c");
+        argv.add("/data/adb/dsha/scripts/term.sh");
         ProcessBuilder pb = new ProcessBuilder(argv).redirectErrorStream(true);
-        applyProotEnv(pb);
-        // 交互终端：危险命令启用确认
         pb.environment().put("DSH_CONFIRM", "1");
         pb.environment().put("DSH_INTERACTIVE", "1");
         return pb.start();
@@ -1148,18 +598,18 @@ public class ProotBootstrap {
         return bos.toString("UTF-8");
     }
 
-    /** 冒烟测试：proot 能否 exec + 进 rootfs。 */
+    /** 冒烟测试：原生 chroot 能否 exec + 进 rootfs。 */
     public String smokeTest() {
         try {
             ensureRuntimeFiles();
             StringBuilder diag = new StringBuilder();
-            diag.append("proot 路径: ").append(prootPath()).append("\n");
-            diag.append("nativeLibDir: ").append(nativeLibDir).append("\n");
+            diag.append("运行时: ").append(runtime().displayName()).append("\n");
+            diag.append("rootfs: ").append(getRootfsDir().getAbsolutePath()).append("\n");
             String out = execAndRead("/bin/echo SMOKE_OK");
             diag.append("rootfs exec: ").append(out == null ? "" : out.trim()).append("\n");
             return SensitiveData.redact(diag.toString());
         } catch (Throwable e) {
-            return SensitiveData.redact("PROOT_FAIL: " + e.getClass().getSimpleName()
+            return SensitiveData.redact("CHROOT_FAIL: " + e.getClass().getSimpleName()
                     + ": " + e.getMessage());
         }
     }
@@ -1267,7 +717,7 @@ public class ProotBootstrap {
                 Log.w("DSHA", "解压独立 dsh-runtime 失败或不存在: " + e.getMessage());
             }
         }
-        // 模块 Native 架构下：系统级 Python 3.12 与 pnpm 10.34 原生内置于 rootfs 底包中，APK 纯前端不再内置与解压。
+        // Python 与 pnpm 由原生模块提供；此兼容入口为私有副本准备证书和插件管理工具。
         RuntimeTools.prepare(ctx, rootfsDir);
         markOfflineExtracted();
     }

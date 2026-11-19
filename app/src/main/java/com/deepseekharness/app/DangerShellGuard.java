@@ -9,8 +9,8 @@ package com.deepseekharness.app;
  *
  * 它防的是「误操作」和「明显的恶意命令」，**不是**定向攻击。shell 的表达能力决定了
  * 任何黑名单都能绕过：变量拼接、编码执行、间接调用……追是追不完的。真正的防线是
- * 另外三层 —— 3090 桥的 token 鉴权（未授权者进不来）、关键操作的用户确认（要人真的
- * 点一下）、以及 proot 容器边界（碰不到宿主系统）。
+ * 另外几层 —— 3095 桥的 token 鉴权、关键操作的用户确认，以及模块对 /dev/block 的
+ * 只读隔离与这里的策略拒绝。原生 chroot 内运行的是 uid=0，不能把 chroot 当成宿主隔离边界。
  *
  * 所以这里的取舍是「宁可漏判，不可滥判」：把 > 和 mv 整体判危会让确认弹窗变成噪音，
  * 用户几次之后就学会无脑点允许 —— 那时连真正危险的命令也拦不住了。只在指向关键
@@ -82,7 +82,7 @@ public final class DangerShellGuard {
      *  于是每条命令都要确认。用户实测「任何 shell 都被拦」就是这么来的：
      *  我们把自己加的代码当成了用户意图。 */
     private static String stripOwnWrapper(String c) {
-        // ensureBashGuardPatch 注入的形式：source /root/dsh-guard.sh 2>/dev/null; <真命令>
+        // 识别守卫包装前缀：source /root/dsh-guard.sh 2>/dev/null; <真命令>
         int i = c.indexOf("dsh-guard.sh");
         if (i >= 0) {
             int semi = c.indexOf(';', i);
