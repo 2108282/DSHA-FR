@@ -7,8 +7,12 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 JAVA_ROOT = ROOT / "app" / "src" / "main" / "java"
 
+BUILDER_RE = re.compile(r"new\s+(?:(?:com\.deepseekharness\.app\.ui\.)?DshaDialogBuilder)\s*\(")
+LEGACY_BUILDER_RE = re.compile(
+    r"new\s+(?:(?:android\.app|androidx\.appcompat\.app)\.)?AlertDialog\.Builder\s*\("
+)
 RULES = [
-    (re.compile(r"new\s+(?:(?:android\.app|androidx\.appcompat\.app)\.)?AlertDialog\.Builder\s*\("),
+    (LEGACY_BUILDER_RE,
      "Use DshaDialogBuilder instead of creating AlertDialog.Builder directly."),
     (re.compile(r"new\s+(?:com\.google\.android\.material\.dialog\.)?MaterialAlertDialogBuilder\s*\("),
      "MaterialAlertDialogBuilder bypasses the shared app-dialog theme; use DshaDialogBuilder."),
@@ -21,6 +25,17 @@ RULES = [
 ]
 
 errors = []
+model_setup = JAVA_ROOT / "com" / "deepseekharness" / "app" / "ui" / "ModelSetupActivity.java"
+model_text = model_setup.read_text(encoding="utf-8")
+confirm_model = re.search(
+    r"private void confirmDeleteModel\([^)]*\)\s*\{([\s\S]*?)\n    \}", model_text
+)
+if not confirm_model or "DshaCardDialogs.confirm(" not in confirm_model.group(1):
+    errors.append(
+        "com/deepseekharness/app/ui/ModelSetupActivity.java:confirmDeleteModel: "
+        "model removal confirmation must use the shared Skia-card confirmation component."
+    )
+
 for source in sorted(JAVA_ROOT.rglob("*.java")):
     rel = source.relative_to(JAVA_ROOT).as_posix()
     text = source.read_text(encoding="utf-8")

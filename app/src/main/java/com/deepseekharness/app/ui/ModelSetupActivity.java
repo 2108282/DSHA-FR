@@ -477,14 +477,15 @@ public final class ModelSetupActivity extends AppCompatActivity {
             ref = s(val.getAsJsonObject(), "apiKeyEnv");
         }
         final String finalRef = ref;
-        new DshaDialogBuilder(this)
-                .setTitle(t("删除服务商？", "Delete provider?"))
-                .setMessage(t("确定要删除「" + title + "」的配置吗？这会从 DSH 中移除该提供方与关联密钥。",
-                        "Delete " + title + "? This removes the configuration and stored API key."))
-                .setNegativeButton(t("取消", "Cancel"), null)
-                .setPositiveButton(t("删除", "Delete"), (d, w) -> {
-                    repository.deleteProvider(s(entry, "settingsNs"), path, revision, gen, finalRef);
-                })
+        DshaCardDialogs.confirm(
+                this,
+                t("删除服务商？", "Delete provider?"),
+                t("确定要删除「" + title + "」的配置吗？这会从 DSH 中移除该提供方与关联密钥。",
+                        "Delete " + title + "? This removes the configuration and stored API key."),
+                t("取消", "Cancel"),
+                t("删除", "Delete"),
+                R.drawable.ic_ui2_box,
+                () -> repository.deleteProvider(s(entry, "settingsNs"), path, revision, gen, finalRef))
                 .show();
     }
 
@@ -887,28 +888,33 @@ public final class ModelSetupActivity extends AppCompatActivity {
     }
 
     private void confirmDeleteModel(int index, String modelId) {
-        new DshaDialogBuilder(this)
-                .setTitle(t("移除模型？", "Remove model?"))
-                .setMessage(t("确定从目录中移除模型「" + modelId + "」吗？保存后生效。",
-                        "Remove model " + modelId + " from catalog? Effective after save."))
-                .setNegativeButton(t("取消", "Cancel"), null)
-                .setPositiveButton(t("移除", "Remove"), (dialog, which) -> {
+        DshaCardDialogs.confirm(
+                this,
+                t("移除模型？", "Remove model?"),
+                t("确定从目录中移除模型「" + modelId + "」吗？保存后生效。",
+                        "Remove model " + modelId + " from catalog? Effective after save."),
+                t("取消", "Cancel"),
+                t("移除", "Remove"),
+                R.drawable.ic_ui2_box,
+                () -> {
                     if (index >= 0 && index < draft.modelList.size()) {
                         draft.modelList.remove(index);
                         renderModels();
                         updateStatusBanner(t("已从目录移除模型 " + modelId, "Removed model " + modelId));
                     }
-                })
-                .show();
+                }).show();
     }
 
     private void confirmDeleteProvider() {
-        new DshaDialogBuilder(this)
-                .setTitle(t("删除服务商？", "Delete provider?"))
-                .setMessage(t("确定要删除此服务商配置吗？这会从 DSH 中移除该提供方及关联密钥。",
-                        "Delete this provider? This removes the configuration and stored API key."))
-                .setNegativeButton(t("取消", "Cancel"), null)
-                .setPositiveButton(t("删除", "Delete"), (d, w) -> {
+        DshaCardDialogs.confirm(
+                this,
+                t("删除服务商？", "Delete provider?"),
+                t("确定要删除此服务商配置吗？这会从 DSH 中移除该提供方及关联密钥。",
+                        "Delete this provider? This removes the configuration and stored API key."),
+                t("取消", "Cancel"),
+                t("删除", "Delete"),
+                R.drawable.ic_ui2_box,
+                () -> {
                     JsonArray path = draft.custom
                             ? ModelConfiguration.path("providers", draft.route)
                             : draft.entry.getAsJsonArray("settingsPath");
@@ -924,8 +930,7 @@ public final class ModelSetupActivity extends AppCompatActivity {
                             ref);
                     draft.clear();
                     showDirectory();
-                })
-                .show();
+                }).show();
     }
 
     private boolean isConfiguredRoute(String r) {
@@ -1097,11 +1102,13 @@ public final class ModelSetupActivity extends AppCompatActivity {
                         for (String lvl : ALL_TIERS) {
                             if (!used.contains(lvl)) available.add(lvl);
                         }
-                        String[] items = available.toArray(new String[0]);
-                        new DshaDialogBuilder(ModelSetupActivity.this)
-                                .setTitle(t("选择档位", "Select Level"))
-                                .setItems(items, (d, which) -> {
-                                    String chosen = items[which];
+                        DshaCardDialogs.choices(
+                                ModelSetupActivity.this,
+                                t("选择档位", "Select Level"),
+                                available,
+                                available.indexOf(te.level),
+                                which -> {
+                                    String chosen = available.get(which);
                                     String oldLevel = te.level;
                                     te.level = chosen;
                                     if ("off".equals(chosen)) {
@@ -1110,8 +1117,7 @@ public final class ModelSetupActivity extends AppCompatActivity {
                                         te.wireValue = chosen;
                                     }
                                     run();
-                                })
-                                .show();
+                                });
                     });
 
                     layoutReasoningList.addView(row, rLp);
@@ -1163,16 +1169,16 @@ public final class ModelSetupActivity extends AppCompatActivity {
 
         if (btnReasoningInfo != null) {
             btnReasoningInfo.setOnClickListener(v -> {
-                new DshaDialogBuilder(ModelSetupActivity.this)
-                        .setTitle(t("推理等级说明", "Reasoning Levels"))
-                        .setMessage(t("推理等级（reasoningEfforts）用于配置模型向上游 API 发送的思考强度参数：\n\n"
+                DshaCardDialogs.info(
+                        ModelSetupActivity.this,
+                        t("推理等级说明", "Reasoning Levels"),
+                        t("推理等级（reasoningEfforts）用于配置模型向上游 API 发送的思考强度参数：\n\n"
                                         + "· 档位：在 DSH 选择器中展示的等级标识（如 low, medium, high 等）；\n"
                                         + "· API 参数值：实际在请求协议中发送的参数字符串；\n"
                                         + "· off 档位：固定表示关闭深度思考，参数值锁定为空；\n"
                                         + "· 必须包含至少一个除 off 以外的思考档位。",
-                                "Reasoning levels configure model thinking effort dispatched to API."))
-                        .setPositiveButton(t("知道了", "Got it"), null)
-                        .show();
+                                "Reasoning levels configure model thinking effort dispatched to API."),
+                        t("知道了", "Got it"));
             });
         }
 
@@ -1582,11 +1588,11 @@ public final class ModelSetupActivity extends AppCompatActivity {
                     : t("请检查模型目录：ID 不能重复，容量必须是正整数。", "Check models: unique IDs and positive integer capacities are required.");
             updateStatusBanner(msg);
             ToastHelper.makeText(this, msg, Toast.LENGTH_LONG).show();
-            new DshaDialogBuilder(this)
-                    .setTitle(t("保存失败", "Save failed"))
-                    .setMessage(msg)
-                    .setPositiveButton(t("去修改", "OK"), null)
-                    .show();
+            DshaCardDialogs.info(
+                    this,
+                    t("保存失败", "Save failed"),
+                    msg,
+                    t("去修改", "OK"));
         }
     }
 
