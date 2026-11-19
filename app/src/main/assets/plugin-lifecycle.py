@@ -198,7 +198,8 @@ class Lifecycle:
             if os.path.isdir(path) and not os.path.islink(path) and time.time() - os.path.getmtime(path) > 7200:
                 shutil.rmtree(path)
 
-    def inspect_npm(self, spec, path, key, request):
+    def inspect_npm(self, spec, path, key, request, receive):
+        """锁定 npm 的实际版本，再把 tarball 交给统一归档预览流程。"""
         if not shutil.which('npm'):
             raise ValueError('npm 尚未就绪，请关闭终端后重新打开')
         res = subprocess.run(['npm', 'view', spec, '--json'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30)
@@ -211,27 +212,24 @@ class Lifecycle:
                 pkg = pkg[-1]
         except Exception:
             raise ValueError('npm 返回数据无法解析')
-        if not isinstance(pkg, dict) or not pkg.get('name'):
-            raise ValueError('npm 插件信息无效')
+        if not isinstance(pkg, dict) or not pkg.get('name') or not pkg.get('version'):
+            raise ValueError('npm 插件信息无效：未返回明确版本')
+        name = str(pkg['name'])
+        version = str(pkg['version'])
         item = self.metadata_from_dict(pkg)
         if request.get('name') and item['name'] != request['name']:
             raise ValueError('下载包的名称与选中的插件不一致')
         if request.get('version') and item['version'] != request['version']:
             raise ValueError('下载包版本与网页说明不一致')
-        prepared = {
-            'previewId': key,
-            'type': 'npm',
-            'npmSpec': spec,
-            'source': 'npm:' + spec,
-            'sha256': hashlib.sha256(spec.encode('utf-8')).hexdigest(),
-            'items': [item],
-            'createdAt': int(time.time()),
-            'subdir': '',
-            'updateFor': request.get('updateFor', ''),
-            'fromVersion': request.get('fromVersion', '')
-        }
-        self.annotate_existing_install(prepared)
-        self.write(os.path.join(path, 'preview.json'), prepared)
+        # 预览和确认必须针对同一个不可变版本，不能让 latest 在两次操作间漂移。
+        exact_spec = name + '@' + version
+        self.g['cmd_npm'](exact_spec,
+                           consume=lambda archive, source='': receive(archive, source=source))
+        prepared = self.read(os.path.join(path, 'preview.json'), {})
+        actual_items = prepared.get('items') or []
+        if len(actual_items) != 1 or actual_items[0].get('name') != name \
+                or str(actual_items[0].get('version', '')) != version:
+            raise ValueError('npm 下载包的名称或版本与查询结果不一致')
         return prepared
 
     def annotate_existing_install(self, prepared):
@@ -345,7 +343,7 @@ class Lifecycle:
                 self.g['cmd_release'](*parts[1:], consume=receive)
             elif parts[0] == 'npm' and len(parts) == 2:
                 spec = parts[1].removeprefix("npm:")
-                prepared = self.inspect_npm(spec, path, key, request)
+                prepared = self.inspect_npm(spec, path, key, request, receive)
             elif parts[0] == 'file' and len(parts) == 2:
                 receive(self.local(parts[1]))
             else:
@@ -381,42 +379,22 @@ class Lifecycle:
             raise ValueError('安装预览已过期，请重新解析链接')
 
         if preview.get('type') == 'npm':
-            spec = preview.get('npmSpec') or preview['items'][0]['name']
-            name = preview['items'][0]['name']
-            if name in self.builtin.builtin_names():
-                code = self.g['cmd_npm'](spec)
-                if code == 0:
-                    shutil.rmtree(path, ignore_errors=True)
-                return code
-            res = subprocess.run(["dsh", "plugin", "--profile", "web", "add", spec],
-                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=300)
-            if res.returncode != 0:
-                raise ValueError("npm 插件安装失败：" + (res.stdout or "")[-1200:].strip())
-            sources = self.read(self.local(self.g['SOURCES']), {})
-            if not isinstance(sources, dict):
-                sources = {}
-            sources[name] = "npm:" + spec
-            self.write(self.local(self.g['SOURCES']), sources)
-            if self.g.get('ensure_plugin_symlinks'):
-                self.g['ensure_plugin_symlinks'](name)
-            shutil.rmtree(path)
-            action_desc = "更新" if preview.get('updateFor') else "安装"
-            self.g['result']('ok', f"已{action_desc} {name}；重启 Web 后生效。", installed=[name])
-            return 0
+            shutil.rmtree(path, ignore_errors=True)
+            raise ValueError('旧版 npm 预览已失效，请重新解析链接')
 
-        archive = os.path.join(path, 'archive')
-        if not os.path.isfile(archive) or self.digest(archive) != preview.get('sha256'):
-            raise ValueError('暂存包已变化，请重新解析链接')
-        if preview.get('updateFor'):
-            directory = self.g['resolve_plugin_dir'](preview['updateFor'])
-            current = self.read(os.path.join(directory, 'package.json'), {}) if directory else {}
-            if current.get('version') != preview.get('fromVersion'):
-                raise ValueError('插件已被其他操作更新，请重新检查版本')
-        expected = {preview['updateFor']: preview.get('fromVersion')} if preview.get('updateFor') else None
-        code = self.g['cmd_import'](archive, preview.get('subdir', ''), preview.get('source', ''), expected_versions=expected)
-        if code == 0:
-            shutil.rmtree(path)
-        return code
+        try:
+            archive = os.path.join(path, 'archive')
+            if not os.path.isfile(archive) or self.digest(archive) != preview.get('sha256'):
+                raise ValueError('暂存包已变化，请重新解析链接')
+            if preview.get('updateFor'):
+                directory = self.g['resolve_plugin_dir'](preview['updateFor'])
+                current = self.read(os.path.join(directory, 'package.json'), {}) if directory else {}
+                if current.get('version') != preview.get('fromVersion'):
+                    raise ValueError('插件已被其他操作更新，请重新检查版本')
+            expected = {preview['updateFor']: preview.get('fromVersion')} if preview.get('updateFor') else None
+            return self.g['cmd_import'](archive, preview.get('subdir', ''), preview.get('source', ''), expected_versions=expected)
+        finally:
+            shutil.rmtree(path, ignore_errors=True)
 
     def source_command(self, name):
         sources = self.read(self.local(self.g['SOURCES']), {})

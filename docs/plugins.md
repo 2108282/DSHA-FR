@@ -57,8 +57,7 @@ dsha-plugin install 插件包名
 dsha-plugin install @作者/插件@1.0.0
 ```
 
-`dsha-plugin install` 不执行包的安装脚本，要求发布包已构建且声明 dsh.bundle.patch。
-普通 `npm install` 只安装包，不自动修改 dsh 的启用列表。安装 dsh 插件后重启 Web 生效。
+`dsha-plugin install` 不执行包的安装脚本，要求发布包已构建且声明 dsh.bundle.patch。APK 中输入 npm 包名、GitHub 地址或本地归档时，都会先固定并校验实际包体，再等待确认；确认后复用同一份已校验归档，不会重新解析 `latest`。普通 `npm install` 只安装包，不自动修改 dsh 的启用列表。安装 dsh 插件后重启 Web 生效。
 作者只提供 GitHub 压缩包、没有发布到 npm 时，继续用链接或本地导入。
 
 ## 插件包要求

@@ -232,6 +232,27 @@ class PluginLifecycleTest(PluginTestBase):
             for file in root.iterdir(): out.write(file, 'package/' + file.name)
         return archive
 
+    def test_npm_preview_uses_locked_tarball_through_confirm(self):
+        archive = self.archive(version='1.0.0')
+        life = self.manager.lifecycle()
+        def pack(spec, consume):
+            self.assertEqual('dsh-demo@1.0.0', spec)
+            return consume(str(archive), source='npm:dsh-demo@1.0.0')
+        request = {'command': "npm dsh-demo", 'name': 'dsh-demo'}
+        metadata = json.dumps({'name': 'dsh-demo', 'version': '1.0.0', 'main': 'index.js',
+                               'dsh': {'bundle': {'patch': 'cordis.patch.yml'}}})
+        completed = self.manager.subprocess.CompletedProcess([], 0, metadata, '')
+        with patch.object(self.manager.shutil, 'which', return_value='/usr/bin/npm'), \
+                patch.object(self.manager.subprocess, 'run', return_value=completed), \
+                patch.object(self.manager, 'cmd_npm', side_effect=pack):
+            preview = life.inspect(request, False)
+        preview_path = Path(life.preview_path(preview['previewId']))
+        self.assertEqual(life.digest(str(preview_path / 'archive')), preview['sha256'])
+        self.assertEqual('1.0.0', preview['items'][0]['version'])
+        self.assertFalse((self.home / 'plugin-src/dsh-demo').exists())
+        self.assertEqual(0, life.install_preview(preview['previewId']))
+        self.assertTrue((self.home / 'plugin-src/dsh-demo').exists())
+
     def test_rollback_retains_only_one_previous_version_and_disabled_state(self):
         for version in ('1.0.0', '2.0.0', '3.0.0'):
             self.manager.register_plugin(self.package(self.root / version, version=version), 'npm:dsh-demo@' + version)
@@ -274,6 +295,20 @@ class PluginLifecycleTest(PluginTestBase):
             preview = life.inspect(request, False)
             (Path(life.preview_path(preview['previewId'])) / 'archive').write_bytes(b'changed')
             with self.assertRaises(ValueError): life.install_preview(preview['previewId'])
+
+    def test_failed_preview_install_cleans_staged_archive(self):
+        archive = self.archive(version='1.0.0')
+        life = self.manager.lifecycle()
+        def download(url, target):
+            import shutil
+            shutil.copyfile(archive, target)
+        request = {'command': "download 'https://example.com/demo.zip'", 'name': 'dsh-demo', 'version': '1.0.0'}
+        with patch.object(self.manager, 'download', side_effect=download):
+            preview = life.inspect(request, False)
+        staged = Path(life.preview_path(preview['previewId']))
+        with patch.object(self.manager, 'cmd_import', return_value=1):
+            self.assertEqual(1, life.install_preview(preview['previewId']))
+        self.assertFalse(staged.exists())
 
     def test_update_preview_is_bound_to_plugin_identity_and_installed_version(self):
         self.manager.register_plugin(self.package(self.root / 'v1', version='1.0.0'), 'https://example.com/demo.zip')
