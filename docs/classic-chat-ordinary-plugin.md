@@ -12,7 +12,7 @@ classic-chat 不再属于 DSHA 固有插件。新 Full 包不预装；旧环境�
 - `magisk-module/customize.sh`：Full 保留数据安装也执行普通模式迁移。
 - 注册脚本、自愈脚本、历史补丁与公开底包导出器不再把 classic-chat 自动注册成固有插件。
 
-早期 ARCHITECTURE_AND_PACKAGING.md 中“补丁放 scripts”的说明已过时；实际构建优先打包 `magisk-module/patches/*.sh`，只有模块补丁目录没有脚本时才回退根目录，二者不会合并。
+历史版本 ARCHITECTURE_AND_PACKAGING.md 曾使用“补丁放 scripts”的说明；该规则已由 patches 隔离规则替代，实际构建优先打包 `magisk-module/patches/*.sh`，只有模块补丁目录没有脚本时才回退根目录，二者不会合并。
 
 ## Lite 的迁移行为
 

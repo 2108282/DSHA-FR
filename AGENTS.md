@@ -13,7 +13,7 @@
 | 分支名称 | 仓库定位与职责 | 构建产物与发布目标 |
 | :--- | :--- | :--- |
 | **`magisk-apk`** | **Android 前端客户端**（Java 17, minSdk 31, 纯 64 位）<br>- 承载全屏/抽屉 WebView UI (`:3080`)<br>- 提供 3095 设备能力桥 (`HttpShellService`)<br>- 提供 PTY 终端会话连接器 (`term.sh`)<br>- 不含任何 Linux 底包，包体仅 ~25MB | 自动编译 `dsha-v1.2.0-native-debug.apk`<br>(直接安装至 Android 手机) |
-| **`dsh-magisk`** | **KernelSU / Magisk 原生 Linux 底座与模块源码**<br>- 包含完整 Ubuntu ARM64 生产闭包与 7 大插件实体<br>- 包含模块安装器 (`customize.sh`) 与生命周期脚本 (`scripts/`)<br>- 负责打包全内置刷机包与轻量热更新刷机包 | 自动打包 `dsha_ksu_native_full.zip` (~200MB)<br>与 `dsha_ksu_native_lite.zip` (~3.6MB) |
+| **`dsh-magisk`** | **KernelSU / Magisk 原生 Linux 底座与模块源码**<br>- 包含完整 Ubuntu ARM64 生产闭包与当前 5 个内置插件实体<br>- 包含模块安装器 (`customize.sh`) 与生命周期脚本 (`scripts/`)<br>- 负责打包全内置刷机包与轻量热更新刷机包 | 自动打包 `dsha_ksu_native_full.zip` (~200MB)<br>与 `dsha_ksu_native_lite.zip` (~3.6MB) |
 
 ---
 
@@ -36,20 +36,18 @@
 │   └── usr/local/lib/node_modules/
 │       └── @deepseek-ai/dsh/    # DSH 官方核心运行时源码与生产闭包
 │
-├── [3. 全部 7 大插件实体与双向软链挂载层]
-│   ├── root/dsha-* 与 root/dsh-web-mobile # 4 大核心插件实体：
+├── [3. 当前 5 个内置插件实体与双向软链挂载层]
+│   ├── root/dsha-* 与 root/dsh-* # 当前内置插件实体：
 │   │   ├── dsha-device-shell-guide (设备指南提示词与 nsenter 直通说明)
 │   │   ├── dsha-status-overlay     (屏幕顶部悬浮流式状态条)
 │   │   ├── dsha-task-notifier      (任务结束通知，通过 3095 桥直推 Android 通知栏)
-│   │   └── dsh-web-mobile          (移动端 UI、毛玻璃背景与触屏让路守卫，独立开源项目)
+│   │   ├── dsh-mobile-lite         (移动端布局、输入框与侧栏手势适配)
+│   │   └── dsh-quickchat-gesture   (独立返回手势分发)
 │   │
-│   ├── root/.dsh/plugin-src/    # 3 大官方扩展插件源码实体：
-│   │   ├── dsh-agy                 (Antigravity 账户多模型与 Token 管理)
-│   │   ├── dsh-api-dashboard       (多平台 API 余额看板与大肥鱼桌面挂件)
-│   │   └── @xmanrui/dsh-im         (即时通讯机器人接入)
+│   ├── root/.dsh/plugin-src/    # 用户后装插件，不随纯净底包固定预装
 │   │
 │   ├── root/.dsh/profiles/web/  # Web 运行时 Profile：
-│   │   ├── package.json         # 注册了全部 7 大插件 dependencies 与 bundles 清单
+│   │   ├── package.json         # 注册当前内置插件 dependencies 与 bundles 清单
 │   │   ├── cordis.yml           # 插件加载与启动参数
 │   │   └── node_modules/        # [关键] 指向 /root/dsha-* 与 plugin-src/* 的符号链接
 │   └── usr/local/lib/node_modules/ # [关键] 供 Cordis 全局加载器导入的同名软链
@@ -84,10 +82,10 @@
 su -c /data/adb/dsha/scripts/term.sh
 # 2. 升级核心
 pnpm install -g @deepseek-ai/dsh@latest
-# 3. 验证版本
-dsh --version && exit
-# 4. 宿主执行脱敏打包并同步
-/sdcard/Download/DSHA/dsha-ksu-project/tools/export-rootfs.sh
+# 3. 验证版本，保持在容器中
+dsh --version
+# 4. 在当前后端源码工作树根目录执行脱敏导出：
+bash tools/export-rootfs.sh
 ```
 
 ### 2. 修改或调试控制脚本 (`scripts/`)
@@ -100,7 +98,7 @@ dsh --version && exit
 
 ## 四、 绝对禁止触发的红线
 
-1. **严禁在云端擅自“拼凑”或“裁剪”插件与底包**：所有 7 大插件与运行环境必须完整打包，不可挑三拣四；
+1. **严禁在云端擅自“拼凑”或“裁剪”插件与底包**：当前内置清单中的全部插件与运行环境必须完整打包，不可挑三拣四；
 2. **严禁在调用 `su` 时传入不存在的参数（如 `-i`）**：KernelSU 的 `su` 仅支持 `-c`、`-mm` 等标准选项；
 3. **严禁在自愈脚本中使用 `rm -rf` 等破坏性命令**：优先使用 `ln -sfn` 原子符号链接覆盖与 `printf ... >` 直接写入；
 4. **严禁破坏 `/dev/block` 的只读隔离**：设备物理分区安全第一，禁止尝试任何写入分区的行为。

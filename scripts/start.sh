@@ -68,7 +68,7 @@ rm -f "$ROOTFS/root/.dsh/"*.lock 2>/dev/null || true
 rm -f "$ROOTFS/root/.dsh/."*.lock 2>/dev/null || true
 rm -f "$ROOTFS/root/.dsh/.credentials.yaml.lock" 2>/dev/null || true
 
-# 2.5 自动补齐 CA 根证书与前端首帧防闪白样式
+# 2.5 自动补齐 CA 根证书（不修改官方前端产物）
 mkdir -p "$ROOTFS/etc/ssl/certs" "$ROOTFS/usr/lib/ssl" 2>/dev/null || true
 if [ -f "$ROOTFS/usr/local/share/dsha/ca-certificates.crt" ]; then
     if [ ! -f "$ROOTFS/etc/ssl/certs/ca-certificates.crt" ]; then
@@ -79,10 +79,6 @@ if [ -f "$ROOTFS/usr/local/share/dsha/ca-certificates.crt" ]; then
         cp -f "$ROOTFS/usr/local/share/dsha/ca-certificates.crt" "$ROOTFS/usr/lib/ssl/cert.pem" 2>/dev/null || true
         chmod 644 "$ROOTFS/usr/lib/ssl/cert.pem" 2>/dev/null || true
     fi
-fi
-INDEX_HTML="$ROOTFS/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-web-frontend/dist/index.html"
-if [ -f "$INDEX_HTML" ] && ! grep -q "dsh-boot-style" "$INDEX_HTML"; then
-    sed -i 's|<head>|<head><style id="dsh-boot-style">html,body,#root{background:transparent!important;background-color:transparent!important;}</style>|' "$INDEX_HTML" 2>/dev/null || true
 fi
 
 # 3. 挂载原生虚拟文件系统（基于 /proc/mounts 精准判重，杜绝挂载泄漏与层叠）
@@ -761,10 +757,15 @@ exec $REAL_PNPM "$@"
 PNPM_EOF
 chmod 755 "$DSH_BIN/pnpm"
 
-# 清空旧日志
-> "$LOG_FILE"
+# 清空旧日志：实体放在容器内，宿主 run 路径通过软链访问同一文件。
+# 旧版容器内绝对宿主路径软链在 chroot 中无法解析，先只移除该软链。
 mkdir -p "$ROOTFS/root"
-ln -sf "$LOG_FILE" "$ROOTFS/root/dsh-web.log" 2>/dev/null || true
+if [ -L "$ROOTFS/root/dsh-web.log" ]; then
+    rm -f "$ROOTFS/root/dsh-web.log" || exit 1
+fi
+> "$ROOTFS/root/dsh-web.log" || exit 1
+rm -f "$LOG_FILE" || exit 1
+ln -s "$ROOTFS/root/dsh-web.log" "$LOG_FILE" || exit 1
 
 # 确保本机极速低功耗心跳与轮询补丁就绪（彻底抑制 client-hmr 500ms 磁盘轮询与 skill-filesystem 轮询）
 mkdir -p "$ROOTFS/root/.dsh" 2>/dev/null || true
@@ -905,7 +906,7 @@ if [ -d "/dev/cpuctl/background" ]; then
     echo "$NEW_PID" > /dev/cpuctl/background/cgroup.procs 2>/dev/null || true
 fi
 
-# 纳入系统免压缩 memcg 组（锁定真实物理内存，严禁 ZRAM 压缩换页）
+# 尝试配置较低换页倾向；不锁页、不设置内存硬上限，具体效果取决于宿主内核
 mkdir -p /dev/memcg/dsh 2>/dev/null || true
 echo 0 > /dev/memcg/dsh/memory.swappiness 2>/dev/null || true
 echo 1 > /dev/memcg/dsh/memory.anno_writeback_protected 2>/dev/null || true

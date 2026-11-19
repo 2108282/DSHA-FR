@@ -39,6 +39,25 @@ if [ -n "$OVERLAY_SRC" ]; then
     done
 fi
 
+# 手势分发已移到 dsh-quickchat-gesture；保留旧补丁唯一需要的源码清理。
+# 不再维护旧补丁的 plugin-src 双源复制与重复注册逻辑。
+for mobile_root in "$ROOT_DIR/dsh-mobile-lite" "$DSH_DIR/plugin-src/dsh-mobile-lite"; do
+    [ -d "$mobile_root" ] && [ ! -L "$mobile_root" ] || continue
+    for stale_parent in src/client/effects .client-build/effects; do
+        parent="$mobile_root"
+        redirected=0
+        for component in $(echo "$stale_parent" | tr '/' ' '); do
+            parent="$parent/$component"
+            [ ! -L "$parent" ] || redirected=1
+        done
+        [ "$redirected" = 0 ] || continue
+        case "$stale_parent" in
+            src/*) rm -f "$parent/mobile-back-dispatcher.ts" 2>/dev/null || true ;;
+            *) rm -f "$parent/mobile-back-dispatcher.js" 2>/dev/null || true ;;
+        esac
+    done
+done
+
 # 2. 确保 dsha-builtin.txt 清单完整包含全部 5 大内置固有插件
 if [ -f "$BUILTIN_TXT" ]; then
     for bp in dsh-device-shell-guide dsh-task-notifier dsh-status-overlay dsh-mobile-lite dsh-quickchat-gesture; do
@@ -127,5 +146,11 @@ if [ -f "$DSH_DIR/dsha-plugin-heal.sh" ]; then
     echo "  -> 正在执行容器内置插件自愈与权限校准..."
     chroot "$ROOTFS" /bin/bash /root/.dsh/dsha-plugin-heal.sh 2>/dev/null || true
 fi
+
+# 保留旧手势迁移的客户端时间戳刷新，不再分发重复的注册补丁。
+for client in "$ROOT_DIR/dsh-quickchat-gesture/lib/client.js" "$ROOT_DIR/dsh-mobile-lite/lib/client.js"; do
+    plugin="${client%/lib/client.js}"
+    [ ! -L "$plugin" ] && [ ! -L "$plugin/lib" ] && [ ! -L "$client" ] && [ -f "$client" ] && touch "$client" 2>/dev/null || true
+done
 
 echo "✓ 内置插件单源物理熔铸增量补丁执行完毕！"

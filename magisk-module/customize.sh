@@ -124,9 +124,7 @@ if [ "$FORCE_CLEAN" = "1" ]; then
     # 检查 zip 中是否存在 rootfs.tar.gz
     LOCAL_TAR=""
     for p in "/sdcard/Download/DSHA/rootfs.tar.gz" \
-             "/data/media/0/Download/DSHA/rootfs.tar.gz" \
-             "/sdcard/Download/DSHA/dsha-ksu-project/release/rootfs.tar.gz" \
-             "/data/media/0/Download/DSHA/dsha-ksu-project/release/rootfs.tar.gz"; do
+             "/data/media/0/Download/DSHA/rootfs.tar.gz"; do
         if [ -f "$p" ]; then
             LOCAL_TAR="$p"
             break
@@ -175,18 +173,7 @@ for migration in "$ROOTFS_DIR/root/.dsh/rootfs-migrations/"*.py; do
         || abort "❌ 容器迁移失败: $migration_name"
 done
 
-# 自动自愈核心运行时中可能存在的 .ignored_ 异常改名与断裂软链
-TARGET_CORE_DIR="$ROOTFS_DIR/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai"
-if [ -d "$TARGET_CORE_DIR" ]; then
-    for d in "$TARGET_CORE_DIR"/.ignored_*; do
-        [ -d "$d" ] || continue
-        b=$(basename "$d")
-        real="${b#.ignored_}"
-        orig="$TARGET_CORE_DIR/$real"
-        [ -L "$orig" ] && rm -f "$orig"
-        mv -f "$d" "$orig" 2>/dev/null || true
-    done
-fi
+# 安装器部署模块资产与用户状态迁移，不改写官方包的依赖布局。
 
 # 确保 rootfs 基础目录与挂载保护点结构正确
 chmod 755 "$ROOTFS_DIR/bin" 2>/dev/null || true

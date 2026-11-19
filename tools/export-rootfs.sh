@@ -4,7 +4,7 @@
 # 特性：
 # 1. 纯只读脱敏：绝对不修改、不删除当前运行环境下的任何本地文件或配置；
 # 2. 智能解耦：自动排除后装插件源码 (plugin-src/*) 及个人账号/密钥；
-# 3. 完美修复依赖：动态注入仅含 4 大内置原生插件的标准 profiles/web/package.json，
+# 3. 完美修复依赖：动态注入仅含 5 大内置原生插件的标准 profiles/web/package.json，
 #    彻底杜绝新机刷入后因后装插件断链导致 DSH 启动报错；
 # 4. 双模式支持：--clean (默认，公开发布纯净底包) / --clone (个人整机换机备份)；
 # 5. 支持 --full 参数直接联动 build-module.sh 一键生成最终刷机包。
@@ -110,30 +110,7 @@ else
     echo "==> 正在准备【公开发布纯净脱敏】打包..."
     echo "    [安全保障]: 当前本地系统文件零修改，所有脱敏重置仅在导出流中生效。"
 
-    # 0. 底包导出前依赖健康自愈与严格断言
-    TARGET_CORE_DIR="/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai"
-    if [ -d "$TARGET_CORE_DIR" ]; then
-        for d in "$TARGET_CORE_DIR"/.ignored_*; do
-            [ -d "$d" ] || continue
-            b=$(basename "$d")
-            real="${b#.ignored_}"
-            orig="$TARGET_CORE_DIR/$real"
-            [ -L "$orig" ] && rm -f "$orig"
-            mv -f "$d" "$orig" 2>/dev/null || true
-            echo "  -> [自动自愈] 恢复核心包实体: $b -> $real"
-        done
-
-        # 自动去重：清理 npm 重复下载的 50+ 个子包内冗余嵌套 node_modules/zod
-        python3 -c '
-import os, shutil
-base = "/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai"
-for d in os.listdir(base):
-    zod_nm = os.path.join(base, d, "node_modules", "zod")
-    if os.path.isdir(zod_nm):
-        shutil.rmtree(os.path.join(base, d, "node_modules"), ignore_errors=True)
-' 2>/dev/null || true
-    fi
-
+    # 只读检查官方运行时；不修补官方包、依赖或安装布局。
     echo "==> 正在执行运行时完整性断言 (dsh --version)..."
     DSH_VER=$(dsh --version 2>&1) || {
         echo "❌ 致命错误: dsh 运行时损坏，禁止导出带毒底包！报错如下：" >&2
@@ -484,66 +461,6 @@ EOF_CORDIS
 
     mkdir -p "$(dirname "$OUTPUT_TAR")"
     TMP_RAW_TAR="$STAGE_DIR/raw_rootfs.tar"
-
-    # 6. 内置插件外层更新检测与自动熔铸 (Bake-in)
-    # 若在工作区或 plugin-src 中存在修改或编译出的更新版本，自动将最新生产产物替换底层与 overlay
-    echo "==> [0/3] 正在检测内置固有插件是否有外层新版本并执行自动熔铸..."
-    PRE_BUILTIN_PLUGINS=(
-        "dsh-device-shell-guide"
-        "dsh-task-notifier"
-        "dsh-status-overlay"
-        "dsh-mobile-lite"
-        "dsh-quickchat-gesture"
-    )
-    for p in "${PRE_BUILTIN_PLUGINS[@]}"; do
-        if [ "$p" = "dsh-mobile-lite" ] || [ "$p" = "dsh-quickchat-gesture" ]; then
-            base_tgt="/root/$p"
-            overlay_tgt="$ROOT_DIR/rootfs-overlay/root/$p"
-        else
-            base_tgt="/root/dsha-${p#dsh-}"
-            overlay_tgt="$ROOT_DIR/rootfs-overlay/root/dsha-${p#dsh-}"
-        fi
-
-        # 候选外层来源优先顺序：工作区开发源码 > plugin-src
-        src_candidate=""
-        if [ -d "/root/workspaces/内部工作区/$p" ] && [ -f "/root/workspaces/内部工作区/$p/package.json" ]; then
-            src_candidate="/root/workspaces/内部工作区/$p"
-        elif [ -d "/root/.dsh/plugin-src/$p" ] && [ -f "/root/.dsh/plugin-src/$p/package.json" ]; then
-            src_candidate="/root/.dsh/plugin-src/$p"
-        fi
-
-        if [ -n "$src_candidate" ] && [ -d "$base_tgt" ]; then
-            # 比对版本或核心编译产物修改时间
-            src_ver=$(python3 -c "import json; print(json.load(open('$src_candidate/package.json')).get('version', ''))" 2>/dev/null || true)
-            base_ver=$(python3 -c "import json; print(json.load(open('$base_tgt/package.json')).get('version', ''))" 2>/dev/null || true)
-            need_bake=0
-            if [ -n "$src_ver" ] && [ "$src_ver" != "$base_ver" ]; then
-                need_bake=1
-            elif [ -d "$src_candidate/lib" ] && [ "$src_candidate/lib" -nt "$base_tgt/package.json" ]; then
-                need_bake=1
-            fi
-
-            if [ "$need_bake" -eq 1 ]; then
-                echo "  -> [自动熔铸] 发现 $p 外层新版本 (外层: v$src_ver, 底层: v$base_ver)，正在熔铸进底包..."
-                # 物理覆盖底层生产产物 (排除 node_modules, .git, src 等开发死重，纯净就绪)
-                mkdir -p "$base_tgt"
-                rm -rf "$base_tgt/lib" 2>/dev/null || true
-                cp -af "$src_candidate/package.json" "$base_tgt/"
-                [ -d "$src_candidate/lib" ] && cp -af "$src_candidate/lib" "$base_tgt/"
-                [ -f "$src_candidate/cordis.patch.yml" ] && cp -af "$src_candidate/cordis.patch.yml" "$base_tgt/"
-                [ -f "$src_candidate/README.md" ] && cp -af "$src_candidate/README.md" "$base_tgt/"
-                
-                # 同步更新到仓库的 rootfs-overlay
-                if [ -d "$ROOT_DIR/rootfs-overlay" ]; then
-                    mkdir -p "$overlay_tgt"
-                    cp -af "$base_tgt/." "$overlay_tgt/" 2>/dev/null || true
-                fi
-                echo "     ✓ $p 已成功熔铸至底模 (v$src_ver)"
-            fi
-        fi
-        # 确保标记立牌存在
-        touch "$base_tgt-installed" 2>/dev/null || true
-    done
 
     echo "==> [1/3] 正在扫描系统并创建脱敏底包流..."
     cd /

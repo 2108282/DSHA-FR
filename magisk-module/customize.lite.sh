@@ -78,6 +78,7 @@ fi
 
 # 解压包内所有控制脚本、现场补丁与通用 rootfs-overlay 增量资产到临时运行目录
 TMP_STAGE="/tmp/dsha_lite_stage_$$"
+export TMP_STAGE
 mkdir -p "$TMP_STAGE"
 unzip -o "$ZIPFILE" 'scripts/*' 'patches/*' 'rootfs-overlay/*' -d "$TMP_STAGE" >&2 2>/dev/null || true
 

@@ -13,6 +13,8 @@ import shutil
 import zipfile
 import unittest
 import sys
+import re
+import shlex
 
 sys.dont_write_bytecode = True
 from unittest.mock import patch
@@ -226,6 +228,180 @@ class OrdinaryMigrationTest(unittest.TestCase):
         self.migrate()
         self.assertNotIn(NAME, (self.root / "root/dsha-builtin.txt").read_text())
         self.assertIn("dsh-quickchat-gesture", (self.root / "root/dsha-builtin.txt").read_text())
+
+
+class DistributionCleanupTest(unittest.TestCase):
+    """只打包临时项目、运行隔离的日志片段和假 root 迁移。"""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix="dsha-cleanup-test-")
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+
+    def test_lite_contains_current_guards_without_retired_preinstall_or_templates(self):
+        project = self.root / "project"
+        module = project / "magisk-module"
+        shutil.copytree(REPO / "magisk-module", module)
+        shutil.copytree(REPO / "rootfs-overlay", project / "rootfs-overlay")
+        (project / "scripts").mkdir()
+        shutil.copy2(REPO / "scripts/build-module.sh", project / "scripts/build-module.sh")
+        result = subprocess.run(["bash", str(project / "scripts/build-module.sh"), "--lite"],
+                                capture_output=True, text=True)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        with zipfile.ZipFile(project / "dist/dsha_ksu_native_lite.zip") as archive:
+            names = archive.namelist()
+            self.assertIn("scripts/term.sh", names)
+            self.assertIn("patches/patch-sync-builtin-single-source-and-bakein.sh", names)
+            self.assertFalse(any("patch-sync-rm-one-file-system-guard" in name for name in names))
+            self.assertFalse(any("patch-sync-quickchat-gesture-builtin" in name for name in names))
+            self.assertFalse(any("dsh-classic-chat-installed" in name for name in names))
+            builtin = archive.read("rootfs-overlay/root/dsha-builtin.txt").decode().splitlines()
+            self.assertNotIn(NAME, builtin)
+            self.assertIn("dsh-quickchat-gesture", builtin)
+            guard = archive.read("rootfs-overlay/root/dsh-bin/rm").decode()
+            self.assertIn("--one-file-system", guard)
+            self.assertIn("__dsha_needs_confirm", guard)
+            self.assertEqual((REPO / "scripts/term.sh").read_bytes(), archive.read("scripts/term.sh"))
+
+    def test_log_layout_preserves_host_and_container_access_across_restarts(self):
+        rootfs = self.root / "rootfs"
+        run = self.root / "run"
+        (rootfs / "root").mkdir(parents=True)
+        run.mkdir()
+        host_log = run / "dsh-web.log"
+        container_log = rootfs / "root/dsh-web.log"
+        host_log.write_text("previous log")
+        container_log.symlink_to("/data/adb/dsha/run/dsh-web.log")
+        source = (REPO / "scripts/start.sh").read_text()
+        block = source.split("# 清空旧日志：", 1)[1].split("# 确保本机极速低功耗心跳", 1)[0]
+        block = "# 清空旧日志：" + block
+        env = dict(os.environ, ROOTFS=str(rootfs), RUN_DIR=str(run), LOG_FILE=str(host_log))
+        for _ in range(2):
+            result = subprocess.run(["bash", "-s"], input=block, env=env,
+                                    capture_output=True, text=True)
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            self.assertFalse(container_log.is_symlink())
+            self.assertTrue(host_log.is_symlink())
+            self.assertEqual(container_log.resolve(), host_log.resolve())
+            self.assertEqual("", container_log.read_text())
+            with host_log.open("a") as stream:
+                stream.write("same log\n")
+            self.assertEqual("same log\n", container_log.read_text())
+
+    def test_export_preflight_leaves_official_dependency_layout_untouched(self):
+        core = self.root / "official-dependencies"
+        ignored = core / ".ignored_demo"
+        ignored.mkdir(parents=True)
+        (ignored / "package.json").write_text('{"name":"demo"}')
+        original = core / "demo"
+        original.symlink_to("unchanged-target")
+        dependency = core / "other/node_modules/zod/index.js"
+        dependency.parent.mkdir(parents=True)
+        dependency.write_text("official dependency bytes")
+        commands = self.root / "bin"
+        commands.mkdir()
+        dsh = commands / "dsh"
+        dsh.write_text('#!/bin/sh\n[ "$1" = --version ] || exit 2\nprintf "fixture-version\\n"\n')
+        dsh.chmod(0o755)
+        source = (REPO / "tools/export-rootfs.sh").read_text()
+        block = source.split('echo "==> 正在准备【公开发布纯净脱敏】打包..."', 1)[1]
+        block = block.split("    # 1. 在临时 Stage", 1)[0]
+        block = block.replace("/usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai", str(core))
+        env = dict(os.environ, PATH=str(commands) + os.pathsep + os.environ["PATH"])
+        result = subprocess.run(["bash", "-s"], input="set -euo pipefail\n" + block,
+                                env=env, capture_output=True, text=True)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertTrue(original.is_symlink())
+        self.assertEqual("unchanged-target", os.readlink(original))
+        self.assertEqual('{"name":"demo"}', (ignored / "package.json").read_text())
+        self.assertEqual("official dependency bytes", dependency.read_text())
+        install_root = self.root / "install-root"
+        install_core = install_root / "usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai"
+        install_core.parent.mkdir(parents=True)
+        install_core.symlink_to(core, target_is_directory=True)
+        installer = (REPO / "magisk-module/customize.sh").read_text()
+        install_block = installer.split("# 保留数据安装也执行通用迁移；这里始终保留用户插件和启用状态。\n", 1)[1]
+        install_block = install_block.split("# 确保 rootfs 基础目录与挂载保护点结构正确", 1)[0]
+        env = dict(os.environ, ROOTFS_DIR=str(install_root))
+        result = subprocess.run(["bash", "-s"], input="set -euo pipefail\n" + install_block,
+                                env=env, capture_output=True, text=True)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertTrue(original.is_symlink())
+        self.assertEqual("unchanged-target", os.readlink(original))
+        self.assertEqual('{"name":"demo"}', (ignored / "package.json").read_text())
+        self.assertEqual("official dependency bytes", dependency.read_text())
+
+        official_html = install_root / "usr/local/lib/node_modules/@deepseek-ai/dsh/node_modules/@deepseek-ai/dsh-web-frontend/dist/index.html"
+        official_html.parent.mkdir(parents=True)
+        official_html.write_text("<html><head></head><body>official bytes</body></html>")
+        startup = (REPO / "scripts/start.sh").read_text()
+        bootstrap = startup.split("# 2.5 ", 1)[1].split("\n", 1)[1]
+        bootstrap = bootstrap.split("# 3. 挂载原生虚拟文件系统", 1)[0]
+        env = dict(os.environ, ROOTFS=str(install_root))
+        result = subprocess.run(["bash", "-s"], input="set -euo pipefail\n" + bootstrap,
+                                env=env, capture_output=True, text=True)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertEqual("<html><head></head><body>official bytes</body></html>", official_html.read_text())
+
+    def test_publishing_replaces_only_old_generated_parts(self):
+        clone = self.root / "clone"
+        target = clone / "rootfs"
+        target.mkdir(parents=True)
+        for suffix in ["00", "01", "02"]:
+            (target / ("rootfs.tar.gz.part-" + suffix)).write_text("old part")
+        (target / "keep.txt").write_text("unrelated file")
+        stage = self.root / "stage"
+        stage.mkdir()
+        (stage / "rootfs.tar.gz.part-00").write_text("new only part")
+        source = (REPO / "scripts/publish-rootfs-asset.sh").read_text()
+        block = 'mkdir -p "$CLONE_DIR/rootfs"' + source.split('mkdir -p "$CLONE_DIR/rootfs"', 1)[1]
+        block = block.split('cd "$CLONE_DIR"', 1)[0]
+        env = dict(os.environ, CLONE_DIR=str(clone), STAGE_DIR=str(stage))
+        result = subprocess.run(["bash", "-s"], input="set -euo pipefail\n" + block,
+                                env=env, capture_output=True, text=True)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertEqual(["rootfs.tar.gz.part-00"], [p.name for p in target.glob("rootfs.tar.gz.part-*")])
+        self.assertEqual("new only part", (target / "rootfs.tar.gz.part-00").read_text())
+        self.assertEqual("unrelated file", (target / "keep.txt").read_text())
+
+    def test_builtin_migration_uses_parent_stage_and_does_not_follow_stale_source_links(self):
+        rootfs = self.root / "rootfs"
+        home = rootfs / "root/.dsh"
+        profile = home / "profiles/web/package.json"
+        profile.parent.mkdir(parents=True)
+        profile.write_text('{"dependencies":{},"dsh":{"profile":{"bundles":[]}}}')
+        mobile = rootfs / "root/dsh-mobile-lite"
+        stale = mobile / "src/client/effects/mobile-back-dispatcher.ts"
+        stale.parent.mkdir(parents=True)
+        stale.write_text("retired source")
+        keep = stale.with_name("keep.ts")
+        keep.write_text("unrelated source")
+        protected = self.root / "protected/effects/mobile-back-dispatcher.js"
+        protected.parent.mkdir(parents=True)
+        protected.write_text("keep redirected source")
+        (mobile / ".client-build").symlink_to(protected.parent.parent, target_is_directory=True)
+        stage = self.root / "parent stage"
+        engine = stage / "rootfs-overlay/root/.dsh/register-builtin-plugins.py"
+        engine.parent.mkdir(parents=True)
+        engine.write_text("# staged engine\n")
+        installer = (REPO / "magisk-module/customize.lite.sh").read_text()
+        stage_init = re.search(r'^TMP_STAGE=.*\n(?:export TMP_STAGE\n)?', installer, re.MULTILINE).group()
+        stage_init = stage_init.replace('"/tmp/dsha_lite_stage_$$"', shlex.quote(str(stage)))
+        command = stage_init + '\nexec sh "$1" "$2" "$3"\n'
+        patch_path = REPO / "magisk-module/patches/patch-sync-builtin-single-source-and-bakein.sh"
+        before_manifest = None
+        for _ in range(2):
+            result = subprocess.run(["sh", "-c", command, "fixture", str(patch_path),
+                                     str(rootfs), str(self.root / "data")],
+                                    capture_output=True, text=True)
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            self.assertEqual(engine.read_bytes(), (home / engine.name).read_bytes())
+            self.assertFalse(stale.exists())
+            self.assertEqual("unrelated source", keep.read_text())
+            self.assertEqual("keep redirected source", protected.read_text())
+            if before_manifest is not None:
+                self.assertEqual(before_manifest, profile.read_bytes())
+            before_manifest = profile.read_bytes()
 
 
 if __name__ == "__main__":

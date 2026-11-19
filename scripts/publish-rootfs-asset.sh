@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOTFS_TAR="${1:-magisk-module/rootfs.tar.gz}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+ROOTFS_TAR="${1:-$ROOT_DIR/dist/rootfs.tar.gz}"
 TARGET_TAG="${2:-rootfs}"
 BRANCH_NAME="${3:-rootfs}"
 REPO="${GITHUB_REPOSITORY:-2108282/DSHA-FR}"
@@ -19,7 +21,7 @@ echo "=========================================================="
 echo "==> [1/3] 上传纯净底包到 Release $TARGET_TAG..."
 if ! gh release view "$TARGET_TAG" --repo "$REPO" >/dev/null 2>&1; then
     echo "创建 Release $TARGET_TAG..."
-    gh release create "$TARGET_TAG" --repo "$REPO" --title "DSHA 1.2.0（内置 dsh 0.1.5-rc.2 基础底包预发布）" --notes "纯净重构底包" --prerelease
+    gh release create "$TARGET_TAG" --repo "$REPO" --title "DSHA 原生底包 ($TARGET_TAG)" --notes "纯净重构底包" --prerelease
 fi
 gh release upload "$TARGET_TAG" "$ROOTFS_TAR" --repo "$REPO" --clobber
 DOWNLOAD_URL="https://github.com/${REPO}/releases/download/${TARGET_TAG}/rootfs.tar.gz"
@@ -45,10 +47,10 @@ EOF_MERGE
 chmod +x "$STAGE_DIR/merge.sh"
 
 cat > "$STAGE_DIR/README.md" << EOF_DOC
-# DSHA 0.2.2-rc.1 纯净原生 Linux 底包资产
+# DSHA 原生 Linux 底包资产 (${TARGET_TAG})
 
 本目录为 GitHub Actions 自动化流水线熔铸生成的 **100% 纯净全新底包**。
-已彻底物理清除旧时代残留，原生内置 @deepseek-ai/dsh@0.2.2-rc.1、Node 24、五大核心插件以及官方标准技能（含 external-device-mesh）。
+底包内容以本次构建产物为准；具体运行时与插件版本请检查镜像内的安装清单。
 
 ---
 
@@ -73,6 +75,8 @@ CLONE_DIR="/tmp/branch_clone_$$"
 git clone --depth=1 --branch "$BRANCH_NAME" "https://x-access-token:${TOKEN}@github.com/${REPO}.git" "$CLONE_DIR"
 
 mkdir -p "$CLONE_DIR/rootfs"
+# 新底包分卷变少时移除旧尾卷，避免 merge.sh 拼入上次发布的残留数据。
+rm -f "$CLONE_DIR/rootfs"/rootfs.tar.gz.part-*
 cp -rf "$STAGE_DIR"/* "$CLONE_DIR/rootfs/"
 
 cd "$CLONE_DIR"
@@ -90,7 +94,7 @@ git add rootfs README.md
 if git diff --staged --quiet; then
   echo "底包资产无变动，跳过推送。"
 else
-  git commit -m "feat(rootfs): 持久化全新纯净 0.1.5-rc.2 底包资产 (永久直链 + 50M分卷实体)"
+  git commit -m "feat(rootfs): 更新 ${TARGET_TAG} 底包资产与分卷"
   git push origin "$BRANCH_NAME"
   echo "✓ 成功推送到 $BRANCH_NAME 分支！"
 fi

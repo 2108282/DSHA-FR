@@ -1,189 +1,83 @@
-# DSHA (KernelSU / Magisk + APK) 项目架构地图
+# DSHA Native 后端项目地图
 
----
+本文件对应 `dsh-magisk` 分支的 KernelSU / Magisk 原生 chroot 后端。安装说明见 [README](../README.md)，构建与补丁约定见 [BUILD](../BUILD.md)。Android 前端位于独立的 `magisk-apk` 分支，不属于本后端工作树。
 
-## 一、 系统全局通信拓扑
+## 一、运行边界
 
-```text
-[ 用户操作 ]
-    │
-    ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│ Android APK 前端外壳 (com.dsh.client)                                   │
-│  ├─ WebView 视图 ──────────── HTTP/WS (127.0.0.1:3080) ────┐            │
-│  ├─ 控制面板 (Start/Stop) ──── su -mm -c ───┐               │            │
-│  └─ 设备能力桥 (HttpShellService)           │               │            │
-│       └─ 监听 127.0.0.1:3090 ◄──────────┐   │               │            │
-└─────────────────────────────────────────┼───┼───────────────┼───────────┘
-                                          │   │               │
-┌─────────────────────────────────────────┼───┼───────────────┼───────────┐
-│ Linux 内核层与模块宿主 (KernelSU / Magisk)│   │               │            │
-│  ├─ 控制脚本: /data/adb/dsha/scripts/ ◄─┼───┘               │            │
-│  │   ├─ start.sh (挂载 + 拉起)          │                   │            │
-│  │   ├─ stop.sh  (杀进程 + 卸载)        │                   │            │
-│  │   └─ term.sh  (交互终端)             │                   │            │
-│  │                                      │                   │            │
-│  └─ 原生 chroot 根目录:                 │                   │            │
-│     /data/adb/dsha/rootfs/              │                   │            │
-│       ├─ bin/bash                       │                   │            │
-│       ├─ usr/local/bin/node             │                   │            │
-│       ├─ DSH 核心守护进程 ──────────────┴───────────────────┘            │
-│       │    └─ 监听 127.0.0.1:3080 (WebUI)                                │
-│       └─ Agent 执行硬件指令 ──────────── HTTP curl ─────────┘            │
-│            └─ 带 Token 访问 127.0.0.1:3090/app/*                         │
-└─────────────────────────────────────────────────────────────────────────┘
-```
+- Android 前端 `com.dsha.fr` 调用宿主控制脚本，承载 DSH WebView，并提供手机 MCP 与独立设备桥。
+- 宿主控制脚本安装在 `/data/adb/dsha/scripts/`，管理 `/data/adb/dsha/rootfs/` 内的原生 Ubuntu ARM64 环境。
+- DSH Web 默认监听 `127.0.0.1:3080`；独立设备与运行时桥使用 `127.0.0.1:3095`。
+- 本机电话、短信、日历、读屏和点击等任务走已安装的手机 MCP 工具。3095 保留独立设备能力、产物导出和既有插件运行时职责，不作为手机 MCP 失败后的绕行通道。
+- 外部设备与 SSH 主机操作使用 [external-device-mesh](../agent-skills/external-device-mesh/SKILL.md)，明确目标，避免混同本机与远端。
 
----
-
-## 二、 完整项目目录树
-
-### 1. 模块与构建产物目录 (`/sdcard/Download/DSHA/`)
+## 二、本地仓库结构
 
 ```text
-/sdcard/Download/DSHA/
-├── PROJECT_MAP.md                  # [地图文档] 本项目完整架构地图与故障速查手册
-├── dsha_ksu_native_v1.2.0.zip      # [交付物] KernelSU / Magisk 一键刷机模块包
-├── rootfs.tar.xz                   # [交付物] 纯净 Ubuntu ARM64 底包 (xz 高压版)
-├── rootfs.tar.gz                   # [交付物] 纯净 Ubuntu ARM64 底包 (Android 通用 gzip 版)
-├── export-rootfs.sh                # [维护工具] 导出当前容器环境并重新打包模块的脚本
-│
-├── dsha_ksu_module/                # 模块源工程目录（用于打包 zip）
-│   ├── META-INF/com/google/android/
-│   │   ├── update-binary           # Magisk/KSU 通用模块安装解析入口
-│   │   └── updater-script          # 标准 Magisk 占位脚本
-│   ├── module.prop                 # 模块元数据（ID: dsha_native, 名称, 版本）
-│   ├── customize.sh                # 刷入时执行：解压 rootfs 至 /data/adb/dsha/rootfs
-│   ├── service.sh                  # 开机静默服务：仅负责解除 Android 12+ 幽灵进程上限
-│   └── scripts/                    # 运行时控制脚本集合
-│       ├── start.sh                # 启动脚本：按需挂载虚拟文件系统并后台拉起 DSH
-│       ├── stop.sh                 # 停止脚本：终止内部全部进程，安全 umount 挂载点
-│       ├── status.sh               # 状态检测：通过 PID 文件检测服务运行状态
-│       └── term.sh                 # 终端直通：以 Root 身份直接进入 chroot bash
-│
-└── 工作区/                         # Agent 实际执行文件操作的映射目录 (/sdcard)
+dsh-magisk/
+├── .github/workflows/magisk-module-build.yml  # Full / Lite 构建
+├── magisk-module/
+│   ├── META-INF/                            # 模块安装入口
+│   ├── customize.sh                         # Full 安装器
+│   ├── customize.lite.sh                    # Lite 两步选择安装器
+│   ├── scripts/                             # 七个基础运行时控制脚本
+│   └── patches/                             # Lite 现场迁移补丁
+├── scripts/                                 # 控制脚本镜像、本地打包与测试
+├── patches/                                 # 现场迁移补丁镜像
+├── rootfs-overlay/                          # Full / Lite 共用容器文件
+│   └── root/
+│       ├── .dsh/                            # 注册、自愈、生命周期与数据迁移
+│       ├── dsh-bin/                         # 命令守卫包装器
+│       ├── dsh-mobile-lite/                 # 移动端轻量界面
+│       ├── dsh-quickchat-gesture/            # QuickChat 手势插件
+│       └── dsha-device-shell-guide/         # 设备通道与安全提示插件
+├── tools/
+│   ├── dynamic-rootfs-merge.sh              # 离线合成底包
+│   └── export-rootfs.sh                     # 实机底包导出工具
+└── docs/                                    # 当前后端说明与有效迁移说明
 ```
 
----
+容器文件放入对应的 overlay 路径；额外现场动作放入模块 patches，并同步根 patches。构建优先使用模块补丁目录，仅在没有脚本时回退根目录，不合并两者。
 
-### 2. 运行时宿主环境部署目录 (`/data/adb/dsha/`)
+## 三、设备部署路径
 
-```text
-/data/adb/dsha/
-├── scripts/                        # 真实运行的控制脚本
-│   ├── start.sh
-│   ├── stop.sh
-│   ├── status.sh
-│   └── term.sh
-│
-├── run/                            # 运行时状态与日志
-│   ├── dsh.pid                     # DSH 主进程 PID 记录文件
-│   └── dsh-web.log                 # DSH 运行标准输出与错误日志
-│
-└── rootfs/                         # Ubuntu ARM64 完整根文件系统 (chroot 目标路径)
-    ├── bin/ -> usr/bin
-    ├── etc/
-    │   ├── resolv.conf             # 容器内部 DNS 解析配置
-    │   └── group                   # 包含 Android GID 的组配置
-    ├── root/                       # root 用户主目录
-    │   ├── .dsh/
-    │   │   ├── .bridge_token       # 3090 硬件桥鉴权密钥（与 APK 双向对齐）
-    │   │   ├── settings.yaml       # DSH 核心运行配置文件
-    │   │   └── profiles/           # DSH 运行 Profile
-    │   └── dsh-bin/                # 守护包装脚本与环境变量注入路径
-    ├── usr/
-    │   ├── bin/                    # 系统基础工具 (bash, tar, xz, git, curl)
-    │   └── local/
-    │       ├── bin/
-    │       │   ├── node            # Node.js 运行时可执行文件 (v24.19.0)
-    │       │   └── dsh -> ../lib/node_modules/@deepseek-ai/dsh/lib/bin.js
-    │       └── lib/node_modules/
-    │           └── @deepseek-ai/dsh/ # DSH 核心代码包（上游源码/发布包所在目录）
-    ├── dev/                        # 挂载点：内核 /dev (由 start.sh 绑定)
-    ├── proc/                       # 挂载点：内核 /proc (由 start.sh 绑定)
-    ├── sys/                        # 挂载点：内核 /sys (由 start.sh 绑定)
-    └── sdcard/                     # 挂载点：/storage/emulated/0 (由 start.sh 绑定)
+| 项目 | Android 宿主路径 | 容器内路径或说明 |
+|---|---|---|
+| 根文件系统 | `/data/adb/dsha/rootfs/` | `/`，uid=0 的原生 Linux 环境 |
+| 控制脚本 | `/data/adb/dsha/scripts/` | 在 Android 宿主调用 |
+| 核心 PID | `/data/adb/dsha/run/dsh.pid` | 容器侧记录为 `/root/.dsh/dsh.pid` |
+| Web 日志 | `/data/adb/dsha/run/dsh-web.log`（软链） | `/root/dsh-web.log`（实际文件），双端访问同一份日志 |
+| 设备桥凭据 | `/data/adb/dsha/rootfs/root/.dsh/.bridge_token` | `/root/.dsh/.bridge_token`；不得提交、分享或发给网站 |
+| Web profile | `/data/adb/dsha/rootfs/root/.dsh/profiles/web/` | `/root/.dsh/profiles/web/` |
+| 命令包装器 | `/data/adb/dsha/rootfs/root/dsh-bin/` | `/root/dsh-bin/` |
+| 共享存储挂载 | `/data/adb/dsha/rootfs/sdcard/` | `/sdcard/`，不存放核心运行时 |
+
+基础控制脚本为 `start.sh`、`stop.sh`、`status.sh`、`term.sh`、`lan-proxy.sh`、`idle-freezer.sh`、`block-guard.sh`，根目录脚本与模块内脚本同步维护。
+
+## 四、维护入口
+
+以下设备命令供维护人员在 Android 宿主终端按需执行；不要在依赖该服务的 Agent 会话中停止或卸载自身运行环境。
+
+```sh
+# 查看状态
+su -mm -c "/data/adb/dsha/scripts/status.sh"
+
+# 查看宿主日志
+su -c "cat /data/adb/dsha/run/dsh-web.log"
+
+# 启动默认 Web 服务
+su -mm -c "/data/adb/dsha/scripts/start.sh 3080"
+
+# 进入原生容器终端
+su -mm -c "/data/adb/dsha/scripts/term.sh"
 ```
 
----
+普通停止服务会保留容器挂载。仅在退出容器终端、结束相关任务后，才可在宿主运行 `stop.sh --umount`；删除运行目录前须确认对应挂载已解绑。
 
-### 3. Android APK 客户端源码结构 (`/root/dsha-repo/`)
+在本地仓库根目录打包：
 
-```text
-app/src/main/
-├── AndroidManifest.xml             # 清单文件：权限、Foreground Service、AccessibilityService
-├── assets/                         # 随 APK 打包的基础资源与补丁脚本
-│   └── builtin-plugins/            # DSH 内置前端拓展插件
-│
-└── java/com/deepseekharness/app/
-    ├── DshaApp.java                # Application 实例，全局状态初始化
-    ├── HarnessService.java         # 前台保活 Service，维护 3090 端口与防杀通知
-    ├── HttpShellService.java       # 设备能力桥服务端 (127.0.0.1:3090, 响应 /app/*)
-    ├── DshaAccessibilityService.java # 无障碍服务：实现系统读屏 (dump) 与模拟点击 (tap)
-    ├── PtySession.java             # PTY 伪终端会话封装，对接 Termux terminal-view
-    │
-    ├── bridge/
-    │   ├── AppBridge.java          # 处理 /app/* 的具体逻辑（振动、通知、电量、剪贴板等）
-    │   └── AdbBridge.java          # 无线调试配对与 ADB 命令转发
-    │
-    ├── core/
-    │   ├── HarnessController.java  # 核心控制器：调度 Web 生命周期、鉴权提取、状态流转
-    │   ├── ConfigStore.java        # 本地 SharedPreferences 配置存取
-    │   └── DiagnosticRepository.java # 诊断信息汇总（排查环境问题）
-    │
-    ├── runtime/
-    │   ├── ContainerRuntime.java   # 容器运行时抽象接口 (Proot / Proroot / Chroot)
-    │   ├── ProotBootstrap.java     # 运行时参数组装、环境变量注入与执行入口
-    │   ├── WebProcessManager.java  # 进程启停逻辑与停止哨兵
-    │   └── RuntimeTools.java       # 运行时依赖检查工具
-    │
-    └── ui/
-        ├── MainActivity.java       # 主窗口，承载加载 127.0.0.1:3080 的 WebView
-        ├── LaunchFragment.java     # 启停控制主页面（启动/停止按钮、状态指示灯）
-        ├── TerminalFragment.java   # 嵌入式终端页面，展示命令行交互界面
-        ├── QuickChatSheetActivity.java # 悬浮/半屏快聊面板
-        ├── ConfigFragment.java     # 参数配置界面（端口、网络模式、主题）
-        └── DiagnosticActivity.java # 诊断日志展示页面
+```sh
+bash scripts/build-module.sh --lite
+bash scripts/build-module.sh full
 ```
 
----
-
-## 三、 核心接口、端口与关键路径映射表
-
-| 项目 | 配置值 / 路径 | 作用说明 | 关联文件 |
-| :--- | :--- | :--- | :--- |
-| **DSH Web 服务端口** | `127.0.0.1:3080` (测试可自定义如 3088) | DSH 前端 UI 与 WebSocket 后端交互端口 | `start.sh`, `MainActivity.java` |
-| **设备硬件能力桥端口** | `127.0.0.1:3090` | 容器内 Agent 操控实体手机的 HTTP API 端口 | `HttpShellService.java`, `HarnessService.java` |
-| **设备能力鉴权密钥** | `/root/.dsh/.bridge_token` | Agent 访问 3090 端口必须携带的 Token（Header: `X-Token`） | `HttpShellService.java`, `start.sh` |
-| **Chroot 宿主绝对路径** | `/data/adb/dsha/rootfs` | 原生 Linux 镜像在手机真实 ext4 分区上的根路径 | `customize.sh`, `start.sh`, `stop.sh` |
-| **PID 状态记录路径** | `/data/adb/dsha/run/dsh.pid` | 记录 DSH 主进程 PID，用于状态判断和精准 kill | `start.sh`, `stop.sh`, `status.sh` |
-| **标准输出日志路径** | `/data/adb/dsha/run/dsh-web.log` (宿主) / `/root/dsh-web.log` (容器内部) | DSH 运行标准输出与错误日志 | `start.sh` |
-| **幽灵进程上限配置** | `max_phantom_processes` | Android 12+ 允许派生的最大子进程数（设为 2147483647） | `service.sh`, `start.sh` |
-
----
-
-## 四、 常用运维与调试指令
-
-```bash
-# 1. 启动服务（支持指定端口，如 3088 防止与当前环境冲突）
-/data/adb/dsha/scripts/start.sh 3088
-
-# 2. 查看当前服务运行状态
-/data/adb/dsha/scripts/status.sh
-
-# 3. 查看实时运行日志 (在宿主环境终端执行)
-cat /data/adb/dsha/run/dsh-web.log
-
-# 4. 以 Root 身份直接进入 Linux 原生 bash 终端
-/data/adb/dsha/scripts/term.sh
-
-# 5. 测试 3090 宿主硬件能力连通性（在 term.sh 终端内执行）
-T=$(cat /root/.dsh/.bridge_token)
-curl -s "http://127.0.0.1:3090/app/device?token=$T"
-
-# 6. 停止服务并安全卸载所有挂载点
-/data/adb/dsha/scripts/stop.sh
-
-# 7. 更新 DSH 后重新打包新底包
-/sdcard/Download/DSHA/export-rootfs.sh
-```
+输出分别为 `dist/dsha_ksu_native_lite.zip` 和 `dist/dsha_ksu_native_full.zip`。Full 原料选择、实机导出要求和对外交付流程见 [BUILD](../BUILD.md)。已有用户的插件身份迁移见 [classic-chat 普通插件迁移](classic-chat-ordinary-plugin.md)。

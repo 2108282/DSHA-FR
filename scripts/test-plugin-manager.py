@@ -12,10 +12,7 @@ import unittest
 from unittest.mock import patch
 import zipfile
 
-p1 = Path(__file__).resolve().parents[1] / "app/src/main/assets/plugin-manager.py"
-p2 = Path(__file__).resolve().parents[1] / "rootfs-overlay/root/.dsh/plugin-manager.py"
-p3 = Path(__file__).resolve().parents[2] / "DSHA_repo/app/src/main/assets/plugin-manager.py"
-ASSET = p1 if p1.exists() else (p2 if p2.exists() else p3)
+ASSET = Path(__file__).resolve().parents[1] / "rootfs-overlay/root/.dsh/plugin-manager.py"
 
 
 class PluginTestBase(unittest.TestCase):

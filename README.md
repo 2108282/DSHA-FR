@@ -2,14 +2,14 @@
 
 本项目为 **DeepSeek Harness (DSH)** 专为 Android 12+ Root 设备打造的纯原生 Linux (chroot) 模块与底座工程。
 
-彻底弃用 PRoot / Proroot 等用户态 ptrace / LD_PRELOAD 虚拟化方案，将 Ubuntu ARM64 运行时直接部署于手机真实的 `ext4` 分区，实现 **0 虚拟化损耗、原生 glibc 性能、按需启停 0 待机功耗**。
+Ubuntu ARM64 运行时直接部署于手机真实的 `ext4` 分区，使用原生 glibc，通过宿主控制脚本按需启停。
 
 > **💡 架构演进与开发维护指引（核心必读）**：
-> * **核心开发铁律（双轨修补原则）**：今后写代码修改时，必须**同时写两套**：
->   1. **面向 Full 完整包**：按 1:1 目录放入 `rootfs-overlay/`，编译底包时直接装进去；
->   2. **面向 Lite 热更新包**：在 `magisk-module/scripts/` 下写一个现场执行的增量 `.sh` 脚本，用户刷 Lite 包时音量键选择现场执行！
+> * **核心开发铁律（双轨修补原则）**：容器文件与需要现场执行的迁移动作分别维护：
+>   1. **Full / Lite 共用文件**：按 1:1 目录放入 `rootfs-overlay/`，Full 合成底包，Lite 经用户确认后镜像覆盖；
+>   2. **Lite 现场迁移**：仅在需要执行迁移动作时，在 `magisk-module/patches/` 添加幂等 `.sh` 脚本，并同步根目录 `patches/` 镜像；不要放入基础控制脚本目录。
 > * 打包机制请参阅：👉 **[ARCHITECTURE_AND_PACKAGING.md](./ARCHITECTURE_AND_PACKAGING.md)**；
-> * 底包发布至 Release [Tag: `rootfs`](https://github.com/2108282/DSHA-FR/releases/tag/rootfs) 与 [rootfs 分支](https://github.com/2108282/DSHA-FR/tree/rootfs)。
+> * 基准底包由 `scripts/build-module.sh` 的 `ROOTFS_TAG` / `ROOTFS_URL` 选择；本地构建与发版分工见 [BUILD.md](./BUILD.md)。
 
 ---
 
@@ -22,12 +22,13 @@ dsh-magisk 分支仓库根目录
 ├── magisk-module/                    # 模块本体与安装器
 │   ├── customize.sh                  # 安装入口 (含防变砖安全检查、音量键交互)
 │   ├── service.sh                    # 开机守护 (幽灵进程解除限制)
-│   └── scripts/                      # start.sh / stop.sh / term.sh 运行时脚本
+│   ├── patches/                      # Lite 专用现场迁移脚本；与根 patches/ 同步维护
+│   └── scripts/                      # start.sh / stop.sh / term.sh 等基础控制脚本
 ├── rootfs-overlay/                   # 👈 【核心】：1:1 反射式动态镜像层
 │   └── root/
-│       ├── dsha-web-mobile/          # 消除手机顶部空白行 + 支持通知审批自动关卡
-│       ├── dsha-task-notifier/       # 具备 justApproved 状态机锁，杜绝误弹完成通知
-│       ├── dsha-status-overlay/      # 顶部灵动悬浮条插件
+│       ├── dsh-mobile-lite/          # 当前移动端轻量界面
+│       ├── dsh-quickchat-gesture/    # QuickChat 手势插件
+│       ├── .dsh/                    # 插件注册、自愈与迁移工具
 │       └── dsha-device-shell-guide/  # 设备 Shell 原生指令提示插件
 │       # 【未来无论新增何种插件/补丁，直接丢在这里即可，无需在 CI 声明】
 ├── scripts/
@@ -51,13 +52,13 @@ dsh-magisk 分支仓库根目录
 │
 ├── scripts/                        # 核心生命周期控制脚本 (可执行权限 755)
 │   ├── start.sh                    # 启动服务：安全挂载、配置网络、后台拉起 Node.js DSH
-│   ├── stop.sh                     # 停止服务：多层卸载检测、杀残留进程、0 资源残留
+│   ├── stop.sh                     # 停止服务；显式传 --umount 才卸载全部虚拟挂载
 │   ├── term.sh                     # 原生终端：直接以 Root 身份登录 chroot bash 交互终端
 │   └── status.sh                   # 状态探针：检测 PID、端口与当前鉴权 Token
 │
 └── run/                            # 运行时状态目录
     ├── dsh.pid                     # 记录后台 DSH 主进程 PID
-    └── dsh-web.log                 # 标准输出与错误重定向运行日志
+    └── dsh-web.log                 # 软链至 rootfs/root/dsh-web.log，双端共用日志
 ```
 
 ---
@@ -112,11 +113,12 @@ rm -rf /tmp/dsha_tmp
   ```bash
   su -mm -c "/data/adb/dsha/scripts/stop.sh"
   ```
-  停止后所有挂载点自动解绑，**后台 0 进程、0 内存开销、0 功耗**。
+  普通停止保留容器挂载；如需卸载挂载点，先退出容器终端并结束相关任务，再从 Android 宿主执行 `stop.sh --umount`。
 * **彻底卸载与完全清除**：
   ```bash
-  # 1. 确保服务与挂载已干净卸载
-  su -mm -c "/data/adb/dsha/scripts/stop.sh"
+  # 1. 从 Android 宿主执行；先退出容器终端并结束相关任务
+  su -mm -c "/data/adb/dsha/scripts/stop.sh --umount"
+  # 确认 /proc/mounts 中已无 /data/adb/dsha/rootfs 挂载后再继续
 
   # 2. 彻底删除运行数据与模块记录
   su -c "rm -rf /data/adb/dsha /data/adb/modules/dsha_native"
@@ -198,7 +200,7 @@ exit
 su -mm -c "/data/adb/dsha/scripts/status.sh"
 # 输出: STATUS:RUNNING PID:12345 URL:http://...
 
-# 停止服务并释放所有挂载与文件锁
+# 普通停止服务（保留容器挂载）
 su -mm -c "/data/adb/dsha/scripts/stop.sh"
 # 输出: STATUS:STOPPED
 
@@ -209,9 +211,10 @@ su -mm -c "/data/adb/dsha/scripts/status.sh"
 
 ---
 
-### 步骤 6：核验 0 挂载残留（验证 0 开销）
-停止后，在宿主终端执行：
+### 步骤 6：需要时显式卸载并核验挂载残留
+先退出容器终端并结束相关任务，再在 Android 宿主终端执行：
 ```bash
+su -mm -c "/data/adb/dsha/scripts/stop.sh --umount"
 su -c "grep '/data/adb/dsha/rootfs' /proc/mounts"
 ```
-**结果应无任何输出**。证明 `/dev`, `/proc`, `/sys`, `/sdcard`, `/dev/shm`, `/dev/block` 等所有挂载点已被 `stop.sh` 循环卸载干净，后台 0 进程、0 内存开销、0 耗电。
+**核验无输出后才表示这些容器挂载已解绑**；若仍有输出，先排查残留挂载，不要删除运行目录。普通 `stop.sh` 不承诺卸载所有挂载点。

@@ -6,6 +6,36 @@ is_mounted() {
     grep -q " $target " /proc/mounts 2>/dev/null || mountpoint -q "$target" 2>/dev/null
 }
 
+clean_umount() {
+    local target="${1%/}"
+    while grep -q " $target " /proc/mounts 2>/dev/null || mountpoint -q "$target" 2>/dev/null; do
+        umount -l "$target" 2>/dev/null || break
+    done
+}
+
+is_storage_alive() {
+    local target="${1%/}"
+    if ! grep -q " $target " /proc/mounts 2>/dev/null; then
+        return 1
+    fi
+    timeout 1 stat -t "$target" >/dev/null 2>&1
+}
+
+mount_storage_safe() {
+    local target="$1"
+    local source="$2"
+
+    if grep -q " $target " /proc/mounts 2>/dev/null; then
+        if is_storage_alive "$target"; then
+            return 0
+        fi
+        clean_umount "$target"
+    fi
+
+    mkdir -p "$target" 2>/dev/null
+    mount -o bind "$source" "$target"
+}
+
 mount_if_needed() {
     local target="$1"
     shift
@@ -18,7 +48,7 @@ mount_if_needed() {
 # 确保必要的挂载点存在
 mount_if_needed "$ROOTFS/dev" -o bind /dev
 
-# 确保 $ROOTFS/dev/pts 与宿主 /dev/pts 共享一致的 bind 挂载，消除独立 devpts 导致的 ioctl 报错
+# 确保 $ROOTFS/dev/pts 与宿主 /dev/pts 共享一致的 bind 挂载
 if grep -q " $ROOTFS/dev/pts devpts " /proc/mounts 2>/dev/null; then
     umount -l "$ROOTFS/dev/pts" 2>/dev/null || true
 fi
@@ -31,10 +61,10 @@ mount_if_needed "$ROOTFS/dev/block" -t tmpfs tmpfs -o ro,mode=000
 mount_if_needed "$ROOTFS/proc" -t proc proc
 mount_if_needed "$ROOTFS/sys" -t sysfs sysfs
 if [ -d "/storage/emulated/0" ]; then
-    mount_if_needed "$ROOTFS/sdcard" -o bind /storage/emulated/0
-    mount_if_needed "$ROOTFS/storage/emulated/0" -o bind /storage/emulated/0
+    mount_storage_safe "$ROOTFS/sdcard" /storage/emulated/0
+    mount_storage_safe "$ROOTFS/storage/emulated/0" /storage/emulated/0
 elif [ -d "/sdcard" ]; then
-    mount_if_needed "$ROOTFS/sdcard" -o bind /sdcard
+    mount_storage_safe "$ROOTFS/sdcard" /sdcard
 fi
 
 # 确保手机 Download/DSHA/工作区 存在，并在容器 root 下建立「内部存储」软链接直通

@@ -72,8 +72,7 @@ TAR_SRC=""
 for p in "$ROOT_DIR/magisk-module/rootfs.tar.gz" \
          "$ROOT_DIR/rootfs.tar.gz" \
          "/sdcard/Download/DSHA/rootfs.tar.gz" \
-         "/data/media/0/Download/DSHA/rootfs.tar.gz" \
-         "/sdcard/Download/DSHA/dsha-ksu-project/release/rootfs.tar.gz"; do
+         "/data/media/0/Download/DSHA/rootfs.tar.gz"; do
     if [ -f "$p" ]; then TAR_SRC="$p"; break; fi
 done
 
