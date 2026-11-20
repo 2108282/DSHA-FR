@@ -491,7 +491,7 @@ internal class MainScreenDriver(private val service: PhoneA11yService, private v
             // l10n:keep agent screen result
             if (snap.ownApp && !lifted.ownApp) return ActionResult(false, "这是 DSH 自己的界面，不操作。")
             // l10n:keep agent screen result
-            if (snap.unreadable) return ActionResult(false, "这一屏读不到内容（可能受敏感视图策略限制），不盲滑。请 handoff。", observeQuiet(gen))
+            if (snap.unreadable) return ActionResult(false, "这一屏读不到内容，不盲滑。先核对该手机页面是否为任务目标；仅当任务确需用户在此接手时使用 handoff，不相关就停止手机操作。", observeQuiet(gen))
             val screen = screenBox()
             if (cancelled(gen) || !isCurrent(a.screenId)) return ActionResult(false, "操作已停止，没有滚动。")
             val before = clock.count
@@ -539,10 +539,10 @@ internal class MainScreenDriver(private val service: PhoneA11yService, private v
         if (snap == null || !isCurrent(a.screenId)) {
             val now = observeQuiet(gen)
             // l10n:keep agent screen result
-            return ActionResult(false, "屏幕编号 ${a.screenId} 已过期，坐标对不上了。请重新 screen 加 image 再点。", now)
+            return ActionResult(false, "屏幕编号 ${a.screenId} 已过期，坐标对不上了。仅当任务仍需操作该手机界面且策略允许时，才重新 screen 加 image 获取有效观察；否则停止手机操作。", now)
         }
         // l10n:keep agent screen result
-        val geometry = snap.image ?: return ActionResult(false, "屏幕 ${a.screenId} 没有截图。坐标点击要先用 screen 加 image 拿一张标号截图。")
+        val geometry = snap.image ?: return ActionResult(false, "屏幕 ${a.screenId} 没有截图。仅当任务仍需操作该手机界面且策略允许时，才用 screen 加 image 获取坐标依据；不相关就停止手机操作。")
         val point = geometry.toScreen(a.x, a.y)
             // l10n:keep agent screen result
             ?: return ActionResult(false, "坐标 (${a.x}, ${a.y}) 不在这张截图里（${geometry.width}×${geometry.height}）。")
@@ -551,7 +551,7 @@ internal class MainScreenDriver(private val service: PhoneA11yService, private v
         // l10n:keep agent screen result
         if (snap.protectedPage && !lifted.systemPages) return ActionResult(false, "这是系统权限 / 安全相关页面，DSH 不在这里点击。需要的话请用 handoff 交给用户。")
         // l10n:keep agent screen result
-        if (snap.unreadable) return ActionResult(false, "这一屏读不到内容（可能受敏感视图策略限制），不盲点。请 handoff。", observeQuiet(gen))
+        if (snap.unreadable) return ActionResult(false, "这一屏读不到内容，不盲点。先核对该手机页面是否为任务目标；仅当任务确需用户在此接手时使用 handoff，不相关就停止手机操作。", observeQuiet(gen))
         val cap = capture()
         val same = try { cap.packageName == snap.packageName && cap.windows.lastOrNull()?.id == snap.mainWindowId } finally { cap.recycle() }
         // l10n:keep agent screen result
@@ -679,14 +679,14 @@ internal class MainScreenDriver(private val service: PhoneA11yService, private v
         if (cap.hiddenWindowTitle != null) {
             val name = cap.hiddenWindowTitle.takeIf { it.isNotBlank() }?.let { "「$it」" } ?: ""
             // l10n:keep agent screen result
-            note("hidden", "提示：前台页面${name}不向 DSH 开放（应用标成了敏感页面）。读不到也点不了，需要就 handoff。")
+            note("hidden", "提示：前台页面${name}不向 DSH 开放，不能读或操作，不以截图绕过。仅当该手机页面确属任务目标且需要用户接手时使用 handoff；否则停止手机操作，返回原任务的数据通道。")
         // l10n:keep agent screen result
         } else if (cap.unreadableWindowTitle != null) {
             val name = cap.unreadableWindowTitle.takeIf { it.isNotBlank() }?.let { "「$it」" } ?: ""
             // l10n:keep agent screen result
-            note("unreadable", "提示：当前无法读取这一屏${name}的有效内容，可能受敏感视图策略限制（Android 14 起密码、支付、验证页会被系统过滤）。读不到也点不了；能看图的模型可以 screen 加 image，否则请 handoff。")
+            note("unreadable", "提示：当前未读到这一屏${name}的有效内容；空内容不能确定原因，可能与加载状态或系统视图过滤有关。先核对当前手机界面是否为任务目标且观察必要；不相关就停止手机操作。不要因空屏自动截图或 handoff；仅在确需观察此界面且未受访问策略限制时才考虑附图。截图不能读取 DOM、localStorage 或插件内部记录。")
         // l10n:keep agent screen result
-        } else if (cap.windows.isEmpty()) note("empty", "提示：读不到前台界面（可能是锁屏、安全页面或系统界面）。")
+        } else if (cap.windows.isEmpty()) note("empty", "提示：未获得前台界面，原因未确认。先核对任务是否确需观察手机；不要把空结果作为继续读屏、截图或 handoff 的理由，不相关就返回原任务的数据通道。")
         val previous = latest?.takeIf { it.packageName == pkg }?.screen?.keys
         fun format(notes: List<Pair<String, String>>) = ScreenFormat.format(
             ScreenInput(

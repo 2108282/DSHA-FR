@@ -65,16 +65,16 @@ object PhoneToolCatalog {
     )
 
     private val taskTools: List<Tool> = listOf(
-        Tool(CONTACTS, "为电话/短信任务查询联系人及号码。search按query找人，get按contact_id读取；重名或多号码不要猜。", linkedMapOf(
+        Tool(CONTACTS, "为这台Android手机的电话/短信任务查询手机联系人及号码。search按query找人，get按contact_id读取；重名或多号码不要猜。", linkedMapOf(
             "action" to enum(listOf("search", "get"), "操作"), "query" to str("姓名或号码片段"),
             "contact_id" to str("查询返回的原始联系人ID"), "offset" to int("分页起点", 0), "limit" to int("最多50条", 1, 50),
         ), listOf("action")),
-        Tool(MESSAGES, "先threads按number或地址query查会话ID，再search/read读取指定thread_id；仅任务所需范围。发送使用intent sms_send。", linkedMapOf(
+        Tool(MESSAGES, "查询这台Android手机的短信：先threads按number或地址query查会话ID，再search/read读取指定thread_id；仅任务所需范围。发送使用intent sms_send。", linkedMapOf(
             "action" to enum(listOf("threads", "search", "read"), "操作"), "thread_id" to str("search/read必须明确会话ID"),
             "number" to str("threads精确号码"),
             "query" to str("可选正文关键词"), "offset" to int("分页起点", 0), "limit" to int("最多50条", 1, 50),
         ), listOf("action")),
-        Tool(CALENDAR, "通用Android日历事务：查询/读/创建/批量/改/删，事件与提醒事务写入后回查；写操作必须唯一request_id，未确认先回查不可重建。", linkedMapOf(
+        Tool(CALENDAR, "这台Android手机的日历事务：查询/读/创建/批量/改/删，事件与提醒事务写入后回查；写操作必须唯一request_id，未确认先回查不可重建。", linkedMapOf(
             "action" to enum(listOf("list_calendars", "search", "read", "create", "create_many", "update", "delete"), "操作"),
             "request_id" to str("写操作唯一ID"), "calendar_id" to str("list_calendars返回的真实ID"),
             "event_id" to str("真实事件ID，不能猜"), "query" to str("查询关键词"), "title" to str("标题"),
@@ -85,7 +85,7 @@ object PhoneToolCatalog {
             "events" to linkedMapOf("type" to "array", "description" to "最多30条，同一日历；每项使用title/start_time/end_time/all_day/reminder_minutes", "items" to mapOf("type" to "object")),
             "offset" to int("分页起点", 0), "limit" to int("最多50条", 1, 50),
         ), listOf("action")),
-        Tool(MEDIA, "为分享等手机任务查找共享媒体/文件，返回可授权content URI；不扫描私有目录。", linkedMapOf(
+        Tool(MEDIA, "为分享等手机任务查找这台Android手机的共享媒体/文件，返回可授权content URI；不扫描私有目录，工作区文件使用文件工具查找。", linkedMapOf(
             "action" to enum(listOf("search"), "操作"), "kind" to enum(listOf("images", "audio", "video", "files"), "媒体类型"),
             "query" to str("文件名关键词"), "offset" to int("分页起点", 0), "limit" to int("最多50条", 1, 50),
         ), listOf("action", "kind", "query")),
@@ -95,7 +95,7 @@ object PhoneToolCatalog {
         Tool(
             APPS,
             // l10n:keep agent tool catalog
-            "列出这台手机上能打开的应用（名称 · 包名）。",
+            "列出这台Android手机上能打开的应用（名称 · 包名），用于手机App任务。",
             // l10n:keep agent tool catalog
             linkedMapOf("query" to str("按名称或包名筛选，可省略")),
             emptyList(),
@@ -103,7 +103,7 @@ object PhoneToolCatalog {
         Tool(
             OPEN,
             // l10n:keep agent tool catalog
-            "打开应用或链接（app 或 url 二选一）。background:true 在后台屏打开（需用户开通不打扰模式）；无障碍开着时返回新屏幕。",
+            "在这台Android手机上打开App或链接（app 或 url 二选一），仅用于需要手机打开的任务；不用于网页抓取或DSH侧栏打开。background:true 在后台屏打开（需用户开通不打扰模式）；无障碍可用时自动观察并返回新屏幕。",
             linkedMapOf(
                 // l10n:keep agent tool catalog
                 "app" to str("包名或应用名"),
@@ -117,7 +117,7 @@ object PhoneToolCatalog {
         Tool(
             INTENT,
             // l10n:keep agent tool catalog
-            "直接调用原生接口，无需先screen，结果不自动读屏；仅后续确需界面操作才screen。dispatched不是业务完成；未确认写操作不可重做。call/sms_send需request_id，operation_status查询同ID结果；accounts列SIM/通话账户。字段按kind：" +
+            "执行这台Android手机的原生业务（闹钟、计时器、电话、短信、分享、导航等），无需先screen，结果不自动读屏；仅后续确需手机界面信息才screen。dispatched不是业务完成；未确认写操作不可重做。call/sms_send需request_id，operation_status查询同ID结果；accounts列SIM/通话账户。字段按kind：" +
                 // l10n:keep agent tool catalog
                 "alarm(hour,minute,days?,message?)、timer(seconds,message?)、calendar(title,begin,end?,all_day?,location?,description?)、" +
                 // l10n:keep agent tool catalog
@@ -180,7 +180,7 @@ object PhoneToolCatalog {
         Tool(
             NOTIFY,
             // l10n:keep agent tool catalog
-            "给用户发一条手机通知。",
+            "在这台Android手机上给用户发一条系统通知。",
             // l10n:keep agent tool catalog
             linkedMapOf("title" to str("标题"), "text" to str("正文")),
             listOf("title", "text"),
@@ -188,7 +188,7 @@ object PhoneToolCatalog {
         Tool(
             CLIPBOARD,
             // l10n:keep agent tool catalog
-            "读写剪贴板：set 写入文字；get:true 读取（系统只允许前台应用读，DSH 不在前台时读不到）。",
+            "读写这台Android手机的系统剪贴板：set 写入文字；get:true 读取（系统只允许前台应用读，DSH 不在前台时读不到）。仅在任务需要手机剪贴板时使用；不能从中猜读插件记录或内部数据，复制失败不代表记录已进入剪贴板。",
             // l10n:keep agent tool catalog
             linkedMapOf("set" to str("要写入的文字"), "get" to bool("读取剪贴板")),
             emptyList(),
@@ -196,7 +196,7 @@ object PhoneToolCatalog {
         Tool(
             SCREEN,
             // l10n:keep agent tool catalog
-            "读当前屏幕：每行一个元素，[编号] 只在本屏有效。detail:true 附坐标；image:true 附标号截图；background:true 读后台屏。",
+            "观察这台Android手机当前主屏或后台虚拟屏，仅在用户要求查看手机屏幕，或任务确需当前Android界面信息时使用；允许纯观察，也可查看DSH在手机上的实际视觉效果。不能读取DOM、localStorage、插件内部数据、工作区文件或终端输出；已有截图用图像工具查看。不因提到页面、前端、APK、WebView或其他工具失败就调用，也不作原生业务结果验证。每行一个元素，[编号]只在本屏有效。detail:true附坐标；image:true附标号截图；background:true读后台屏。",
             linkedMapOf(
                 // l10n:keep agent tool catalog
                 "detail" to bool("附上元素坐标"),
@@ -210,7 +210,7 @@ object PhoneToolCatalog {
         Tool(
             COLLECT,
             // l10n:keep agent tool catalog
-            "滚动读取指定列表。只采集此列表条目，返回complete/truncated/stop_reason；部分结果不能当全部。",
+            "滚动读取这台Android手机界面上的指定列表。只采集此列表条目，返回complete/truncated/stop_reason；部分结果不能当全部。",
             linkedMapOf(
                 "screen" to SCREEN_ID,
                 // l10n:keep agent tool catalog
@@ -225,7 +225,7 @@ object PhoneToolCatalog {
         Tool(
             TAP,
             // l10n:keep agent tool catalog
-            "点一个元素，返回新屏幕。敏感按钮或首次操作该 App 会先请用户确认。",
+            "点这台Android手机界面上的一个元素，返回新屏幕。敏感按钮或首次操作该App会先请用户确认。",
             // l10n:keep agent tool catalog
             linkedMapOf("screen" to SCREEN_ID, "id" to int("元素编号"), "long" to bool("长按")),
             listOf("screen", "id"),
@@ -233,7 +233,7 @@ object PhoneToolCatalog {
         Tool(
             TYPE,
             // l10n:keep agent tool catalog
-            "替换输入框文字（空串清空，最多2000字），返回written/submitted和新屏幕。submit按用户确认设置执行；写入成功而提交失败时不要重复输入。密码/验证码/支付框默认handoff。",
+            "替换这台Android手机界面输入框的文字（空串清空，最多2000字），返回written/submitted和新屏幕。submit按用户确认设置执行；写入成功而提交失败时不要重复输入。密码/验证码/支付框默认handoff。",
             linkedMapOf(
                 "screen" to SCREEN_ID,
                 // l10n:keep agent tool catalog
@@ -248,7 +248,7 @@ object PhoneToolCatalog {
         Tool(
             SCROLL,
             // l10n:keep agent tool catalog
-            "滚动，返回新屏幕。id 是要滚动的列表，省略时滚主列表。",
+            "滚动这台Android手机界面，返回新屏幕。id是要滚动的列表，省略时滚主列表。",
             linkedMapOf(
                 "screen" to SCREEN_ID,
                 // l10n:keep agent tool catalog
@@ -261,7 +261,7 @@ object PhoneToolCatalog {
         Tool(
             KEY,
             // l10n:keep agent tool catalog
-            "按系统键（back / home / recents / notifications），返回新屏幕。",
+            "按这台Android手机的系统键（back / home / recents / notifications），返回新屏幕。",
             // l10n:keep agent tool catalog
             linkedMapOf("key" to enum(KEYS, "按键"), "screen" to str("屏幕号；省略时作用于主屏")),
             listOf("key"),
@@ -269,7 +269,7 @@ object PhoneToolCatalog {
         Tool(
             TAP_XY,
             // l10n:keep agent tool catalog
-            "按最近标号截图像素坐标点击，仅元素无法定位时后备，遵循用户确认模式；页面或截图变化则拒绝。",
+            "按这台Android手机最近标号截图的像素坐标点击，仅元素无法定位时后备，遵循用户确认模式；页面或截图变化则拒绝。",
             linkedMapOf(
                 // l10n:keep agent tool catalog
                 "observation" to str("那张截图的屏幕号"),
@@ -283,7 +283,7 @@ object PhoneToolCatalog {
         Tool(
             HANDOFF,
             // l10n:keep agent tool catalog
-            "把手机交给用户完成登录、验证码、支付或没把握的步骤；等用户点「继续」或「停止」，最长 10 分钟。",
+            "仅在手机操作流程中把这台Android手机交给用户完成登录、验证码、支付或需用户处理的界面步骤；不用于普通问答、开发任务阻塞或取不到插件数据。等用户点「继续」或「停止」，最长10分钟；继续后会观察并返回当前主屏。",
             // l10n:keep agent tool catalog
             linkedMapOf("reason" to str("要用户做什么，一句话")),
             listOf("reason"),

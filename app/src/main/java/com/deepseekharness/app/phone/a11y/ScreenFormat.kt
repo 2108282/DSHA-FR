@@ -112,7 +112,7 @@ object ScreenFormat {
     private const val NEW_RATIO_LIMIT = 0.6
 
     // l10n:keep model screen format
-    const val POOR_TREE_NOTE = "提示：本页文字很少（游戏、自绘界面常见）。能看图的模型可以 screen 加 image；否则请用户协助。"
+    const val POOR_TREE_NOTE = "提示：本屏可读文字很少，不能据此确定原因。先核对当前手机界面是否为任务目标且观察必要；不相关就停止手机操作。不要自动升级截图或交接；只有确需观察且未受访问策略限制时才考虑附图。截图不能读取 DOM、localStorage 或插件内部记录。"
 
     fun format(input: ScreenInput): FormattedScreen {
         val textNodes = input.windows.sumOf { w -> w.root?.let(::countText) ?: 0 }
