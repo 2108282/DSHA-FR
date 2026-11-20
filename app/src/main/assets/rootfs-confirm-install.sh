@@ -26,13 +26,21 @@ http_confirm() {
   local force="$5"
 
   if command -v curl >/dev/null 2>&1; then
-    curl -s -m 65 -G "http://$host:$port/confirm" --data-urlencode "cmd=$cmd" --data-urlencode "force=$force" -H "X-Token: $token" 2>/dev/null
+    curl -s -m 65 -G "http://$host:$port/confirm" --data-urlencode "cmd=$cmd" --data-urlencode "force=$force" \
+      --data-urlencode "root_session_id=${DSH_APPROVAL_ROOT_SESSION_ID:-}" \
+      --data-urlencode "session_id=${DSH_SESSION_ID:-}" \
+      --data-urlencode "conversation_title=${DSH_APPROVAL_CONVERSATION_TITLE:-}" \
+      --data-urlencode "agent_title=${DSH_APPROVAL_AGENT_TITLE:-}" -H "X-Token: $token" 2>/dev/null
   elif command -v python3 >/dev/null 2>&1; then
     python3 -c "
-import sys, urllib.request, urllib.parse
+import os, sys, urllib.request, urllib.parse
 host, port, token, cmd, force = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
 h = '127.0.0.1' if host == '[::1]' else host
-params = urllib.parse.urlencode({'cmd': cmd, 'force': force})
+params = urllib.parse.urlencode({'cmd': cmd, 'force': force,
+    'root_session_id': os.environ.get('DSH_APPROVAL_ROOT_SESSION_ID', ''),
+    'session_id': os.environ.get('DSH_SESSION_ID', ''),
+    'conversation_title': os.environ.get('DSH_APPROVAL_CONVERSATION_TITLE', ''),
+    'agent_title': os.environ.get('DSH_APPROVAL_AGENT_TITLE', '')})
 url = f'http://{h}:{port}/confirm?{params}'
 req = urllib.request.Request(url, headers={'X-Token': token})
 try:
@@ -46,7 +54,11 @@ except Exception:
 const http = require("http");
 const [, host, port, token, cmd, force] = process.argv;
 const h = host === "[::1]" ? "127.0.0.1" : host;
-const params = new URLSearchParams({ cmd, force });
+const params = new URLSearchParams({ cmd, force,
+  root_session_id: process.env.DSH_APPROVAL_ROOT_SESSION_ID || "",
+  session_id: process.env.DSH_SESSION_ID || "",
+  conversation_title: process.env.DSH_APPROVAL_CONVERSATION_TITLE || "",
+  agent_title: process.env.DSH_APPROVAL_AGENT_TITLE || "" });
 const options = {
   hostname: h,
   port: Number(port),

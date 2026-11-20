@@ -13,6 +13,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
+import android.text.TextUtils
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
@@ -82,6 +83,7 @@ object DangerConfirmOverlay {
     fun show(
         context: Context,
         cmd: String,
+        source: CommandApprovalSource,
         epoch: Long,
         timeoutSeconds: Long = 60L,
         onDecision: OnDecisionListener
@@ -93,7 +95,7 @@ object DangerConfirmOverlay {
 
         val task = Runnable {
             try {
-                success.set(showInternal(appContext, cmd, epoch, timeoutSeconds, onDecision))
+                success.set(showInternal(appContext, cmd, source, epoch, timeoutSeconds, onDecision))
             } catch (t: Throwable) {
                 Log.w(TAG, "showInternal uncaught error", t)
                 success.set(false)
@@ -117,6 +119,7 @@ object DangerConfirmOverlay {
     private fun showInternal(
         context: Context,
         cmd: String,
+        source: CommandApprovalSource,
         epoch: Long,
         timeoutSeconds: Long,
         onDecision: OnDecisionListener
@@ -266,6 +269,21 @@ object DangerConfirmOverlay {
             setPadding(0, dp(context, 6), 0, dp(context, 8))
         }
         card.addView(hintView)
+
+        // 来源按请求传递，不读取当前页面；每个标题只占一行，ID 不进入显示文本。
+        fun addSourceLine(label: String, value: String) {
+            card.addView(TextView(context).apply {
+                text = "$label$value"
+                textSize = 12f
+                setTextColor(textSecondaryColor)
+                setSingleLine(true)
+                ellipsize = TextUtils.TruncateAt.END
+                setPadding(0, 0, 0, dp(context, 4))
+            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        }
+        addSourceLine("来自对话：", source.conversationTitle)
+        if (source.isChildAgent) addSourceLine("子代理：", source.agentTitle)
+        card.addView(View(context), LinearLayout.LayoutParams(1, dp(context, 4)))
 
         // --- 命令展示框（深色玻璃槽内嵌、等宽字体） ---
         val cmdBox = FrameLayout(context).apply {

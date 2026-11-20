@@ -21,6 +21,38 @@ def method(text, signature):
 
 
 class ApprovalNotificationsTest(unittest.TestCase):
+    def test_command_source_titles_and_hidden_ids(self):
+        probe = r'''package com.deepseekharness.app;
+class SourceProbe {
+ static void check(boolean ok) { if (!ok) throw new AssertionError(); }
+ public static void main(String[] args) {
+   CommandApprovalSource main = new CommandApprovalSource("root-secret", "root-secret", "修复弹窗", "");
+   check(!main.isChildAgent());
+   check(main.getConversationTitle().equals("修复弹窗"));
+   CommandApprovalSource child = new CommandApprovalSource("root-secret", "child-secret", "主对话", "检查代码");
+   check(child.isChildAgent() && child.getAgentTitle().equals("检查代码"));
+   check(child.getRootSessionId().equals("root-secret") && child.getSessionId().equals("child-secret"));
+   check(!child.getConversationTitle().contains("secret") && !child.getAgentTitle().contains("secret"));
+   CommandApprovalSource empty = new CommandApprovalSource("root-secret", "child-secret", null, " ");
+   check(empty.getConversationTitle().equals("未命名对话") && empty.getAgentTitle().equals("未命名子代理"));
+   check(CommandApprovalSource.UNKNOWN.getConversationTitle().equals("未知对话"));
+   check(!CommandApprovalSource.UNKNOWN.isChildAgent());
+   CommandApprovalSource multiline = new CommandApprovalSource("a", "b", "  第一行\n第二行\t标题\u202e  ", "测试\u2028子任务");
+   check(multiline.getConversationTitle().equals("第一行 第二行 标题"));
+   check(multiline.getAgentTitle().equals("测试 子任务"));
+   String longTitle = "😀".repeat(250);
+   String capped = new CommandApprovalSource("a", "a", longTitle, "").getConversationTitle();
+   check(capped.codePointCount(0, capped.length()) == 201 && capped.endsWith("…"));
+   check(capped.substring(0, capped.length()-1).equals("😀".repeat(200)));
+ }
+}'''
+        with tempfile.TemporaryDirectory(prefix='dsha-source-test-') as directory:
+            tmp = Path(directory)
+            (tmp / 'SourceProbe.java').write_text(probe)
+            subprocess.run(['javac', '-d', str(tmp), str(JAVA / 'CommandApprovalSource.java'),
+                            str(tmp / 'SourceProbe.java')], check=True)
+            subprocess.run(['java', '-cp', str(tmp), 'com.deepseekharness.app.SourceProbe'], check=True)
+
     def test_production_gate_and_decision(self):
         service = (JAVA / 'HttpShellService.java').read_text()
         decision = method(service, 'public boolean resolveConfirm(ShellDecision decision, long epoch)')

@@ -631,7 +631,12 @@ public final class HttpShellService {
                     boolean guarded = "2".equals(mode);
                     boolean needConfirm = force || (confirmEnabled() && (guarded || DangerShellGuard.isDangerous(cmd))
                             && !isLeaseActive() && !(isTaskWaived && isTaskActive));
-                    result = needConfirm ? (requestUserConfirm(cmd) ? "YES" : "NO") : "YES";
+                    CommandApprovalSource source = new CommandApprovalSource(
+                            getParam(queryOf(path), "root_session_id", ""),
+                            getParam(queryOf(path), "session_id", ""),
+                            getParam(queryOf(path), "conversation_title", ""),
+                            getParam(queryOf(path), "agent_title", ""));
+                    result = needConfirm ? (requestUserConfirm(cmd, source) ? "YES" : "NO") : "YES";
                 }
             } else if (DangerShellGuard.isPolicyBlocked(cmd)) {
                 result = "[POLICY_BLOCKED] 设备策略强制拦截：禁止修改底层块设备、分区、SELinux状态或挂载操作";
@@ -1547,6 +1552,10 @@ public final class HttpShellService {
      *  - 卡片不可用时，通过通知栏与灵动岛推送高优先级确认；
      *  - 谁先点谁生效，全通道级联瞬时销毁。 */
     private boolean requestUserConfirm(String cmd) {
+        return requestUserConfirm(cmd, CommandApprovalSource.UNKNOWN);
+    }
+
+    private boolean requestUserConfirm(String cmd, CommandApprovalSource source) {
         if (!confirmBusy.compareAndSet(false, true)) {
             return false; // 已有确认在进行：拒绝新的（避免 pendingLatch 互相覆盖）
         }
@@ -1559,7 +1568,7 @@ public final class HttpShellService {
         try {
 
             // 1. 优先展示与手机操控同款样式的统一 UI 弹窗（无障碍 + Root 双通道兜底）
-            boolean overlayShown = DangerConfirmOverlay.show(ctx, safeDisplay(cmd), myEpoch, CONFIRM_TIMEOUT_S,
+            boolean overlayShown = DangerConfirmOverlay.show(ctx, safeDisplay(cmd), source, myEpoch, CONFIRM_TIMEOUT_S,
                     (decision, ep) -> resolveConfirm(decision, ep));
 
             // 2. 弹窗成功挂载时只显示底部卡片，绝不发通知；仅当弹窗不可用/挂载失败时，才降级退回到通知栏与灵动岛！
