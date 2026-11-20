@@ -37,7 +37,46 @@ const PROMPT = [
   '  - 与用户交流一律使用中文。',
 ].join('\n')
 
+function approvalTitle(value) {
+  if (typeof value !== 'string') return '';
+  const text = value.replace(/[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '')
+    .replace(/[\s\u0000-\u001f\u007f-\u009f]+/g, ' ').trim();
+  const chars = Array.from(text);
+  return chars.length > 200 ? chars.slice(0, 200).join('') + '…' : text;
+}
+
 export function apply(ctx) {
+  // Resolve per execution so parallel conversations and descendants never share a global source.
+  ctx.inject(['shellEnv', 'subagents', 'sessionProjections'], sourceCtx => {
+    sourceCtx.shellEnv.register({
+      name: 'dsha-command-approval-source',
+      variables: {
+        DSH_APPROVAL_ROOT_SESSION_ID: { description: 'Main conversation ID for command approval routing.' },
+        DSH_APPROVAL_CONVERSATION_TITLE: { description: 'Main conversation title for command approval display.' },
+        DSH_APPROVAL_AGENT_TITLE: { description: 'Subagent task title for command approval display.' },
+      },
+      resolve({ agent }) {
+        if (!agent) return {};
+        try {
+          const root = sourceCtx.subagents.rootOf(agent);
+          const title = sourceCtx.sessionProjections.stateOf(root.session, 'title');
+          const child = root !== agent;
+          // A fork can inherit its parent's chat title; use the child's own task descriptor.
+          const identity = child ? sourceCtx.sessionProjections.stateOf(agent.session, 'subagent').identity : undefined;
+          return {
+            DSH_APPROVAL_ROOT_SESSION_ID: root.session.header.id,
+            DSH_APPROVAL_CONVERSATION_TITLE: approvalTitle(title) || '未命名对话',
+            DSH_APPROVAL_AGENT_TITLE: child
+              ? approvalTitle(identity && agent.session.isOwnSeq(identity.seq) ? identity.label : '') || '未命名子代理'
+              : '',
+          };
+        } catch {
+          // Missing runtime ownership must not misattribute a child command to itself.
+          return {};
+        }
+      },
+    });
+  });
   let systemActive = false;
   const guided = new WeakSet();
   const inspected = new WeakSet();
