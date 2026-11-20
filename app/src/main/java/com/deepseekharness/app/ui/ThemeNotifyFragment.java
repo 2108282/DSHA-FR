@@ -322,7 +322,6 @@ public final class ThemeNotifyFragment extends Fragment {
 
         LinearLayout menuLayout = new LinearLayout(context);
         menuLayout.setOrientation(LinearLayout.VERTICAL);
-        menuLayout.setPadding(0, dp(6), 0, dp(6));
         MonetEngine.PaletteInfo popupPalette = DshaPopupTheme.apply(context, scrollView);
         scrollView.addView(menuLayout);
 
@@ -347,7 +346,7 @@ public final class ThemeNotifyFragment extends Fragment {
             item.setGravity(Gravity.CENTER_VERTICAL);
             item.setPadding(dp(16), dp(11), dp(16), dp(11));
             item.setBackground(DshaPopupTheme.itemBackground(
-                    context, popupPalette.primaryColor, popupPalette.containerColor, isSelected, 12));
+                    popupPalette.primaryColor, popupPalette.containerColor, isSelected));
             item.setClickable(true);
             item.setFocusable(true);
 

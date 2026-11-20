@@ -29,27 +29,32 @@ public final class DshaPopupTheme {
     background.setShape(GradientDrawable.RECTANGLE);
     background.setColor(fill);
     background.setCornerRadius(dp(context, 16));
-    background.setStroke(dp(context, 1), outline);
     surface.setBackground(background);
+    // Clip every row (including ripples) to the popup, also while the list scrolls.
+    surface.setClipToOutline(true);
+    // Draw the outline above the rows so edge-to-edge selection cannot cover it.
+    GradientDrawable border = new GradientDrawable();
+    border.setShape(GradientDrawable.RECTANGLE);
+    border.setColor(android.graphics.Color.TRANSPARENT);
+    border.setCornerRadius(dp(context, 16));
+    border.setStroke(dp(context, 1), outline);
+    surface.setForeground(border);
     return palette;
   }
 
   public static Drawable itemBackground(
-      Context context,
       int primaryColor,
       int containerColor,
-      boolean selected,
-      int cornerRadiusDp) {
+      boolean selected) {
+    // Rows stay rectangular; only the popup surface owns the rounded corners.
     GradientDrawable mask = new GradientDrawable();
     mask.setShape(GradientDrawable.RECTANGLE);
     mask.setColor(android.graphics.Color.WHITE);
-    mask.setCornerRadius(dp(context, cornerRadiusDp));
     Drawable content = null;
     if (selected) {
       GradientDrawable selectedShape = new GradientDrawable();
       selectedShape.setShape(GradientDrawable.RECTANGLE);
       selectedShape.setColor(containerColor);
-      selectedShape.setCornerRadius(dp(context, cornerRadiusDp));
       content = selectedShape;
     }
     return new RippleDrawable(

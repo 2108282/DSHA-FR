@@ -540,8 +540,6 @@ public class SheetSettingsFragment extends Fragment {
         root.setOrientation(LinearLayout.VERTICAL);
         MonetEngine.PaletteInfo popupPalette = DshaPopupTheme.apply(context, root);
         root.setElevation(dp(context, 8));
-        int padV = dp(context, 6);
-        root.setPadding(0, padV, 0, padV);
 
         ScrollView scroll = new ScrollView(context);
         scroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
@@ -565,7 +563,7 @@ public class SheetSettingsFragment extends Fragment {
             item.setFocusable(true);
 
             item.setBackground(DshaPopupTheme.itemBackground(
-                    context, popupPalette.primaryColor, popupPalette.containerColor, isSelected, 12));
+                    popupPalette.primaryColor, popupPalette.containerColor, isSelected));
 
             // 选项文字：选中时强调色高亮且加粗，未选中时使用主题正文色
             TextView label = new TextView(context);
