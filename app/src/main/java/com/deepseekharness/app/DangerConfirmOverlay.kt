@@ -277,7 +277,24 @@ object DangerConfirmOverlay {
             setPadding(dp(context, 10), dp(context, 8), dp(context, 10), dp(context, 8))
         }
 
-        val cmdScroll = ScrollView(context).apply {
+        // 与插件导出弹窗一致：只限制内容区，操作按钮保留在滚动区外。
+        val maxBoxHeight = minOf(
+            dp(context, 110),
+            (context.resources.displayMetrics.heightPixels * 0.42f).roundToInt()
+        )
+        val cmdScroll = object : ScrollView(context) {
+            override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+                val limit = if (View.MeasureSpec.getMode(heightMeasureSpec) == View.MeasureSpec.UNSPECIFIED) {
+                    maxBoxHeight
+                } else {
+                    minOf(maxBoxHeight, View.MeasureSpec.getSize(heightMeasureSpec))
+                }
+                super.onMeasure(
+                    widthMeasureSpec,
+                    View.MeasureSpec.makeMeasureSpec(limit, View.MeasureSpec.AT_MOST)
+                )
+            }
+        }.apply {
             isVerticalScrollBarEnabled = true
         }
 
@@ -290,10 +307,7 @@ object DangerConfirmOverlay {
         }
         cmdScroll.addView(cmdText)
 
-        val maxBoxHeight = dp(context, 110)
-        cmdBox.addView(cmdScroll, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
-            height = ViewGroup.LayoutParams.WRAP_CONTENT
-        })
+        cmdBox.addView(cmdScroll, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT))
         card.addView(cmdBox, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
             bottomMargin = dp(context, 12)
         })
