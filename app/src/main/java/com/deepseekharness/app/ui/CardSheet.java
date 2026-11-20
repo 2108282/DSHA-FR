@@ -85,7 +85,7 @@ final class CardSheet {
       row.setPadding(page.dp(16), page.dp(8), page.dp(16), page.dp(8));
       MonetEngine.PaletteInfo palette = MonetEngine.resolveCurrentPalette(context);
       boolean itemEnabled = enabled.test(position);
-      row.setBackground(choiceBackground(context, isSelected, itemEnabled, palette.primaryColor, palette.containerColor));
+      row.setBackground(choiceBackground(context, itemEnabled, palette.primaryColor));
       row.setFocusable(itemEnabled);
       row.setClickable(itemEnabled);
       row.setEnabled(itemEnabled);
@@ -120,28 +120,14 @@ final class CardSheet {
   }
 
   private static android.graphics.drawable.Drawable choiceBackground(
-      Context context, boolean selected, boolean enabled, int primary, int containerColor) {
-    int radius = Math.round(14 * context.getResources().getDisplayMetrics().density);
+      Context context, boolean enabled, int primary) {
     if (!enabled) {
       android.graphics.drawable.GradientDrawable shape = new android.graphics.drawable.GradientDrawable();
       shape.setColor(context.getColor(R.color.raised));
-      shape.setCornerRadius(radius);
+      shape.setCornerRadius(dp(context, 14));
       return shape;
     }
-    if (selected) {
-      android.graphics.drawable.GradientDrawable shape = new android.graphics.drawable.GradientDrawable();
-      shape.setColor(containerColor);
-      shape.setCornerRadius(radius);
-      return shape;
-    }
-    android.graphics.drawable.GradientDrawable mask = new android.graphics.drawable.GradientDrawable();
-    mask.setColor(android.graphics.Color.WHITE);
-    mask.setCornerRadius(radius);
-    return new android.graphics.drawable.RippleDrawable(
-        android.content.res.ColorStateList.valueOf(
-            androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 0x35)),
-        null,
-        mask);
+    return DshaPopupTheme.itemBackground(context, primary, 14);
   }
 
   static void show(Context context, String title, String body) {
