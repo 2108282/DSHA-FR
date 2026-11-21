@@ -125,7 +125,11 @@ public class QuickChatSheetActivity extends AppCompatActivity {
     private static WebView sRemoteWebView = null;
     public static boolean sIsRemoteActive = false;
 
-    private static boolean sWebLoaded = false;
+    private static final String SCRIPT_NOTIFY_FOREGROUND =
+            "window.dispatchEvent(new Event('dsha:foreground'));";
+    private static final String SCRIPT_NOTIFY_BACKGROUND =
+            "window.dispatchEvent(new Event('dsha:background'));";
+
     private static boolean sLocalWebLoaded = false;
     private static boolean sRemoteWebLoaded = false;
     private static long sLoadedGeneration = -1;
@@ -553,7 +557,6 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             hideApprovalBanner();
         }
         if (sCachedWebView != null) {
-            triggerForegroundWakeup();
             injectTransparentBackground(sCachedWebView);
             if (sPendingApprovalDecision != null) {
                 boolean allow = "allowed-once".equals(sPendingApprovalDecision);
@@ -572,19 +575,9 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             if (fileViewerContainer == null || fileViewerContainer.getVisibility() != View.VISIBLE) {
                 sCachedWebView.setVisibility(View.VISIBLE);
             }
-            // 唤醒防白屏兜底：若上次未成功加载出界面，再次唤出时自动重载有效凭证
-            if (!sWebLoaded) {
-                String authUrl = controller != null ? controller.getWebAuthUrl() : "";
-                if (authUrl != null && !authUrl.isEmpty()) {
-                    if (progressBar != null) progressBar.setVisibility(View.VISIBLE);
-                    sCachedWebView.loadUrl(authUrl);
-                }
-            }
         }
-        // 如果抽屉当前已在屏幕中且处于展开状态，不再重置平移从底部重复播放动画，平滑保持
-        if (sheetCard != null && sheetCard.getVisibility() == View.VISIBLE && sheetCard.getTranslationY() == 0) {
-            triggerForegroundWakeup();
-        } else {
+        // 如果抽屉已展开，不重复播放入场动画。失效页面统一由 onResume 恢复。
+        if (sheetCard != null && (sheetCard.getVisibility() != View.VISIBLE || sheetCard.getTranslationY() != 0)) {
             animateIn();
         }
     }
@@ -1906,7 +1899,6 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             mountWebViewToContainer(sCachedWebView);
             sCachedWebView.bringToFront();
             injectTransparentBackground(sCachedWebView);
-            triggerForegroundWakeup();
         }
         if (progressBar != null) {
             progressBar.bringToFront();
@@ -1995,7 +1987,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             mountWebViewToContainer(sLocalWebView);
             updateWebViewSlotVisibility();
 
-            // 智能判定：如果本地已有有效网页，立即刷新前台唤醒，杜绝白屏
+            // 本地已有有效网页时直接复用，否则重新获取鉴权 URL。
             String localUrl = sLocalWebView != null ? sLocalWebView.getUrl() : null;
             boolean hasValidUrl = localUrl != null && !localUrl.isEmpty() && !"about:blank".equals(localUrl);
             if (!hasValidUrl) {
@@ -2003,7 +1995,6 @@ public class QuickChatSheetActivity extends AppCompatActivity {
             } else {
                 sLocalWebLoaded = true;
                 if (progressBar != null) progressBar.setVisibility(View.GONE);
-                triggerForegroundWakeup();
             }
             ToastHelper.makeText(this, "已切换至本机 DSH", Toast.LENGTH_SHORT).show();
         }
@@ -2877,57 +2868,19 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         refreshImmersiveTheme(this);
     }
 
-    /**
-     * 前台闪电唤醒：
-     * 1. 恢复渲染管线与 JS 定时器；
-     * 2. 状态跳变（offline -> online）绕过前端连接守卫，强制激活 WebSocket 重连与增量信息流拉取；
-     * 3. 派发 visibilitychange 与 focus，让页面组件与框架立即感知前台活跃。
-     */
-    private void triggerForegroundWakeup() {
+    /** 恢复本地服务、WebView 渲染与定时器，不动网页连接。 */
+    private void resumeCachedWebView() {
         if (controller != null && controller.isFrozen()) {
             controller.resumeIfFrozen("快捷抽屉拉出");
         }
         if (sCachedWebView == null) return;
         sCachedWebView.onResume();
         sCachedWebView.resumeTimers();
-        // 关键加固：唤醒时无条件同步刷新透明沉浸样式，消除后台任务渲染引起的样式断档与白底残留
-        refreshImmersiveTheme(this);
-        sCachedWebView.post(() -> {
-            if (sCachedWebView == null || isFinishing() || isDestroyed()) return;
-            try {
-                // 远端模式防护：绝对禁止派发 offline 事件！
-                // DSH 官方 ConnectionController 收到 offline 会立即 abort 正在运行的物理连接（SSE/WebSocket），
-                // 导致远端跨网/VPN 连接被瞬间掐断并进入指数退避；远端模式只需通知 visibility 与 focus 即可自然唤醒。
-                boolean isRemote = (sCachedWebView == sRemoteWebView) || sIsRemoteActive;
-                String js = "(function() {\n"
-                        + "  try {\n"
-                        + "    if (document.hidden) {\n"
-                        + "      try {\n"
-                        + "        Object.defineProperty(document, 'hidden', { value: false, writable: true, configurable: true });\n"
-                        + "        Object.defineProperty(document, 'visibilityState', { value: 'visible', writable: true, configurable: true });\n"
-                        + "      } catch(e) {}\n"
-                        + "    }\n"
-                        + "    document.dispatchEvent(new Event('visibilitychange'));\n"
-                        + "    window.dispatchEvent(new Event('focus'));\n"
-                        + "    if (" + isRemote + ") {\n"
-                        + "      // 远端长连接仅通知网络在线，促发前端重连，绝不派发 offline 掐断链路\n"
-                        + "      window.dispatchEvent(new Event('online'));\n"
-                        + "    } else if (!" + com.deepseekharness.app.HttpShellService.isInteractiveWaiting() + ") {\n"
-                        + "      // 本机模式且非审批交互等待状态下，正常触发跳变重置\n"
-                        + "      window.dispatchEvent(new Event('offline'));\n"
-                        + "      window.dispatchEvent(new Event('online'));\n"
-                        + "    }\n"
-                        + "  } catch(e) {}\n"
-                        + "})();";
-                sCachedWebView.evaluateJavascript(js, null);
-            } catch (Throwable ignored) {}
-        });
     }
 
     /** 从底部顺滑滑入展开（屏幕外静默就绪，绝不闪屏变形） */
     private void animateIn() {
         isDismissing = false;
-        triggerForegroundWakeup();
         if (sheetCard != null) {
             ConfigStore cfg = new ConfigStore(this);
             // 如果开启了低位自动恢复开关且上次处于低位 (<=45%)，重置为自定义默认高度
@@ -2972,10 +2925,6 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                     .setListener(new AnimatorListenerAdapter() {
                         @Override
                         public void onAnimationEnd(Animator animation) {
-                            // 动画完全滑出屏幕后暂停渲染管线释放 GPU，保留 JS 定时器避免 WebSocket 探活重连卡死
-                            if (sCachedWebView != null) {
-                                sCachedWebView.onPause();
-                            }
                             moveTaskToBack(true);
                             overridePendingTransition(0, 0);
                             isDismissing = false;
@@ -2983,9 +2932,6 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                     })
                     .start();
         } else {
-            if (sCachedWebView != null) {
-                sCachedWebView.onPause();
-            }
             moveTaskToBack(true);
             overridePendingTransition(0, 0);
             isDismissing = false;
@@ -3099,7 +3045,6 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 } else {
                     sLocalWebLoaded = true;
                 }
-                sWebLoaded = true;
                 if (progressBar != null) progressBar.setVisibility(View.GONE);
             }
 
@@ -3134,7 +3079,6 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 } else {
                     sLocalWebLoaded = true;
                 }
-                sWebLoaded = true;
                 authRetried = false;
                 if (progressBar != null) progressBar.setVisibility(View.GONE);
                 injectTransparentBackground(view);
@@ -3259,11 +3203,11 @@ public class QuickChatSheetActivity extends AppCompatActivity {
      * 5. 若核心未运行或未获取到 Token，给予用户清晰准确的 Toast 提示。
      */
     private void forceReloadWithLatestToken() {
-        if (sCachedWebView == null) return;
+        final WebView localWebView = sLocalWebView;
+        if (localWebView == null) return;
         if (progressBar != null) {
             progressBar.setVisibility(View.VISIBLE);
         }
-        sWebLoaded = false;
         authRetried = false;
 
         final int port = controller != null ? controller.getPort() : 3080;
@@ -3320,8 +3264,9 @@ public class QuickChatSheetActivity extends AppCompatActivity {
 
             // 在主线程加载 WebView
             runOnUiThread(() -> {
-                if (sCachedWebView != null && !isFinishing() && !isDestroyed()) {
-                    sCachedWebView.loadUrl(finalUrl);
+                if (sLocalWebView == localWebView && !isFinishing() && !isDestroyed()) {
+                    sLocalWebLoaded = false;
+                    localWebView.loadUrl(finalUrl);
                     ToastHelper.makeText(this, "正在重新连接 DSH...", Toast.LENGTH_SHORT).show();
                 }
             });
@@ -3363,6 +3308,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
         sCurrentInstance = this;
         super.onResume();
         isDismissing = false;
+        resumeCachedWebView();
         if (sheetCard != null) {
             // 若卡片当前处于屏幕外（平移距离大于 0 或不可见），可靠执行进场动画恢复显示
             if (sheetCard.getTranslationY() > 0 || sheetCard.getVisibility() != View.VISIBLE) {
@@ -3391,16 +3337,7 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 executeApprovalDecisionScript(sCachedWebView, allow);
             }
 
-            // 1. 唤醒 WebView 渲染管线与 JS 定时器，并执行状态跳变触发信息流拉取
-            triggerForegroundWakeup();
-            // 进场动画完成后（350ms）执行二次兜底唤醒，确保动效期间若有卡顿仍能可靠补齐
-            sCachedWebView.postDelayed(() -> {
-                if (sCachedWebView != null && !isFinishing() && !isDestroyed()) {
-                    triggerForegroundWakeup();
-                }
-            }, 350);
-
-            // 2. 检查底层服务与远端开关状态
+            // 页面失效与连接中断是两回事：先处理必要的页面导航。
             ConfigStore cfg = ConfigStore.get(this);
             String activeRemoteUrl = cfg.getActiveRemoteDshUrl();
             boolean hasActiveRemote = cfg.isAnyRemoteDshActive() && activeRemoteUrl != null && !activeRemoteUrl.isEmpty();
@@ -3416,15 +3353,14 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                     sRemoteWebLoaded = false;
                 }
                 updateWebViewSlotVisibility();
-                if (!sLocalWebLoaded) {
-                    forceReloadWithLatestToken();
-                }
-            } else if (sIsRemoteActive) {
+            }
+            if (sIsRemoteActive) {
                 String curRemoteUrl = sRemoteWebView != null ? sRemoteWebView.getUrl() : null;
                 boolean isRemoteBlank = curRemoteUrl == null || curRemoteUrl.isEmpty() || "about:blank".equals(curRemoteUrl);
                 if (!activeRemoteUrl.equals(sLoadedRemoteUrl) || !sRemoteWebLoaded || isRemoteBlank) {
                     ensureRemoteWebViewLoaded(activeRemoteUrl);
                     updateWebViewSlotVisibility();
+                    return;
                 }
             } else {
                 long currentGen = controller != null ? controller.getWebGeneration() : -1;
@@ -3436,8 +3372,12 @@ public class QuickChatSheetActivity extends AppCompatActivity {
                 // 只要 WebView 已在正常显示本地网页，绝对不重新刷新，彻底消除白屏与卡顿！
                 if (!sLocalWebLoaded || serviceRestarted || !isLocalDsh) {
                     forceReloadWithLatestToken();
+                    return;
                 }
             }
+
+            // 一次实际的 Activity 恢复只通知一次。前端仅在确认断开时重连。
+            if (sCachedWebView != null) sCachedWebView.evaluateJavascript(SCRIPT_NOTIFY_FOREGROUND, null);
         }
     }
 
@@ -4730,8 +4670,9 @@ public class QuickChatSheetActivity extends AppCompatActivity {
     protected void onPause() {
         super.onPause();
         
-        // 抽屉退入后台时仅暂停单个 WebView 渲染合成释放 GPU，保留全局 JS 定时器与网络心跳存活
+        // 通知可见性订阅者，并按 Android 生命周期暂停 WebView；不主动伪造网络断线。
         if (sCachedWebView != null) {
+            sCachedWebView.evaluateJavascript(SCRIPT_NOTIFY_BACKGROUND, null);
             sCachedWebView.onPause();
         }
     }
