@@ -306,6 +306,21 @@ exports.inject = ['layout'];
  */
 function apply(ctx) {
     (0, mobile_back_dispatcher_ts_1.installMobileBackDispatcher)(ctx);
+    // 连接服务缺失时仍保留手势分发；由旧版网页自己的连接循环恢复。
+    ctx.inject(['connection'], (scope) => {
+        const connection = scope.get('connection');
+        scope.effect(() => {
+            if (typeof window === 'undefined')
+                return;
+            const onForeground = () => {
+                // connecting 包含正在握手和退避重试；不要打断已有连接或重试。
+                if (connection.state.getSnapshot() === 'disconnected')
+                    connection.reconnect();
+            };
+            window.addEventListener('dsha:foreground', onForeground);
+            return () => window.removeEventListener('dsha:foreground', onForeground);
+        }, 'dsh-quickchat-gesture: foreground reconnect');
+    });
 }
 var mobile_back_dispatcher_ts_2 = require("./effects/mobile-back-dispatcher.js");
 Object.defineProperty(exports, "triggerMobileBack", { enumerable: true, get: function () { return mobile_back_dispatcher_ts_2.triggerMobileBack; } });

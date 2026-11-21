@@ -1,6 +1,6 @@
 {
   "name": "dsh-quickchat-gesture",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "DSH 移动端全面屏手势与侧滑返回分发中枢插件 (triggerMobileBack)",
   "type": "module",
   "main": "lib/index.js",
