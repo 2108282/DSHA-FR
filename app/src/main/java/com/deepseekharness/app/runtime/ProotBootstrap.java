@@ -2,6 +2,7 @@ package com.deepseekharness.app.runtime;
 import com.deepseekharness.app.util.Compat;
 import com.deepseekharness.app.util.ShellQuote;
 import com.deepseekharness.app.util.PluginScriptDeployment;
+import com.deepseekharness.app.util.PluginScriptProcess;
 
 import android.content.Context;
 import android.util.Base64;
@@ -274,8 +275,10 @@ public class ProotBootstrap {
             // 保留 canonical CLI 路径；本次调用从完整校验的同版本组导入 siblings。
             String cmd = PluginScriptDeployment.command("/root/.dsh", script, common,
                     lifecycle, extraArgs);
-            // 下载、多个插件依赖安装和导出可能较慢，脚本内部仍有单次网络/依赖超时。
-            return execAndRead(cmd, 600_000);
+            // 长脚本通过 PIPE stdin 传入；绝不能放入 su -c 的单个 argv（Android E2BIG）。
+            ProcessBuilder runner = new ProcessBuilder(PluginScriptProcess.argv(
+                    getRootfsDir().getAbsolutePath())).redirectErrorStream(true);
+            return PluginScriptProcess.exchange(runner.start(), cmd, 600_000);
         } catch (Throwable e) {
             Log.w("DSHA", "插件管理脚本执行失败: " + SensitiveData.redact(String.valueOf(e)));
             return "ERROR: " + SensitiveData.redact(String.valueOf(e));
