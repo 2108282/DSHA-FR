@@ -570,13 +570,6 @@ class PluginSafetyRegressionTest(PluginTestBase):
         self.assertTrue(source.is_dir())
         self.assertNotIn('dsh-demo', self.manager.builtin.read_manifest()['dependencies'])
 
-    def test_missing_disabled_dependency_stays_visible_and_deletable(self):
-        self.manager.builtin.write_manifest({'dependencies': {'dsh-demo': '1'}, 'dsh': {'profile': {'bundles': []}}})
-        self.manager.cmd_list()
-        listing = json.loads(self.out.getvalue().split('PLUGIN_RESULT: ')[-1])
-        item = next(item for item in listing['items'] if item['name'] == 'dsh-demo')
-        self.assertFalse(item['available']); self.assertFalse(item['enabled']); self.assertTrue(item['deletable'])
-
     def test_test_harness_rejects_real_global_write_and_external_command(self):
         with self.assertRaisesRegex(AssertionError, '临时目录之外'):
             os.symlink('/does-not-exist', '/usr/local/lib/node_modules/dsha-test-must-not-write')

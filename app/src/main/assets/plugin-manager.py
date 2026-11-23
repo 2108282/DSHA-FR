@@ -830,10 +830,9 @@ def cmd_list():
         directory = resolve_plugin_dir(name)
         pkg = read_json(os.path.join(directory, "package.json"), {}) if directory else {}
         if not official and name not in builtin.builtin_names() \
-                and name not in bundles and not (pkg.get("dsh") or {}).get("bundle") \
-                and (name not in deps or directory is not None):
+                and name not in bundles and not (pkg.get("dsh") or {}).get("bundle"):
             continue
-        available = official or bool(directory and pkg.get('name') == name)
+        available = official or directory is not None
 
         # 权威启用状态：对齐 DSH 官方规范，只要在 manifest 的 bundles 列表中即为已启用
         plugin_enabled = name in bundles
