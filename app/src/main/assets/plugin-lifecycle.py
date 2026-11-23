@@ -143,8 +143,10 @@ class Lifecycle:
 
     def clear_history(self, name):
         path = self.history_path(name)
-        if os.path.isdir(path) and not os.path.islink(path):
-            shutil.rmtree(path, ignore_errors=True)
+        if os.path.islink(path):
+            raise ValueError('插件历史目录是软链接，已停止清理')
+        if os.path.isdir(path):
+            shutil.rmtree(path)
 
     def dsh_version(self):
         for path in ('/usr/local/lib/node_modules/@deepseek-ai/dsh/package.json', '/root/dsh-src/package.json'):

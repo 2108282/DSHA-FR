@@ -1,6 +1,7 @@
 package com.deepseekharness.app.runtime;
 import com.deepseekharness.app.util.Compat;
 import com.deepseekharness.app.util.ShellQuote;
+import com.deepseekharness.app.util.PluginScriptDeployment;
 
 import android.content.Context;
 import android.util.Base64;
@@ -252,7 +253,7 @@ public class ProotBootstrap {
     public static final String PLUGIN_MANAGER_SCRIPT = "plugin-manager.py";
 
     /**
-     * 注入插件管理脚本及共用注册模块，再通过 python3 执行。
+     * 同组部署插件管理、共用注册与生命周期脚本，再通过 python3 执行。
      * 末行 PLUGIN_RESULT JSON 区分成功、部分成功和失败。
      *
      * @param extraArgs 例如 {@code import /root/.dsh/import-upload.bin}、
@@ -266,18 +267,13 @@ public class ProotBootstrap {
         try {
             String script = readAssetString(PLUGIN_MANAGER_SCRIPT);
             if (script.isEmpty()) return "ASSET_MISSING:" + PLUGIN_MANAGER_SCRIPT;
-            String b64 = Base64.encodeToString(script.getBytes(
-                    java.nio.charset.StandardCharsets.UTF_8), Base64.NO_WRAP);
             String common = readAssetString(BUILTIN_REGISTER_SCRIPT);
             if (common.isEmpty()) return "ASSET_MISSING:" + BUILTIN_REGISTER_SCRIPT;
-            String common64 = Base64.encodeToString(common.getBytes(
-                    java.nio.charset.StandardCharsets.UTF_8), Base64.NO_WRAP);
-            String cmd = "set -e; mkdir -p /root/.dsh; "
-                    + "printf '%s' '" + common64 + "' | base64 -d > /root/.dsh/" + BUILTIN_REGISTER_SCRIPT + "; "
-                    + "printf '%s' '" + b64 + "' | base64 -d > /root/.dsh/" + PLUGIN_MANAGER_SCRIPT + "; "
-                    + "chmod +x /root/.dsh/" + PLUGIN_MANAGER_SCRIPT + "; "
-                    + "python3 /root/.dsh/" + PLUGIN_MANAGER_SCRIPT
-                    + (extraArgs == null || extraArgs.isEmpty() ? "" : " " + extraArgs) + " 2>&1";
+            String lifecycle = readAssetString(PluginScriptDeployment.LIFECYCLE);
+            if (lifecycle.isEmpty()) return "ASSET_MISSING:" + PluginScriptDeployment.LIFECYCLE;
+            // 保留 canonical CLI 路径；本次调用从完整校验的同版本组导入 siblings。
+            String cmd = PluginScriptDeployment.command("/root/.dsh", script, common,
+                    lifecycle, extraArgs);
             // 下载、多个插件依赖安装和导出可能较慢，脚本内部仍有单次网络/依赖超时。
             return execAndRead(cmd, 600_000);
         } catch (Throwable e) {
