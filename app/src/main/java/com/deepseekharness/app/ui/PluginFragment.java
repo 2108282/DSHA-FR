@@ -335,7 +335,8 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
 
         // 2. 状态条与加载进度 (在市场页面操作时平滑浮现精致状态卡片)
         boolean hasStatusMsg = state.statusMessage != null && !state.statusMessage.trim().isEmpty();
-        boolean showStatusCard = state.isMarketTab && (state.isBusy || hasStatusMsg);
+        boolean showStatusCard = state.isBusy || (hasStatusMsg && (state.isMarketTab
+                || !"插件管理功能正常".equals(state.statusMessage)));
         if (pluginStatusCard != null) {
             pluginStatusCard.setVisibility(showStatusCard ? View.VISIBLE : View.GONE);
         }
@@ -393,7 +394,11 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
             PluginRepository.Item a = oldList.get(i);
             PluginRepository.Item b = newList.get(i);
             if (!a.name.equals(b.name) || a.enabled != b.enabled || a.available != b.available
-                    || a.updateAvailable != b.updateAvailable || !a.version.equals(b.version)) {
+                    || a.updateAvailable != b.updateAvailable || !a.version.equals(b.version)
+                    || !a.latestVersion.equals(b.latestVersion)
+                    || !a.updatePreviewId.equals(b.updatePreviewId)
+                    || !a.updateMessage.equals(b.updateMessage)
+                    || !a.rollbackVersion.equals(b.rollbackVersion)) {
                 return true;
             }
         }
