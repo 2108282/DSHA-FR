@@ -83,6 +83,9 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
 
     private final List<PluginRepository.Item> visibleItems = new ArrayList<>();
     private final Adapter adapter = new Adapter();
+    private String checkingPluginName;
+    private String lastCheckedPluginName;
+    private boolean lastPluginCheckFailed;
 
     private ArrayList<String> pendingExports = new ArrayList<>();
     private Uri pendingImport;
@@ -378,14 +381,30 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
 
         // 6. 列表数据刷新 (智能比对，坚决杜绝无谓的整表暴力重绘掐死动画)
         boolean itemsChanged = isItemsDifferent(visibleItems, state.displayItems);
+        boolean checkingFinished = !state.isBusy && checkingPluginName != null;
+        if (checkingFinished) {
+            lastCheckedPluginName = checkingPluginName;
+            lastPluginCheckFailed = isUpdateCheckError(state.statusMessage);
+            checkingPluginName = null;
+        }
         if (itemsChanged) {
             visibleItems.clear();
             visibleItems.addAll(state.displayItems);
+        }
+        if (itemsChanged || checkingFinished || checkingPluginName != null) {
             adapter.notifyDataSetChanged();
         }
 
         // 7. 安装确认弹窗检测（解析完成时立即弹出）
         checkShowInstallPreview();
+    }
+
+    private boolean isUpdateCheckError(String message) {
+        if (message == null || message.trim().isEmpty()) return false;
+        String text = message.trim();
+        return text.contains("失败") || text.contains("错误") || text.contains("网络")
+                || text.contains("连接") || text.contains("无法") || text.contains("格式不同")
+                || text.contains("不存在") || text.contains("超时");
     }
 
     private boolean isItemsDifferent(List<PluginRepository.Item> oldList, List<PluginRepository.Item> newList) {
@@ -561,6 +580,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
             ValueAnimator expansionAnimator;
             final TextView detailText;
             final Button btnUpdate, btnRollback;
+            final ProgressBar updateProgress;
             final Button btnAddr, btnRename, btnExport, btnUninstall;
 
             Holder(View view) {
@@ -575,6 +595,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
                 detailText = view.findViewById(R.id.pluginDetailText);
                 btnUpdate = view.findViewById(R.id.btnPluginUpdate);
                 btnRollback = view.findViewById(R.id.btnPluginRollback);
+                updateProgress = view.findViewById(R.id.pluginUpdateProgress);
                 btnAddr = view.findViewById(R.id.btnPluginAddr);
                 btnRename = view.findViewById(R.id.btnPluginRename);
                 btnExport = view.findViewById(R.id.btnPluginExport);
@@ -745,27 +766,46 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
                     latestVerStr = curVer + " (已就绪)";
                 }
 
+                String checkMessage = item.updateMessage == null ? "" : item.updateMessage.trim();
+                if (item.name.equals(lastCheckedPluginName) && lastPluginCheckFailed && checkMessage.isEmpty()) {
+                    checkMessage = "检查失败，请查看上方操作结果后重试";
+                }
                 holder.detailText.setText("当前版本：" + curVer
                         + "\n最新版本：" + latestVerStr
+                        + (checkMessage.isEmpty() ? "" : "\n检查结果：" + checkMessage)
                         + "\n配置路径：" + configPath);
             }
 
             if (holder.btnUpdate != null) {
                 if (item.official) {
                     holder.btnUpdate.setVisibility(View.GONE);
-                } else if (item.updateAvailable) {
-                    holder.btnUpdate.setVisibility(View.VISIBLE);
-                    holder.btnUpdate.setText("更新至 v" + item.latestVersion.replace("v", ""));
-                    holder.btnUpdate.setEnabled(!repository.isBusy());
-                    holder.btnUpdate.setOnClickListener(v -> {
-                        if (actions != null) actions.onUpdateClick(item);
-                    });
+                    if (holder.updateProgress != null) holder.updateProgress.setVisibility(View.GONE);
                 } else {
                     holder.btnUpdate.setVisibility(View.VISIBLE);
-                    holder.btnUpdate.setText("检查更新");
+                    boolean checking = item.name.equals(checkingPluginName) && repository.isBusy();
+                    if (holder.updateProgress != null) {
+                        holder.updateProgress.setVisibility(checking ? View.VISIBLE : View.GONE);
+                    }
                     holder.btnUpdate.setEnabled(!repository.isBusy());
+                    if (checking) {
+                        holder.btnUpdate.setText("检查中…");
+                    } else if (item.updateAvailable) {
+                        holder.btnUpdate.setText("更新至 v" + item.latestVersion.replace("v", ""));
+                    } else if ((item.name.equals(lastCheckedPluginName) && lastPluginCheckFailed)
+                            || isUpdateCheckError(item.updateMessage)) {
+                        holder.btnUpdate.setText("检查失败，重试");
+                    } else if (item.updateMessage.contains("来源未提供更高版本")
+                            || item.updateMessage.contains("已是最新")) {
+                        holder.btnUpdate.setText("暂无更新");
+                    } else {
+                        holder.btnUpdate.setText("检查更新");
+                    }
                     holder.btnUpdate.setOnClickListener(v -> {
-                        if (actions != null) actions.onUpdateClick(item);
+                        if (actions != null) {
+                            if (!item.updateAvailable) checkingPluginName = item.name;
+                            actions.onUpdateClick(item);
+                            adapter.notifyDataSetChanged();
+                        }
                     });
                 }
             }

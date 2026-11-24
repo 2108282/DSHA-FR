@@ -131,22 +131,37 @@
             android:layout_marginTop="10dp"
             android:orientation="horizontal">
 
-            <Button
-                android:id="@+id/btnPluginUpdate"
+            <FrameLayout
                 android:layout_width="0dp"
                 android:layout_height="34dp"
-                android:layout_weight="1"
-                android:background="@drawable/m3_btn_tonal_expressive"
-                android:elevation="0dp"
-                android:gravity="center"
-                android:minWidth="0dp"
-                android:minHeight="0dp"
-                android:stateListAnimator="@animator/btn_press_scale"
-                android:text="更新"
-                android:textAllCaps="false"
-                android:textColor="@color/primary"
-                android:textSize="13sp"
-                android:textStyle="bold" />
+                android:layout_weight="1">
+
+                <Button
+                    android:id="@+id/btnPluginUpdate"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/m3_btn_tonal_expressive"
+                    android:elevation="0dp"
+                    android:gravity="center"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:stateListAnimator="@animator/btn_press_scale"
+                    android:text="更新"
+                    android:textAllCaps="false"
+                    android:textColor="@color/primary"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <ProgressBar
+                    android:id="@+id/pluginUpdateProgress"
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:layout_gravity="end|center_vertical"
+                    android:layout_marginEnd="8dp"
+                    android:indeterminate="true"
+                    android:visibility="gone"
+                    app:indeterminateTint="@color/primary" />
+            </FrameLayout>
 
             <Button
                 android:id="@+id/btnPluginRollback"
