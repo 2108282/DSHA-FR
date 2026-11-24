@@ -3,7 +3,7 @@
 # 本地一键打包 Magisk / KernelSU 刷机包
 # 用法:
 #   ./scripts/build-module.sh          # 默认打包全内置完整版 (~218MB)
-#   ./scripts/build-module.sh --lite   # 单独打包极速热更新包 (Lite, ~27KB)
+#   ./scripts/build-module.sh --lite   # 打包 Lite 热更新包（基础控制脚本，无增量补丁）
 # ============================================================
 set -euo pipefail
 
@@ -15,7 +15,7 @@ mkdir -p "$OUTPUT_DIR"
 MODE="${1:-full}"
 
 if [ "$MODE" = "--lite" ] || [ "$MODE" = "lite" ]; then
-    echo "==> 正在准备打包【DSHA 极速热更新补丁包】(Lite, 仅脚本)..."
+    echo "==> 正在准备打包【DSHA 极速热更新包】(Lite, 基础脚本 + overlay，无现场补丁)..."
     STAGE_LITE="/tmp/dsha_build_lite_$$"
     mkdir -p "$STAGE_LITE"
     cleanup_lite() {
@@ -28,36 +28,18 @@ if [ "$MODE" = "--lite" ] || [ "$MODE" = "lite" ]; then
     cp -f "$MODULE_DIR/service.sh" "$STAGE_LITE/"
     cp -f "$MODULE_DIR/action.sh" "$STAGE_LITE/"
     cp -f "$MODULE_DIR/uninstall.sh" "$STAGE_LITE/"
-    
-    # 使用专用的两步音量键交互安装器
     cp -f "$MODULE_DIR/customize.lite.sh" "$STAGE_LITE/customize.sh"
 
-    # 打包 scripts/ 下的全部基础控制脚本 (五大核心控制脚本)
+    # 基础控制脚本与通用 overlay 仍可通过 Lite 更新；不再携带现场 patches。
     mkdir -p "$STAGE_LITE/scripts"
     cp -rf "$MODULE_DIR/scripts/"* "$STAGE_LITE/scripts/"
-
-    # 打包 patches/ 下的现场增量补丁脚本 (若存在且含有真实补丁，专供老用户增量热修)
-    if [ -d "$MODULE_DIR/patches" ] && [ -n "$(find "$MODULE_DIR/patches" -maxdepth 1 -name "*.sh" 2>/dev/null)" ]; then
-        mkdir -p "$STAGE_LITE/patches"
-        cp -rf "$MODULE_DIR/patches/"*.sh "$STAGE_LITE/patches/"
-        echo "  -> 已打包 patches 现场增量补丁至 Lite 模块"
-    elif [ -d "$ROOT_DIR/patches" ] && [ -n "$(find "$ROOT_DIR/patches" -maxdepth 1 -name "*.sh" 2>/dev/null)" ]; then
-        mkdir -p "$STAGE_LITE/patches"
-        cp -rf "$ROOT_DIR/patches/"*.sh "$STAGE_LITE/patches/"
-        echo "  -> 已打包 patches 现场增量补丁至 Lite 模块"
-    fi
-
-    # 通用增量层叠：若存在 rootfs-overlay 增量资产，整体打包至 Lite 模块
-    # 零硬编码：任何放入 rootfs-overlay 的增量文件均自动纳入 Lite 热更新包
     if [ -d "$ROOT_DIR/rootfs-overlay" ] && [ -n "$(find "$ROOT_DIR/rootfs-overlay" -mindepth 1 ! -name ".gitkeep" 2>/dev/null)" ]; then
         mkdir -p "$STAGE_LITE/rootfs-overlay"
         cp -af "$ROOT_DIR/rootfs-overlay/." "$STAGE_LITE/rootfs-overlay/"
-        echo "  -> 已打包通用 rootfs-overlay 增量层叠资产至 Lite 模块"
     fi
 
     cd "$STAGE_LITE"
     chmod +x customize.sh service.sh action.sh uninstall.sh scripts/*.sh
-    [ -d patches ] && chmod +x patches/*.sh 2>/dev/null || true
     python3 -c "import os; p='$OUTPUT_DIR/dsha_ksu_native_lite.zip'; os.path.exists(p) and os.remove(p)" 2>/dev/null || true
     zip -r -9 "$OUTPUT_DIR/dsha_ksu_native_lite.zip" . >/dev/null
     cd "$ROOT_DIR"

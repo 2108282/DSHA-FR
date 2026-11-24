@@ -11,7 +11,7 @@ DSHA 采用清晰的职责隔离架构，杜绝在单个分支内混合不同平
 | 分支名称 | 定位与职责 | 产出物 |
 | :--- | :--- | :--- |
 | **`magisk-apk`** | **Android 前端客户端源码** (Java 17, minSdk 31, 纯 64 位)<br>承载 WebView UI (`:3080`)、3095 硬件能力桥 (`HttpShellService`)、PTY 终端会话连接器，包体约 25MB。 | `DSHA-FR <版本>.apk` |
-| **`dsh-magisk`** | **Linux 底座与模块源码**<br>包含控制脚本（`scripts/`）、模块安装器（`customize.sh` / `customize.lite.sh`）、通用增量层叠（`rootfs-overlay/`）。 | `dsha_ksu_native_lite.zip` (~2MB)<br>`dsha_ksu_native_full.zip` (~200MB) |
+| **`dsh-magisk`** | **Linux 底座与模块源码**<br>包含控制脚本（`scripts/`）、模块安装器（`customize.sh` / `customize.lite.sh`）、通用增量层叠（`rootfs-overlay/`）。 | `dsha_ksu_native_lite.zip`（基础脚本 + overlay 更新器）<br>`dsha_ksu_native_full.zip` (~200MB) |
 | **`dsha-for-root.x`** | **统一发版调度分支（流水线收口）**<br>本分支不存放任何业务源码，专职管理 GitHub Actions 联合总装流水线（`.github/workflows/package-*.yml`）。 | 自动拉取上述两分支源码，联合打包并发布 GitHub Releases |
 
 ---
@@ -27,24 +27,20 @@ DSHA 采用清晰的职责隔离架构，杜绝在单个分支内混合不同平
   - 例如修改系统解析或 hosts：放入 `rootfs-overlay/etc/resolv.conf`。
 * **通用复用机制**：
   - **Full 完整包**：打包引擎（`tools/dynamic-rootfs-merge.sh`）会自动将 `rootfs-overlay/` 动态镜像熔铸入 `rootfs.tar.gz` 底包中；
-  - **Lite 增量包**：打包引擎（`scripts/build-module.sh --lite`）会自动将 `rootfs-overlay/` 整体打入 zip；刷入 Lite 模块时，在【第 1 步】经用户按【音量 +】确认后，安装器（`customize.lite.sh`）会**零硬编码、通用镜像递归覆盖至老用户容器**并赋予执行权限。
-  - **红线约束**：**严禁在安装脚本中针对具体业务文件名进行硬编码！** Lite 包是通用可复用框架，任何容器文件变更均直接走 `rootfs-overlay/` 通用镜像通道。
+  - **Lite 包**：Full 包已合并当前提交；Lite 仍作为更新器保留安装器、基础控制脚本和 `rootfs-overlay/`，只移除已合并、不再需要重复分发的 `patches/`。
+  - **红线约束**：**严禁在安装脚本中针对具体业务文件名进行硬编码！** Lite 通过 `rootfs-overlay/` 通用镜像通道应用容器文件更新；已合并到 Full 的现场补丁不再打入 Lite。
 
 ### 2. 基础控制脚本维护（面向 `scripts/` 与 `magisk-module/scripts/`）
 * **范围**：`start.sh`、`stop.sh`、`status.sh`、`term.sh`、`lan-proxy.sh`、`idle-freezer.sh`、`block-guard.sh`。
 * **规则**：
   - 这些脚本由宿主机 Magisk/KernelSU 调度，负责运行时控制；
-  - 严禁在此目录混入任何增量补丁；Full 包与 Lite 包均会打包此目录；
-  - 刷入 Lite 增量包时，安装器在【第 2 步】通过物理音量键提示用户是否覆盖基础控制脚本。
+  - 严禁在此目录混入任何现场增量补丁；Full 包与 Lite 包均会打包此目录；
+  - 刷入 Lite 更新器时，安装器通过物理音量键确认是否覆盖基础控制脚本。
 
 ### 3. 现场执行增量补丁维护（物理隔离：面向 `patches/` 与 `magisk-module/patches/`）
-* **定位**：**专属于 Lite 极速热更新包，Full 完整包绝对不打包！**
-* **场景**：若某次更新需要为老用户已有环境执行现场修补（例如初始化解耦的 `.lan_token`、调用 sed 调整配置、释放自愈实体等）；
-* **规则**：
-  - 必须独立存放在 `magisk-module/patches/` 目录下（例如 `patch-lan-proxy.sh`），并同步维护根目录 `patches/` 镜像，与基础控制脚本在物理路径上彻底隔离；
-  - 脚本必须自包含、具备容错与幂等性（多次执行不产生副作用）；
-  - **打包行为**：`build-module.sh --lite` 自动将其打包至 Lite 模块；`build-module.sh full` 严禁将其打入 Full 包，保证全新刷机底座 100% 纯净；
-  - **刷入行为**：Lite 模块安装器在【第 1 步】统筹执行容器增量更新：用户选择【音量 +】后，先执行 `rootfs-overlay` 镜像层叠覆盖，再逐个执行 `patches/*.sh` 补丁脚本；用户若选择【音量 -】则完全跳过，绝不修改老用户的容器环境。
+* **定位**：`patches/` 仅用于需要一次性现场迁移时的短期补丁，不作为 Lite 的常驻内容。
+* **当前状态**：当前补丁已合并进 Full 底包与 overlay，Lite 不再携带 `patches/*.sh`。
+* **维护规则**：若未来确实需要不可由 overlay 表达的一次性现场动作，再单独评估是否临时加入补丁；不得默认将历史补丁重新打入 Lite。
 
 ---
 
@@ -91,7 +87,11 @@ DSHA 采用清晰的职责隔离架构，杜绝在单个分支内混合不同平
 
 ---
 
-## 四、 本地一键打包指令（开发者自测）
+## 四、Lite 更新器行为
+
+Lite 保留模块安装器、模块生命周期文件、`scripts/` 基础控制脚本和 `rootfs-overlay/` 容器更新层。刷入时用户分别确认是否应用 overlay、是否覆盖基础控制脚本。当前已合并进 Full 的现场补丁不再放入 Lite。
+
+## 五、 本地一键打包指令（开发者自测）
 
 ### 0. 从实机当前安装环境导出纯净脱敏底包 (export-rootfs.sh)
 若在真机容器中升级了官方核心（如 `pnpm install -g @deepseek-ai/dsh@latest`）或优化了环境，可直接一键导出为通用纯净底包：
@@ -110,12 +110,12 @@ bash tools/export-rootfs.sh --clone
 
 在 `dsh-magisk` 分支根目录下，执行 `scripts/build-module.sh`：
 
-### 1. 单独打包极速热更新包 (Lite)
+### 1. 单独打包 Lite 更新器
 ```bash
 bash scripts/build-module.sh --lite
 ```
 * 产物：`dist/dsha_ksu_native_lite.zip`；
-* 特性：自动收集 `scripts/` 控制脚本、增量补丁与 `rootfs-overlay/` 容器增量资产。
+* 特性：包含 `scripts/` 基础控制脚本和 `rootfs-overlay/` 容器更新资产，不包含已合并到 Full 的 `patches/*.sh` 现场补丁。
 
 ### 2. 打包全内置完整包 (Full)
 ```bash
@@ -132,7 +132,7 @@ bash scripts/package-all.sh
 
 ---
 
-## 五、 发版操作标准指南 (SOP)
+## 六、 发版操作标准指南 (SOP)
 
 当代码通过验证，需要正式发布时：
 
