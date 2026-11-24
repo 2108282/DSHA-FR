@@ -13,8 +13,8 @@ export const COMPOSER_AND_STATS_CSS = `/* ======================================
    桌面端一条规则都没命中，按钮就以浏览器原生 button 渲染
    （buttonface 底色 + 2px outset 边框），在浅色输入框上就是一圈黑框。
    修法：补一段两端通用的基线，尺寸与观感对齐宿主自带工具键
-   [class*="_add"]（28×28、999px 胶囊、--dsw-specific-selector 中性底色、
-   hover 走 --dsw-alias-interactive-bg-hover-solid），并把原生外观彻底关掉。
+   [class*="_add"]（28×28、999px 胶囊），桌面端默认背景透明、只显示图标，
+   hover 走 --dsw-alias-interactive-bg-hover-solid，并把原生外观彻底关掉。
    刻意不加 !important：下方 @media 段（6 / 7.11）在源顺序上更靠后，
    同特异性下依旧由移动端那套透明胶囊 + ::before/::after 规则接管，
    移动端现有观感与命中区不变。
@@ -32,11 +32,11 @@ export const COMPOSER_AND_STATS_CSS = `/* ======================================
   height: 28px;
   min-height: 28px;
   max-height: 28px;
-  margin: 0;
+  margin: 0 0 0 -8px;
   padding: 0;
   border: 0;
   border-radius: 999px;
-  background: var(--dsw-specific-selector, transparent);
+  background: transparent;
   color: var(--dsw-alias-label-primary, inherit);
   font: inherit;
   line-height: 1;
@@ -366,8 +366,9 @@ export const COMPOSER_AND_STATS_CSS = `/* ======================================
 
   /* 7.10 右簇（模型胶囊 + 发送键）焊在右缘：整簇 flex-end 兜底，
           余量由模型根节点的 margin-left:auto 吸收（自适应留白永远落在工具道与胶囊之间） */
-  [data-phase] [data-composer-card]:has(textarea, [data-composer-input]) [class*="_row"]:has([class*="_trailing"]) > [class*="_trailing"] {
-    /* 必须是 none（宿主原值），不能用 dsh-web-mobile 的 1 1 auto：
+  [data-phase] [data-composer-card]:has(textarea, [data-composer-input]) [class*="_row"]:has([class*="_trailing"]) > [class*="_trailing"]:not([class*="_trailingActive"]) {
+    /* 语音活动态保留宿主 flex:1 的整行布局，以下仅用于普通输入态。
+       必须是 none（宿主原值），不能用 dsh-web-mobile 的 1 1 auto：
        宿主 0.2.2 的 observeControlRow 用「子元素真实宽度之和 vs 可用宽度」来判定
        是否切 data-model-compact（模型文字塌成图标）。车道一旦可增长/可压缩，
        量出来的 needed 永远约等于 available，判定恒为"装得下"，文字改用省略号收场，
