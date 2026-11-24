@@ -38,6 +38,8 @@ jobs:
           path: dist/dsha_ksu_native_lite.zip
 
       - name: 统一运行动态层叠引擎合成底包并打包全内置刷机包 (Full Module)
+        env:
+          ROOTFS_TAG: 0.2.3-alpha.2-rootfs
         run: |
           set -euo pipefail
           ./scripts/build-module.sh full
