@@ -55,12 +55,18 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-STAGE_DIR="/tmp/dsha_export_stage_$$"
-mkdir -p "$STAGE_DIR"
+STAGE_DIR="$(mktemp -d /tmp/dsha_export_stage.XXXXXXXX)"
 cleanup() {
-    rm -rf --one-file-system "$STAGE_DIR" 2>/dev/null || python3 -c "import shutil; shutil.rmtree('$STAGE_DIR', ignore_errors=True)" 2>/dev/null || true
+    # 只清理本次创建且核实过的临时目录；失败不换通道绕过删除策略。
+    local resolved
+    resolved="$(realpath -- "$STAGE_DIR")" || return
+    if [[ "$resolved" == "$STAGE_DIR" && "$resolved" == /tmp/dsha_export_stage.* ]]; then
+        rm -rf --one-file-system -- "$resolved" || echo "⚠️ 临时目录保留: $resolved" >&2
+    fi
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 echo "=========================================================="
 echo "   DSHA 原生 Linux 底包导出引擎 (当前运行环境 -> rootfs.tar.gz)   "
@@ -95,7 +101,7 @@ BASE_EXCLUDES=(
 # 压缩引擎选择 (优先多线程 pigz，最高压缩等级 -9)
 COMPRESS_CMD="gzip -9"
 if command -v pigz >/dev/null 2>&1; then
-    COMPRESS_CMD="pigz -p 6 -9"
+    COMPRESS_CMD="pigz -p ${PIGZ_THREADS:-2} -9"
 fi
 
 if [ "$MODE" = "clone" ]; then
@@ -227,7 +233,7 @@ EOF_CORDIS
             while IFS= read -r link_entry; do
                 [ -L "$link_entry" ] || continue
                 target=$(readlink "$link_entry" || true)
-                if [[ "$target" == *"plugin-src"* ]] || [[ "$target" == *"/sdcard"* ]] || [[ "$target" == *"/storage"* ]] || [ ! -e "$link_entry" ]; then
+                if [[ "$target" == *"plugin-src"* ]] || [[ "$target" == /root/.dsh/profiles/web/node_modules/* ]] || [[ "$target" == *"/sdcard"* ]] || [[ "$target" == *"/storage"* ]] || [ ! -e "$link_entry" ]; then
                     rel_path=".${link_entry}"
                     SYMLINK_EXCLUDES+=("--exclude=$rel_path")
                 fi
@@ -379,6 +385,34 @@ EOF_CORDIS
         "--exclude=./root/.dsh/.credentials.yaml"
         "--exclude=./root/.dsh/dsh-api-dashboard.json"
         "--exclude=./root/.dsh/settings.yaml*"
+        # 本机凭据、远程访问证书与设备配对状态不属于公共底包。
+        "--exclude=./root/.git-credentials*"
+        "--exclude=./root/.claude"
+        "--exclude=./root/.claude.json*"
+        "--exclude=./root/.dsh/mobile-access"
+        "--exclude=./root/.dsh/app.uid"
+        "--exclude=./root/.dsh/heartbeat-patch.yml"
+        "--exclude=./root/.dsh/prompt-custom.json"
+        "--exclude=./root/.dsh/profiles/*/.plugin-manager*"
+        "--exclude=./root/.dsh/profiles/*/pnpm-lock.yaml"
+        "--exclude=./root/.dsh/profiles/*/package-lock.json"
+        "--exclude=./root/.dsh/profiles/*/yarn.lock"
+        "--exclude=./root/.dsh/profiles/*/.npmrc"
+        # 排除部署备份、自测状态、私人技能副本和后装模型/临时工具。
+        "--exclude=./root/.dsh/maintenance"
+        "--exclude=./root/.dsh/skill-backups"
+        "--exclude=./root/.dsh/fujiang-skills"
+        "--exclude=./root/.dsh/guard-selftest-*"
+        "--exclude=./root/.dsh/.plugin-scripts-stage.*"
+        "--exclude=./root/.dsh/planners-form/state"
+        "--exclude=./root/.dsh/planners-form/state.json"
+        "--exclude=./root/.dsh/planners-form/staging"
+        "--exclude=./root/.dsh/speech-to-text"
+        "--exclude=./root/obscura"
+        "--exclude=./root/.java"
+        "--exclude=./root/.android/cache"
+        # n 的下载副本不是活动 Node 运行时（活动二进制仍保留在 usr/local/bin）。
+        "--exclude=./usr/local/n"
         # 排除用户 SSH 个人公私钥、资产密码与主机指纹 (绝不外泄，确保每机独立性)
         "--exclude=./root/.ssh"
         "--exclude=./root/.ssh/*"
@@ -447,6 +481,8 @@ EOF_CORDIS
         "--exclude=./root/.dsh/repair-builtin.log"
         "--exclude=./root/.dsh/restore-report.txt"
         "--exclude=./root/.dsh/plugin-export*"
+        "--exclude=./root/.dsh/plugin-upload*"
+        "--exclude=./root/.dsh/dsh-market"
         "--exclude=./root/dsha-repo"
         "--exclude=./root/.opencodereview"
         "--exclude=./root/root*"
@@ -515,7 +551,7 @@ EOF_CORDIS
 
     echo "==> [3/3] 正在执行多线程高效压缩..."
     $COMPRESS_CMD < "$TMP_RAW_TAR" > "$OUTPUT_TAR"
-    rm -f "$TMP_RAW_TAR"
+    # raw_rootfs.tar 由 EXIT trap 在核实临时目录后统一清理。
 
     echo "✓ 纯净脱敏底包已生成: $OUTPUT_TAR ($(ls -lh "$OUTPUT_TAR" | awk '{print $5}'))"
 fi

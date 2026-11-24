@@ -38,6 +38,12 @@ bash tools/export-rootfs.sh --clone
 
 公开模式在导出流中排除虚拟挂载、临时数据、会话与凭据，注入纯净 profile，并使用可用的 pigz 或 gzip 生成 `rootfs.tar.gz`。公开发布前仍须检查产物，确认没有个人记录、密钥或设备专属凭据。
 
+- 公开模式不携带 classic-chat 的旧实体、安装立牌、普通插件源码及旧 profile 锁文件；Web profile 仅注册当前五个内置插件，避免残留第三方路径。
+- Git 登录凭据、远程访问 TLS 私钥/配对状态、维护备份、私人技能副本、后装语音模型和临时 obscura 工具均不进入公开底包。活动 Node 二进制保留，`n` 下载缓存不保留。
+- 前代已含的 Java 21 运行时、JADX、REA、DSH 官方生产闭包及共享运行模块继续保留，不因目录大就裁剪。
+- pigz 默认使用两个线程；可用 `PIGZ_THREADS=2 bash tools/export-rootfs.sh --output <新产物路径>` 显式控制并行度，降低手机负载。
+- 导出前可运行 `python3 scripts/test-rootfs-export.py -v`，用隔离归档验证脱敏排除、内置清单及软链过滤。该测试不读取或修改真实系统文件。
+
 - 默认底包输出：`/sdcard/Download/DSHA/rootfs.tar.gz`，可用 `--output` 指定。
 - Full 模块输出：当前仓库的 `dist/dsha_ksu_native_full.zip`。
 - Lite 模块不携带新底包，使用 `bash scripts/build-module.sh --lite` 单独构建。
