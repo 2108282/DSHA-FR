@@ -4,6 +4,7 @@
 仅安装声明 dsh.bundle.patch 的发布包；安装依赖不执行 prepare/build 脚本。
 """
 import importlib.util
+from contextlib import contextmanager
 import json
 import os
 import re
@@ -242,31 +243,101 @@ def prepare_dependencies(root, pkg):
         shutil.move(os.path.join(work, "node_modules"), modules)
 
 
+def owned_plugin_dir(name):
+    """只认 DSHA 的精确实体映射；npm/pnpm 的实体与 scope 父级不归本脚本所有。"""
+    if not builtin.valid_name(name):
+        raise ValueError("无效的插件名称")
+    if name in builtin.builtin_names():
+        directory = builtin.entity_dir(name)
+        candidates = ["/root/" + name, "/root/dsha-" + name]
+        if name.startswith("dsh-"):
+            candidates.append("/root/dsha-" + name[4:])
+        if not directory or local(directory) not in [local(path) for path in candidates]:
+            return None
+        return local(directory)
+    if builtin.is_official_bundle(name):
+        return None
+    return local(os.path.join(PLUGIN_SRC, name))
+
+
+def plugin_link_paths(name):
+    return [os.path.join(local(base), name) for base in
+            (builtin.NODE_MODULES, "/usr/local/lib/node_modules")]
+
+
+def check_link_parent(link, base):
+    """拒绝 scope 或 node_modules 经软链跳转；绝不摘掉父级来强行建链。"""
+    parent = os.path.dirname(link)
+    current = parent
+    while current != os.path.dirname(base):
+        if os.path.islink(current):
+            raise ValueError("插件模块父目录是软链接，已停止操作：" + current)
+        if os.path.lexists(current) and not os.path.isdir(current):
+            raise ValueError("插件模块父目录类型异常：" + current)
+        if current == base:
+            break
+        current = os.path.dirname(current)
+
+
 def ensure_plugin_symlinks(name):
-    """确保插件在 local(builtin.NODE_MODULES) 与 /usr/local/lib/node_modules 下的双向软链均正确建立"""
+    """只为 DSHA own 实体补链；相同路径/实体先 noop，碰撞绝不删除或吞错。"""
     target = resolve_plugin_dir(name)
-    if not target or not os.path.isdir(target):
-        return
-    for base_nm in [local(builtin.NODE_MODULES), "/usr/local/lib/node_modules"]:
-        link = os.path.join(base_nm, name)
-        parent = os.path.dirname(link)
-        if os.path.islink(parent):
-            try: os.unlink(parent)
-            except OSError: pass
-        os.makedirs(parent, exist_ok=True)
-        if os.path.islink(link):
-            try: os.unlink(link)
-            except OSError: pass
-        elif os.path.lexists(link):
-            if os.path.isdir(link):
-                shutil.rmtree(link, ignore_errors=True)
-            else:
-                try: os.unlink(link)
-                except OSError: pass
-        try:
+    owned = owned_plugin_dir(name)
+    if not target:
+        if any(os.path.islink(link) for link in plugin_link_paths(name)):
+            raise ValueError("插件链接目标不存在：" + name)
+        return 0
+    package = read_json(os.path.join(target, "package.json"), {})
+    if package.get("name") != name or not os.path.isdir(target):
+        raise ValueError("插件链接目标名称或类型不匹配：" + name)
+    # 官方/npm/pnpm 解析出的目录不属于 DSHA；尤其 hoisted 的 target 就是 profile link。
+    if not owned or os.path.realpath(target) != os.path.realpath(owned):
+        return 0
+    if os.path.islink(owned) or os.path.realpath(owned) != os.path.abspath(owned):
+        raise ValueError("插件实体目录经软链接跳转，已停止补链：" + name)
+    paths = plugin_link_paths(name)
+    # 全部预检后再写入，避免 profile 已改而 global 碰撞才失败。
+    missing = []
+    for link in paths:
+        base = os.path.dirname(link) if not name.startswith("@") else os.path.dirname(os.path.dirname(link))
+        check_link_parent(link, base)
+        if os.path.abspath(link) == os.path.abspath(target) or (
+                os.path.exists(link) and os.path.samefile(link, target)):
+            continue
+        if os.path.lexists(link):
+            raise ValueError("插件模块路径已被非 DSHA 映射占用：" + link)
+        missing.append(link)
+    created = []
+    try:
+        for link in missing:
+            os.makedirs(os.path.dirname(link), exist_ok=True)
             os.symlink(target, link, target_is_directory=True)
-        except Exception:
-            pass
+            created.append(link)
+            if not os.path.isdir(link) or not os.path.samefile(link, target):
+                raise ValueError("插件链接回查失败：" + link)
+    except Exception:
+        for link in reversed(created):
+            if os.path.islink(link) and os.path.realpath(link) == os.path.realpath(target):
+                os.unlink(link)
+        raise
+    return len(created)
+
+
+@contextmanager
+def installation_workspace(parent):
+    """失败时尚未归位的旧版本/历史备份必须保留，不能随临时目录自动销毁。"""
+    work = tempfile.mkdtemp(prefix='.install-', dir=parent)
+    failed = False
+    try:
+        yield work
+    except BaseException:
+        failed = True
+        raise
+    finally:
+        if failed and any(os.path.lexists(os.path.join(work, name)) for name in ('old', 'previous-history')):
+            print('DSHA: 回滚备份已保留：' + work, flush=True)
+        else:
+            shutil.rmtree(work)
 
 
 def register_plugin(root, source, expected_version=None):
@@ -289,7 +360,7 @@ def register_plugin(root, source, expected_version=None):
         dep_target = os.path.join(PLUGIN_SRC, name).replace("\\", "/")
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     # 新目录先准备完整再切换；第三方插件只保留唯一上一版，供显式回退。
-    with tempfile.TemporaryDirectory(prefix=".install-", dir=os.path.dirname(dest)) as work:
+    with installation_workspace(os.path.dirname(dest)) as work:
         prepared = os.path.join(work, "new")
         shutil.copytree(root, prepared, symlinks=True)
         # 复制后再检查软链接：插件不能依赖源仓库中没有被带走的相邻目录。
@@ -318,12 +389,18 @@ def register_plugin(root, source, expected_version=None):
             source_written = False
             existed = os.path.lexists(dest)
             link = os.path.join(local(builtin.NODE_MODULES), name)
-            if os.path.lexists(link) and not os.path.islink(link):
-                if existed or name in doc.get("dependencies", {}):
-                    shutil.rmtree(link, ignore_errors=True)
-                else:
-                    raise ValueError(name + " 已由 pnpm 安装为实体目录，请先在终端移除该依赖再导入")
+            global_link = plugin_link_paths(name)[1]
+            for candidate, base in zip(plugin_link_paths(name),
+                                       (local(builtin.NODE_MODULES), local('/usr/local/lib/node_modules'))):
+                check_link_parent(candidate, base)
+                if os.path.lexists(candidate) and not os.path.islink(candidate):
+                    raise ValueError(name + " 的模块路径是实体目录，请先通过官方卸载再导入")
+                if os.path.islink(candidate):
+                    target = os.path.abspath(os.path.join(os.path.dirname(candidate), os.readlink(candidate)))
+                    if target != os.path.abspath(dest):
+                        raise ValueError(name + " 的模块路径由其他安装器管理，请先通过官方卸载再导入")
             old_link = os.readlink(link) if os.path.islink(link) else None
+            had_global_link = os.path.lexists(global_link)
             marker = builtin.marker_path(name)
             previous_bundles = doc.get("dsh", {}).get("profile", {}).get("bundles", [])
             known = name in doc.get("dependencies", {}) or name in previous_bundles
@@ -338,11 +415,6 @@ def register_plugin(root, source, expected_version=None):
                     os.unlink(link)
                 if enabled:
                     parent_dir = os.path.dirname(link)
-                    if os.path.islink(parent_dir):
-                        try:
-                            os.unlink(parent_dir)
-                        except OSError:
-                            pass
                     os.makedirs(parent_dir, exist_ok=True)
                     os.symlink(dest, link, target_is_directory=True)
                     ensure_plugin_symlinks(name)
@@ -360,22 +432,50 @@ def register_plugin(root, source, expected_version=None):
                 if existed:
                     history_change = lifecycle().retain(name, old, work, previous_sources.get(name, ""))
                 builtin.write_manifest(doc)
-            except Exception:
-                if history_change is not None:
-                    history_change.undo()
-                if source_written:
+            except Exception as install_error:
+                rollback_errors = []
+
+                def rollback(label, action):
                     try:
-                        write_json(local(SOURCES), previous_sources)
-                    except OSError:
-                        pass
-                if os.path.islink(link):
-                    os.unlink(link)
-                if old_link is not None:
-                    os.symlink(old_link, link, target_is_directory=True)
-                if os.path.isdir(dest):
-                    shutil.rmtree(dest)
-                if existed:
-                    os.replace(old, dest)
+                        action()
+                    except Exception as error:
+                        rollback_errors.append(label + '：' + str(error))
+
+                # 旧实体优先归位；软链恢复即使持续失败，也不能阻断数据恢复。
+                if history_change is not None:
+                    rollback('恢复历史备份', history_change.undo)
+
+                def restore_entity():
+                    if os.path.isdir(dest) and not os.path.islink(dest):
+                        shutil.rmtree(dest)
+                    if existed:
+                        if not os.path.isdir(old):
+                            raise OSError('旧版本备份尚未归位，请检查安装工作目录和插件历史')
+                        os.replace(old, dest)
+
+                rollback('恢复插件实体', restore_entity)
+                if source_written:
+                    rollback('恢复来源记录', lambda: write_json(local(SOURCES), previous_sources))
+
+                def restore_global_link():
+                    if not had_global_link and os.path.islink(global_link):
+                        target = os.path.abspath(os.path.join(os.path.dirname(global_link), os.readlink(global_link)))
+                        if target == os.path.abspath(dest):
+                            os.unlink(global_link)
+
+                def restore_profile_link():
+                    if os.path.islink(link):
+                        os.unlink(link)
+                    if old_link is not None:
+                        os.symlink(old_link, link, target_is_directory=True)
+
+                rollback('恢复全局链接', restore_global_link)
+                rollback('恢复 profile 链接', restore_profile_link)
+                if rollback_errors:
+                    pending_backup = any(os.path.lexists(os.path.join(work, item)) for item in ('old', 'previous-history'))
+                    location = work if pending_backup else dest
+                    raise RuntimeError(str(install_error) + '；回滚未完成：' + '；'.join(rollback_errors)
+                                       + '；请检查插件实体或备份：' + location) from install_error
                 raise
     return name
 
@@ -499,8 +599,32 @@ def cmd_export(names, out):
     return 0
 
 
+def cleanup_plugin_links(name, package=None):
+    """只摘除精确指向此插件的自有链接；不碰实体、其他包或 scope 父目录。"""
+    src = os.path.abspath(local(os.path.join(PLUGIN_SRC, name)))
+    profile = os.path.abspath(os.path.join(local(builtin.NODE_MODULES), name))
+    for link, base in zip(plugin_link_paths(name),
+                          (local(builtin.NODE_MODULES), local('/usr/local/lib/node_modules'))):
+        check_link_parent(link, base)
+        if os.path.islink(link):
+            target = os.path.abspath(os.path.join(os.path.dirname(link), os.readlink(link)))
+            if target in (src, profile):
+                os.unlink(link)
+    names = {name.rsplit('/', 1)[-1]}
+    bins = (package or {}).get('bin', {})
+    if isinstance(bins, dict):
+        names.update(key for key in bins if isinstance(key, str) and key not in ('.', '..') and '/' not in key)
+    for binary in names:
+        link = os.path.join(local(builtin.NODE_MODULES), '.bin', binary)
+        check_link_parent(link, local(builtin.NODE_MODULES))
+        if os.path.islink(link):
+            target = os.path.abspath(os.path.join(os.path.dirname(link), os.readlink(link)))
+            if any(os.path.commonpath([root, target]) == root for root in (src, profile)):
+                os.unlink(link)
+
+
 def cmd_delete(name):
-    """移除指定第三方插件：调用官方包管理器卸载依赖并清理本地源码，保持完全干净。"""
+    """官方卸载成功且回查通过后，才清理该插件的 DSHA 自有残留。"""
     if not builtin.valid_name(name):
         raise ValueError("无效的插件名称")
     if builtin.is_official_bundle(name) or name in builtin.builtin_names():
@@ -511,62 +635,58 @@ def cmd_delete(name):
             raise ValueError("插件配置不存在")
         bundles = doc.get("dsh", {}).get("profile", {}).get("bundles", [])
         deps = doc.get("dependencies", {})
-        if name not in deps and name not in bundles:
+        sources = read_json(local(SOURCES), {})
+        src_path = local(os.path.join(PLUGIN_SRC, name))
+        if name not in deps and name not in bundles and name not in (sources or {}) and not os.path.lexists(src_path):
             raise ValueError("插件未安装或已经删除，请刷新列表")
-
-        # 1. 如果在 profile 依赖中有声明，先调用官方 dsh 命令安全移除依赖与清理锁文件
+        directory = resolve_plugin_dir(name)
+        package = read_json(os.path.join(directory, 'package.json'), {}) if directory else {}
+        # 不吞掉官方失败或超时；它可能要求先停止仍在运行的 profile。
         if name in deps:
             try:
-                subprocess.run(["dsh", "plugin", "--profile", "web", "remove", name],
-                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=120)
-            except Exception:
-                pass
-
-        # 2. 重新读取最新清单并从 bundles 剔除
-        doc = builtin.read_manifest() or doc
-        bundles = doc.get("dsh", {}).get("profile", {}).get("bundles", [])
-        if name in bundles:
-            bundles.remove(name)
-            doc.setdefault("dsh", {}).setdefault("profile", {})["bundles"] = bundles
+                env = dict(os.environ, DSH_HOME=local(DSH_HOME))
+                removed = subprocess.run(["dsh", "plugin", "--profile", "web", "remove", name],
+                                         cwd=local(os.path.join(DSH_HOME, 'profiles', 'web')), env=env,
+                                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=120)
+            except subprocess.TimeoutExpired as error:
+                raise ValueError("官方卸载超时，尚未清理插件文件，请核对状态后重试") from error
+            if removed.returncode != 0:
+                detail = (removed.stderr or removed.stdout or '').strip()[-1200:]
+                raise ValueError("官方卸载失败，保留插件文件：" + (detail or str(removed.returncode)))
+            doc = builtin.read_manifest()
+            if doc is None or name in doc.get('dependencies', {}) or name in doc.get('dsh', {}).get('profile', {}).get('bundles', []):
+                raise ValueError("官方卸载回查未通过，保留插件文件，请刷新后重试")
+        elif name in bundles:
+            # 只有 bundle 选择、没有包依赖的历史残项，不运行无关的 pnpm 操作。
+            doc['dsh']['profile']['bundles'] = [item for item in bundles if item != name]
             builtin.write_manifest(doc)
 
-        # 3. 清理 plugin-src 下的物理源码与 node_modules 软链
-        src_path = os.path.join(local(PLUGIN_SRC), name)
-        if os.path.isdir(src_path) and not os.path.islink(src_path):
-            shutil.rmtree(src_path, ignore_errors=True)
-            # 若父级 scope 目录已空，一并清理
-            scope_dir = os.path.dirname(src_path)
-            if os.path.basename(scope_dir).startswith('@') and os.path.isdir(scope_dir) and not os.listdir(scope_dir):
-                try:
-                    os.rmdir(scope_dir)
-                except OSError:
-                    pass
-
-        link_path = os.path.join(local(builtin.NODE_MODULES), name)
-        if os.path.islink(link_path):
-            try:
-                os.unlink(link_path)
-            except OSError:
-                pass
-
-        # 4. 清理禁用标记、历史与来源记录
-        marker = builtin.marker_path(name)
-        if os.path.isfile(marker):
-            try:
-                os.remove(marker)
-            except OSError:
-                pass
-
         try:
+            managed = os.path.realpath(local(PLUGIN_SRC))
+            home = os.path.realpath(local(DSH_HOME))
+            if os.path.commonpath([home, managed]) != home or os.path.realpath(src_path) != os.path.abspath(src_path):
+                raise ValueError("插件源码路径经软链接跳转，已停止残留清理")
+            if os.path.lexists(src_path) and not os.path.isdir(src_path):
+                raise ValueError("插件源码目录类型异常，已停止残留清理")
+            cleanup_plugin_links(name, package)
+            if os.path.isdir(src_path):
+                owned_package = read_json(os.path.join(src_path, 'package.json'), {})
+                if owned_package.get('name') != name:
+                    raise ValueError("插件源码名称不匹配，已停止残留清理")
+                shutil.rmtree(src_path)
+                scope_dir = os.path.dirname(src_path)
+                if os.path.basename(scope_dir).startswith('@') and not os.listdir(scope_dir):
+                    os.rmdir(scope_dir)
+            marker = builtin.marker_path(name)
+            if os.path.isfile(marker) and not os.path.islink(marker):
+                os.remove(marker)
             lifecycle().clear_history(name)
-        except Exception:
-            pass
-
-        sources = read_json(local(SOURCES), {})
-        if isinstance(sources, dict) and name in sources:
-            sources.pop(name, None)
-            write_json(local(SOURCES), sources)
-
+            if isinstance(sources, dict) and name in sources:
+                sources.pop(name)
+                write_json(local(SOURCES), sources)
+        except Exception as error:
+            result('partial', "插件依赖已移除，但残留清理失败：" + str(error), removed=[name])
+            return 1
     result("ok", "已删除 " + name + "；重启 Web 后停止加载。对话和其他插件保留。")
     return 0
 

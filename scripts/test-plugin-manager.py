@@ -5,6 +5,7 @@ import importlib.util
 import io
 import json
 import os
+import sys
 from pathlib import Path
 import tarfile
 import tempfile
@@ -12,13 +13,52 @@ import unittest
 from unittest.mock import patch
 import zipfile
 
-ASSET = Path(__file__).resolve().parents[1] / "rootfs-overlay/root/.dsh/plugin-manager.py"
+p1 = Path(__file__).resolve().parents[1] / "app/src/main/assets/plugin-manager.py"
+p2 = Path(__file__).resolve().parents[1] / "rootfs-overlay/root/.dsh/plugin-manager.py"
+p3 = Path(__file__).resolve().parents[2] / "DSHA_repo/app/src/main/assets/plugin-manager.py"
+ASSET = p1 if p1.exists() else (p2 if p2.exists() else p3)
+
+# 全进程审计兜底：任何测试意外写出临时根目录都立即失败，包括 dir_fd 删除。
+_ACTIVE_ROOT = None
+
+
+def guard_test_writes(event, args):
+    if _ACTIVE_ROOT is None:
+        return
+    paths = []
+    if event == 'open':
+        path, mode, flags = args
+        if isinstance(path, int):
+            return
+        if (mode and any(letter in mode for letter in 'wax+')) or flags & (os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_TRUNC | os.O_APPEND):
+            paths = [(path, None)]
+    elif event in ('os.remove', 'os.rmdir', 'os.mkdir', 'os.chmod'):
+        paths = [(args[0], args[-1] if isinstance(args[-1], int) else None)]
+    elif event == 'os.symlink':
+        paths = [(args[1], args[2])]
+    elif event == 'os.rename':
+        paths = [(args[0], args[2]), (args[1], args[3])]
+    for path, descriptor in paths:
+        path = os.fsdecode(path)
+        if not os.path.isabs(path) and descriptor is not None and descriptor >= 0:
+            path = os.path.join(os.readlink('/proc/self/fd/' + str(descriptor)), path)
+        # 删除/替换的是链接本身，校验其父目录，不解引用最后一段。
+        absolute = os.path.abspath(path)
+        parent = os.path.realpath(os.path.dirname(absolute))
+        resolved = os.path.join(parent, os.path.basename(absolute))
+        if os.path.commonpath([_ACTIVE_ROOT, resolved]) != _ACTIVE_ROOT:
+            raise AssertionError('测试试图写入临时目录之外：' + resolved)
+
+
+sys.addaudithook(guard_test_writes)
 
 
 class PluginTestBase(unittest.TestCase):
     def setUp(self):
+        global _ACTIVE_ROOT
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
+        _ACTIVE_ROOT = str(self.root.resolve())
         self.env = patch.dict(os.environ, {"DSHA_TEST_ROOT": str(self.root), "DSH_HOME": "/root/.dsh"})
         self.env.start()
         spec = importlib.util.spec_from_file_location("manager", ASSET)
@@ -26,14 +66,37 @@ class PluginTestBase(unittest.TestCase):
         spec.loader.exec_module(self.manager)
         self.home = self.root / "root/.dsh"
         self.home.mkdir(parents=True)
+        self.commands = patch.object(self.manager.subprocess, 'run', side_effect=self.fake_command)
+        self.commands.start()
+        self.network = patch.object(self.manager.urllib.request, 'urlopen', side_effect=AssertionError('测试禁止真实网络'))
+        self.network.start()
         self.out = io.StringIO()
         self.capture = contextlib.redirect_stdout(self.out)
         self.capture.__enter__()
 
+    def fake_command(self, args, **kwargs):
+        if args[:5] != ['dsh', 'plugin', '--profile', 'web', 'remove'] or len(args) != 6:
+            raise AssertionError('测试禁止真实外部命令：' + str(args))
+        self.assertEqual(str(self.home / 'profiles/web'), kwargs['cwd'])
+        self.assertEqual(str(self.home), kwargs['env']['DSH_HOME'])
+        doc = self.manager.builtin.read_manifest()
+        doc.get('dependencies', {}).pop(args[5], None)
+        bundles = doc.get('dsh', {}).get('profile', {}).get('bundles', [])
+        if args[5] in bundles:
+            bundles.remove(args[5])
+        self.manager.builtin.write_manifest(doc)
+        return self.manager.subprocess.CompletedProcess(args, 0, '', '')
+
     def tearDown(self):
-        self.capture.__exit__(None, None, None)
-        self.env.stop()
-        self.temp.cleanup()
+        global _ACTIVE_ROOT
+        try:
+            self.capture.__exit__(None, None, None)
+            self.network.stop()
+            self.commands.stop()
+            self.env.stop()
+            self.temp.cleanup()
+        finally:
+            _ACTIVE_ROOT = None
 
     def package(self, path, name="dsh-demo", version="1"):
         path.mkdir(parents=True, exist_ok=True)
@@ -229,6 +292,27 @@ class PluginLifecycleTest(PluginTestBase):
             for file in root.iterdir(): out.write(file, 'package/' + file.name)
         return archive
 
+    def test_npm_preview_uses_locked_tarball_through_confirm(self):
+        archive = self.archive(version='1.0.0')
+        life = self.manager.lifecycle()
+        def pack(spec, consume):
+            self.assertEqual('dsh-demo@1.0.0', spec)
+            return consume(str(archive), source='npm:dsh-demo@1.0.0')
+        request = {'command': "npm dsh-demo", 'name': 'dsh-demo'}
+        metadata = json.dumps({'name': 'dsh-demo', 'version': '1.0.0', 'main': 'index.js',
+                               'dsh': {'bundle': {'patch': 'cordis.patch.yml'}}})
+        completed = self.manager.subprocess.CompletedProcess([], 0, metadata, '')
+        with patch.object(self.manager.shutil, 'which', return_value='/usr/bin/npm'), \
+                patch.object(self.manager.subprocess, 'run', return_value=completed), \
+                patch.object(self.manager, 'cmd_npm', side_effect=pack):
+            preview = life.inspect(request, False)
+        preview_path = Path(life.preview_path(preview['previewId']))
+        self.assertEqual(life.digest(str(preview_path / 'archive')), preview['sha256'])
+        self.assertEqual('1.0.0', preview['items'][0]['version'])
+        self.assertFalse((self.home / 'plugin-src/dsh-demo').exists())
+        self.assertEqual(0, life.install_preview(preview['previewId']))
+        self.assertTrue((self.home / 'plugin-src/dsh-demo').exists())
+
     def test_rollback_retains_only_one_previous_version_and_disabled_state(self):
         for version in ('1.0.0', '2.0.0', '3.0.0'):
             self.manager.register_plugin(self.package(self.root / version, version=version), 'npm:dsh-demo@' + version)
@@ -271,6 +355,20 @@ class PluginLifecycleTest(PluginTestBase):
             preview = life.inspect(request, False)
             (Path(life.preview_path(preview['previewId'])) / 'archive').write_bytes(b'changed')
             with self.assertRaises(ValueError): life.install_preview(preview['previewId'])
+
+    def test_failed_preview_install_cleans_staged_archive(self):
+        archive = self.archive(version='1.0.0')
+        life = self.manager.lifecycle()
+        def download(url, target):
+            import shutil
+            shutil.copyfile(archive, target)
+        request = {'command': "download 'https://example.com/demo.zip'", 'name': 'dsh-demo', 'version': '1.0.0'}
+        with patch.object(self.manager, 'download', side_effect=download):
+            preview = life.inspect(request, False)
+        staged = Path(life.preview_path(preview['previewId']))
+        with patch.object(self.manager, 'cmd_import', return_value=1):
+            self.assertEqual(1, life.install_preview(preview['previewId']))
+        self.assertFalse(staged.exists())
 
     def test_update_preview_is_bound_to_plugin_identity_and_installed_version(self):
         self.manager.register_plugin(self.package(self.root / 'v1', version='1.0.0'), 'https://example.com/demo.zip')
@@ -316,6 +414,167 @@ class PluginLifecycleTest(PluginTestBase):
         with self.assertRaises(ValueError):
             self.manager.register_plugin(self.package(self.root / 'scoped', name='@scope/demo'), '')
         self.assertEqual([], list(outside.iterdir()))
+
+
+class PluginSafetyRegressionTest(PluginTestBase):
+    def profile_package(self, name='dsh-demo'):
+        return self.package(Path(self.manager.local(self.manager.builtin.NODE_MODULES)) / name, name)
+
+    def register_fixture(self, name='dsh-demo'):
+        self.manager.register_plugin(self.package(self.root / 'incoming', name=name), 'npm:' + name)
+        return self.home / 'plugin-src' / name
+
+    def test_hoisted_npm_entity_is_not_deleted_or_relinked(self):
+        package = self.profile_package()
+        before = (package / 'index.js').read_bytes()
+        self.assertEqual(0, self.manager.ensure_plugin_symlinks('dsh-demo'))
+        self.assertFalse(package.is_symlink())
+        self.assertEqual(before, (package / 'index.js').read_bytes())
+        self.assertFalse((self.root / 'usr/local/lib/node_modules/dsh-demo').exists())
+
+    def test_pnpm_isolated_link_is_not_rewritten(self):
+        actual = self.package(self.home / 'profiles/web/node_modules/.pnpm/demo/node_modules/dsh-demo')
+        link = actual.parents[3] / 'dsh-demo'
+        os.symlink(actual, link)
+        self.assertEqual(0, self.manager.ensure_plugin_symlinks('dsh-demo'))
+        self.assertEqual(str(actual), os.readlink(link))
+        self.assertTrue((actual / 'index.js').is_file())
+
+    def test_self_link_and_dangling_link_fail_without_being_deleted(self):
+        root = Path(self.manager.local(self.manager.builtin.NODE_MODULES))
+        root.mkdir(parents=True)
+        link = root / 'dsh-demo'
+        for target in (str(link), str(root / 'missing')):
+            with self.subTest(target=target):
+                os.symlink(target, link)
+                with self.assertRaisesRegex(ValueError, '目标不存在'):
+                    self.manager.ensure_plugin_symlinks('dsh-demo')
+                self.assertEqual(target, os.readlink(link))
+                link.unlink()
+
+    def test_registration_keeps_existing_pnpm_entity_and_manifest(self):
+        existing = self.profile_package()
+        self.manager.builtin.write_manifest({'dependencies': {'dsh-demo': '1'}, 'dsh': {'profile': {'bundles': ['dsh-demo']}}})
+        before = self.manager.builtin.read_manifest()
+        with self.assertRaisesRegex(ValueError, '实体目录'):
+            self.manager.register_plugin(self.package(self.root / 'incoming'), '')
+        self.assertEqual(before, self.manager.builtin.read_manifest())
+        self.assertTrue((existing / 'index.js').is_file())
+        self.assertFalse(existing.is_symlink())
+
+    def test_global_collision_does_not_remove_entity_or_publish_profile_link(self):
+        name = 'dsh-demo'
+        actual = self.package(self.home / 'plugin-src' / name)
+        foreign = self.package(self.root / 'usr/local/lib/node_modules' / name)
+        with self.assertRaisesRegex(ValueError, '占用'):
+            self.manager.ensure_plugin_symlinks(name)
+        self.assertTrue((foreign / 'index.js').is_file())
+        self.assertTrue((actual / 'index.js').is_file())
+        self.assertFalse(Path(self.manager.local(self.manager.builtin.NODE_MODULES)).joinpath(name).exists())
+
+    def test_scope_parent_link_is_preserved_without_external_write(self):
+        self.package(self.home / 'plugin-src/@scope/demo', '@scope/demo')
+        root = self.root / 'usr/local/lib/node_modules'; root.mkdir(parents=True)
+        outside = self.root / 'other-scope'; outside.mkdir()
+        os.symlink(outside, root / '@scope')
+        with self.assertRaisesRegex(ValueError, '父目录'):
+            self.manager.ensure_plugin_symlinks('@scope/demo')
+        self.assertTrue((root / '@scope').is_symlink())
+        self.assertEqual([], list(outside.iterdir()))
+
+    def test_failed_manifest_commit_rolls_back_new_global_link(self):
+        incoming = self.package(self.root / 'incoming')
+        with patch.object(self.manager.builtin, 'write_manifest', side_effect=OSError('disk full')):
+            with self.assertRaises(OSError):
+                self.manager.register_plugin(incoming, '')
+        self.assertFalse(os.path.lexists(self.root / 'usr/local/lib/node_modules/dsh-demo'))
+        self.assertFalse(os.path.lexists(self.home / 'profiles/web/node_modules/dsh-demo'))
+        self.assertFalse((self.home / 'plugin-src/dsh-demo').exists())
+
+    def test_continuous_symlink_failure_restores_old_entity_before_links(self):
+        source = self.register_fixture()
+        before = self.manager.builtin.read_manifest()
+        old_bytes = (source / 'package.json').read_bytes()
+        incoming = self.package(self.root / 'upgrade', version='2')
+        with patch.object(self.manager.os, 'symlink', side_effect=OSError('no space left')):
+            with self.assertRaisesRegex(RuntimeError, '回滚未完成'):
+                self.manager.register_plugin(incoming, 'new-source')
+        self.assertEqual(old_bytes, (source / 'package.json').read_bytes())
+        self.assertEqual(before, self.manager.builtin.read_manifest())
+        self.assertTrue((self.root / 'usr/local/lib/node_modules/dsh-demo/package.json').is_file())
+        self.assertFalse(list((self.home / 'plugin-src').glob('.install-*')))
+
+    def test_failed_entity_restore_keeps_backup_outside_automatic_cleanup(self):
+        source = self.register_fixture()
+        old_bytes = (source / 'package.json').read_bytes()
+        incoming = self.package(self.root / 'upgrade', version='2')
+        replace = self.manager.os.replace
+
+        def fail_old_restore(src, dst):
+            if Path(src).name == 'old' and Path(dst) == source:
+                raise OSError('restore denied')
+            return replace(src, dst)
+
+        with patch.object(self.manager.os, 'replace', side_effect=fail_old_restore), \
+                patch.object(self.manager.builtin, 'write_manifest', side_effect=OSError('commit denied')):
+            with self.assertRaisesRegex(RuntimeError, '回滚未完成'):
+                self.manager.register_plugin(incoming, 'new-source')
+        backups = list((self.home / 'plugin-src').glob('.install-*/old/package.json'))
+        self.assertEqual(1, len(backups))
+        self.assertEqual(old_bytes, backups[0].read_bytes())
+        self.assertIn('回滚备份已保留', self.out.getvalue())
+
+    def test_official_remove_failure_and_timeout_preserve_plugin(self):
+        source = self.register_fixture()
+        before = self.manager.builtin.read_manifest()
+        for outcome in ('failed', 'timeout', 'unchanged'):
+            with self.subTest(outcome=outcome):
+                response = self.manager.subprocess.CompletedProcess([], 1 if outcome == 'failed' else 0, '', 'stop-profile')
+                error = self.manager.subprocess.TimeoutExpired('dsh', 120) if outcome == 'timeout' else None
+                with patch.object(self.manager.subprocess, 'run', side_effect=error, return_value=response):
+                    with self.assertRaises(ValueError): self.manager.cmd_delete('dsh-demo')
+                self.assertEqual(before, self.manager.builtin.read_manifest())
+                self.assertTrue((source / 'index.js').is_file())
+                self.assertTrue((self.root / 'usr/local/lib/node_modules/dsh-demo').is_symlink())
+
+    def test_delete_cleans_own_global_and_bin_links_but_preserves_foreign_link(self):
+        source = self.register_fixture()
+        root = self.home / 'profiles/web/node_modules'
+        binary = root / '.bin/dsh-demo'; binary.parent.mkdir()
+        os.symlink('../dsh-demo/lib/cli.js', binary)
+        other = self.package(self.root / 'foreign', 'other')
+        global_link = self.root / 'usr/local/lib/node_modules/dsh-demo'
+        global_link.unlink(); os.symlink(other, global_link)
+        self.assertEqual(0, self.manager.cmd_delete('dsh-demo'))
+        self.assertFalse(source.exists())
+        self.assertFalse(os.path.lexists(binary))
+        self.assertEqual(str(other), os.readlink(global_link))
+        self.assertTrue((other / 'index.js').is_file())
+
+    def test_delete_removes_self_loop_and_global_reference_for_missing_package(self):
+        name = 'dsh-demo'
+        self.manager.builtin.write_manifest({'dependencies': {name: '1'}, 'dsh': {'profile': {'bundles': []}}})
+        profile, global_link = map(Path, self.manager.plugin_link_paths(name))
+        for link in (profile, global_link): link.parent.mkdir(parents=True, exist_ok=True)
+        os.symlink(profile, profile); os.symlink(profile, global_link)
+        self.assertEqual(0, self.manager.cmd_delete(name))
+        self.assertFalse(os.path.lexists(profile)); self.assertFalse(os.path.lexists(global_link))
+        self.assertNotIn(name, self.manager.builtin.read_manifest()['dependencies'])
+
+    def test_cleanup_failure_is_partial_not_success(self):
+        source = self.register_fixture()
+        with patch.object(self.manager, 'cleanup_plugin_links', side_effect=OSError('permission denied')):
+            self.assertEqual(1, self.manager.cmd_delete('dsh-demo'))
+        result = json.loads(self.out.getvalue().split('PLUGIN_RESULT: ')[-1])
+        self.assertEqual('partial', result['status'])
+        self.assertTrue(source.is_dir())
+        self.assertNotIn('dsh-demo', self.manager.builtin.read_manifest()['dependencies'])
+
+    def test_test_harness_rejects_real_global_write_and_external_command(self):
+        with self.assertRaisesRegex(AssertionError, '临时目录之外'):
+            os.symlink('/does-not-exist', '/usr/local/lib/node_modules/dsha-test-must-not-write')
+        with self.assertRaisesRegex(AssertionError, '外部命令'):
+            self.manager.subprocess.run(['pnpm', 'install'])
 
 
 if __name__ == "__main__":
