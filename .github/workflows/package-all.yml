@@ -22,9 +22,9 @@ on:
         required: false
         default: "0.2.2-rc.1-u1"
       rootfs_tag:
-        description: "基准纯净底包 Release Tag (默认 0.2.2-rc.1-rootfs)"
+        description: "基准纯净底包 Release Tag (默认 0.2.3-alpha.2-rootfs)"
         required: false
-        default: "0.2.2-rc.1-rootfs"
+        default: "0.2.3-alpha.2-rootfs"
       prerelease:
         description: "是否标记为预发布 (Pre-release)"
         type: boolean
@@ -147,14 +147,14 @@ jobs:
           echo "✓ 产物 1 已就绪 (前端 APK): dist/DSHA-FR ${VERSION}.apk ($(ls -lh "dist/DSHA-FR ${VERSION}.apk" | awk '{print $5}'))"
 
       # ============================================================
-      # 3.5 准备基准 RootFS 纯净底包 (0.2.2-rc.1-rootfs)
+      # 3.5 准备基准 RootFS 纯净底包 (0.2.3-alpha.2-rootfs)
       # ============================================================
-      - name: 下载基准 RootFS 纯净底包 (0.2.2-rc.1-rootfs)
+      - name: 下载基准 RootFS 纯净底包 (0.2.3-alpha.2-rootfs)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          ROOTFS_TAG="${{ inputs.rootfs_tag || '0.2.2-rc.1-rootfs' }}"
+          ROOTFS_TAG="${{ inputs.rootfs_tag || '0.2.3-alpha.2-rootfs' }}"
           echo "==> 正在从官方 Release ($ROOTFS_TAG) 下载基准 rootfs.tar.gz..."
           mkdir -p module_source/magisk-module
           if command -v gh >/dev/null 2>&1 && gh release download "$ROOTFS_TAG" --repo "${{ github.repository }}" --pattern "rootfs.tar.gz" --dir module_source/magisk-module 2>/dev/null && [ -s module_source/magisk-module/rootfs.tar.gz ]; then
@@ -172,7 +172,7 @@ jobs:
       - name: 执行核心模块打包 (build-module.sh --lite 与 full)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          ROOTFS_TAG: ${{ inputs.rootfs_tag || '0.2.2-rc.1-rootfs' }}
+          ROOTFS_TAG: ${{ inputs.rootfs_tag || '0.2.3-alpha.2-rootfs' }}
         run: |
           set -euo pipefail
           cd module_source
