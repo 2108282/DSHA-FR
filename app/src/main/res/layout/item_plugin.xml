@@ -160,7 +160,7 @@
                     android:layout_marginEnd="8dp"
                     android:indeterminate="true"
                     android:visibility="gone"
-                    app:indeterminateTint="@color/primary" />
+                    android:indeterminateTint="@color/primary" />
             </FrameLayout>
 
             <Button
