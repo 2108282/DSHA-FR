@@ -191,6 +191,8 @@ public class ProotBootstrap {
 
     /** 插件管理脚本（导入、导出、链接安装与状态读取），资产名。 */
     public static final String PLUGIN_MANAGER_SCRIPT = "plugin-manager.py";
+    /** 插件生命周期逻辑；必须与每次注入的管理器保持同版。 */
+    public static final String PLUGIN_LIFECYCLE_SCRIPT = "plugin-lifecycle.py";
 
     /**
      * 注入插件管理脚本及共用注册模块，再通过 python3 执行。
@@ -213,8 +215,13 @@ public class ProotBootstrap {
             if (common.isEmpty()) return "ASSET_MISSING:" + BUILTIN_REGISTER_SCRIPT;
             String common64 = Base64.encodeToString(common.getBytes(
                     java.nio.charset.StandardCharsets.UTF_8), Base64.NO_WRAP);
+            String lifecycle = readAssetString(PLUGIN_LIFECYCLE_SCRIPT);
+            if (lifecycle.isEmpty()) return "ASSET_MISSING:" + PLUGIN_LIFECYCLE_SCRIPT;
+            String lifecycle64 = Base64.encodeToString(lifecycle.getBytes(
+                    java.nio.charset.StandardCharsets.UTF_8), Base64.NO_WRAP);
             String cmd = "set -e; mkdir -p /root/.dsh; "
                     + "printf '%s' '" + common64 + "' | base64 -d > /root/.dsh/" + BUILTIN_REGISTER_SCRIPT + "; "
+                    + "printf '%s' '" + lifecycle64 + "' | base64 -d > /root/.dsh/" + PLUGIN_LIFECYCLE_SCRIPT + "; "
                     + "printf '%s' '" + b64 + "' | base64 -d > /root/.dsh/" + PLUGIN_MANAGER_SCRIPT + "; "
                     + "chmod +x /root/.dsh/" + PLUGIN_MANAGER_SCRIPT + "; "
                     + "python3 /root/.dsh/" + PLUGIN_MANAGER_SCRIPT
