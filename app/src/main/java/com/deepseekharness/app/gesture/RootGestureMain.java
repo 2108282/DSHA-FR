@@ -12,7 +12,6 @@ import android.view.InputChannel;
 import android.view.InputEvent;
 import android.view.InputEventReceiver;
 import android.view.MotionEvent;
-import android.view.HapticFeedbackConstants;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.lang.reflect.Method;
@@ -20,7 +19,6 @@ import org.lsposed.hiddenapibypass.HiddenApiBypass;
 
 /** Runs in a separate uid=0 app_process. stdout is a private pipe to our APK, never a socket. */
 public final class RootGestureMain {
-    private static final String HAPTIC_REASON = "DSH corner gesture threshold";
     private static Object monitor;
     private static InputEventReceiver receiver;
     private static Context context;
@@ -30,8 +28,6 @@ public final class RootGestureMain {
     private static boolean captured;
     private static int frames;
     private static Method eventDisplayId;
-    private static android.os.Vibrator vibrator;
-    private static Method hapticFeedback;
     private static PowerManager power;
     private static Object windowManager;
 
@@ -51,12 +47,6 @@ public final class RootGestureMain {
                 windowManager = windowManager();
             } catch (Throwable ignored) {
                 // Locked-state gating is a convenience; the gesture still works without it.
-            }
-            try {
-                vibrator = context.getSystemService(android.os.Vibrator.class);
-                hapticFeedback = hapticMethod();
-            } catch (Throwable ignored) {
-                // Missing haptics must never prevent QuickChat from opening.
             }
             display = context.getSystemService(DisplayManager.class).getDisplay(Display.DEFAULT_DISPLAY);
             eventDisplayId = InputEvent.class.getMethod("getDisplayId");
@@ -141,7 +131,7 @@ public final class RootGestureMain {
             recognizer.move(event.getRawX(), event.getRawY());
             frames++;
             if (!launched && recognizer.isTriggered()) {
-                triggerHapticFeedback();
+                requestHapticFeedback();
                 emit("TRIGGER " + (recognizer.isLeft() ? "L" : "R"));
                 Intent intent = new Intent(Intent.ACTION_ASSIST);
                 intent.setComponent(new ComponentName("com.dsha.fr", "com.deepseekharness.app.ui.AssistGatewayActivity"));
@@ -156,29 +146,14 @@ public final class RootGestureMain {
         }
     }
 
-    private static void triggerHapticFeedback() {
-        try {
-            if (vibrator == null || !vibrator.hasVibrator()) return;
-            if (hapticFeedback != null) {
-                // Same semantic feedback as launcher View.performHapticFeedback(VIRTUAL_KEY).
-                // flags=0 preserves the system's haptic setting and vendor effect mapping.
-                // Android 17 prepends the caller uid; older releases take the 4-argument form.
-                Object[] call = hapticFeedback.getParameterCount() == 5
-                        ? new Object[] {android.os.Process.myUid(), HapticFeedbackConstants.VIRTUAL_KEY,
-                                HAPTIC_REASON, 0, 0}
-                        : new Object[] {HapticFeedbackConstants.VIRTUAL_KEY, HAPTIC_REASON, 0, 0};
-                hapticFeedback.invoke(vibrator, call);
-            } else if (android.provider.Settings.System.getInt(context.getContentResolver(),
-                    android.provider.Settings.System.HAPTIC_FEEDBACK_ENABLED, 1) != 0) {
-                vibrator.vibrate(android.os.VibrationEffect.createPredefined(android.os.VibrationEffect.EFFECT_CLICK),
-                        new android.media.AudioAttributes.Builder()
-                                .setUsage(android.media.AudioAttributes.USAGE_ASSISTANCE_SONIFICATION).build());
-            }
-            emit("HAPTIC VIRTUAL_KEY");
-        } catch (Throwable error) {
-            // Missing OEM feedback support must never prevent QuickChat from opening.
-            emit("WARN haptic " + reason(error));
-        }
+    /**
+     * Haptics are requested from the APK, not played here. A standalone app_process cannot build
+     * the vibrator service reliably on Android 17 (same ApplicationSharedMemory class of failure as
+     * KeyguardManager), and even where it can, uid 0 bypasses the user's haptic setting. The APK
+     * process owns real identity and the real services, so it plays the tick and we only ask.
+     */
+    private static void requestHapticFeedback() {
+        emit("HAPTIC VIRTUAL_KEY");
     }
 
     private static void launchQuickChat(Intent intent) throws Exception {
@@ -194,16 +169,6 @@ public final class RootGestureMain {
             return;
         }
         throw new NoSuchMethodException("IActivityTaskManager.startActivityAsUser");
-    }
-
-    private static Method hapticMethod() throws NoSuchMethodException {
-        try {
-            return android.os.Vibrator.class.getMethod("performHapticFeedback",
-                    int.class, int.class, String.class, int.class, int.class);
-        } catch (NoSuchMethodException missing) {
-            return android.os.Vibrator.class.getMethod("performHapticFeedback",
-                    int.class, String.class, int.class, int.class);
-        }
     }
 
     /** The window manager binder also answers keyguard state without a full app process. */

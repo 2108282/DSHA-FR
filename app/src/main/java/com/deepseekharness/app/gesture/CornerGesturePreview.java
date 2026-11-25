@@ -111,6 +111,31 @@ public final class CornerGesturePreview {
             notifyChanged();
         } else if (message.startsWith("ERROR ")) {
             fail(ticket, message.substring(6));
+        } else if (message.startsWith("HAPTIC")) {
+            playHaptic();
+        }
+    }
+
+    /**
+     * The threshold tick is played here, in the APK process. The root helper only signals it:
+     * a standalone app_process cannot build Vibrator reliably on Android 17, and uid 0 would
+     * bypass the user's haptic setting. View feedback is what the system expects here, so it
+     * follows the touch-feedback toggle and the OEM effect mapping on every release.
+     */
+    private static void playHaptic() {
+        Context context = app;
+        if (context == null) return;
+        try {
+            android.os.Vibrator vibrator = context.getSystemService(android.os.Vibrator.class);
+            if (vibrator == null || !vibrator.hasVibrator()) return;
+            if (android.provider.Settings.System.getInt(context.getContentResolver(),
+                    android.provider.Settings.System.HAPTIC_FEEDBACK_ENABLED, 1) == 0) return;
+            vibrator.vibrate(android.os.VibrationEffect.createPredefined(
+                    android.os.VibrationEffect.EFFECT_CLICK),
+                    new android.media.AudioAttributes.Builder()
+                            .setUsage(android.media.AudioAttributes.USAGE_ASSISTANCE_SONIFICATION).build());
+        } catch (Throwable ignored) {
+            // Feedback is optional; never let it break the gesture session.
         }
     }
 
