@@ -91,16 +91,19 @@ public final class BackupManager {
                         lastError = "备份导出验证失败：/sdcard/Download/DSHA 里未生成有效备份";
                         return null;
                     }
+                    // sdcard 上已生成 latest 与时间戳两份，容器内临时包不再需要，删掉避免在 rootfs 里堆积
+                    cleanupRootfsTemp(c);
                     return target.getAbsolutePath();
                 }
 
                 File tmp = new File(c.proot().getRootfsDir(), "root/.dsha-backup.tar.gz");
                 if (!tmp.isFile() || tmp.length() == 0) {
                     lastError = "打包产物未生成（tar 没产出 .dsha-backup.tar.gz）";
+                    cleanupRootfsTemp(c);
                     return null;
                 }
                 String path = exportArchive(ctx, tmp, latestName);
-                tmp.delete();
+                cleanupRootfsTemp(c);
                 if (path == null) {
                     lastError = "导出到 Download/DSHA 失败（存储权限或空间不足）";
                     return null;
@@ -113,8 +116,35 @@ public final class BackupManager {
                 return path;
             } catch (Exception e) {
                 lastError = classifyError(e);
+                cleanupRootfsTemp(c);
                 return null;
             }
+        }
+    }
+
+    /**
+     * 清理 rootfs 内的备份中间产物。
+     * <p>sdcard 侧的 latest 与时间戳两份是备份成品，必须保留；这里只清容器内的临时包与暂存目录，
+     * 避免每次备份在 rootfs 里残留一份与成品同体积的 tar.gz（全量包可达数 GB），以及 tar 失败时
+     * 因 {@code set -e} 跳过清理而遗留的 .dsha-workspaces / .dsha-tools 暂存目录。</p>
+     */
+    private static void cleanupRootfsTemp(HarnessController c) {
+        try {
+            String[] rels = {
+                    "root/.dsha-backup.tar.gz",
+                    "root/.dsha-workspaces",
+                    "root/.dsha-tools",
+                    "root/.dsha-backup-manifest.json",
+            };
+            for (String rel : rels) {
+                File f = new File(c.proot().getRootfsDir(), rel);
+                if (!f.exists()) continue;
+                if (f.isDirectory()) deleteRecursively(f);
+                else f.delete();
+            }
+        } catch (Throwable e) {
+            // 清理失败不影响备份结果本身，仅记录，不覆盖 lastError
+            android.util.Log.w("DSHA", "备份临时文件清理失败: " + SensitiveData.redact(String.valueOf(e)));
         }
     }
 
@@ -266,6 +296,14 @@ public final class BackupManager {
                   .append("            os.makedirs(dst, exist_ok=True)\n")
                   .append("            meta[wid] = {\"title\": t, \"orig_path\": p}\n")
                   .append("            shutil.copytree(p, dst, dirs_exist_ok=True, ignore=ign)\n")
+                  // 工作区 .dsh 整体被 ign 排除（避免把会话缓存/状态打进代码备份），
+                  // 但 .dsh/skills 是 DSH 的项目级技能根，属于用户资产，按工作区真实布局单独补拷。
+                  // 恢复侧 restore_workspaces 直接把 dst 合并回目标工作区，路径自然对齐。
+                  .append("            for ws_rel in (\".dsh/skills\", \".agents/skills\"):\n")
+                  .append("                src_ws = os.path.join(p, ws_rel)\n")
+                  .append("                if not os.path.isdir(src_ws):\n")
+                  .append("                    continue\n")
+                  .append("                shutil.copytree(src_ws, os.path.join(dst, ws_rel), symlinks=True, ignore=ign, dirs_exist_ok=True)\n")
                   .append("    except Exception:\n")
                   .append("        pass\n")
                   .append("if not meta:\n")
