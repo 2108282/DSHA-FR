@@ -194,8 +194,22 @@ public class ProotBootstrap {
     /** 插件生命周期逻辑；必须与每次注入的管理器保持同版。 */
     public static final String PLUGIN_LIFECYCLE_SCRIPT = "plugin-lifecycle.py";
 
+    private boolean injectPluginScript(String name, String content, boolean executable) {
+        if (name == null || !name.matches("[A-Za-z0-9._-]+") || content == null || content.isEmpty()) return false;
+        String encoded = Base64.encodeToString(content.getBytes(java.nio.charset.StandardCharsets.UTF_8), Base64.NO_WRAP);
+        String target = "/root/.dsh/" + name;
+        String staged = "/root/.dsh/." + name + ".dsha-tmp";
+        String marker = "DSHA_SCRIPT_INSTALLED:" + name;
+        String cmd = "set -e; mkdir -p /root/.dsh; "
+                + "printf '%s' '" + encoded + "' | base64 -d > " + ShellQuote.arg(staged) + "; "
+                + (executable ? "chmod +x " + ShellQuote.arg(staged) + "; " : "")
+                + "mv -f -- " + ShellQuote.arg(staged) + " " + ShellQuote.arg(target) + "; "
+                + "printf '%s\\n' '" + marker + "'";
+        return execAndRead(cmd, 90_000).contains(marker);
+    }
+
     /**
-     * 注入插件管理脚本及共用注册模块，再通过 python3 执行。
+     * 分次原子注入三份脚本，避免合并 Base64 后超过 su/chroot 单参数长度上限。
      * 末行 PLUGIN_RESULT JSON 区分成功、部分成功和失败。
      *
      * @param extraArgs 例如 {@code import /root/.dsh/import-upload.bin}、
@@ -204,34 +218,31 @@ public class ProotBootstrap {
      */
     public String runPluginManager(String extraArgs) {
         synchronized (PLUGIN_SCRIPT_LOCK) {
-        if (!isEnvironmentReady()) return "ENV_NOT_READY";
-        if (!ensureBundledPython()) return "ERROR: Ubuntu Python 环境未就绪";
-        try {
-            String script = readAssetString(PLUGIN_MANAGER_SCRIPT);
-            if (script.isEmpty()) return "ASSET_MISSING:" + PLUGIN_MANAGER_SCRIPT;
-            String b64 = Base64.encodeToString(script.getBytes(
-                    java.nio.charset.StandardCharsets.UTF_8), Base64.NO_WRAP);
-            String common = readAssetString(BUILTIN_REGISTER_SCRIPT);
-            if (common.isEmpty()) return "ASSET_MISSING:" + BUILTIN_REGISTER_SCRIPT;
-            String common64 = Base64.encodeToString(common.getBytes(
-                    java.nio.charset.StandardCharsets.UTF_8), Base64.NO_WRAP);
-            String lifecycle = readAssetString(PLUGIN_LIFECYCLE_SCRIPT);
-            if (lifecycle.isEmpty()) return "ASSET_MISSING:" + PLUGIN_LIFECYCLE_SCRIPT;
-            String lifecycle64 = Base64.encodeToString(lifecycle.getBytes(
-                    java.nio.charset.StandardCharsets.UTF_8), Base64.NO_WRAP);
-            String cmd = "set -e; mkdir -p /root/.dsh; "
-                    + "printf '%s' '" + common64 + "' | base64 -d > /root/.dsh/" + BUILTIN_REGISTER_SCRIPT + "; "
-                    + "printf '%s' '" + lifecycle64 + "' | base64 -d > /root/.dsh/" + PLUGIN_LIFECYCLE_SCRIPT + "; "
-                    + "printf '%s' '" + b64 + "' | base64 -d > /root/.dsh/" + PLUGIN_MANAGER_SCRIPT + "; "
-                    + "chmod +x /root/.dsh/" + PLUGIN_MANAGER_SCRIPT + "; "
-                    + "python3 /root/.dsh/" + PLUGIN_MANAGER_SCRIPT
-                    + (extraArgs == null || extraArgs.isEmpty() ? "" : " " + extraArgs) + " 2>&1";
-            // 下载、多个插件依赖安装和导出可能较慢，脚本内部仍有单次网络/依赖超时。
-            return execAndRead(cmd, 600_000);
-        } catch (Throwable e) {
-            Log.w("DSHA", "插件管理脚本执行失败: " + SensitiveData.redact(String.valueOf(e)));
-            return "ERROR: " + SensitiveData.redact(String.valueOf(e));
-        }
+            if (!isEnvironmentReady()) return "ENV_NOT_READY";
+            if (!ensureBundledPython()) return "ERROR: Ubuntu Python 环境未就绪";
+            try {
+                String script = readAssetString(PLUGIN_MANAGER_SCRIPT);
+                if (script.isEmpty()) return "ASSET_MISSING:" + PLUGIN_MANAGER_SCRIPT;
+                String common = readAssetString(BUILTIN_REGISTER_SCRIPT);
+                if (common.isEmpty()) return "ASSET_MISSING:" + BUILTIN_REGISTER_SCRIPT;
+                String lifecycle = readAssetString(PLUGIN_LIFECYCLE_SCRIPT);
+                if (lifecycle.isEmpty()) return "ASSET_MISSING:" + PLUGIN_LIFECYCLE_SCRIPT;
+
+                if (!injectPluginScript(BUILTIN_REGISTER_SCRIPT, common, true))
+                    return "ERROR: 无法同步插件注册脚本";
+                if (!injectPluginScript(PLUGIN_LIFECYCLE_SCRIPT, lifecycle, false))
+                    return "ERROR: 无法同步插件生命周期脚本";
+                if (!injectPluginScript(PLUGIN_MANAGER_SCRIPT, script, true))
+                    return "ERROR: 无法同步插件管理脚本";
+
+                String cmd = "python3 /root/.dsh/" + PLUGIN_MANAGER_SCRIPT
+                        + (extraArgs == null || extraArgs.isEmpty() ? "" : " " + extraArgs) + " 2>&1";
+                // 下载、多个插件依赖安装和导出可能较慢，脚本内部仍有单次网络/依赖超时。
+                return execAndRead(cmd, 600_000);
+            } catch (Throwable e) {
+                Log.w("DSHA", "插件管理脚本执行失败: " + SensitiveData.redact(String.valueOf(e)));
+                return "ERROR: " + SensitiveData.redact(String.valueOf(e));
+            }
         }
     }
 
