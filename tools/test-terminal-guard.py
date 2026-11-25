@@ -44,7 +44,7 @@ class TerminalGuardTest(unittest.TestCase):
         self.flag.write_text('1\n')
         self.log = self.base / 'calls'
         self.confirm_log = self.base / 'confirmations'
-        self.env = dict(os.environ, HOME=str(self.root), BASH_ENV='', DSH_CONFIRM='0', DSH_SHELL='0', CALLS=str(self.log), CONFIRMS=str(self.confirm_log), DENY='0')
+        self.env = dict(os.environ, HOME=str(self.root), BASH_ENV='', DSH_CONFIRM='0', DSH_SHELL='1', CALLS=str(self.log), CONFIRMS=str(self.confirm_log), DENY='0')
         for command in COMMANDS:
             self.executable(self.bin / command, '#!/bin/bash\nprintf "%s\\n" "${0##*/}:$*" >> "$CALLS"\n')
         self.executable(self.root / 'dsh-confirm.sh', '#!/bin/bash\nprintf "%s\\n" "$*" >> "$CONFIRMS"\n[ "$DENY" != 1 ]\n')
@@ -107,9 +107,11 @@ rm legacy
         self.assertEqual(len(self.lines(self.log)), 4)
         self.flag.unlink()
         self.run_shell('rm shell', DSH_SHELL='1')
-        self.run_shell('rm confirm', DSH_CONFIRM='1')
-        self.run_shell('rm install')
-        self.assertEqual(len(self.lines(self.confirm_log)), 7)
+        # V13：DSH_CONFIRM 会继承给 pnpm/插件/系统脚本，不得单独激活守卫。
+        self.run_shell('rm confirm', DSH_CONFIRM='1', DSH_SHELL='0')
+        # 无 DSH_SHELL = 用户自己的终端 / 插件子进程，一律放行。
+        self.run_shell('rm install', DSH_SHELL='0')
+        self.assertEqual(len(self.lines(self.confirm_log)), 6)
 
     def test_every_dangerous_function_is_inert_and_guarded(self):
         self.run_shell('\n'.join(c + ' synthetic' for c in COMMANDS if c not in ('find', 'mv', 'adb')))
