@@ -52,6 +52,14 @@ public final class PluginSource {
         throw new IllegalArgumentException("无法识别：支持 npm 包名、GitHub 仓库、分支/子目录、Release 下载链接或 HTTPS 压缩包直链");
     }
 
+    /**
+     * 仅返回无需解析来源内容即可确定的官方安装规格。
+     * GitHub 分支和子目录必须由后端先解析到 commit SHA，再将同一 SHA 用于预览和安装。
+     */
+    public String officialSpec() {
+        return npm;
+    }
+
     public String command() {
         if (!npm.isEmpty()) return "npm " + ShellQuote.arg(npm);
         if (!url.isEmpty()) return "download " + ShellQuote.arg(url);

@@ -5,6 +5,7 @@
 """
 import importlib.util
 from contextlib import contextmanager
+import hashlib
 import json
 import os
 import re
@@ -623,6 +624,114 @@ def cleanup_plugin_links(name, package=None):
                 os.unlink(link)
 
 
+def cmd_official_add(spec, expected_name, expected_version=""):
+    """通过官方 dsh plugin add 安装单个 bundle，并回查 profile 提交结果。"""
+    if not isinstance(spec, str) or not spec.strip() or len(spec) > 2048 \
+            or re.search(r'[\x00-\x1f\x7f]', spec) or spec.lstrip().startswith('-'):
+        raise ValueError("官方插件规格无效")
+    if not builtin.valid_name(expected_name):
+        raise ValueError("官方插件名称无效")
+    env = dict(os.environ, DSH_HOME=local(DSH_HOME))
+    try:
+        process = subprocess.run(
+            ["dsh", "plugin", "--profile", "web", "add", spec.strip()],
+            cwd=local(builtin.PROFILE), env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, timeout=600,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise ValueError("官方安装超时，profile 状态请先回查后再重试") from error
+    output = ((process.stdout or "") + ("\n" + process.stderr if process.stderr else "")).strip()
+    if process.returncode != 0:
+        detail = output[-1600:] if output else str(process.returncode)
+        raise ValueError("官方安装失败：" + detail)
+    doc = builtin.read_manifest() or {}
+    dependencies = doc.get("dependencies") or {}
+    bundles = doc.get("dsh", {}).get("profile", {}).get("bundles", [])
+    if expected_name not in dependencies or expected_name not in bundles:
+        raise ValueError("官方安装已返回成功，但 profile 未登记 " + expected_name)
+    directory = resolve_plugin_dir(expected_name)
+    package = read_json(os.path.join(directory, "package.json"), {}) if directory else {}
+    if package.get("name") != expected_name:
+        raise ValueError("官方安装回查的插件目录名称不匹配：" + expected_name)
+    if expected_version and str(package.get("version", "")) != expected_version:
+        raise ValueError("官方安装回查的插件版本与预览不匹配：" + expected_name)
+    return {
+        "exitCode": process.returncode,
+        "output": output[-1600:],
+        "dependency": dependencies.get(expected_name, ""),
+        "version": package.get("version", ""),
+    }
+
+
+def cmd_official_archive(archive, subdir, expected_items, archive_digest):
+    """Normalize a checked archive into a stable local tarball for official pnpm install."""
+    if not isinstance(expected_items, list) or not expected_items or len(expected_items) > 30:
+        raise ValueError("归档插件清单无效")
+    staging = tempfile.mkdtemp(prefix="plugin-official-", dir=local(DSH_HOME))
+    installed, failures, package_results = [], [], []
+    try:
+        extracted = os.path.join(staging, "contents")
+        extract_archive(archive, extracted)
+        roots = find_plugin_roots(extracted, subdir)
+        expected = {str(item.get("name", "")): str(item.get("version", "")) for item in expected_items}
+        actual = {}
+        for root in roots:
+            pkg = plugin_package(root)
+            if pkg["name"] in actual:
+                raise ValueError("归档含多个同名插件：" + pkg["name"])
+            actual[pkg["name"]] = (root, str(pkg.get("version", "")))
+        if set(actual) != set(expected):
+            raise ValueError("预览后的插件清单与归档不一致，请重新解析")
+        for name, (root, version) in actual.items():
+            if expected[name] and version != expected[name]:
+                raise ValueError("插件版本与预览不一致：" + name)
+            identity = hashlib.sha256((archive_digest + "\0" + subdir + "\0" + name).encode("utf-8")).hexdigest()
+            archive_root = local(os.path.join(DSH_HOME, "plugin-archives"))
+            os.makedirs(archive_root, mode=0o700, exist_ok=True)
+            tarball = os.path.join(archive_root, identity + ".tgz")
+            if os.path.lexists(tarball) and (os.path.islink(tarball) or not os.path.isfile(tarball)):
+                raise ValueError("官方插件归档路径类型异常：" + tarball)
+            if not os.path.isfile(tarball):
+                staged_tarball = os.path.join(archive_root, "." + identity + ".tmp")
+                try:
+                    with tarfile.open(staged_tarball, "w:gz", format=tarfile.PAX_FORMAT) as output:
+                        output.add(root, arcname="package", recursive=False)
+                        for base, dirs, files in os.walk(root, topdown=True, followlinks=False):
+                            dirs.sort(); files.sort()
+                            for directory in list(dirs):
+                                path = os.path.join(base, directory)
+                                if directory in ("node_modules", ".git", ".cache", "__pycache__", ".pnpm-store"):
+                                    dirs.remove(directory)
+                                    continue
+                                output.add(path, arcname=os.path.join("package", os.path.relpath(path, root)), recursive=False)
+                                if os.path.islink(path):
+                                    dirs.remove(directory)
+                            for filename in files:
+                                path = os.path.join(base, filename)
+                                output.add(path, arcname=os.path.join("package", os.path.relpath(path, root)), recursive=False)
+                    if os.path.getsize(staged_tarball) > MAX_DOWNLOAD:
+                        raise ValueError("规范化插件包超过 256 MiB")
+                    os.replace(staged_tarball, tarball)
+                finally:
+                    if os.path.lexists(staged_tarball):
+                        os.unlink(staged_tarball)
+            try:
+                result = cmd_official_add("file:" + tarball, name, version)
+                installed.append(name)
+                package_results.append({"name": name, **result})
+            except Exception as error:
+                failures.append(name + "：" + str(error))
+        status = "partial" if installed and failures else ("error" if failures else "ok")
+        message = "已通过 DSH 官方 profile 安装器安装 " + "、".join(installed) + "；重启 Web 后生效。" if installed else ""
+        if failures:
+            message += ("\n" if message else "") + "未安装：" + "\n".join(failures)
+        return {"status": status, "message": message, "installed": installed,
+                "application": "restart-required", "restartReason": "no-hmr",
+                "packageResults": package_results}
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+
+
 def cmd_delete(name):
     """官方卸载成功且回查通过后，才清理该插件的 DSHA 自有残留。"""
     if not builtin.valid_name(name):
@@ -732,42 +841,57 @@ def download(url, target):
             stream.write(data)
 
 
-def cmd_download(url, subdir="", source="", *, consume=None):
+def cmd_download(url, subdir="", source="", *, consume=None, official_spec=""):
     with tempfile.TemporaryDirectory(prefix="plugin-download-", dir=local(DSH_HOME)) as staging:
         target = os.path.join(staging, "archive")
         download(url, target)
-        return (consume or cmd_import)(target, subdir, source or url)
+        if consume:
+            return consume(target, subdir, source or url, official_spec)
+        return cmd_import(target, subdir, source or url)
 
 
 def cmd_github(owner, repo, tree="", *, consume=None):
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9-]{0,38}", owner) or not re.fullmatch(
             r"[A-Za-z0-9_.-]+", repo) or repo in (".", ".."):
         raise ValueError("无效的 GitHub 仓库")
-    revision, subdir = "HEAD", ""
+    revision, subdir = "", ""
     if tree:
         parts = tree.split("/")
         if len(parts) > 16 or any(p in ("", ".", "..") for p in parts):
             raise ValueError("无效的仓库目录")
-        # 最长匹配支持 feature/foo 等带斜杠分支；不默默改成默认分支。
-        for end in range(len(parts), 0, -1):
-            candidate = "/".join(parts[:end])
-            api = "https://api.github.com/repos/%s/%s/commits/%s" % (
-                owner, repo, urllib.parse.quote(candidate, safe=""))
-            try:
-                with open_url(api) as response:
-                    commit = json.loads(response.read(1024 * 1024))
-                revision = commit["sha"]
-                subdir = "/".join(parts[end:])
-                break
-            except urllib.error.HTTPError as error:
-                if error.code not in (404, 422):
-                    raise
-        else:
-            raise ValueError("GitHub 分支或标签不存在")
+    else:
+        with open_url("https://api.github.com/repos/%s/%s" % (owner, repo)) as response:
+            repository = json.loads(response.read(1024 * 1024))
+        default_branch = repository.get("default_branch")
+        if not isinstance(default_branch, str) or not default_branch:
+            raise ValueError("GitHub 仓库未返回默认分支")
+        parts = [default_branch]
+    # 最长匹配支持 feature/foo 等带斜杠分支；不默默改成默认分支。
+    for end in range(len(parts), 0, -1):
+        candidate = "/".join(parts[:end])
+        api = "https://api.github.com/repos/%s/%s/commits/%s" % (
+            owner, repo, urllib.parse.quote(candidate, safe=""))
+        try:
+            with open_url(api) as response:
+                commit = json.loads(response.read(1024 * 1024))
+            revision = commit["sha"]
+            subdir = "/".join(parts[end:])
+            break
+        except urllib.error.HTTPError as error:
+            if error.code not in (404, 422):
+                raise
+    else:
+        raise ValueError("GitHub 分支或标签不存在")
+    if not re.fullmatch(r"[a-fA-F0-9]{40}", revision):
+        raise ValueError("GitHub 未返回有效 commit SHA")
     url = "https://codeload.github.com/%s/%s/tar.gz/%s" % (
         owner, repo, urllib.parse.quote(revision, safe=""))
     source = "https://github.com/%s/%s" % (owner, repo) + ("/tree/" + tree if tree else "")
-    return cmd_download(url, subdir, source, **({"consume": consume} if consume else {}))
+    official_spec = "git+https://github.com/%s/%s.git#%s" % (owner, repo, revision)
+    if subdir:
+        official_spec += "&path:" + urllib.parse.quote(subdir, safe="/")
+    return cmd_download(url, subdir, source, official_spec=official_spec,
+                        **({"consume": consume} if consume else {}))
 
 
 def cmd_release(owner, repo, tag, *, consume=None):

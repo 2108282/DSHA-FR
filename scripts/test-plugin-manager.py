@@ -75,15 +75,34 @@ class PluginTestBase(unittest.TestCase):
         self.capture.__enter__()
 
     def fake_command(self, args, **kwargs):
-        if args[:5] != ['dsh', 'plugin', '--profile', 'web', 'remove'] or len(args) != 6:
+        prefix = ['dsh', 'plugin', '--profile', 'web']
+        if args[:4] != prefix or len(args) != 6 or args[4] not in ('add', 'remove'):
             raise AssertionError('测试禁止真实外部命令：' + str(args))
         self.assertEqual(str(self.home / 'profiles/web'), kwargs['cwd'])
         self.assertEqual(str(self.home), kwargs['env']['DSH_HOME'])
         doc = self.manager.builtin.read_manifest()
-        doc.get('dependencies', {}).pop(args[5], None)
-        bundles = doc.get('dsh', {}).get('profile', {}).get('bundles', [])
-        if args[5] in bundles:
-            bundles.remove(args[5])
+        if doc is None:
+            doc = self.manager.builtin.new_manifest({})
+        name = args[5]
+        if args[4] == 'remove':
+            doc.get('dependencies', {}).pop(name, None)
+            bundles = doc.get('dsh', {}).get('profile', {}).get('bundles', [])
+            if name in bundles:
+                bundles.remove(name)
+        else:
+            spec = args[5]
+            if spec.startswith('file:'):
+                with tarfile.open(spec[5:], 'r:gz') as archive:
+                    metadata = json.load(archive.extractfile('package/package.json'))
+                name, version = metadata['name'], metadata.get('version', '1.0.0')
+            else:
+                name, _, version = spec.rpartition('@')
+            self.package(Path(self.manager.local(self.manager.builtin.NODE_MODULES)) / name,
+                         name, version or '1.0.0')
+            doc.setdefault('dependencies', {})[name] = spec
+            bundles = doc.setdefault('dsh', {}).setdefault('profile', {}).setdefault('bundles', [])
+            if name not in bundles:
+                bundles.append(name)
         self.manager.builtin.write_manifest(doc)
         return self.manager.subprocess.CompletedProcess(args, 0, '', '')
 
@@ -113,6 +132,24 @@ class PluginTestBase(unittest.TestCase):
         marker.touch()
 
 class PluginManagerTest(PluginTestBase):
+    def test_official_pnpm_plugin_toggle_preserves_dependency_and_clears_marker(self):
+        name = "dsh-demo"
+        self.package(self.home / "profiles/web/node_modules" / name, name, "1.0.0")
+        dependency = "github:owner/repo#" + "a" * 40
+        self.manager.builtin.write_manifest({
+            "dependencies": {name: dependency},
+            "dsh": {"profile": {"bundles": [name]}}})
+        self.assertEqual(0, self.manager.builtin.disable_plugin(name))
+        self.assertNotIn(name, self.manager.builtin.read_manifest()["dsh"]["profile"]["bundles"])
+        self.assertEqual(dependency, self.manager.builtin.read_manifest()["dependencies"][name])
+        marker = Path(self.manager.builtin.marker_path(name))
+        self.assertTrue(marker.is_file())
+        self.assertEqual(0, self.manager.builtin.enable_plugin(name))
+        manifest = self.manager.builtin.read_manifest()
+        self.assertIn(name, manifest["dsh"]["profile"]["bundles"])
+        self.assertEqual(dependency, manifest["dependencies"][name])
+        self.assertFalse(marker.exists())
+
     def test_scoped_multi_export_import_preserves_disabled_state_and_bytes(self):
         names = ["@sample/demo", "dsh-extra"]
         for name in names:
@@ -217,19 +254,38 @@ class PluginManagerTest(PluginTestBase):
         self.assertEqual("partial", last["status"])
         self.assertEqual(["dsh-good"], last["installed"])
 
+    def test_default_branch_is_pinned_for_official_install(self):
+        revision = "b" * 40
+        def response(url):
+            if url.endswith("/repos/owner/repo"):
+                return io.BytesIO(json.dumps({"default_branch": "main"}).encode())
+            if url.endswith("/commits/main"):
+                return io.BytesIO(json.dumps({"sha": revision}).encode())
+            raise AssertionError(url)
+        with patch.object(self.manager, "open_url", side_effect=response), \
+                patch.object(self.manager, "cmd_download", return_value=0) as download:
+            self.manager.cmd_github("owner", "repo")
+        self.assertEqual("https://codeload.github.com/owner/repo/tar.gz/" + revision,
+                         download.call_args.args[0])
+        self.assertEqual("git+https://github.com/owner/repo.git#" + revision,
+                         download.call_args.kwargs["official_spec"])
+
     def test_slash_branch_resolves_requested_commit_and_subdirectory(self):
         responses = []
+        revision = "a" * 40
         def response(url):
             responses.append(url)
             if url.endswith("feature%2Fandroid"):
-                return io.BytesIO(json.dumps({"sha": "abc123"}).encode())
+                return io.BytesIO(json.dumps({"sha": revision}).encode())
             raise self.manager.urllib.error.HTTPError(url, 404, "missing", {}, None)
         with patch.object(self.manager, "open_url", side_effect=response), \
                 patch.object(self.manager, "cmd_download", return_value=0) as download:
             self.manager.cmd_github("owner", "repo", "feature/android/packages/demo")
             args = download.call_args.args
-            self.assertEqual("https://codeload.github.com/owner/repo/tar.gz/abc123", args[0])
+            self.assertEqual("https://codeload.github.com/owner/repo/tar.gz/" + revision, args[0])
             self.assertEqual("packages/demo", args[1])
+            self.assertEqual("git+https://github.com/owner/repo.git#" + revision + "&path:packages/demo",
+                             download.call_args.kwargs["official_spec"])
 
     def test_github_zip_uses_official_download_and_preserves_ref(self):
         rewrite = self.manager.archive_download_url
@@ -309,9 +365,9 @@ class PluginLifecycleTest(PluginTestBase):
         preview_path = Path(life.preview_path(preview['previewId']))
         self.assertEqual(life.digest(str(preview_path / 'archive')), preview['sha256'])
         self.assertEqual('1.0.0', preview['items'][0]['version'])
-        self.assertFalse((self.home / 'plugin-src/dsh-demo').exists())
+        self.assertFalse((self.home / 'profiles/web/node_modules/dsh-demo').exists())
         self.assertEqual(0, life.install_preview(preview['previewId']))
-        self.assertTrue((self.home / 'plugin-src/dsh-demo').exists())
+        self.assertTrue((self.home / 'profiles/web/node_modules/dsh-demo').exists())
 
     def test_rollback_retains_only_one_previous_version_and_disabled_state(self):
         for version in ('1.0.0', '2.0.0', '3.0.0'):
@@ -350,7 +406,7 @@ class PluginLifecycleTest(PluginTestBase):
             self.assertFalse((self.home / 'plugin-src/dsh-demo').exists())
             self.assertEqual('1.0.0', preview['items'][0]['version'])
             self.assertEqual(0, life.install_preview(preview['previewId']))
-            self.assertTrue((self.home / 'plugin-src/dsh-demo').exists())
+            self.assertTrue((self.home / 'profiles/web/node_modules/dsh-demo').exists())
             with self.assertRaises(ValueError): life.inspect(dict(request, sha256='a' * 64), False)
             preview = life.inspect(request, False)
             (Path(life.preview_path(preview['previewId'])) / 'archive').write_bytes(b'changed')
@@ -366,7 +422,7 @@ class PluginLifecycleTest(PluginTestBase):
         with patch.object(self.manager, 'download', side_effect=download):
             preview = life.inspect(request, False)
         staged = Path(life.preview_path(preview['previewId']))
-        with patch.object(self.manager, 'cmd_import', return_value=1):
+        with patch.object(self.manager, 'cmd_official_add', side_effect=ValueError('official add failed')):
             self.assertEqual(1, life.install_preview(preview['previewId']))
         self.assertFalse(staged.exists())
 

@@ -85,7 +85,8 @@ public final class PluginRepository extends AndroidViewModel {
             }
             text.append("来源：").append(json.optString("source").isEmpty() ? "本地插件包" : json.optString("source"))
                     .append("\nSHA-256：").append(json.optString("sha256"))
-                    .append("\n\n确认后安装并登记；完成后重启 Web 生效。同名更新会保留上一版供回退。");
+                    .append("\n安装方式：DSH 官方 profile 安装器")
+                    .append("\n\n确认后安装并登记；完成后重启 Web 生效。已安装包由官方 profile 管理器更新或移除。");
             description = SensitiveData.redact(text.toString());
         }
     }
@@ -175,6 +176,7 @@ public final class PluginRepository extends AndroidViewModel {
         discardPreview();
         submit("正在下载并解析：" + source.description(), proot -> {
             JSONObject request = new JSONObject().put("command", source.command())
+                    .put("officialSpec", source.officialSpec())
                     .put("sha256", sha256).put("name", name).put("version", version);
             return receivePreview(result(proot.runPluginManager("inspect " + ShellQuote.arg(request.toString()))));
         });

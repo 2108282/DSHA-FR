@@ -154,68 +154,9 @@ public class ProotBootstrap {
      */
     public String setPluginEnabled(String name, boolean enable) {
         if (name == null || name.isEmpty()) return "NO_NAME";
-        synchronized (PLUGIN_SCRIPT_LOCK) {
-            try {
-                // 1. 读取当前的 profile package.json 文本
-                String pkgFile = "/root/.dsh/profiles/web/package.json";
-                String jsonStr = execAndRead("cat " + pkgFile + " 2>/dev/null || true", 5000);
-                if (jsonStr == null || jsonStr.startsWith("ERROR:") || jsonStr.trim().isEmpty()) {
-                    return "ERROR: package.json 读取失败";
-                }
-
-                org.json.JSONObject doc = new org.json.JSONObject(jsonStr);
-                org.json.JSONObject dsh = doc.optJSONObject("dsh");
-                if (dsh == null) {
-                    dsh = new org.json.JSONObject();
-                    doc.put("dsh", dsh);
-                }
-                org.json.JSONObject profile = dsh.optJSONObject("profile");
-                if (profile == null) {
-                    profile = new org.json.JSONObject();
-                    dsh.put("profile", profile);
-                }
-                org.json.JSONArray bundlesArr = profile.optJSONArray("bundles");
-                List<String> bundles = new ArrayList<>();
-                if (bundlesArr != null) {
-                    for (int i = 0; i < bundlesArr.length(); i++) {
-                        bundles.add(bundlesArr.getString(i));
-                    }
-                }
-
-                if (enable) {
-                    if (!bundles.contains(name)) {
-                        bundles.add(name);
-                    }
-                } else {
-                    bundles.remove(name);
-                }
-                profile.put("bundles", new org.json.JSONArray(bundles));
-
-                // 2. 原子安全写入 package.json
-                String newJson = doc.toString(2) + "\n";
-                String b64Pkg = Base64.encodeToString(newJson.getBytes(StandardCharsets.UTF_8), Base64.NO_WRAP);
-                String writePkgCmd = "printf '%s' '" + b64Pkg + "' | base64 -d > " + pkgFile;
-                String writePkgOut = execAndRead(writePkgCmd, 10000);
-                if (writePkgOut != null && writePkgOut.startsWith("ERROR:")) return writePkgOut;
-
-                // 3. 清理历史遗留在 cordis.patch.yml 中的 managed block
-                String patchFile = "/root/.dsh/profiles/web/cordis.patch.yml";
-                String currentYaml = execAndRead("cat " + patchFile + " 2>/dev/null || true", 5000);
-                if (currentYaml != null && currentYaml.contains("# >>> DSHA managed")) {
-                    String cleanedYaml = stripLegacyPatchBlock(currentYaml);
-                    String b64Patch = Base64.encodeToString(cleanedYaml.getBytes(StandardCharsets.UTF_8), Base64.NO_WRAP);
-                    execAndRead("printf '%s' '" + b64Patch + "' | base64 -d > " + patchFile, 5000);
-                }
-
-                // 4. 清理历史遗留的 .disabled 物理标记文件
-                execAndRead("rm -f /root/.dsh/profiles/web/node_modules/" + name + ".disabled /root/.dsh/plugin-src/" + name + ".disabled 2>/dev/null || true", 3000);
-
-                return "BUILTIN_REGISTER_OK: " + name + (enable ? " 已启用" : " 已禁用");
-            } catch (Throwable e) {
-                Log.w("DSHA", "插件启用/禁用切换失败: " + SensitiveData.redact(String.valueOf(e)));
-                return "ERROR: " + SensitiveData.redact(String.valueOf(e));
-            }
-        }
+        // 注册脚本使用与导入/删除相同的 .plugins.lock，并按官方 profile bundles 语义处理：
+        // 依赖保留，启停只改变 bundle 选择；无 HMR 时由启动页重启 Web 生效。
+        return runBuiltinScript((enable ? "--enable " : "--disable ") + ShellQuote.arg(name));
     }
 
     private static String stripLegacyPatchBlock(String yaml) {
