@@ -32,6 +32,8 @@ public final class RootGestureMain {
     private static Method eventDisplayId;
     private static android.os.Vibrator vibrator;
     private static Method hapticFeedback;
+    private static PowerManager power;
+    private static Object windowManager;
 
     public static void main(String[] args) {
         try {
@@ -41,11 +43,20 @@ public final class RootGestureMain {
             Class<?> threadClass = Class.forName("android.app.ActivityThread");
             Object thread = threadClass.getMethod("systemMain").invoke(null);
             context = (Context) threadClass.getMethod("getSystemContext").invoke(thread);
-            vibrator = context.getSystemService(android.os.Vibrator.class);
+            power = context.getSystemService(PowerManager.class);
+            // KeyguardManager cannot be built in a standalone app_process on Android 17: its
+            // constructor needs ApplicationSharedMemory, which only a real app process has.
+            // Ask the window manager over binder instead, and skip the check when unavailable.
             try {
+                windowManager = windowManager();
+            } catch (Throwable ignored) {
+                // Locked-state gating is a convenience; the gesture still works without it.
+            }
+            try {
+                vibrator = context.getSystemService(android.os.Vibrator.class);
                 hapticFeedback = hapticMethod();
-            } catch (NoSuchMethodException ignored) {
-                // Older Android releases use the equivalent predefined click below.
+            } catch (Throwable ignored) {
+                // Missing haptics must never prevent QuickChat from opening.
             }
             display = context.getSystemService(DisplayManager.class).getDisplay(Display.DEFAULT_DISPLAY);
             eventDisplayId = InputEvent.class.getMethod("getDisplayId");
@@ -102,11 +113,9 @@ public final class RootGestureMain {
         if (action == MotionEvent.ACTION_DOWN) {
             Point size = new Point();
             display.getRealSize(size);
-            PowerManager power = context.getSystemService(PowerManager.class);
-            android.app.KeyguardManager keyguard = context.getSystemService(android.app.KeyguardManager.class);
             captured = false;
             recognizer.cancel();
-            if (!power.isInteractive() || keyguard.isKeyguardLocked()) return;
+            if (!interactive() || keyguardLocked()) return;
             // First preview only owns the portrait bottom corners. Rotation cancels on the next DOWN.
             if (size.x >= size.y) return;
             if (recognizer.begin(event.getRawX(), event.getRawY(), size.x, size.y)) {
@@ -194,6 +203,32 @@ public final class RootGestureMain {
         } catch (NoSuchMethodException missing) {
             return android.os.Vibrator.class.getMethod("performHapticFeedback",
                     int.class, String.class, int.class, int.class);
+        }
+    }
+
+    /** The window manager binder also answers keyguard state without a full app process. */
+    private static Object windowManager() throws Exception {
+        Object binder = Class.forName("android.os.ServiceManager")
+                .getMethod("getService", String.class).invoke(null, "window");
+        return Class.forName("android.view.IWindowManager$Stub")
+                .getMethod("asInterface", android.os.IBinder.class).invoke(null, binder);
+    }
+
+    private static boolean keyguardLocked() {
+        if (windowManager == null) return false;
+        try {
+            return (Boolean) windowManager.getClass().getMethod("isKeyguardLocked").invoke(windowManager);
+        } catch (Throwable unavailable) {
+            // Keep the gesture usable instead of failing the whole stream on a ROM quirk.
+            return false;
+        }
+    }
+
+    private static boolean interactive() {
+        try {
+            return power == null || power.isInteractive();
+        } catch (Throwable unavailable) {
+            return true;
         }
     }
 
