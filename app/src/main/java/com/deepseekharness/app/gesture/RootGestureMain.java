@@ -20,6 +20,7 @@ import org.lsposed.hiddenapibypass.HiddenApiBypass;
 
 /** Runs in a separate uid=0 app_process. stdout is a private pipe to our APK, never a socket. */
 public final class RootGestureMain {
+    private static final String HAPTIC_REASON = "DSH corner gesture threshold";
     private static Object monitor;
     private static InputEventReceiver receiver;
     private static Context context;
@@ -42,8 +43,7 @@ public final class RootGestureMain {
             context = (Context) threadClass.getMethod("getSystemContext").invoke(thread);
             vibrator = context.getSystemService(android.os.Vibrator.class);
             try {
-                hapticFeedback = android.os.Vibrator.class.getMethod("performHapticFeedback",
-                        int.class, String.class, int.class, int.class);
+                hapticFeedback = hapticMethod();
             } catch (NoSuchMethodException ignored) {
                 // Older Android releases use the equivalent predefined click below.
             }
@@ -53,7 +53,8 @@ public final class RootGestureMain {
             display.getRealMetrics(metrics);
             recognizer = new CornerGestureRecognizer(metrics.density);
             Class<?> imClass = Class.forName("android.hardware.input.InputManager");
-            Object im = imClass.getMethod("getInstance").invoke(null);
+            Object im = inputManager(imClass);
+            if (im == null) throw new IllegalStateException("InputManager service unavailable");
             monitor = imClass.getMethod("monitorGestureInput", String.class, int.class)
                     .invoke(im, "DSH Corner Gesture Preview", Display.DEFAULT_DISPLAY);
             pilfer = monitor.getClass().getMethod("pilferPointers");
@@ -152,8 +153,12 @@ public final class RootGestureMain {
             if (hapticFeedback != null) {
                 // Same semantic feedback as launcher View.performHapticFeedback(VIRTUAL_KEY).
                 // flags=0 preserves the system's haptic setting and vendor effect mapping.
-                hapticFeedback.invoke(vibrator, HapticFeedbackConstants.VIRTUAL_KEY,
-                        "DSH corner gesture threshold", 0, 0);
+                // Android 17 prepends the caller uid; older releases take the 4-argument form.
+                Object[] call = hapticFeedback.getParameterCount() == 5
+                        ? new Object[] {android.os.Process.myUid(), HapticFeedbackConstants.VIRTUAL_KEY,
+                                HAPTIC_REASON, 0, 0}
+                        : new Object[] {HapticFeedbackConstants.VIRTUAL_KEY, HAPTIC_REASON, 0, 0};
+                hapticFeedback.invoke(vibrator, call);
             } else if (android.provider.Settings.System.getInt(context.getContentResolver(),
                     android.provider.Settings.System.HAPTIC_FEEDBACK_ENABLED, 1) != 0) {
                 vibrator.vibrate(android.os.VibrationEffect.createPredefined(android.os.VibrationEffect.EFFECT_CLICK),
@@ -180,6 +185,34 @@ public final class RootGestureMain {
             return;
         }
         throw new NoSuchMethodException("IActivityTaskManager.startActivityAsUser");
+    }
+
+    private static Method hapticMethod() throws NoSuchMethodException {
+        try {
+            return android.os.Vibrator.class.getMethod("performHapticFeedback",
+                    int.class, int.class, String.class, int.class, int.class);
+        } catch (NoSuchMethodException missing) {
+            return android.os.Vibrator.class.getMethod("performHapticFeedback",
+                    int.class, String.class, int.class, int.class);
+        }
+    }
+
+    /**
+     * InputManager stopped exposing getInstance() in newer releases (Android 17/API 37 removed it
+     * and made the class a plain Context service). Prefer the service lookup and keep the legacy
+     * static factory as the fallback for the releases this preview was first verified on.
+     */
+    private static Object inputManager(Class<?> imClass) {
+        Object service = context.getSystemService(Context.INPUT_SERVICE);
+        if (service != null && imClass.isInstance(service)) return service;
+        Object direct = context.getSystemService(imClass);
+        if (direct != null) return direct;
+        try {
+            return imClass.getMethod("getInstance").invoke(null);
+        } catch (Throwable ignored) {
+            // Android 17 dropped the factory; the service above is the only supported path.
+            return null;
+        }
     }
 
     private static synchronized void emit(String line) {

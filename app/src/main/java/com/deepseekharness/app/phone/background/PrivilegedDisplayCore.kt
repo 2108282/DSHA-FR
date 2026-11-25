@@ -794,7 +794,11 @@ class PrivilegedDisplayCore(private val context: Context) {
         InputEvent::class.java.getDeclaredMethod("setDisplayId", Int::class.javaPrimitiveType)
             .apply { isAccessible = true }.invoke(event, id)
         val type = Class.forName("android.hardware.input.InputManager")
-        val manager = type.getDeclaredMethod("getInstance").apply { isAccessible = true }.invoke(null)
+        // Android 17/API 37 dropped InputManager.getInstance(); the class is a plain Context
+        // service there, so prefer the service lookup and keep the factory for older releases.
+        val manager = privileged.getSystemService(Context.INPUT_SERVICE)
+            ?.takeIf { type.isInstance(it) }
+            ?: type.getDeclaredMethod("getInstance").apply { isAccessible = true }.invoke(null)
         val method = type.getMethod("injectInputEvent", InputEvent::class.java, Int::class.javaPrimitiveType)
         // Prefer WAIT_FOR_FINISH (2) for a confirmed delivery; some ROMs and the emulator only
         // accept ASYNC (0). Either way the action is verified by re-observing the screen, never by
