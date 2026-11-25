@@ -61,7 +61,10 @@ for p in "${PATHS[@]}"; do
   fi
 done
 
-if [ "$IS_DANGEROUS" -eq 1 ]; then
+source /root/dsh-guard-policy.sh
+# 全盘扫盘拦截与确认拦截共用同一开关（含 DSH_SHELL 作用域），
+# 用户自己的终端不再被常驻拦截；agent 的 shell 调用仍会被拦下。
+if [ "$IS_DANGEROUS" = 1 ] && __dsha_guard_active; then
   cat >&2 << 'EOF'
 [POLICY_BLOCKED] 移动端功耗与性能安全拦截：
 检测到试图对 Android 根目录或 /sdcard 全盘执行无限制递归 find 扫描！
@@ -76,8 +79,6 @@ if [ "$IS_DANGEROUS" -eq 1 ]; then
 EOF
   exit 1
 fi
-
-source /root/dsh-guard-policy.sh
 if __dsha_needs_confirm find "$@"; then
   /root/dsh-confirm.sh "find $*" || exit 1
 fi

@@ -44,7 +44,7 @@ class TerminalGuardTest(unittest.TestCase):
         self.flag.write_text('1\n')
         self.log = self.base / 'calls'
         self.confirm_log = self.base / 'confirmations'
-        self.env = dict(os.environ, HOME=str(self.root), BASH_ENV='', DSH_CONFIRM='0', DSH_SHELL='0', CALLS=str(self.log), CONFIRMS=str(self.confirm_log), DENY='0', TMPDIR=str(self.base))
+        self.env = dict(os.environ, HOME=str(self.root), BASH_ENV='', DSH_CONFIRM='0', DSH_SHELL='1', CALLS=str(self.log), CONFIRMS=str(self.confirm_log), DENY='0', TMPDIR=str(self.base))
         for command in COMMANDS:
             self.executable(self.bin / command, '#!/bin/bash\nif [ "$1" = -f ]; then case "$2" in "$TMPDIR"/tmp.*) exit 0 ;; esac; fi\nprintf "%s\\n" "${0##*/}:$*" >> "$CALLS"\n')
         self.executable(self.root / 'dsh-confirm.sh', '#!/bin/bash\nprintf "%s\\n" "$*" >> "$CONFIRMS"\n[ "$DENY" != 1 ]\n')
@@ -105,6 +105,7 @@ class TerminalGuardTest(unittest.TestCase):
         subprocess.run(['python3', str(REPO / 'tools/sync-terminal-guard.py'), '--check'], check=True)
 
     def test_dynamic_flag_and_environment_fallback(self):
+        # V13：DSH_SHELL 是唯一激活来源，flag 只做减法。
         self.run_shell(f'''rm one
 printf 0 > {self.flag}
 rm two
@@ -117,9 +118,12 @@ rm legacy
         self.assertEqual(len(self.lines(self.log)), 4)
         self.flag.unlink()
         self.run_shell('rm shell', DSH_SHELL='1')
-        self.run_shell('rm confirm', DSH_CONFIRM='1')
-        self.run_shell('rm install')
-        self.assertEqual(len(self.lines(self.confirm_log)), 7)
+        # DSH_CONFIRM 会继承给 pnpm/插件/系统脚本，不得单独激活守卫。
+        self.run_shell('rm confirm', DSH_CONFIRM='1', DSH_SHELL='0')
+        # 无 DSH_SHELL = 用户自己的终端 / 插件子进程，一律放行。
+        self.run_shell('rm install', DSH_SHELL='0')
+        self.assertEqual(len(self.lines(self.confirm_log)), 6)
+        self.assertEqual(len(self.lines(self.log)), 7)
 
     def test_every_dangerous_function_is_inert_and_guarded(self):
         self.run_shell('\n'.join(c + ' synthetic' for c in COMMANDS if c not in ('find', 'mv', 'adb')))
@@ -155,14 +159,27 @@ mv {self.root} moved
         # Root/FUSE paths below are arguments only; no real find ever executes.
         self.assertIn(f'for p in {self.base}/usr/local/bin {self.bin} ', wrapper.read_text())
         roots = ('/', '/sdcard', '/storage', '/storage/emulated', '/storage/emulated/0', '/data', '/data/adb')
-        for enabled in ('1', '0'):
-            self.flag.write_text(enabled)
-            for root in roots:
-                for depth in ('', '-maxdepth 4'):
-                    with self.subTest(enabled=enabled, root=root, depth=depth):
-                        proc = self.run_shell(f'{wrapper} {shlex.quote(root)} {depth} -delete || test $? -eq 1', guarded=False)
-                        self.assertIn('[POLICY_BLOCKED]', proc.stderr)
+        # V13：全盘扫盘拦截跟随开关，flag=1 且 agent 上下文才拦。
+        self.flag.write_text('1')
+        for root in roots:
+            for depth in ('', '-maxdepth 4'):
+                with self.subTest(enabled='1', root=root, depth=depth):
+                    proc = self.run_shell(f'{wrapper} {shlex.quote(root)} {depth} -delete || test $? -eq 1', guarded=False)
+                    self.assertIn('[POLICY_BLOCKED]', proc.stderr)
         self.assertEqual(self.lines(self.log), [])
+        self.assertEqual(self.lines(self.confirm_log), [])
+
+    def test_find_wrapper_power_guard_honors_scope(self):
+        wrapper = self.wrappers / 'find'
+        # 用户自己的终端（无 DSH_SHELL）与 App 关掉开关时都不再生效；
+        # agent 的 shell 调用（DSH_SHELL=1）仍被拦下。
+        self.flag.write_text('1')
+        self.run_shell(f'{wrapper} / -delete', guarded=False, DSH_SHELL='0')
+        self.run_shell(f'{wrapper} /sdcard -maxdepth 4 -delete', guarded=False, DSH_SHELL='0')
+        self.flag.write_text('0')
+        proc = self.run_shell(f'{wrapper} / -delete', guarded=False)
+        self.assertNotIn('[POLICY_BLOCKED]', proc.stderr)
+        self.assertEqual(len(self.lines(self.log)), 3)
         self.assertEqual(self.lines(self.confirm_log), [])
 
     def test_find_wrapper_bounded_and_scoped_queries_use_only_stub(self):

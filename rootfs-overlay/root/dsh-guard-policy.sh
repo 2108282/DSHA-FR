@@ -1,12 +1,19 @@
-# DSHA-GUARD-V12: shared by function and PATH guards; no child process on flag reads.
+# DSHA-GUARD-V13: shared by function and PATH guards; no child process on flag reads.
+# 作用域仅限 agent 发起的模型 shell 调用，不得扩散到全环境：
+#  - DSH_SHELL 由 DSH 核心的 shellEnv 每次调用时注入，只贴给 model 的 bash/pwsh 执行，
+#    不继承给 pnpm、插件、start.sh/stop.sh 等程序派生的子进程 —— 唯一可靠的判据。
+#  - DSH_CONFIRM 是 start.sh 传给 node 主进程的进程级变量，会继承给上述所有子进程，
+#    用它判危会让插件安装和系统清理脚本一起弹窗，故不参与判定。
+#  - .guard_enabled 是 App 的开关，只做减法（写 0 才关），不能让守卫在无 DSH_SHELL 时激活。
 __dsha_guard_active() {
+  [ "${DSH_SHELL:-0}" = 1 ] || return 1
   local value
   if [ -e /root/.dsh/.guard_enabled ]; then
     value=''
     IFS= read -r value < /root/.dsh/.guard_enabled || :
-    case "$value" in 0) return 1 ;; 1|'') return 0 ;; *) return 1 ;; esac
+    [ "$value" = 0 ] && return 1
   fi
-  [ "${DSH_CONFIRM:-0}" = 1 ] || [ "${DSH_SHELL:-0}" = 1 ]
+  return 0
 }
 __dsha_critical_path() {
   local target="$1" path

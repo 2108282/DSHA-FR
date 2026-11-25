@@ -387,15 +387,22 @@ chmod 755 "$ROOTFS/root/dsh-confirm.sh"
 
 # 每次启动更新守卫策略，旧 rootfs 也会升级；此处为原生 chroot 内路径。
 cat << 'POLICY_EOF' > "$ROOTFS/root/dsh-guard-policy.sh"
-# DSHA-GUARD-V12: shared by function and PATH guards; no child process on flag reads.
+# DSHA-GUARD-V13: shared by function and PATH guards; no child process on flag reads.
+# 作用域仅限 agent 发起的模型 shell 调用，不得扩散到全环境：
+#  - DSH_SHELL 由 DSH 核心的 shellEnv 每次调用时注入，只贴给 model 的 bash/pwsh 执行，
+#    不继承给 pnpm、插件、start.sh/stop.sh 等程序派生的子进程 —— 唯一可靠的判据。
+#  - DSH_CONFIRM 是 start.sh 传给 node 主进程的进程级变量，会继承给上述所有子进程，
+#    用它判危会让插件安装和系统清理脚本一起弹窗，故不参与判定。
+#  - .guard_enabled 是 App 的开关，只做减法（写 0 才关），不能让守卫在无 DSH_SHELL 时激活。
 __dsha_guard_active() {
+  [ "${DSH_SHELL:-0}" = 1 ] || return 1
   local value
   if [ -e /root/.dsh/.guard_enabled ]; then
     value=''
     IFS= read -r value < /root/.dsh/.guard_enabled || :
-    case "$value" in 0) return 1 ;; 1|'') return 0 ;; *) return 1 ;; esac
+    [ "$value" = 0 ] && return 1
   fi
-  [ "${DSH_CONFIRM:-0}" = 1 ] || [ "${DSH_SHELL:-0}" = 1 ]
+  return 0
 }
 __dsha_critical_path() {
   local target="$1" path
@@ -656,7 +663,10 @@ for p in "${PATHS[@]}"; do
   fi
 done
 
-if [ "$IS_DANGEROUS" -eq 1 ]; then
+source /root/dsh-guard-policy.sh
+# 全盘扫盘拦截与确认拦截共用同一开关（含 DSH_SHELL 作用域），
+# 用户自己的终端不再被常驻拦截；agent 的 shell 调用仍会被拦下。
+if [ "$IS_DANGEROUS" = 1 ] && __dsha_guard_active; then
   cat >&2 << 'EOF'
 [POLICY_BLOCKED] 移动端功耗与性能安全拦截：
 检测到试图对 Android 根目录或 /sdcard 全盘执行无限制递归 find 扫描！
@@ -671,8 +681,6 @@ if [ "$IS_DANGEROUS" -eq 1 ]; then
 EOF
   exit 1
 fi
-
-source /root/dsh-guard-policy.sh
 if __dsha_needs_confirm find "$@"; then
   /root/dsh-confirm.sh "find $*" || exit 1
 fi
