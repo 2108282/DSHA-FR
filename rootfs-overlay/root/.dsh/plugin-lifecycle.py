@@ -226,7 +226,7 @@ class Lifecycle:
         # 预览和确认必须针对同一个不可变版本，不能让 latest 在两次操作间漂移。
         exact_spec = name + '@' + version
         self.g['cmd_npm'](exact_spec,
-                           consume=lambda archive, source='': receive(archive, source=source))
+                           consume=lambda archive, source='': receive(archive, source=source, official_spec=exact_spec))
         prepared = self.read(os.path.join(path, 'preview.json'), {})
         actual_items = prepared.get('items') or []
         if len(actual_items) != 1 or actual_items[0].get('name') != name \
@@ -254,17 +254,17 @@ class Lifecycle:
                 item['updateStatus'] = 'upgrade'
                 item['installedVersion'] = cur_ver
                 item['compatibilityMessage'] = (item.get('compatibilityMessage', '') +
-                    f"\n【版本升级】当前已安装 v{cur_ver}，确认后将平滑更新至 v{new_ver}（旧版本自动备份，支持随时回退）。")
+                    f"\n【版本升级】当前已安装 v{cur_ver}，确认后将交由 DSH 官方 profile 安装器更新至 v{new_ver}。")
             elif cmp == 0:
                 item['updateStatus'] = 'reinstall'
                 item['installedVersion'] = cur_ver
                 item['compatibilityMessage'] = (item.get('compatibilityMessage', '') +
-                    f"\n【重新安装】当前已安装相同版本 v{cur_ver}，确认后将重新安装覆盖（旧版本自动备份）。")
+                    f"\n【重新安装】当前已安装相同版本 v{cur_ver}，确认后将交由 DSH 官方 profile 安装器重新安装。")
             else:
                 item['updateStatus'] = 'downgrade'
                 item['installedVersion'] = cur_ver
                 item['compatibilityMessage'] = (item.get('compatibilityMessage', '') +
-                    f"\n【版本降级】⚠ 警告：当前已安装较新版本 v{cur_ver}，确认后将降级覆盖为 v{new_ver}。")
+                    f"\n【版本降级】⚠ 警告：当前已安装较新版本 v{cur_ver}，确认后交由 DSH 官方 profile 安装器处理降级至 v{new_ver}。")
             if not prepared.get('updateFor'):
                 prepared['updateFor'] = name
                 prepared['fromVersion'] = cur_ver
@@ -309,7 +309,7 @@ class Lifecycle:
         path = self.preview_path(key); os.makedirs(path)
         prepared = None
 
-        def receive(archive, subdir='', source=''):
+        def receive(archive, subdir='', source='', official_spec=''):
             nonlocal prepared
             if not os.path.isfile(archive) or os.path.getsize(archive) > self.g['MAX_DOWNLOAD']:
                 raise ValueError('插件包不存在或超过 256 MiB')
@@ -329,7 +329,8 @@ class Lifecycle:
                 raise ValueError('下载包的名称与选中的插件不一致')
             if request.get('version') and (len(items) != 1 or items[0]['version'] != request['version']):
                 raise ValueError('下载包版本与网页说明不一致')
-            prepared = {'previewId': key, 'source': source, 'command': command, 'sha256': digest,
+            prepared = {'previewId': key, 'source': source, 'command': command,
+                        'sha256': digest, 'officialSpec': str(official_spec or request.get('officialSpec', '') or ''),
                         'items': items, 'createdAt': int(time.time()), 'subdir': subdir,
                         'updateFor': request.get('updateFor', ''), 'fromVersion': request.get('fromVersion', '')}
             self.annotate_existing_install(prepared)
@@ -393,8 +394,24 @@ class Lifecycle:
                 current = self.read(os.path.join(directory, 'package.json'), {}) if directory else {}
                 if current.get('version') != preview.get('fromVersion'):
                     raise ValueError('插件已被其他操作更新，请重新检查版本')
-            expected = {preview['updateFor']: preview.get('fromVersion')} if preview.get('updateFor') else None
-            return self.g['cmd_import'](archive, preview.get('subdir', ''), preview.get('source', ''), expected_versions=expected)
+            items = preview.get('items') or []
+            official_spec = str(preview.get('officialSpec', '') or '').strip()
+            if official_spec:
+                if len(items) != 1 or not items[0].get('name'):
+                    raise ValueError('官方安装器一次只支持一个插件包')
+                name = str(items[0]['name'])
+                installed = self.g['cmd_official_add'](official_spec, name, str(items[0].get('version', '')))
+                self.g['result']('ok', '已通过 DSH 官方 profile 安装器安装 ' + name + '；重启 Web 后生效。',
+                                 installed=[name], official=True, application='restart-required',
+                                 restartReason='no-hmr', packageResult=installed)
+                return 0
+            outcome = self.g['cmd_official_archive'](
+                archive, preview.get('subdir', ''), items, preview.get('sha256', ''))
+            self.g['result'](outcome['status'], outcome['message'],
+                             installed=outcome['installed'], official=True,
+                             application=outcome['application'], restartReason=outcome['restartReason'],
+                             packageResults=outcome['packageResults'])
+            return 0 if outcome['status'] == 'ok' else 1
         finally:
             shutil.rmtree(path, ignore_errors=True)
 

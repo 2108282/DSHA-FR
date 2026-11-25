@@ -471,8 +471,9 @@ def enable_plugin(name):
             lines.append("已加回 bundles：%s" % name)
         else:
             lines.append("本就启用：%s" % name)
-        if d is not None and not official and os.path.isfile(marker_path(name)):
-            os.remove(marker_path(name))
+        marker = marker_path(name)
+        if os.path.isfile(marker) or os.path.islink(marker):
+            os.remove(marker)
             lines.append("已清除禁用标记")
     except RuntimeError as e:
         lines.append(str(e))
