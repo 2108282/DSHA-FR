@@ -145,6 +145,21 @@ def valid_name(name):
         r"(?:@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*", name) is not None
 
 
+def profile_package_dir(name):
+    """返回 profile 中包名匹配的实际安装位置，避免旧内置副本覆盖官方安装。"""
+    if not valid_name(name):
+        return None
+    path = os.path.join(local(NODE_MODULES), name)
+    try:
+        with open(os.path.join(path, "package.json"), encoding="utf-8") as f:
+            package = json.load(f)
+        if isinstance(package, dict) and package.get("name") == name:
+            return os.path.realpath(path)
+    except (OSError, ValueError):
+        pass
+    return None
+
+
 def ensure_runtime_modules():
     """导入实体位于 plugin-src；在共同父目录提供同一份 dsh 运行时，供 ESM 查找 peer 模块。"""
     package = local('/usr/local/lib/node_modules/@deepseek-ai/dsh')
@@ -213,6 +228,9 @@ def ensure_global_plugin_links():
     for name, plugin_path in all_plugins.items():
         if not os.path.isdir(plugin_path) or not os.path.isfile(os.path.join(plugin_path, 'package.json')):
             continue
+        installed = profile_package_dir(name)
+        if installed is not None and installed != os.path.realpath(plugin_path):
+            continue
         # 1. 全局模块链接
         if os.path.isdir(global_modules):
             link = os.path.join(global_modules, name)
@@ -260,6 +278,36 @@ def operation_lock():
         finally:
             if os.name != "nt":
                 fcntl.flock(lock, fcntl.LOCK_UN)
+
+
+def assert_no_pending_plugin_transactions():
+    """持有 operation_lock 时调用；未确认的官方子进程可能仍在改同一 profile。"""
+    root = local(os.path.join(DSH_HOME, "plugin-transactions"))
+    if not os.path.lexists(root):
+        return
+    home = os.path.realpath(local(DSH_HOME))
+    if os.path.islink(root) or not os.path.isdir(root) or os.path.commonpath([home, os.path.realpath(root)]) != home:
+        raise RuntimeError("插件事务目录类型异常，需先检查：" + root)
+    safe_phases = {"preparing", "prepared", "snapshot-failed", "restored", "committed"}
+    for key in sorted(os.listdir(root)):
+        if not re.fullmatch("[a-f0-9]{32}", key):
+            continue
+        work = os.path.join(root, key)
+        if os.path.islink(work) or not os.path.isdir(work):
+            raise RuntimeError("插件事务路径类型异常，需先回查：" + work)
+        record = os.path.join(work, "operation.json")
+        if not os.path.lexists(record):
+            # 创建工作目录至记录落盘期间尚未执行官方安装。
+            continue
+        try:
+            if os.path.islink(record) or not os.path.isfile(record):
+                raise ValueError("诊断记录类型异常")
+            with open(record, encoding="utf-8") as stream:
+                operation = json.load(stream)
+            if not isinstance(operation, dict) or operation.get("phase") not in safe_phases:
+                raise ValueError("阶段：" + str(operation.get("phase", "未知") if isinstance(operation, dict) else "未知"))
+        except Exception as error:
+            raise RuntimeError("存在未完成或状态不确定的插件事务，需先回查后再修改插件：" + work + "；" + str(error)) from error
 
 
 def entity_dir(name):
@@ -369,12 +417,15 @@ def merge_manifest(doc, registered):
     doc["dsh"]["profile"] = dict(doc["dsh"].get("profile") or {})
     bundles = list(doc["dsh"]["profile"].get("bundles") or [])
     deps = dict(doc.get("dependencies") or {})
+    declared = set(deps) | set(doc.get("devDependencies") or {}) | set(doc.get("optionalDependencies") or {})
     added = []
     for name, d in registered.items():
-        if name not in deps and name not in bundles:
+        if name not in declared and name not in bundles:
             bundles.append(name)
             added.append(name)
-        deps[name] = "link:" + d
+        installed = profile_package_dir(name)
+        if name not in declared and (installed is None or installed == os.path.realpath(local(d))):
+            deps[name] = "link:" + d
     # 同 new_manifest：Android 上 live（HMR）会让 dsh 因缺 --expose-internals 崩溃，
     # 覆盖安装老 profile 也可能是 live，必须拉回 startup 才能起得来
     doc["dsh"]["profile"]["patchReload"] = "startup"
@@ -389,6 +440,8 @@ def ensure_symlink(name, d):
     """保证 profiles/web/node_modules/<name> 是指向实体目录的链接。返回 True=改动了。"""
     link = os.path.join(local(NODE_MODULES), name)
     target = local(d)
+    if profile_package_dir(name) is not None:
+        return False
     parent_dir = os.path.dirname(link)
     # 如果父级（如 @scope）被历史脚本错误做成了软链接，必须先拔除，换为物理目录
     if os.path.islink(parent_dir):
@@ -442,11 +495,13 @@ def enable_plugin(name):
     """--enable：清禁用标记、加回 bundles、重建链接（官方核心无标记/链接，只改 bundles）。"""
     lines = ["== " + time.strftime("%Y-%m-%d %H:%M:%S") + " 启用 " + name]
     try:
+        assert_no_pending_plugin_transactions()
         d = entity_dir(name)
         official = is_official_bundle(name)
+        installed = profile_package_dir(name)
+        managed = installed is not None and (d is None or installed != os.path.realpath(local(d)))
         if d is None and not official:
-            link = os.path.join(local(NODE_MODULES), name, "package.json")
-            if not os.path.isfile(link):
+            if installed is None:
                 raise RuntimeError("找不到插件实体，请重新导入：" + name)
         doc = read_manifest()
         if doc is None:
@@ -459,13 +514,16 @@ def enable_plugin(name):
         if name not in bundles:
             doc.setdefault("dsh", {}).setdefault("profile", {})["bundles"] = bundles + [name]
             changed = True
-        if d is not None and not official and ensure_symlink(name, d):
-            changed = True
-        if d is not None and not official:
+        if d is not None and not official and not managed:
+            if ensure_symlink(name, d):
+                changed = True
             if not os.path.isfile(os.path.join(local(NODE_MODULES), name, "package.json")):
                 raise RuntimeError("无法建立插件链接：" + name)
-            doc.setdefault("dependencies", {})[name] = "link:" + d
-            changed = True
+            deps = doc.setdefault("dependencies", {})
+            if not any(name in (doc.get(section) or {}) for section in
+                       ("dependencies", "devDependencies", "optionalDependencies")):
+                deps[name] = "link:" + d
+                changed = True
         if changed:
             write_manifest(doc)
             lines.append("已加回 bundles：%s" % name)
@@ -490,6 +548,7 @@ def disable_plugin(name):
     """--disable：从 profile 的 dsh.profile.bundles 清单中剔除，写禁用标记，对齐官方 DSH 标准。"""
     lines = ["== " + time.strftime("%Y-%m-%d %H:%M:%S") + " 禁用 " + name]
     try:
+        assert_no_pending_plugin_transactions()
         if not is_official_bundle(name):
             marker = marker_path(name)
             os.makedirs(os.path.dirname(marker), exist_ok=True)
@@ -524,6 +583,7 @@ def register():
     os.makedirs(local(DSH_HOME), exist_ok=True)
     lines = ["== " + time.strftime("%Y-%m-%d %H:%M:%S")]
     try:
+        assert_no_pending_plugin_transactions()
         linked = ensure_runtime_modules()
         if linked: lines.append('已补充 %d 个共享运行时模块链接' % linked)
         g_linked = ensure_global_plugin_links()

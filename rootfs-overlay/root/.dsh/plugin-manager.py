@@ -19,6 +19,7 @@ import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 import zipfile
 
 spec = importlib.util.spec_from_file_location("builtin", os.path.join(
@@ -373,6 +374,7 @@ def register_plugin(root, source, expected_version=None):
         old = os.path.join(work, "old")
         history_change = None
         with builtin.operation_lock():
+            lifecycle()._check_pending_transactions()
             builtin.ensure_runtime_modules()
             if expected_version is not None:
                 current_dir = resolve_plugin_dir(name)
@@ -511,26 +513,58 @@ def cmd_import(archive, subdir="", source="", expected_versions=None):
         return 0 if not failures else 1
 
 
+def container_path(path):
+    """输出容器内路径；测试根前缀不应进入 APK 的路径显示。"""
+    path = os.path.abspath(path)
+    test_root = os.path.abspath(builtin.ROOT) if builtin.ROOT else ""
+    if test_root and os.path.commonpath([test_root, path]) == test_root:
+        return "/" + os.path.relpath(path, test_root).replace(os.sep, "/")
+    return path
+
+
+def profile_dependencies(doc):
+    """与官方管理器一样识别全部直接依赖，optional 对同名依赖优先。"""
+    result = {}
+    for section in ("devDependencies", "dependencies", "optionalDependencies"):
+        values = doc.get(section) or {}
+        if not isinstance(values, dict):
+            raise ValueError("profile " + section + " 格式无效")
+        result.update(values)
+    return result
+
+
+def resolve_profile_plugin_dir(name):
+    """以 profile 的实际模块入口为准，跟随 pnpm/link 链接但核对包名。"""
+    if not builtin.valid_name(name):
+        raise ValueError("无效的插件名称")
+    path = os.path.join(local(builtin.NODE_MODULES), name)
+    package = read_json(os.path.join(path, "package.json"), {})
+    if isinstance(package, dict) and package.get("name") == name:
+        return os.path.realpath(path)
+    return None
+
+
 def resolve_plugin_dir(name):
     if not builtin.valid_name(name):
         raise ValueError("无效的插件名称")
-    # 1. 内置固有插件：指向底座实体目录 (/root/dsha-* 或 /root/<name>)
+    directory = resolve_profile_plugin_dir(name)
+    if directory:
+        return directory
+    doc = builtin.read_manifest() or {}
+    registered = name in profile_dependencies(doc) or name in doc.get("dsh", {}).get("profile", {}).get("bundles", [])
+    # 已登记但入口缺失/损坏时，不用旧目录冒充当前安装。官方随附包仍可由宿主安装提供。
+    if registered and not builtin.is_official_bundle(name):
+        return None
+    if os.path.lexists(os.path.join(local(builtin.NODE_MODULES), name)):
+        return None
     if name in builtin.builtin_names():
         directory = builtin.entity_dir(name)
         if directory and os.path.isfile(local(os.path.join(directory, "package.json"))):
             return local(directory)
-    # 2. 第三方插件：检查 plugin-src 目录
     src_dir = local(os.path.join(PLUGIN_SRC, name))
-    if os.path.isfile(os.path.join(src_dir, "package.json")):
+    package = read_json(os.path.join(src_dir, "package.json"), {})
+    if isinstance(package, dict) and package.get("name") == name:
         return src_dir
-    # 3. 检查 web profile 的 node_modules
-    path = os.path.join(local(builtin.NODE_MODULES), name)
-    if os.path.isfile(os.path.join(path, "package.json")):
-        return os.path.realpath(path)
-    # 4. 检查官方核心包或内置插件实体兜底
-    direct = builtin.entity_dir(name)
-    if direct and os.path.isfile(local(os.path.join(direct, "package.json"))):
-        return local(direct)
     return builtin.find_official_pkg_dir(name)
 
 
@@ -624,6 +658,174 @@ def cleanup_plugin_links(name, package=None):
                 os.unlink(link)
 
 
+def managed_directory(relative):
+    """仅创建 DSH_HOME 内的管理目录，拒绝目录经软链接跳出管理区。"""
+    home = os.path.realpath(local(DSH_HOME))
+    path = os.path.join(home, relative)
+    if os.path.commonpath([home, os.path.realpath(path)]) != home or os.path.islink(path):
+        raise ValueError("插件管理目录指向外部：" + relative)
+    os.makedirs(path, mode=0o700, exist_ok=True)
+    return path
+
+
+def store_plugin_archive(root):
+    """把已校验的包保存为稳定 file: 安装源；不包含依赖树或执行构建。"""
+    root = os.path.realpath(root)
+    package = plugin_package(root)
+    # 这些包依赖原目录布局/随包依赖，排除 node_modules 后不能保证可恢复；先停止而非产生假备份。
+    if package.get("bundledDependencies") or package.get("bundleDependencies"):
+        raise ValueError("插件含随包依赖，当前归档备份无法保证完整恢复，未执行安装")
+    for section in ("dependencies", "optionalDependencies"):
+        dependencies = package.get(section) or {}
+        if not isinstance(dependencies, dict):
+            raise ValueError("插件 " + section + " 格式无效，未执行安装")
+        if any(not isinstance(value, str) or value.startswith(("file:", "link:", "workspace:", "/", "./", "../"))
+               for value in dependencies.values()):
+            raise ValueError("插件依赖本地路径，当前归档备份无法保证完整恢复，未执行安装")
+    excluded = {"node_modules", ".git", ".cache", "__pycache__", ".pnpm-store"}
+
+    def ensure_archived(relative):
+        target = safe_target(root, relative)
+        # 同时核对声明路径与软链接实际目标，防止备份时把入口或 patch 排除。
+        paths = (os.path.normpath(relative), os.path.relpath(target, root))
+        if any(excluded.intersection(path.split(os.sep)) for path in paths):
+            raise ValueError("插件备份所需文件位于排除目录，无法保证完整恢复，未执行安装：" + relative)
+
+    for required in ("package.json", package.get("main"),
+                     (package.get("cordis") or {}).get("entry"),
+                     (package.get("dsh") or {}).get("bundle", {}).get("patch")):
+        if isinstance(required, str):
+            ensure_archived(required)
+    archive_root = managed_directory("plugin-archives")
+    descriptor, temporary = tempfile.mkstemp(prefix=".snapshot-", suffix=".tgz", dir=archive_root)
+    os.close(descriptor)
+    size = count = 0
+    try:
+        with tarfile.open(temporary, "w:gz", format=tarfile.PAX_FORMAT, dereference=False) as output:
+            output.add(root, arcname="package", recursive=False)
+            for base, dirs, files in os.walk(root, topdown=True, followlinks=False):
+                dirs[:] = sorted(directory for directory in dirs if directory not in excluded)
+                for filename in list(dirs) + sorted(files):
+                    if filename in excluded:
+                        continue
+                    path = os.path.join(base, filename)
+                    relative = os.path.relpath(path, root)
+                    safe_target(root, relative)
+                    if os.path.islink(path):
+                        ensure_archived(relative)
+                        link = os.readlink(path)
+                        if os.path.isabs(link) or "\\" in link or ":" in link:
+                            raise ValueError("插件备份含不可移植软链接：" + relative)
+                        # 即使随后由 .. 抵消，内核仍须访问原始目标中的中间目录。
+                        if excluded.intersection(link.split("/")):
+                            raise ValueError("插件备份软链接经过排除目录，未执行安装：" + relative)
+                        ensure_archived(os.path.relpath(os.path.normpath(os.path.join(base, link)), root))
+                        if filename in dirs:
+                            dirs.remove(filename)
+                    info = output.gettarinfo(path, arcname=os.path.join("package", relative))
+                    if not (info.isfile() or info.isdir() or info.issym()):
+                        raise ValueError("插件备份含不支持的文件：" + relative)
+                    count += 1
+                    size += info.size
+                    if count > MAX_FILES or size > MAX_EXPANDED:
+                        raise ValueError("插件备份超过容量限制，未执行安装")
+                    if info.isfile():
+                        with open(path, "rb") as stream:
+                            output.addfile(info, stream)
+                    else:
+                        output.addfile(info)
+        if os.path.getsize(temporary) > MAX_DOWNLOAD:
+            raise ValueError("插件备份超过 256 MiB，未执行安装")
+        with open(temporary, "rb") as stream:
+            os.fsync(stream.fileno())
+        digest = lifecycle().digest(temporary)
+        target = os.path.join(archive_root, digest + ".tgz")
+        if os.path.lexists(target):
+            if os.path.islink(target) or not os.path.isfile(target) or lifecycle().digest(target) != digest:
+                raise ValueError("插件备份归档路径异常，未执行安装")
+        else:
+            os.replace(temporary, target)
+        return target
+    finally:
+        if os.path.isfile(temporary):
+            os.unlink(temporary)
+
+
+def legacy_directory_references(directory):
+    """检查各 profile 的依赖/模块入口；无法确认安全时保留旧目录。"""
+    directory = os.path.realpath(directory)
+    profiles = local(os.path.join(DSH_HOME, "profiles"))
+    references = []
+    for profile in sorted(os.listdir(profiles)) if os.path.isdir(profiles) else []:
+        base = os.path.join(profiles, profile)
+        if not os.path.isdir(base):
+            continue
+        doc = read_json(os.path.join(base, "package.json"), {})
+        groups = [doc.get(section) or {} for section in ("dependencies", "devDependencies", "optionalDependencies")]
+        names = set(doc.get("dsh", {}).get("profile", {}).get("bundles", []))
+        for dependencies in groups:
+            names.update(dependencies)
+        for name in names:
+            if not builtin.valid_name(name):
+                continue
+            entry = os.path.join(base, "node_modules", name)
+            targets = [os.path.realpath(entry)] if os.path.lexists(entry) else []
+            for dependencies in groups:
+                dependency = dependencies.get(name, "")
+                if isinstance(dependency, str) and dependency.startswith(("link:", "file:")):
+                    source = os.path.expanduser(dependency.split(":", 1)[1])
+                    target = local(source) if os.path.isabs(source) else os.path.join(base, source)
+                    targets.append(os.path.realpath(target))
+            if any(os.path.commonpath([directory, target]) == directory for target in targets):
+                references.append(profile + ":" + name)
+    return references
+
+
+def retire_legacy_directory(name, active):
+    """仅隔离未被引用的 DSHA plugin-src 实体；不删外部目录或 pnpm 存储。"""
+    result = {"warnings": [], "retiredPath": ""}
+    legacy = local(os.path.join(PLUGIN_SRC, name))
+    if not os.path.lexists(legacy) or os.path.realpath(legacy) == os.path.realpath(active):
+        return result
+    try:
+        check_link_parent(legacy, local(PLUGIN_SRC))
+        if os.path.islink(legacy) or not os.path.isdir(legacy):
+            raise ValueError("旧路径不是可确认归属的 DSHA 实体")
+        package = read_json(os.path.join(legacy, "package.json"), {})
+        if package.get("name") != name:
+            raise ValueError("旧目录包名不匹配")
+        references = legacy_directory_references(legacy)
+        if references:
+            raise ValueError("仍被 profile 引用：" + "、".join(references))
+        profile_entry, global_link = plugin_link_paths(name)
+        check_link_parent(global_link, local("/usr/local/lib/node_modules"))
+        if os.path.islink(global_link):
+            raw_target = os.path.abspath(os.path.join(os.path.dirname(global_link), os.readlink(global_link)))
+            if raw_target == os.path.abspath(legacy):
+                temporary = global_link + ".dsha-" + uuid.uuid4().hex
+                try:
+                    os.symlink(profile_entry, temporary, target_is_directory=True)
+                    os.replace(temporary, global_link)
+                finally:
+                    if os.path.islink(temporary):
+                        os.unlink(temporary)
+            elif os.path.commonpath([os.path.realpath(legacy), os.path.realpath(global_link)]) == os.path.realpath(legacy):
+                raise ValueError("全局链接仍引用旧目录，且无法确认归属")
+        identifier = hashlib.sha256(name.encode()).hexdigest()[:32] + "/" + uuid.uuid4().hex
+        destination = managed_directory("plugin-retired/" + identifier)
+        write_json(os.path.join(destination, "state.json"), {"name": name, "version": package.get("version", ""),
+                   "originalDirectory": container_path(legacy), "activeDirectory": container_path(active)})
+        os.replace(legacy, os.path.join(destination, "package"))
+        result["retiredPath"] = container_path(destination)
+    except Exception as error:
+        result["warnings"].append("新版已安装，旧目录保留（" + container_path(legacy) + "）：" + str(error))
+    return result
+
+
+class OfficialInstallUncertain(ValueError):
+    """命令超时不代表其子进程已经停止；回查前不得启动第二次安装。"""
+
+
 def cmd_official_add(spec, expected_name, expected_version=""):
     """通过官方 dsh plugin add 安装单个 bundle，并回查 profile 提交结果。"""
     if not isinstance(spec, str) or not spec.strip() or len(spec) > 2048 \
@@ -639,22 +841,23 @@ def cmd_official_add(spec, expected_name, expected_version=""):
             text=True, timeout=600,
         )
     except subprocess.TimeoutExpired as error:
-        raise ValueError("官方安装超时，profile 状态请先回查后再重试") from error
+        raise OfficialInstallUncertain("官方安装超时，结果未确认；请先回查 profile 和安装事务，勿直接重试") from error
     output = ((process.stdout or "") + ("\n" + process.stderr if process.stderr else "")).strip()
     if process.returncode != 0:
         detail = output[-1600:] if output else str(process.returncode)
         raise ValueError("官方安装失败：" + detail)
     doc = builtin.read_manifest() or {}
-    dependencies = doc.get("dependencies") or {}
-    bundles = doc.get("dsh", {}).get("profile", {}).get("bundles", [])
-    if expected_name not in dependencies or expected_name not in bundles:
-        raise ValueError("官方安装已返回成功，但 profile 未登记 " + expected_name)
-    directory = resolve_plugin_dir(expected_name)
+    dependencies = profile_dependencies(doc)
+    # 已禁用插件更新后仍可保持禁用；是否启用由安装事务恢复，不能当作安装成功条件。
+    if expected_name not in dependencies:
+        raise ValueError("官方安装已返回成功，但 profile 未登记依赖 " + expected_name)
+    directory = resolve_profile_plugin_dir(expected_name)
     package = read_json(os.path.join(directory, "package.json"), {}) if directory else {}
     if package.get("name") != expected_name:
-        raise ValueError("官方安装回查的插件目录名称不匹配：" + expected_name)
+        raise ValueError("官方安装回查的 profile 插件目录名称不匹配：" + expected_name)
     if expected_version and str(package.get("version", "")) != expected_version:
         raise ValueError("官方安装回查的插件版本与预览不匹配：" + expected_name)
+    plugin_package(directory)
     return {
         "exitCode": process.returncode,
         "output": output[-1600:],
@@ -663,10 +866,12 @@ def cmd_official_add(spec, expected_name, expected_version=""):
     }
 
 
-def cmd_official_archive(archive, subdir, expected_items, archive_digest):
+def cmd_official_archive(archive, subdir, expected_items, archive_digest, source=""):
     """Normalize a checked archive into a stable local tarball for official pnpm install."""
     if not isinstance(expected_items, list) or not expected_items or len(expected_items) > 30:
         raise ValueError("归档插件清单无效")
+    if lifecycle().digest(archive) != archive_digest:
+        raise ValueError("安装归档已变化，请重新解析")
     staging = tempfile.mkdtemp(prefix="plugin-official-", dir=local(DSH_HOME))
     installed, failures, package_results = [], [], []
     try:
@@ -685,49 +890,29 @@ def cmd_official_archive(archive, subdir, expected_items, archive_digest):
         for name, (root, version) in actual.items():
             if expected[name] and version != expected[name]:
                 raise ValueError("插件版本与预览不一致：" + name)
-            identity = hashlib.sha256((archive_digest + "\0" + subdir + "\0" + name).encode("utf-8")).hexdigest()
-            archive_root = local(os.path.join(DSH_HOME, "plugin-archives"))
-            os.makedirs(archive_root, mode=0o700, exist_ok=True)
-            tarball = os.path.join(archive_root, identity + ".tgz")
-            if os.path.lexists(tarball) and (os.path.islink(tarball) or not os.path.isfile(tarball)):
-                raise ValueError("官方插件归档路径类型异常：" + tarball)
-            if not os.path.isfile(tarball):
-                staged_tarball = os.path.join(archive_root, "." + identity + ".tmp")
-                try:
-                    with tarfile.open(staged_tarball, "w:gz", format=tarfile.PAX_FORMAT) as output:
-                        output.add(root, arcname="package", recursive=False)
-                        for base, dirs, files in os.walk(root, topdown=True, followlinks=False):
-                            dirs.sort(); files.sort()
-                            for directory in list(dirs):
-                                path = os.path.join(base, directory)
-                                if directory in ("node_modules", ".git", ".cache", "__pycache__", ".pnpm-store"):
-                                    dirs.remove(directory)
-                                    continue
-                                output.add(path, arcname=os.path.join("package", os.path.relpath(path, root)), recursive=False)
-                                if os.path.islink(path):
-                                    dirs.remove(directory)
-                            for filename in files:
-                                path = os.path.join(base, filename)
-                                output.add(path, arcname=os.path.join("package", os.path.relpath(path, root)), recursive=False)
-                    if os.path.getsize(staged_tarball) > MAX_DOWNLOAD:
-                        raise ValueError("规范化插件包超过 256 MiB")
-                    os.replace(staged_tarball, tarball)
-                finally:
-                    if os.path.lexists(staged_tarball):
-                        os.unlink(staged_tarball)
+            tarball = store_plugin_archive(root)
             try:
-                result = cmd_official_add("file:" + tarball, name, version)
+                result = lifecycle().install_package("file:" + tarball, name, version, source=source)
                 installed.append(name)
                 package_results.append({"name": name, **result})
+            except OfficialInstallUncertain as error:
+                failures.append(name + "：" + str(error) + "；已停止后续插件安装")
+                break
             except Exception as error:
                 failures.append(name + "：" + str(error))
         status = "partial" if installed and failures else ("error" if failures else "ok")
         message = "已通过 DSH 官方 profile 安装器安装 " + "、".join(installed) + "；重启 Web 后生效。" if installed else ""
         if failures:
             message += ("\n" if message else "") + "未安装：" + "\n".join(failures)
+        warnings = [warning for entry in package_results for warning in entry.get("warnings", [])]
+        retired = [entry["retiredPath"] for entry in package_results if entry.get("retiredPath")]
+        if warnings:
+            message += "\n" + "\n".join(warnings)
+        if retired:
+            message += "\n已将未引用的旧目录移入备份区：" + "、".join(retired)
         return {"status": status, "message": message, "installed": installed,
                 "application": "restart-required", "restartReason": "no-hmr",
-                "packageResults": package_results}
+                "warnings": warnings, "retiredPaths": retired, "packageResults": package_results}
     finally:
         shutil.rmtree(staging, ignore_errors=True)
 
@@ -739,11 +924,12 @@ def cmd_delete(name):
     if builtin.is_official_bundle(name) or name in builtin.builtin_names():
         raise ValueError("官方核心和内置插件请使用禁用开关，不能删除")
     with builtin.operation_lock():
+        lifecycle()._check_pending_transactions()
         doc = builtin.read_manifest()
         if doc is None:
             raise ValueError("插件配置不存在")
         bundles = doc.get("dsh", {}).get("profile", {}).get("bundles", [])
-        deps = doc.get("dependencies", {})
+        deps = profile_dependencies(doc)
         sources = read_json(local(SOURCES), {})
         src_path = local(os.path.join(PLUGIN_SRC, name))
         if name not in deps and name not in bundles and name not in (sources or {}) and not os.path.lexists(src_path):
@@ -763,7 +949,7 @@ def cmd_delete(name):
                 detail = (removed.stderr or removed.stdout or '').strip()[-1200:]
                 raise ValueError("官方卸载失败，保留插件文件：" + (detail or str(removed.returncode)))
             doc = builtin.read_manifest()
-            if doc is None or name in doc.get('dependencies', {}) or name in doc.get('dsh', {}).get('profile', {}).get('bundles', []):
+            if doc is None or name in profile_dependencies(doc) or name in doc.get('dsh', {}).get('profile', {}).get('bundles', []):
                 raise ValueError("官方卸载回查未通过，保留插件文件，请刷新后重试")
         elif name in bundles:
             # 只有 bundle 选择、没有包依赖的历史残项，不运行无关的 pnpm 操作。
@@ -914,7 +1100,7 @@ def cmd_release(owner, repo, tag, *, consume=None):
 def cmd_list():
     doc = builtin.read_manifest() or {}
     bundles = doc.get("dsh", {}).get("profile", {}).get("bundles", [])
-    deps = doc.get("dependencies", {})
+    deps = profile_dependencies(doc)
     sources = read_json(local(SOURCES), {})
     if not isinstance(sources, dict):
         sources = {}
@@ -928,6 +1114,8 @@ def cmd_list():
     patch_file = local(os.path.join(DSH_HOME, "profiles", "web", "cordis.patch.yml"))
     if os.path.isfile(patch_file):
         try:
+            # CLI main 已持有 operation_lock；flock 不能在此用新 fd 重入。
+            builtin.assert_no_pending_plugin_transactions()
             with open(patch_file, "r", encoding="utf-8") as pf:
                 content = pf.read()
             if "# >>> DSHA managed" in content:
@@ -974,6 +1162,7 @@ def cmd_list():
         items.append(dict(name=name, enabled=plugin_enabled, builtin=name in builtin.builtin_names(),
                           official=official, available=available,
                           version=pkg.get("version", ""), description=desc,
+                          installPath=container_path(os.path.realpath(directory)) if directory else "",
                           source=sources.get(name, "") or repository_url(pkg),
                           exportable=not official and directory is not None,
                           deletable=not official and name not in builtin.builtin_names()))

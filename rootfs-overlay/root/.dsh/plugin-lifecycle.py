@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """插件安装预览、更新发现、单版本回退与安全启动；由 plugin-manager 注入既有安装器。"""
+import base64
 import hashlib
 import json
 import os
@@ -138,8 +139,322 @@ class Lifecycle:
 
     def history_info(self, name):
         path = self.history_path(name)
+        if os.path.islink(path):
+            raise ValueError('插件历史目录是软链接，已停止读取')
         state = self.read(os.path.join(path, 'state.json'), {})
-        return state if state.get('name') == name and os.path.isfile(os.path.join(path, 'package', 'package.json')) else {}
+        if not isinstance(state, dict) or state.get('name') != name:
+            return {}
+        if state.get('schema') == 2:
+            self._snapshot_archive(state, verify_digest=False)
+            return state
+        package = os.path.join(path, 'package', 'package.json')
+        return state if os.path.isfile(package) else {}
+
+    def _snapshot_archive(self, state, verify_digest=True):
+        """历史只引用稳定归档区，不能把事务目录或任意外部文件当作恢复包。"""
+        archive = state.get('archive', '')
+        root = os.path.realpath(self.path('plugin-archives'))
+        if not isinstance(archive, str) or not os.path.isabs(archive) or not archive.endswith('.tgz') \
+                or os.path.islink(archive) or not os.path.isfile(archive) \
+                or os.path.commonpath([root, os.path.realpath(archive)]) != root:
+            raise ValueError('插件恢复归档不存在或路径异常，请保留历史并检查：' + str(archive))
+        if not 0 < os.path.getsize(archive) <= self.g.get('MAX_DOWNLOAD', 256 * 1024 * 1024):
+            raise ValueError('插件恢复归档为空或超过容量限制：' + archive)
+        digest = state.get('sha256', '')
+        if not isinstance(digest, str) or not re.fullmatch('[a-fA-F0-9]{64}', digest) \
+                or (verify_digest and self.digest(archive).lower() != digest.lower()):
+            raise ValueError('插件恢复归档校验失败，已停止操作：' + archive)
+        return archive
+
+    def _sources(self):
+        sources = self.read(self.local(self.g['SOURCES']), {})
+        if not isinstance(sources, dict):
+            raise ValueError('插件来源记录格式错误，已停止操作')
+        return sources
+
+    def _capture_state(self, name, directory, doc):
+        sources = self._sources()
+        bundles = doc.get('dsh', {}).get('profile', {}).get('bundles', [])
+        dependencies = self.g['profile_dependencies'](doc)
+        dependency_groups = {section: doc[section][name] for section in
+                             ('dependencies', 'devDependencies', 'optionalDependencies')
+                             if name in (doc.get(section) or {})}
+        marker = self.builtin.marker_path(name)
+        marked = os.path.lexists(marker)
+        marker_content = ''
+        if marked:
+            if os.path.islink(marker) or not os.path.isfile(marker):
+                raise ValueError('插件禁用标记类型异常：' + marker)
+            with open(marker, 'rb') as stream:
+                marker_content = base64.b64encode(stream.read()).decode('ascii')
+        known = name in dependencies or name in bundles
+        state = {'schema': 2, 'name': name, 'version': '', 'archive': '', 'sha256': '',
+                 'source': sources.get(name, ''), 'sourcePresent': name in sources,
+                 'dependency': dependencies.get(name), 'dependencyPresent': name in dependencies,
+                 'dependencyGroups': dependency_groups,
+                 'enabled': name in bundles if known else not marked, 'disabledMarker': marked,
+                 'disabledMarkerContent': marker_content, 'originalDirectory': directory or '',
+                 'savedAt': int(time.time()), 'existed': bool(directory)}
+        if directory:
+            pkg = self.g['plugin_package'](directory)
+            if pkg.get('name') != name or not str(pkg.get('version', '')):
+                raise ValueError('当前插件名称或版本无法确认，已停止覆盖：' + name)
+            archive = self.g['store_plugin_archive'](directory)
+            state.update(version=str(pkg['version']), archive=archive, sha256=self.digest(archive))
+            self._snapshot_archive(state, verify_digest=False)
+        return state
+
+    def _apply_state(self, name, state):
+        """只恢复该包的来源、bundle 选择与标记；依赖规格由官方安装器和锁文件管理。"""
+        sources = self._sources()
+        if state.get('sourcePresent', True):
+            sources[name] = state.get('source', '')
+        else:
+            sources.pop(name, None)
+        self.write(self.local(self.g['SOURCES']), sources)
+        doc = self.builtin.read_manifest()
+        enabled = bool(state.get('enabled', True))
+        if not isinstance(doc, dict):
+            if enabled:
+                raise ValueError('官方安装后 profile 清单不存在，无法恢复启用状态')
+        else:
+            bundles = doc.setdefault('dsh', {}).setdefault('profile', {}).setdefault('bundles', [])
+            if enabled and name not in bundles:
+                bundles.append(name)
+                self.builtin.write_manifest(doc)
+            elif not enabled and name in bundles:
+                doc['dsh']['profile']['bundles'] = [item for item in bundles if item != name]
+                self.builtin.write_manifest(doc)
+        marker = self.builtin.marker_path(name)
+        if os.path.lexists(marker) and (os.path.islink(marker) or not os.path.isfile(marker)):
+            raise ValueError('插件禁用标记类型异常：' + marker)
+        if state.get('disabledMarker', False):
+            content = base64.b64decode(state.get('disabledMarkerContent', ''), validate=True)
+            os.makedirs(os.path.dirname(marker), exist_ok=True)
+            temporary = marker + '.transaction-' + uuid.uuid4().hex
+            try:
+                with open(temporary, 'xb') as stream:
+                    stream.write(content)
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                os.replace(temporary, marker)
+            finally:
+                if os.path.isfile(temporary) and not os.path.islink(temporary):
+                    os.unlink(temporary)
+        elif os.path.isfile(marker):
+            os.unlink(marker)
+
+    def _verify_profile(self, name, version):
+        directory = self.g['resolve_profile_plugin_dir'](name)
+        if not directory or not os.path.isdir(directory):
+            raise ValueError('官方安装后 profile 实际插件目录缺失：' + name)
+        pkg = self.g['plugin_package'](directory)
+        if pkg.get('name') != name:
+            raise ValueError('官方安装后 profile 实际包名不匹配：' + name)
+        if version and str(pkg.get('version', '')) != str(version):
+            raise ValueError('官方安装后 profile 实际版本不匹配：' + name)
+        doc = self.builtin.read_manifest() or {}
+        if name not in self.g['profile_dependencies'](doc):
+            raise ValueError('官方安装后 profile 未登记插件依赖：' + name)
+        return directory, pkg
+
+    def _uncertain(self, error):
+        kind = self.g.get('OfficialInstallUncertain')
+        return isinstance(kind, type) and isinstance(error, kind)
+
+    def _remove_failed_install(self, name):
+        """新安装失败时仅调用官方 remove；不进入会拿同一锁并清历史的 cmd_delete。"""
+        try:
+            process = subprocess.run(
+                ['dsh', 'plugin', '--profile', 'web', 'remove', name],
+                cwd=self.local(self.builtin.PROFILE),
+                env=dict(os.environ, DSH_HOME=self.home), stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, text=True, timeout=120)
+        except subprocess.TimeoutExpired as error:
+            kind = self.g.get('OfficialInstallUncertain', ValueError)
+            raise kind('官方清理超时，需先回查 profile 状态，禁止自动重做') from error
+        if process.returncode:
+            detail = ((process.stderr or '') + '\n' + (process.stdout or '')).strip()[-1200:]
+            raise ValueError('新安装失败后的官方清理失败：' + (detail or str(process.returncode)))
+        doc = self.builtin.read_manifest() or {}
+        if name in self.g['profile_dependencies'](doc) \
+                or name in doc.get('dsh', {}).get('profile', {}).get('bundles', []):
+            raise ValueError('新安装失败后的官方清理回查未通过：' + name)
+
+    def _commit_history(self, name, backup, work):
+        target = self.history_path(name)
+        previous = os.path.join(work, 'previous-history')
+        if os.path.islink(target) or (os.path.lexists(target) and not os.path.isdir(target)):
+            raise ValueError('插件历史目录类型异常，已停止提交')
+        moved = False
+        if os.path.isdir(target):
+            os.replace(target, previous)
+            moved = True
+        try:
+            os.replace(backup, target)
+        except Exception as error:
+            if moved:
+                try:
+                    os.replace(previous, target)
+                except Exception as restore_error:
+                    raise RuntimeError('历史提交失败：' + str(error) + '；原历史恢复失败：' +
+                                       str(restore_error) + '；原历史保留于：' + previous) from error
+            raise
+
+    def _check_pending_transactions(self):
+        """安装、回退与注册/开关共用同一未完成事务检查。"""
+        try:
+            self.builtin.assert_no_pending_plugin_transactions()
+        except RuntimeError as error:
+            raise ValueError(str(error)) from error
+
+    def _record_operation(self, work, operation, phase, strict=True, **details):
+        operation.update(details)
+        operation.update(phase=phase, updatedAt=int(time.time()))
+        try:
+            self.write(os.path.join(work, 'operation.json'), operation)
+            self._sync_directory(work)
+        except Exception as error:
+            message = '事务诊断记录写入失败：' + str(error) + '；事务：' + work
+            if strict:
+                raise RuntimeError(message) from error
+            # 诊断写入失败不能阻断旧包恢复，也不能把已提交的安装误判成失败。
+            print('DSHA: ' + message, flush=True)
+
+    @staticmethod
+    def _sync_directory(path):
+        descriptor = os.open(path, os.O_RDONLY | getattr(os, 'O_DIRECTORY', 0))
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+
+    @staticmethod
+    def installation_message(message, installed):
+        details = list(installed.get('warnings') or [])
+        if installed.get('retiredPath'):
+            details.append('已将未引用的旧目录移入备份区：' + installed['retiredPath'])
+        return message + ('\n' + '\n'.join(details) if details else '')
+
+    def install_package(self, spec, name, version, source='', restore_state=None):
+        """官方安装的唯一事务入口；调用方不可在已持有 operation_lock 时再次进入。"""
+        with self.builtin.operation_lock():
+            return self._install_package_locked(spec, name, version, source, restore_state)
+
+    def _install_package_locked(self, spec, name, version, source='', restore_state=None):
+        self._check_pending_transactions()
+        if not self.builtin.valid_name(name) or self.builtin.is_official_bundle(name):
+            raise ValueError('官方核心或无效插件名不能由此安装')
+        if restore_state is not None and (not isinstance(restore_state, dict) or restore_state.get('name') != name):
+            raise ValueError('恢复状态的插件名称不匹配')
+        doc = self.builtin.read_manifest() or {}
+        registered = name in self.g['profile_dependencies'](doc) \
+            or name in doc.get('dsh', {}).get('profile', {}).get('bundles', [])
+        directory = self.g['resolve_plugin_dir'](name)
+        if registered and not self.g['resolve_profile_plugin_dir'](name):
+            raise ValueError('插件已登记但 profile 实际包缺失，无法备份，已停止覆盖：' + name)
+        if directory and not os.path.isdir(directory):
+            raise ValueError('当前插件目录缺失，无法备份：' + name)
+        transaction_root = self.path('plugin-transactions')
+        os.makedirs(transaction_root, mode=0o700, exist_ok=True)
+        work = self.path('plugin-transactions/' + uuid.uuid4().hex)
+        os.mkdir(work, mode=0o700)
+        backup = os.path.join(work, 'backup')
+        os.mkdir(backup, mode=0o700)
+        # 快照必须先落盘，再允许官方 add 修改 profile 或 pnpm 链接。
+        operation = {'name': name, 'spec': spec, 'version': str(version), 'source': source,
+                     'createdAt': int(time.time())}
+        self._record_operation(work, operation, 'preparing')
+        try:
+            previous = self._capture_state(name, directory, doc)
+            self.write(os.path.join(backup, 'state.json'), previous)
+            self._sync_directory(backup)
+            if previous.get('archive'):
+                self._sync_directory(self.path('plugin-archives'))
+            self._record_operation(work, operation, 'prepared')
+            self._sync_directory(work)
+            self._sync_directory(transaction_root)
+            self._sync_directory(self.home)
+        except Exception as error:
+            self._record_operation(work, operation, 'snapshot-failed', strict=False, error=str(error))
+            raise ValueError('安装前快照未完成，未执行官方安装：' + str(error) + '；事务：' + work) from error
+        self._record_operation(work, operation, 'installing')
+        try:
+            raw = self.g['cmd_official_add'](spec, name, str(version))
+            active, pkg = self._verify_profile(name, version)
+            self._record_operation(work, operation, 'verified')
+            if restore_state is None:
+                desired = dict(previous)
+                desired.update(source=source or self.g['repository_url'](pkg) or previous.get('source', ''),
+                               sourcePresent=True)
+            else:
+                desired = dict(restore_state)
+                if desired.get('name') != name:
+                    raise ValueError('恢复状态的插件名称不匹配')
+            self._apply_state(name, desired)
+            # 再核对实际包，防止状态保存期间路径已被外部变动。
+            self._verify_profile(name, version)
+            self._record_operation(work, operation, 'committing-history')
+            if previous.get('existed'):
+                self._commit_history(name, backup, work)
+        except Exception as error:
+            if self._uncertain(error):
+                self._record_operation(work, operation, 'uncertain', strict=False, error=str(error))
+                raise type(error)(str(error) + '；快照已保留，需先回查，禁止自动恢复或重做；事务：' + work) from error
+            recovery_errors = []
+            self._record_operation(work, operation, 'restoring', strict=False, error=str(error))
+            try:
+                if previous.get('existed'):
+                    archive = self._snapshot_archive(previous)
+                    self.g['cmd_official_add']('file:' + archive, name, previous['version'])
+                    self._verify_profile(name, previous['version'])
+                else:
+                    self._remove_failed_install(name)
+                restored = dict(previous)
+                if not previous.get('existed'):
+                    restored['enabled'] = False
+                self._apply_state(name, restored)
+                held_history = os.path.join(work, 'previous-history')
+                if os.path.lexists(held_history):
+                    raise RuntimeError('插件代码和状态已恢复，但原历史尚未归位，备份保留于：' + held_history)
+            except Exception as recovery_error:
+                recovery_errors.append(str(recovery_error))
+                phase = 'uncertain' if self._uncertain(recovery_error) else 'recovery-required'
+                self._record_operation(work, operation, phase, strict=False, recoveryError=str(recovery_error))
+                if self._uncertain(recovery_error):
+                    raise type(recovery_error)(str(error) + '；恢复结果不确定，需先回查：' + str(recovery_error)
+                                               + '；快照和原历史已保留；事务：' + work) from recovery_error
+            if recovery_errors:
+                raise RuntimeError(str(error) + '；恢复未完成：' + '；'.join(recovery_errors)
+                                   + '；快照和原历史已保留；事务：' + work) from error
+            self._record_operation(work, operation, 'restored', strict=False)
+            raise ValueError(str(error) + '；已恢复安装前的插件和状态；事务快照保留于：' + work) from error
+        self._record_operation(work, operation, 'committed', strict=False)
+        result = dict(raw) if isinstance(raw, dict) else {'result': raw}
+        result.update(name=name, version=str(pkg.get('version', '')))
+        warnings = list(result.get('warnings') or [])
+        original = previous.get('originalDirectory', '')
+        managed = self.local(os.path.join(self.g.get('PLUGIN_SRC', os.path.join(self.g['DSH_HOME'], 'plugin-src')), name))
+        if original and os.path.realpath(original) != os.path.realpath(active) \
+                and os.path.abspath(original) != os.path.abspath(managed):
+            display_path = self.g.get('container_path', lambda path: path)(original)
+            warnings.append('旧版目录不属于可退役的 DSHA plugin-src 精确路径，未搬动该目录：' + display_path)
+        # 旧目录只有在新包核验和历史提交均完成后，才允许退役。
+        try:
+            retired = self.g['retire_legacy_directory'](name, active) or {}
+            warnings.extend(retired.get('warnings') or [])
+            if retired.get('retiredPath'):
+                result['retiredPath'] = retired['retiredPath']
+        except Exception as error:
+            warnings.append('插件已安装，但旧目录退役失败：' + str(error))
+        try:
+            # 归档区不随事务清理；当前 file: 依赖可能仍引用其中任一 tgz。
+            shutil.rmtree(work)
+        except OSError as error:
+            warnings.append('插件已安装，但事务目录清理失败：' + work + '：' + str(error))
+        if warnings:
+            result['warnings'] = warnings
+        return result
 
     def clear_history(self, name):
         path = self.history_path(name)
@@ -400,17 +715,22 @@ class Lifecycle:
                 if len(items) != 1 or not items[0].get('name'):
                     raise ValueError('官方安装器一次只支持一个插件包')
                 name = str(items[0]['name'])
-                installed = self.g['cmd_official_add'](official_spec, name, str(items[0].get('version', '')))
-                self.g['result']('ok', '已通过 DSH 官方 profile 安装器安装 ' + name + '；重启 Web 后生效。',
+                installed = self.install_package(official_spec, name, str(items[0].get('version', '')),
+                                                 source=preview.get('source', ''))
+                extra = {key: installed[key] for key in ('warnings', 'retiredPath') if key in installed}
+                message = self.installation_message('已通过 DSH 官方 profile 安装器安装 ' + name + '；重启 Web 后生效。', installed)
+                self.g['result']('ok', message,
                                  installed=[name], official=True, application='restart-required',
-                                 restartReason='no-hmr', packageResult=installed)
+                                 restartReason='no-hmr', packageResult=installed, **extra)
                 return 0
             outcome = self.g['cmd_official_archive'](
-                archive, preview.get('subdir', ''), items, preview.get('sha256', ''))
+                archive, preview.get('subdir', ''), items, preview.get('sha256', ''),
+                source=preview.get('source', ''))
+            extra = {key: outcome[key] for key in ('warnings', 'retiredPath') if key in outcome}
             self.g['result'](outcome['status'], outcome['message'],
                              installed=outcome['installed'], official=True,
                              application=outcome['application'], restartReason=outcome['restartReason'],
-                             packageResults=outcome['packageResults'])
+                             packageResults=outcome['packageResults'], **extra)
             return 0 if outcome['status'] == 'ok' else 1
         finally:
             shutil.rmtree(path, ignore_errors=True)
@@ -503,20 +823,52 @@ class Lifecycle:
         return self.install_preview(preview['previewId'])
 
     def rollback(self, name, expected=''):
-        if self.builtin.is_official_bundle(name):
-            raise ValueError('官方核心插件请通过应用更新维护')
-        previous = self.history_info(name)
-        if not previous:
-            raise ValueError('没有可回退的上一版')
-        if expected and previous.get('version') != expected:
-            raise ValueError('上一版已发生变化，请刷新后重新确认')
-        self.g['register_plugin'](os.path.join(self.history_path(name), 'package'), previous.get('source', ''))
-        self.g['result']('ok', '已回退 ' + name + ' 至 ' + str(previous.get('version', '')) + '；启用状态保留，重启 Web 生效')
+        if not self.builtin.valid_name(name) or self.builtin.is_official_bundle(name):
+            raise ValueError('官方核心或无效插件名不能回退')
+        with self.builtin.operation_lock():
+            self._check_pending_transactions()
+            previous = self.history_info(name)
+            if not previous:
+                raise ValueError('没有可回退的上一版')
+            if expected and str(previous.get('version', '')) != str(expected):
+                raise ValueError('上一版已发生变化，请刷新后重新确认')
+            previous = dict(previous)
+            if previous.get('schema') != 2:
+                # 兼容旧版 history/package，但恢复仍交给官方安装器，不能重入旧注册器。
+                directory = os.path.join(self.history_path(name), 'package')
+                pkg = self.g['plugin_package'](directory)
+                if pkg.get('name') != name or str(pkg.get('version', '')) != str(previous.get('version', '')):
+                    raise ValueError('旧版历史的包名或版本不匹配，已停止回退')
+                archive = self.g['store_plugin_archive'](directory)
+                doc = self.builtin.read_manifest() or {}
+                marker = self.builtin.marker_path(name)
+                marked = os.path.lexists(marker)
+                content = ''
+                if marked:
+                    if os.path.islink(marker) or not os.path.isfile(marker):
+                        raise ValueError('插件禁用标记类型异常：' + marker)
+                    with open(marker, 'rb') as stream:
+                        content = base64.b64encode(stream.read()).decode('ascii')
+                previous.update(schema=2, archive=archive, sha256=self.digest(archive),
+                                sourcePresent='source' in previous,
+                                enabled=name in doc.get('dsh', {}).get('profile', {}).get('bundles', []),
+                                disabledMarker=marked, disabledMarkerContent=content)
+            archive = self._snapshot_archive(previous)
+            installed = self._install_package_locked('file:' + archive, name, str(previous.get('version', '')),
+                                                     source=previous.get('source', ''), restore_state=previous)
+        extra = {key: installed[key] for key in ('warnings', 'retiredPath') if key in installed}
+        message = self.installation_message('已回退 ' + name + ' 至 ' + str(previous.get('version', ''))
+                                            + '；来源和备份启用状态已恢复，重启 Web 生效', installed)
+        self.g['result']('ok', message,
+                         installed=[name], official=True, application='restart-required',
+                         restartReason='no-hmr', packageResult=installed, **extra)
         return 0
 
     def safe_mode(self, action):
         path = self.path('plugin-safe-mode.json')
         with self.builtin.operation_lock():
+            if action != 'status':
+                self._check_pending_transactions()
             state = self.read(path, {'active': False, 'names': []})
             doc = self.builtin.read_manifest() or {}
             if action == 'on':
