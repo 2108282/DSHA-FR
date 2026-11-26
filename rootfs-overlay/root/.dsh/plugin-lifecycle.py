@@ -908,7 +908,8 @@ class Lifecycle:
                     raise ValueError('插件已被其他操作更新，请重新检查版本')
             items = preview.get('items') or []
             official_spec = str(preview.get('officialSpec', '') or '').strip()
-            if official_spec:
+            # 回退前尚未过期的 GitHub 预览也复用已校验归档，避免确认后重新获取 Git 源。
+            if official_spec and not official_spec.startswith('git+'):
                 if len(items) != 1 or not items[0].get('name'):
                     raise ValueError('官方安装器一次只支持一个插件包')
                 name = str(items[0]['name'])

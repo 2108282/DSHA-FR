@@ -1076,57 +1076,42 @@ def download(url, target):
             stream.write(data)
 
 
-def cmd_download(url, subdir="", source="", *, consume=None, official_spec=""):
+def cmd_download(url, subdir="", source="", *, consume=None):
     with tempfile.TemporaryDirectory(prefix="plugin-download-", dir=local(DSH_HOME)) as staging:
         target = os.path.join(staging, "archive")
         download(url, target)
-        if consume:
-            return consume(target, subdir, source or url, official_spec)
-        return cmd_import(target, subdir, source or url)
+        return (consume or cmd_import)(target, subdir, source or url)
 
 
 def cmd_github(owner, repo, tree="", *, consume=None):
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9-]{0,38}", owner) or not re.fullmatch(
             r"[A-Za-z0-9_.-]+", repo) or repo in (".", ".."):
         raise ValueError("无效的 GitHub 仓库")
-    revision, subdir = "", ""
+    revision, subdir = "HEAD", ""
     if tree:
         parts = tree.split("/")
         if len(parts) > 16 or any(p in ("", ".", "..") for p in parts):
             raise ValueError("无效的仓库目录")
-    else:
-        with open_url("https://api.github.com/repos/%s/%s" % (owner, repo)) as response:
-            repository = json.loads(response.read(1024 * 1024))
-        default_branch = repository.get("default_branch")
-        if not isinstance(default_branch, str) or not default_branch:
-            raise ValueError("GitHub 仓库未返回默认分支")
-        parts = [default_branch]
-    # 最长匹配支持 feature/foo 等带斜杠分支；不默默改成默认分支。
-    for end in range(len(parts), 0, -1):
-        candidate = "/".join(parts[:end])
-        api = "https://api.github.com/repos/%s/%s/commits/%s" % (
-            owner, repo, urllib.parse.quote(candidate, safe=""))
-        try:
-            with open_url(api) as response:
-                commit = json.loads(response.read(1024 * 1024))
-            revision = commit["sha"]
-            subdir = "/".join(parts[end:])
-            break
-        except urllib.error.HTTPError as error:
-            if error.code not in (404, 422):
-                raise
-    else:
-        raise ValueError("GitHub 分支或标签不存在")
-    if not re.fullmatch(r"[a-fA-F0-9]{40}", revision):
-        raise ValueError("GitHub 未返回有效 commit SHA")
+        # 最长匹配支持 feature/foo 等带斜杠分支；不默默改成默认分支。
+        for end in range(len(parts), 0, -1):
+            candidate = "/".join(parts[:end])
+            api = "https://api.github.com/repos/%s/%s/commits/%s" % (
+                owner, repo, urllib.parse.quote(candidate, safe=""))
+            try:
+                with open_url(api) as response:
+                    commit = json.loads(response.read(1024 * 1024))
+                revision = commit["sha"]
+                subdir = "/".join(parts[end:])
+                break
+            except urllib.error.HTTPError as error:
+                if error.code not in (404, 422):
+                    raise
+        else:
+            raise ValueError("GitHub 分支或标签不存在")
     url = "https://codeload.github.com/%s/%s/tar.gz/%s" % (
         owner, repo, urllib.parse.quote(revision, safe=""))
     source = "https://github.com/%s/%s" % (owner, repo) + ("/tree/" + tree if tree else "")
-    official_spec = "git+https://github.com/%s/%s.git#%s" % (owner, repo, revision)
-    if subdir:
-        official_spec += "&path:" + urllib.parse.quote(subdir, safe="/")
-    return cmd_download(url, subdir, source, official_spec=official_spec,
-                        **({"consume": consume} if consume else {}))
+    return cmd_download(url, subdir, source, **({"consume": consume} if consume else {}))
 
 
 def cmd_release(owner, repo, tag, *, consume=None):
