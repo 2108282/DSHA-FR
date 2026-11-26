@@ -5,6 +5,7 @@ import importlib.util
 import io
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 import tarfile
@@ -66,6 +67,7 @@ class PluginTestBase(unittest.TestCase):
         spec.loader.exec_module(self.manager)
         self.home = self.root / "root/.dsh"
         self.home.mkdir(parents=True)
+        self.command_calls = []
         self.commands = patch.object(self.manager.subprocess, 'run', side_effect=self.fake_command)
         self.commands.start()
         self.network = patch.object(self.manager.urllib.request, 'urlopen', side_effect=AssertionError('测试禁止真实网络'))
@@ -83,28 +85,49 @@ class PluginTestBase(unittest.TestCase):
         doc = self.manager.builtin.read_manifest()
         if doc is None:
             doc = self.manager.builtin.new_manifest({})
+        self.command_calls.append(list(args))
         name = args[5]
         if args[4] == 'remove':
             doc.get('dependencies', {}).pop(name, None)
             bundles = doc.get('dsh', {}).get('profile', {}).get('bundles', [])
             if name in bundles:
                 bundles.remove(name)
+            self.remove_profile_entry(name)
         else:
             spec = args[5]
             if spec.startswith('file:'):
-                with tarfile.open(spec[5:], 'r:gz') as archive:
-                    metadata = json.load(archive.extractfile('package/package.json'))
-                name, version = metadata['name'], metadata.get('version', '1.0.0')
+                with tempfile.TemporaryDirectory(dir=self.root) as staging:
+                    self.manager.extract_archive(spec[5:], staging)
+                    roots = self.manager.find_plugin_roots(staging)
+                    self.assertEqual(1, len(roots))
+                    metadata = self.manager.plugin_package(roots[0])
+                    name = metadata['name']
+                    self.remove_profile_entry(name)
+                    target = Path(self.manager.local(self.manager.builtin.NODE_MODULES)) / name
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copytree(roots[0], target, symlinks=True)
             else:
-                name, _, version = spec.rpartition('@')
-            self.package(Path(self.manager.local(self.manager.builtin.NODE_MODULES)) / name,
-                         name, version or '1.0.0')
+                name, separator, version = spec.rpartition('@')
+                if not separator or not self.manager.builtin.valid_name(name):
+                    raise AssertionError('测试未定义该安装规格：' + spec)
+                self.remove_profile_entry(name)
+                self.package(Path(self.manager.local(self.manager.builtin.NODE_MODULES)) / name,
+                             name, version or '1.0.0')
+            newly_added = name not in doc.get('dependencies', {})
             doc.setdefault('dependencies', {})[name] = spec
             bundles = doc.setdefault('dsh', {}).setdefault('profile', {}).setdefault('bundles', [])
-            if name not in bundles:
+            # 官方 reconcile 只自动选择新增依赖；更新已有依赖保留其禁用状态。
+            if newly_added and name not in bundles:
                 bundles.append(name)
         self.manager.builtin.write_manifest(doc)
         return self.manager.subprocess.CompletedProcess(args, 0, '', '')
+
+    def remove_profile_entry(self, name):
+        entry = Path(self.manager.local(self.manager.builtin.NODE_MODULES)) / name
+        if entry.is_symlink() or entry.is_file():
+            entry.unlink()
+        elif entry.is_dir():
+            shutil.rmtree(entry)
 
     def tearDown(self):
         global _ACTIVE_ROOT
@@ -376,7 +399,8 @@ class PluginLifecycleTest(PluginTestBase):
         self.assertEqual('2.0.0', life.history_info('dsh-demo')['version'])
         self.marker('dsh-demo')
         life.rollback('dsh-demo')
-        self.assertEqual('2.0.0', json.loads((self.home / 'plugin-src/dsh-demo/package.json').read_text())['version'])
+        actual = Path(self.manager.resolve_profile_plugin_dir('dsh-demo'))
+        self.assertEqual('2.0.0', json.loads((actual / 'package.json').read_text())['version'])
         self.assertEqual('3.0.0', life.history_info('dsh-demo')['version'])
         self.assertTrue(Path(self.manager.builtin.marker_path('dsh-demo')).is_file())
         self.manager.cmd_delete('dsh-demo')
@@ -631,6 +655,587 @@ class PluginSafetyRegressionTest(PluginTestBase):
             os.symlink('/does-not-exist', '/usr/local/lib/node_modules/dsha-test-must-not-write')
         with self.assertRaisesRegex(AssertionError, '外部命令'):
             self.manager.subprocess.run(['pnpm', 'install'])
+
+
+class OfficialInstallTransactionTest(PluginTestBase):
+    def legacy(self, version='1.0.0', name='dsh-demo', source='npm:dsh-demo@1.0.0'):
+        incoming = self.package(self.root / ('legacy-' + version), name, version)
+        (incoming / 'old-only.txt').write_bytes(b'old package bytes\x00')
+        self.manager.register_plugin(incoming, source)
+        return self.home / 'plugin-src' / name
+
+    def installed_version(self, name='dsh-demo'):
+        directory = self.manager.resolve_profile_plugin_dir(name)
+        return self.manager.read_json(os.path.join(directory, 'package.json'))['version'] if directory else None
+
+    def tree_state(self, path):
+        """记录实体字节和链接本身，不跟随目录软链。"""
+        path = Path(path)
+        if path.is_symlink():
+            return ('link', os.readlink(path))
+        if not path.exists():
+            return ('missing',)
+        if path.is_file():
+            return ('file', path.read_bytes())
+        return ('directory', {child.name: self.tree_state(child) for child in sorted(path.iterdir())})
+
+    def test_profile_wins_over_stale_legacy_for_list_and_export(self):
+        self.legacy()
+        self.fake_command(['dsh', 'plugin', '--profile', 'web', 'add', 'dsh-demo@2.0.0'],
+                          cwd=str(self.home / 'profiles/web'), env={'DSH_HOME': str(self.home)})
+        active = self.home / 'profiles/web/node_modules/dsh-demo'
+        self.assertEqual(str(active), self.manager.resolve_plugin_dir('dsh-demo'))
+        self.manager.cmd_list()
+        item = next(item for item in json.loads(self.out.getvalue().split('PLUGIN_RESULT: ')[-1])['items']
+                    if item['name'] == 'dsh-demo')
+        self.assertEqual('2.0.0', item['version'])
+        self.assertEqual('/root/.dsh/profiles/web/node_modules/dsh-demo', item['installPath'])
+        export = self.root / 'actual.tar.gz'
+        self.manager.cmd_export('["dsh-demo"]', str(export))
+        with tarfile.open(export) as archive:
+            self.assertEqual('2.0.0', json.load(archive.extractfile('plugins/dsh-demo/package.json'))['version'])
+
+    def test_registered_missing_entry_does_not_fall_back_to_old_directory(self):
+        self.legacy()
+        self.remove_profile_entry('dsh-demo')
+        self.assertIsNone(self.manager.resolve_plugin_dir('dsh-demo'))
+        with self.assertRaisesRegex(ValueError, '无法备份'):
+            self.manager.lifecycle().install_package('dsh-demo@2.0.0', 'dsh-demo', '2.0.0')
+        self.assertEqual([], self.command_calls)
+
+    def test_dev_or_optional_only_missing_profile_entry_does_not_use_stale_legacy(self):
+        for section in ('devDependencies', 'optionalDependencies'):
+            with self.subTest(section=section):
+                name = 'dsh-missing-' + section.lower()
+                legacy = self.legacy(name=name)
+                doc = self.manager.builtin.read_manifest()
+                dependency = doc['dependencies'].pop(name)
+                doc.setdefault(section, {})[name] = dependency
+                self.manager.builtin.write_manifest(doc)
+                self.remove_profile_entry(name)
+                before = self.tree_state(legacy)
+                manifest = (self.home / 'profiles/web/package.json').read_bytes()
+                self.assertIsNone(self.manager.resolve_plugin_dir(name))
+                with patch.object(self.manager, 'cmd_official_add', wraps=self.manager.cmd_official_add) as add:
+                    with self.assertRaisesRegex(ValueError, '无法备份|缺失'):
+                        self.manager.lifecycle().install_package(name + '@2.0.0', name, '2.0.0')
+                add.assert_not_called()
+                self.assertEqual([], self.command_calls)
+                self.assertEqual(before, self.tree_state(legacy))
+                self.assertEqual(manifest, (self.home / 'profiles/web/package.json').read_bytes())
+                self.assertFalse(os.path.lexists(self.home / 'profiles/web/node_modules' / name))
+
+    def test_dev_or_optional_only_disabled_plugin_stays_disabled_after_install(self):
+        for section in ('devDependencies', 'optionalDependencies'):
+            with self.subTest(section=section):
+                name = 'dsh-disabled-' + section.lower()
+                self.package(self.home / 'profiles/web/node_modules' / name, name, '1.0.0')
+                self.manager.builtin.write_manifest({section: {name: '1.0.0'},
+                                                    'dsh': {'profile': {'bundles': []}}})
+                self.assertFalse(Path(self.manager.builtin.marker_path(name)).exists())
+                self.manager.lifecycle().install_package(name + '@2.0.0', name, '2.0.0')
+                self.assertEqual('2.0.0', self.installed_version(name))
+                self.assertNotIn(name, self.manager.builtin.read_manifest()['dsh']['profile']['bundles'])
+                self.assertFalse(Path(self.manager.builtin.marker_path(name)).exists())
+
+    def test_snapshot_precedes_add_and_migration_preserves_state_and_bytes(self):
+        legacy = self.legacy()
+        self.manager.builtin.disable_plugin('dsh-demo')
+        old_marker = Path(self.manager.builtin.marker_path('dsh-demo'))
+        old_marker.write_bytes(b'safe-mode-off')
+        old_bytes = (legacy / 'old-only.txt').read_bytes()
+        life = self.manager.lifecycle()
+        def checked_add(args, **kwargs):
+            snapshots = list((self.home / 'plugin-transactions').glob('*/backup/state.json'))
+            self.assertEqual(1, len(snapshots))
+            state = json.loads(snapshots[0].read_text())
+            self.assertEqual('1.0.0', state['version'])
+            self.assertEqual('npm:dsh-demo@1.0.0', state['source'])
+            self.assertFalse(state['enabled'])
+            with tarfile.open(state['archive']) as archive:
+                self.assertEqual(old_bytes, archive.extractfile('package/old-only.txt').read())
+            return self.fake_command(args, **kwargs)
+        with patch.object(self.manager.subprocess, 'run', side_effect=checked_add):
+            outcome = life.install_package('dsh-demo@2.0.0', 'dsh-demo', '2.0.0', source='npm:dsh-demo@2.0.0')
+        self.assertEqual('2.0.0', self.installed_version())
+        self.assertFalse(legacy.exists())
+        retired = Path(self.manager.local(outcome['retiredPath'])) / 'package'
+        self.assertEqual(old_bytes, (retired / 'old-only.txt').read_bytes())
+        self.assertEqual('1.0.0', life.history_info('dsh-demo')['version'])
+        self.assertEqual('npm:dsh-demo@2.0.0', self.manager.read_json(self.home / 'plugin-sources.json')['dsh-demo'])
+        self.assertEqual(b'safe-mode-off', old_marker.read_bytes())
+        self.assertNotIn('dsh-demo', self.manager.builtin.read_manifest()['dsh']['profile']['bundles'])
+        self.assertEqual((self.home / 'profiles/web/node_modules/dsh-demo').resolve(),
+                         (self.root / 'usr/local/lib/node_modules/dsh-demo').resolve())
+        self.manager.builtin.ensure_global_plugin_links()
+        self.assertFalse(legacy.exists())
+
+    def test_scoped_old_directory_is_isolated_without_touching_scope_siblings(self):
+        name = '@sample/demo'
+        legacy = self.legacy(name=name)
+        sibling = self.package(self.home / 'plugin-src/@sample/keep', '@sample/keep')
+        result = self.manager.lifecycle().install_package(name + '@2.0.0', name, '2.0.0')
+        self.assertFalse(legacy.exists())
+        self.assertTrue(sibling.is_dir())
+        self.assertTrue((Path(self.manager.local(result['retiredPath'])) / 'package/old-only.txt').is_file())
+
+    def test_shared_old_directory_is_preserved_with_warning(self):
+        legacy = self.legacy()
+        other = self.home / 'profiles/other'
+        other.mkdir(parents=True)
+        (other / 'package.json').write_text(json.dumps({'dependencies': {'dsh-demo': 'link:/root/.dsh/plugin-src/dsh-demo'}}))
+        result = self.manager.lifecycle().install_package('dsh-demo@2.0.0', 'dsh-demo', '2.0.0')
+        self.assertTrue(legacy.is_dir())
+        self.assertTrue(any('仍被 profile 引用' in warning for warning in result['warnings']))
+        self.assertEqual('2.0.0', self.installed_version())
+
+    def test_other_profile_dependency_groups_and_home_links_preserve_old_directory(self):
+        for section in ('dependencies', 'devDependencies', 'optionalDependencies'):
+            for prefix in ('link:/root/.dsh/plugin-src/', 'link:~/.dsh/plugin-src/'):
+                with self.subTest(section=section, prefix=prefix):
+                    name = 'dsh-shared-' + section.lower() + ('-home' if '~' in prefix else '-absolute')
+                    legacy = self.legacy(name=name)
+                    before = self.tree_state(legacy)
+                    other = self.home / 'profiles' / ('other-' + name)
+                    other.mkdir(parents=True)
+                    metadata = other / 'package.json'
+                    metadata.write_text(json.dumps({section: {name: prefix + name}}))
+                    manifest_bytes = metadata.read_bytes()
+                    calls = len(self.command_calls)
+                    result = self.manager.lifecycle().install_package(name + '@2.0.0', name, '2.0.0')
+                    self.assertEqual(before, self.tree_state(legacy))
+                    self.assertEqual(manifest_bytes, metadata.read_bytes())
+                    self.assertFalse((other / 'node_modules').exists())
+                    self.assertFalse(result.get('retiredPath'))
+                    self.assertTrue(any('仍被 profile 引用' in warning for warning in result['warnings']))
+                    self.assertEqual('2.0.0', self.installed_version(name))
+                    self.assertEqual([['dsh', 'plugin', '--profile', 'web', 'add', name + '@2.0.0']],
+                                     self.command_calls[calls:])
+
+    def test_external_source_directory_is_preserved(self):
+        external = self.package(self.root / 'workspace/source', version='1.0.0')
+        entry = self.home / 'profiles/web/node_modules/dsh-demo'
+        entry.parent.mkdir(parents=True)
+        os.symlink(external, entry)
+        self.manager.builtin.write_manifest({'dependencies': {'dsh-demo': 'link:' + str(external)},
+                                            'dsh': {'profile': {'bundles': ['dsh-demo']}}})
+        result = self.manager.lifecycle().install_package('dsh-demo@2.0.0', 'dsh-demo', '2.0.0')
+        self.assertTrue((external / 'index.js').is_file())
+        self.assertEqual('2.0.0', self.installed_version())
+        self.assertTrue(result.get('warnings'))
+
+    def test_failed_add_after_modification_restores_snapshot_and_old_history(self):
+        life = self.manager.lifecycle()
+        life.install_package('dsh-demo@1.0.0', 'dsh-demo', '1.0.0', source='npm:dsh-demo@1.0.0')
+        life.install_package('dsh-demo@2.0.0', 'dsh-demo', '2.0.0', source='npm:dsh-demo@2.0.0')
+        self.manager.builtin.disable_plugin('dsh-demo')
+        def fail_new(args, **kwargs):
+            result = self.fake_command(args, **kwargs)
+            if args[5] == 'dsh-demo@3.0.0':
+                return self.manager.subprocess.CompletedProcess(args, 1, '', 'partial installation failed')
+            return result
+        with patch.object(self.manager.subprocess, 'run', side_effect=fail_new):
+            with self.assertRaisesRegex(ValueError, '已恢复'):
+                life.install_package('dsh-demo@3.0.0', 'dsh-demo', '3.0.0', source='npm:dsh-demo@3.0.0')
+        self.assertEqual('2.0.0', self.installed_version())
+        self.assertEqual('1.0.0', life.history_info('dsh-demo')['version'])
+        self.assertEqual('npm:dsh-demo@2.0.0', self.manager.read_json(self.home / 'plugin-sources.json')['dsh-demo'])
+        self.assertNotIn('dsh-demo', self.manager.builtin.read_manifest()['dsh']['profile']['bundles'])
+
+    def test_success_with_wrong_version_is_rejected_and_restored(self):
+        self.legacy()
+        def wrong_version(args, **kwargs):
+            result = self.fake_command(args, **kwargs)
+            if args[5] == 'dsh-demo@2.0.0':
+                metadata = self.home / 'profiles/web/node_modules/dsh-demo/package.json'
+                pkg = json.loads(metadata.read_text()); pkg['version'] = '999.0.0'
+                metadata.write_text(json.dumps(pkg))
+            return result
+        with patch.object(self.manager.subprocess, 'run', side_effect=wrong_version):
+            with self.assertRaisesRegex(ValueError, '版本'):
+                self.manager.lifecycle().install_package('dsh-demo@2.0.0', 'dsh-demo', '2.0.0')
+        self.assertEqual('1.0.0', self.installed_version())
+        self.assertEqual(b'old package bytes\x00', (Path(self.manager.resolve_plugin_dir('dsh-demo')) / 'old-only.txt').read_bytes())
+
+    def test_timeout_preserves_snapshot_without_retry_or_cleanup(self):
+        legacy = self.legacy()
+        with patch.object(self.manager.subprocess, 'run', side_effect=self.manager.subprocess.TimeoutExpired('dsh', 600)) as command:
+            with self.assertRaisesRegex(self.manager.OfficialInstallUncertain, '回查'):
+                self.manager.lifecycle().install_package('dsh-demo@2.0.0', 'dsh-demo', '2.0.0')
+        self.assertEqual(1, command.call_count)
+        self.assertTrue(legacy.exists())
+        self.assertTrue(list((self.home / 'plugin-transactions').glob('*/backup/state.json')))
+
+    def test_recovery_failure_keeps_old_archive_and_prior_history(self):
+        life = self.manager.lifecycle()
+        life.install_package('dsh-demo@1.0.0', 'dsh-demo', '1.0.0')
+        life.install_package('dsh-demo@2.0.0', 'dsh-demo', '2.0.0')
+        failed = self.manager.subprocess.CompletedProcess([], 1, '', 'disk full')
+        with patch.object(self.manager.subprocess, 'run', return_value=failed):
+            with self.assertRaisesRegex(RuntimeError, '恢复未完成'):
+                life.install_package('dsh-demo@3.0.0', 'dsh-demo', '3.0.0')
+        self.assertEqual('1.0.0', life.history_info('dsh-demo')['version'])
+        snapshots = list((self.home / 'plugin-transactions').glob('*/backup/state.json'))
+        self.assertTrue(snapshots)
+        self.assertTrue(Path(json.loads(snapshots[-1].read_text())['archive']).is_file())
+
+    def test_rollback_uses_official_archive_and_exchanges_previous_version(self):
+        self.legacy()
+        life = self.manager.lifecycle()
+        life.install_package('dsh-demo@2.0.0', 'dsh-demo', '2.0.0', source='npm:dsh-demo@2.0.0')
+        with patch.object(self.manager, 'register_plugin', side_effect=AssertionError('旧安装路径不可用于回退')):
+            life.rollback('dsh-demo', '1.0.0')
+            self.assertEqual('1.0.0', self.installed_version())
+            self.assertEqual('2.0.0', life.history_info('dsh-demo')['version'])
+            self.assertEqual('npm:dsh-demo@1.0.0', self.manager.read_json(self.home / 'plugin-sources.json')['dsh-demo'])
+            life.rollback('dsh-demo', '2.0.0')
+            self.assertEqual('2.0.0', self.installed_version())
+            self.assertEqual('1.0.0', life.history_info('dsh-demo')['version'])
+        self.assertTrue(self.command_calls[-1][5].startswith('file:'))
+        count = len(self.command_calls)
+        with self.assertRaises(ValueError): life.rollback('dsh-demo', 'other-version')
+        self.assertEqual(count, len(self.command_calls))
+
+    def test_rollback_rejects_changed_archive_before_installing(self):
+        life = self.manager.lifecycle()
+        life.install_package('dsh-demo@1.0.0', 'dsh-demo', '1.0.0')
+        life.install_package('dsh-demo@2.0.0', 'dsh-demo', '2.0.0')
+        state = life.history_info('dsh-demo')
+        Path(state['archive']).write_bytes(b'corrupt')
+        count = len(self.command_calls)
+        with self.assertRaisesRegex(ValueError, '校验'):
+            life.rollback('dsh-demo')
+        self.assertEqual(count, len(self.command_calls))
+        self.assertEqual('2.0.0', self.installed_version())
+
+    def test_install_and_rollback_do_not_reenter_operation_lock(self):
+        original = self.manager.builtin.operation_lock
+        depth = 0
+        @contextlib.contextmanager
+        def guarded():
+            nonlocal depth
+            self.assertEqual(0, depth, 'operation_lock 不可重入')
+            depth += 1
+            try:
+                with original(): yield
+            finally:
+                depth -= 1
+        with patch.object(self.manager.builtin, 'operation_lock', guarded):
+            life = self.manager.lifecycle()
+            life.install_package('dsh-demo@1.0.0', 'dsh-demo', '1.0.0')
+            life.install_package('dsh-demo@2.0.0', 'dsh-demo', '2.0.0')
+            life.rollback('dsh-demo')
+
+    def test_builtin_refresh_and_toggle_preserve_official_profile_package(self):
+        name = 'dsh-mobile-lite'
+        old = self.package(self.root / 'root/dsh-mobile-lite', name, '1.0.0')
+        actual = self.package(self.home / 'profiles/web/node_modules/.pnpm/mobile/node_modules' / name, name, '2.0.0')
+        entry = self.home / 'profiles/web/node_modules' / name
+        os.symlink(actual, entry)
+        dependency = 'file:/root/.dsh/plugin-archives/mobile.tgz'
+        self.manager.builtin.write_manifest({'dependencies': {name: dependency}, 'dsh': {'profile': {'bundles': [name]}}})
+        before = os.readlink(entry)
+        for operation in (lambda: self.manager.builtin.disable_plugin(name), self.manager.builtin.register,
+                          lambda: self.manager.builtin.enable_plugin(name), self.manager.builtin.ensure_global_plugin_links):
+            operation()
+            self.assertEqual(before, os.readlink(entry))
+            self.assertEqual(dependency, self.manager.builtin.read_manifest()['dependencies'][name])
+            self.assertEqual('2.0.0', self.manager.read_json(actual / 'package.json')['version'])
+        self.assertTrue(old.is_dir())
+
+    def test_unrecoverable_bundled_or_local_dependencies_stop_before_add(self):
+        legacy = self.legacy()
+        metadata = legacy / 'package.json'
+        original = json.loads(metadata.read_text())
+        for extra in ({'bundledDependencies': ['private-helper']},
+                      {'bundleDependencies': True},
+                      {'dependencies': {'private-helper': 'file:./private-helper'}},
+                      {'optionalDependencies': {'private-helper': 'link:../private-helper'}}):
+            with self.subTest(extra=extra):
+                metadata.write_text(json.dumps(dict(original, **extra)))
+                with self.assertRaisesRegex(ValueError, '备份|快照'):
+                    self.manager.lifecycle().install_package('dsh-demo@2.0.0', 'dsh-demo', '2.0.0')
+                self.assertEqual([], self.command_calls)
+                self.assertTrue((legacy / 'old-only.txt').exists())
+
+    def test_old_required_files_in_excluded_trees_stop_before_official_add(self):
+        for field in ('main', 'cordis.entry', 'dsh.bundle.patch'):
+            for excluded in ('node_modules', '.cache'):
+                for route in ('direct', 'file-symlink', 'directory-symlink'):
+                    with self.subTest(field=field, excluded=excluded, route=route):
+                        name = 'dsh-excluded-' + field.replace('.', '-') + '-' \
+                            + excluded.lstrip('.').replace('_', '-') + '-' + route
+                        legacy = self.legacy(name=name)
+                        leaf = 'patch.yml' if field == 'dsh.bundle.patch' else 'index.js'
+                        required = legacy / excluded / 'required' / leaf
+                        required.parent.mkdir(parents=True)
+                        required.write_bytes(b'[]' if field == 'dsh.bundle.patch' else b'export default {};')
+                        if route == 'direct':
+                            relative = required.relative_to(legacy).as_posix()
+                        elif route == 'file-symlink':
+                            relative = 'required-' + leaf
+                            os.symlink(required.relative_to(legacy), legacy / relative)
+                        else:
+                            os.symlink(Path(excluded) / 'required', legacy / 'required-link')
+                            relative = 'required-link/' + leaf
+                        metadata = legacy / 'package.json'
+                        package = json.loads(metadata.read_text())
+                        if field == 'main':
+                            package['main'] = relative
+                        elif field == 'cordis.entry':
+                            package['cordis'] = {'entry': relative}
+                        else:
+                            package['dsh']['bundle']['patch'] = relative
+                        metadata.write_text(json.dumps(package))
+                        self.manager.plugin_package(str(legacy))
+                        before = self.tree_state(legacy)
+                        manifest = (self.home / 'profiles/web/package.json').read_bytes()
+                        with patch.object(self.manager, 'cmd_official_add', wraps=self.manager.cmd_official_add) as add:
+                            with self.assertRaisesRegex(ValueError, '备份|快照|排除|归档|恢复'):
+                                self.manager.lifecycle().install_package(name + '@2.0.0', name, '2.0.0')
+                        add.assert_not_called()
+                        self.assertEqual([], self.command_calls)
+                        self.assertEqual(before, self.tree_state(legacy))
+                        self.assertEqual(manifest, (self.home / 'profiles/web/package.json').read_bytes())
+                        self.assertEqual('1.0.0', self.installed_version(name))
+
+    def test_symlink_chain_through_excluded_tree_stops_before_official_add(self):
+        for excluded in ('node_modules', '.cache'):
+            with self.subTest(excluded=excluded):
+                name = 'dsh-excluded-chain-' + excluded.lstrip('.').replace('_', '-')
+                legacy = self.legacy(name=name)
+                index = legacy / 'index.js'
+                index.unlink()
+                library = legacy / 'lib/index.js'
+                library.parent.mkdir()
+                library.write_bytes(b'export default {recoverable: true};')
+                intermediate = legacy / excluded / 'stub/entry.js'
+                intermediate.parent.mkdir(parents=True)
+                os.symlink('../../lib/index.js', intermediate)
+                os.symlink(Path(excluded) / 'stub/entry.js', index)
+                self.assertEqual(library.resolve(), index.resolve())
+                self.assertNotIn('dependencies', self.manager.plugin_package(str(legacy)))
+                before = self.tree_state(legacy)
+                manifest = (self.home / 'profiles/web/package.json').read_bytes()
+                with self.assertRaisesRegex(ValueError, '备份|快照|排除|归档|恢复'):
+                    self.manager.store_plugin_archive(str(legacy))
+                with patch.object(self.manager, 'cmd_official_add', wraps=self.manager.cmd_official_add) as add:
+                    with self.assertRaisesRegex(ValueError, '备份|快照|排除|归档|恢复'):
+                        self.manager.lifecycle().install_package(name + '@2.0.0', name, '2.0.0')
+                add.assert_not_called()
+                self.assertEqual([], self.command_calls)
+                self.assertEqual(before, self.tree_state(legacy))
+                self.assertEqual(manifest, (self.home / 'profiles/web/package.json').read_bytes())
+                self.assertEqual('1.0.0', self.installed_version(name))
+
+    def test_history_commit_failure_restores_current_and_keeps_previous(self):
+        life = self.manager.lifecycle()
+        life.install_package('dsh-demo@1.0.0', 'dsh-demo', '1.0.0')
+        life.install_package('dsh-demo@2.0.0', 'dsh-demo', '2.0.0')
+        with patch.object(life, '_commit_history', side_effect=OSError('history disk full')):
+            with self.assertRaisesRegex(ValueError, '已恢复'):
+                life.install_package('dsh-demo@3.0.0', 'dsh-demo', '3.0.0')
+        self.assertEqual('2.0.0', self.installed_version())
+        self.assertEqual('1.0.0', life.history_info('dsh-demo')['version'])
+
+    def test_source_commit_failure_restores_previous_source_and_package(self):
+        self.legacy()
+        life = self.manager.lifecycle()
+        write = life.write
+        failed = False
+        def fail_once(path, doc):
+            nonlocal failed
+            if Path(path) == self.home / 'plugin-sources.json' and not failed:
+                failed = True
+                raise OSError('source write failed')
+            return write(path, doc)
+        with patch.object(life, 'write', side_effect=fail_once):
+            with self.assertRaisesRegex(ValueError, '已恢复'):
+                life.install_package('dsh-demo@2.0.0', 'dsh-demo', '2.0.0', source='npm:dsh-demo@2.0.0')
+        self.assertEqual('1.0.0', self.installed_version())
+        self.assertEqual('npm:dsh-demo@1.0.0', self.manager.read_json(self.home / 'plugin-sources.json')['dsh-demo'])
+
+    def test_foreign_global_link_is_preserved_during_old_directory_retirement(self):
+        legacy = self.legacy()
+        foreign = self.package(self.root / 'external-global', 'foreign-plugin')
+        link = self.root / 'usr/local/lib/node_modules/dsh-demo'
+        link.unlink(); os.symlink(foreign, link)
+        self.manager.lifecycle().install_package('dsh-demo@2.0.0', 'dsh-demo', '2.0.0')
+        self.assertFalse(legacy.exists())
+        self.assertEqual(str(foreign), os.readlink(link))
+        self.assertTrue((foreign / 'index.js').is_file())
+
+    def test_retirement_failure_preserves_old_directory_and_verified_new_package(self):
+        legacy = self.legacy()
+        replace = self.manager.os.replace
+        def fail_retirement(source, target):
+            if Path(source) == legacy:
+                raise OSError('old directory busy')
+            return replace(source, target)
+        with patch.object(self.manager.os, 'replace', side_effect=fail_retirement):
+            result = self.manager.lifecycle().install_package('dsh-demo@2.0.0', 'dsh-demo', '2.0.0')
+        self.assertEqual('2.0.0', self.installed_version())
+        self.assertTrue((legacy / 'old-only.txt').is_file())
+        self.assertTrue(result.get('warnings'))
+        self.assertEqual('1.0.0', self.manager.lifecycle().history_info('dsh-demo')['version'])
+
+    def test_unfinished_transaction_blocks_subsequent_install_and_rollback(self):
+        self.legacy()
+        life = self.manager.lifecycle()
+        with patch.object(self.manager.subprocess, 'run', side_effect=self.manager.subprocess.TimeoutExpired('dsh', 600)):
+            with self.assertRaises(self.manager.OfficialInstallUncertain):
+                life.install_package('dsh-demo@2.0.0', 'dsh-demo', '2.0.0')
+        with self.assertRaisesRegex(ValueError, '未完成|不确定'):
+            life.install_package('dsh-other@1.0.0', 'dsh-other', '1.0.0')
+        with self.assertRaisesRegex(ValueError, '未完成|不确定'):
+            life.rollback('dsh-demo')
+        self.assertEqual([], self.command_calls)
+
+    def test_pending_guard_rejects_unfinished_and_corrupt_operation_records(self):
+        work = self.home / 'plugin-transactions' / ('a' * 32)
+        work.mkdir(parents=True)
+        record = work / 'operation.json'
+        payloads = [(phase, json.dumps({'name': 'dsh-demo', 'phase': phase})) for phase in (
+            'uncertain', 'recovery-required', 'installing', 'verified', 'committing-history', 'restoring')]
+        payloads += [('invalid-json', '{'), ('not-object', '[]'), ('missing-phase', '{}'),
+                     ('unknown-phase', '{"phase":"unrecognized"}')]
+        for label, payload in payloads:
+            with self.subTest(record=label):
+                record.write_text(payload)
+                before = self.tree_state(work)
+                with self.manager.builtin.operation_lock():
+                    with self.assertRaisesRegex(RuntimeError, '事务|回查'):
+                        self.manager.builtin.assert_no_pending_plugin_transactions()
+                self.assertEqual(before, self.tree_state(work))
+        record.unlink()
+        os.symlink('missing-operation.json', record)
+        with self.assertRaisesRegex(RuntimeError, '事务|回查'):
+            self.manager.builtin.assert_no_pending_plugin_transactions()
+        self.assertEqual('missing-operation.json', os.readlink(record))
+        record.unlink()
+        record.mkdir()
+        with self.assertRaisesRegex(RuntimeError, '事务|回查'):
+            self.manager.builtin.assert_no_pending_plugin_transactions()
+        self.assertTrue(record.is_dir())
+
+    def test_lifecycle_pending_check_delegates_to_builtin_guard(self):
+        with patch.object(self.manager.builtin, 'assert_no_pending_plugin_transactions',
+                          side_effect=RuntimeError('pending transaction fixture')) as guard:
+            with self.assertRaisesRegex(ValueError, 'pending transaction fixture'):
+                self.manager.lifecycle()._check_pending_transactions()
+        guard.assert_called_once_with()
+
+    def test_main_list_with_patch_does_not_reenter_operation_lock(self):
+        self.legacy()
+        patch_file = self.home / 'profiles/web/cordis.patch.yml'
+        content = b'# user prefix\n# >>> DSHA managed\n- disabled: true\n# <<< DSHA managed\n# user suffix\n'
+        original = self.manager.builtin.operation_lock
+        for pending in (False, True):
+            with self.subTest(pending=pending):
+                patch_file.write_bytes(content)
+                if pending:
+                    work = self.home / 'plugin-transactions' / ('b' * 32)
+                    work.mkdir(parents=True)
+                    (work / 'operation.json').write_text(json.dumps({'phase': 'uncertain'}))
+                depth = maximum = calls = 0
+                @contextlib.contextmanager
+                def guarded():
+                    nonlocal depth, maximum, calls
+                    calls += 1
+                    maximum = max(maximum, depth + 1)
+                    self.assertEqual(0, depth, 'list operation_lock 不可重入')
+                    depth += 1
+                    try:
+                        with original():
+                            yield
+                    finally:
+                        depth -= 1
+                with patch.object(self.manager.builtin, 'operation_lock', guarded), \
+                        patch.object(self.manager.sys, 'argv', [str(ASSET), 'list']):
+                    self.assertEqual(0, self.manager.main())
+                self.assertEqual(1, calls)
+                self.assertEqual(1, maximum)
+                self.assertEqual(0, depth)
+                listing = json.loads(self.out.getvalue().split('PLUGIN_RESULT: ')[-1])
+                self.assertTrue(any(item['name'] == 'dsh-demo' for item in listing['items']))
+                self.assertEqual(content if pending else b'# user prefix\n# user suffix\n', patch_file.read_bytes())
+                self.assertEqual([], self.command_calls)
+
+    def test_uncertain_transaction_blocks_all_mutators_but_list_remains_read_only(self):
+        self.legacy()
+        self.legacy(name='dsh-disabled')
+        self.manager.builtin.disable_plugin('dsh-disabled')
+        marker = Path(self.manager.builtin.marker_path('dsh-disabled'))
+        marker.write_bytes(b'DSHA_SAFE_MODE\n')
+        builtin_source = self.package(self.root / 'root/dsh-mobile-lite', 'dsh-mobile-lite')
+        safe_mode = self.home / 'plugin-safe-mode.json'
+        safe_mode.write_text(json.dumps({'active': True, 'names': ['dsh-disabled']}))
+        patch_file = self.home / 'profiles/web/cordis.patch.yml'
+        patch_file.write_bytes(b'# user prefix\n# >>> DSHA managed\n- disabled: true\n# <<< DSHA managed\n# user suffix\n')
+        incoming = self.package(self.root / 'blocked-update', version='2.0.0')
+        new_plugin = self.package(self.root / 'blocked-new', 'dsh-new')
+        life = self.manager.lifecycle()
+        with patch.object(self.manager.subprocess, 'run', side_effect=self.manager.subprocess.TimeoutExpired('dsh', 600)):
+            with self.assertRaises(self.manager.OfficialInstallUncertain):
+                life.install_package('dsh-demo@2.0.0', 'dsh-demo', '2.0.0')
+        operations = list((self.home / 'plugin-transactions').glob('*/operation.json'))
+        self.assertEqual(1, len(operations))
+        self.assertEqual('uncertain', json.loads(operations[0].read_text())['phase'])
+        # history_info 目前会创建空历史根目录，预建以专注验证已有状态不变。
+        (self.home / 'plugin-history').mkdir(exist_ok=True)
+        protected = [self.home / 'profiles', self.home / 'plugin-src',
+                     self.home / 'plugin-sources.json', self.home / 'plugin-history',
+                     self.home / 'plugin-transactions', self.home / 'plugin-archives',
+                     safe_mode, self.root / 'usr/local/lib/node_modules', builtin_source]
+        before = {str(path): self.tree_state(path) for path in protected}
+        mutators = [
+            ('builtin-register', self.manager.builtin.register, True),
+            ('builtin-enable', lambda: self.manager.builtin.enable_plugin('dsh-disabled'), True),
+            ('builtin-disable', lambda: self.manager.builtin.disable_plugin('dsh-demo'), True),
+            ('safe-mode-on', lambda: life.safe_mode('on'), False),
+            ('safe-mode-off', lambda: life.safe_mode('off'), False),
+            ('legacy-update', lambda: self.manager.register_plugin(incoming, 'new-source'), False),
+            ('legacy-register', lambda: self.manager.register_plugin(new_plugin, 'new-source'), False),
+            ('legacy-delete', lambda: self.manager.cmd_delete('dsh-demo'), False),
+        ]
+        for name, mutate, returns_failure in mutators:
+            with self.subTest(operation=name):
+                if returns_failure:
+                    self.assertEqual(1, mutate())
+                else:
+                    with self.assertRaisesRegex((ValueError, RuntimeError), '未完成|不确定|回查'):
+                        mutate()
+                self.assertEqual(before, {str(path): self.tree_state(path) for path in protected})
+                self.assertEqual([], self.command_calls)
+        self.manager.cmd_list()
+        listing = json.loads(self.out.getvalue().split('PLUGIN_RESULT: ')[-1])
+        items = {item['name']: item for item in listing['items']}
+        self.assertEqual('1.0.0', items['dsh-demo']['version'])
+        self.assertTrue(items['dsh-demo']['enabled'])
+        self.assertFalse(items['dsh-disabled']['enabled'])
+        self.assertEqual(before, {str(path): self.tree_state(path) for path in protected})
+        self.assertEqual([], self.command_calls)
+
+    def test_source_absence_and_old_enabled_state_are_restored_by_rollback(self):
+        self.legacy()
+        (self.home / 'plugin-sources.json').write_text('{}')
+        self.manager.builtin.disable_plugin('dsh-demo')
+        life = self.manager.lifecycle()
+        life.install_package('dsh-demo@2.0.0', 'dsh-demo', '2.0.0', source='npm:dsh-demo@2.0.0')
+        self.manager.builtin.enable_plugin('dsh-demo')
+        life.rollback('dsh-demo')
+        self.assertEqual('1.0.0', self.installed_version())
+        self.assertNotIn('dsh-demo', self.manager.read_json(self.home / 'plugin-sources.json'))
+        self.assertNotIn('dsh-demo', self.manager.builtin.read_manifest()['dsh']['profile']['bundles'])
+        self.assertTrue(Path(self.manager.builtin.marker_path('dsh-demo')).is_file())
+
+    def test_test_root_mapping_is_idempotent_for_archives(self):
+        life = self.manager.lifecycle()
+        life.install_package('dsh-demo@1.0.0', 'dsh-demo', '1.0.0')
+        archive = self.manager.store_plugin_archive(self.manager.resolve_profile_plugin_dir('dsh-demo'))
+        self.assertEqual(archive, self.manager.local(archive))
+        self.assertTrue(Path(archive).is_file())
+        self.assertTrue(self.manager.container_path(archive).startswith('/root/.dsh/plugin-archives/'))
 
 
 if __name__ == "__main__":

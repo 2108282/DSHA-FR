@@ -42,6 +42,7 @@ import com.deepseekharness.app.core.PluginRepository;
 import com.deepseekharness.app.ui.contract.PluginActions;
 import com.deepseekharness.app.ui.contract.PluginPresenter;
 import com.deepseekharness.app.ui.contract.PluginUiState;
+import com.deepseekharness.app.util.PluginInstallPath;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -417,6 +418,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
                     || !a.latestVersion.equals(b.latestVersion)
                     || !a.updatePreviewId.equals(b.updatePreviewId)
                     || !a.updateMessage.equals(b.updateMessage)
+                    || !a.installPath.equals(b.installPath)
                     || !a.rollbackVersion.equals(b.rollbackVersion)) {
                 return true;
             }
@@ -741,18 +743,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
             });
 
             // 6. 展开抽屉内的详情与 4 个小按钮
-            String configPath;
-            if (item.builtin) {
-                if ("dsh-mobile-lite".equals(item.name) || "dsh-classic-chat".equals(item.name) || "dsh-quickchat-gesture".equals(item.name)) {
-                    configPath = "/data/adb/dsha/rootfs/root/" + item.name + "/";
-                } else if (item.name.startsWith("dsh-")) {
-                    configPath = "/data/adb/dsha/rootfs/root/dsha-" + item.name.substring(4) + "/";
-                } else {
-                    configPath = "/data/adb/dsha/rootfs/root/dsha-" + item.name + "/";
-                }
-            } else {
-                configPath = "/data/adb/dsha/rootfs/root/.dsh/plugin-src/" + item.name + "/";
-            }
+            String installPath = PluginInstallPath.display(item.installPath);
             if (holder.detailText != null) {
                 String curVer = item.version.isEmpty() ? "未知" : "v" + item.version.replace("v", "");
                 String latestVerStr;
@@ -773,7 +764,7 @@ public class PluginFragment extends Fragment implements PluginPresenter.ViewCall
                 holder.detailText.setText("当前版本：" + curVer
                         + "\n最新版本：" + latestVerStr
                         + (checkMessage.isEmpty() ? "" : "\n检查结果：" + checkMessage)
-                        + "\n配置路径：" + configPath);
+                        + "\n安装路径：" + installPath);
             }
 
             if (holder.btnUpdate != null) {

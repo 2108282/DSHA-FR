@@ -45,7 +45,7 @@ public final class PluginRepository extends AndroidViewModel {
     private final MutableLiveData<Preview> preview = new MutableLiveData<>();
 
     public static final class Item {
-        public final String name, description, version, source;
+        public final String name, description, version, source, installPath;
         public final String latestVersion, updatePreviewId, updateMessage, rollbackVersion, compatibility;
         public final boolean updateAvailable;
         public final boolean enabled, builtin, official, available, exportable, deletable;
@@ -54,6 +54,7 @@ public final class PluginRepository extends AndroidViewModel {
             description = json.optString("description");
             version = json.optString("version");
             source = json.optString("source");
+            installPath = json.isNull("installPath") ? "" : json.optString("installPath", "");
             enabled = json.optBoolean("enabled");
             builtin = json.optBoolean("builtin");
             official = json.optBoolean("official");
