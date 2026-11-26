@@ -7,6 +7,8 @@ import os
 import re
 import shlex
 import shutil
+import stat
+import tarfile
 import subprocess
 import time
 import urllib.parse
@@ -127,18 +129,19 @@ class Lifecycle:
             raise ValueError('插件管理目录指向外部，已停止操作')
         return path
 
-    def history_path(self, name):
+    def history_path(self, name, create=True):
         if not self.builtin.valid_name(name):
             raise ValueError('无效插件名')
         parent = self.path('plugin-history')
-        os.makedirs(parent, exist_ok=True)
+        if create:
+            os.makedirs(parent, exist_ok=True)
         return self.path('plugin-history/' + hashlib.sha256(name.encode()).hexdigest()[:32])
 
     def retain(self, name, old, work, source):
         return HistoryChange(self, name, old, work, source)
 
     def history_info(self, name):
-        path = self.history_path(name)
+        path = self.history_path(name, create=False)
         if os.path.islink(path):
             raise ValueError('插件历史目录是软链接，已停止读取')
         state = self.read(os.path.join(path, 'state.json'), {})
@@ -265,7 +268,7 @@ class Lifecycle:
     def _remove_failed_install(self, name):
         """新安装失败时仅调用官方 remove；不进入会拿同一锁并清历史的 cmd_delete。"""
         try:
-            process = subprocess.run(
+            process = self.g['run_official_command'](
                 ['dsh', 'plugin', '--profile', 'web', 'remove', name],
                 cwd=self.local(self.builtin.PROFILE),
                 env=dict(os.environ, DSH_HOME=self.home), stdout=subprocess.PIPE,
@@ -307,6 +310,197 @@ class Lifecycle:
             self.builtin.assert_no_pending_plugin_transactions()
         except RuntimeError as error:
             raise ValueError(str(error)) from error
+
+    def _reconcile_processes(self, owned_lock=None):
+        """只读 /proc；不能排除活 writer 时失败关闭，不向任何进程发信号。"""
+        try:
+            pids = [entry for entry in os.listdir('/proc') if entry.isdigit()]
+            for pid in pids:
+                try:
+                    with open('/proc/' + pid + '/cmdline', 'rb') as stream:
+                        args = [part.decode('utf-8', 'replace') for part in stream.read().split(b'\0') if part]
+                    if not args:
+                        continue
+                    executables = [os.path.basename(arg) for arg in args[:3]]
+                    package_writer = any(re.fullmatch(r'(?:pnpm(?:\.c?js)?|git|git-remote-.+)', arg)
+                                         for arg in executables)
+                    official_writer = 'plugin' in args and any(arg in ('add', 'remove') for arg in args) \
+                        and any(arg == 'dsh' or arg.endswith('/dsh/lib/bin.js') or arg.endswith('/dsh/bin.js')
+                                or arg.endswith('/dsh') for arg in args[:3])
+                    if package_writer or official_writer:
+                        raise ValueError('仍有官方 writer 或 pnpm/git 活进程，不能确认恢复：PID ' + pid)
+                except (FileNotFoundError, ProcessLookupError):
+                    continue
+        except OSError as error:
+            raise ValueError('无法完整检查 /proc，不能确认 writer 已退出：' + str(error)) from error
+        lock = self.local(os.path.join(self.builtin.PROFILE, 'package.json.lock'))
+        if os.path.lexists(lock):
+            if os.path.realpath(lock) != os.path.abspath(lock) or not os.path.isfile(lock):
+                raise ValueError('官方锁路径类型异常，不能确认恢复')
+            with open(lock, encoding='ascii') as stream:
+                content = stream.read(64)
+            if not re.fullmatch(r'[1-9][0-9]*\n?', content):
+                raise ValueError('官方锁 PID 格式异常，不能确认恢复')
+            pid = int(content.strip())
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                pass  # 只证明锁主人已退出；不删除锁，留给官方 dead-lock takeover。
+            except OSError as error:
+                raise ValueError('无法证明官方锁 PID 已退出') from error
+            else:
+                held = os.stat(lock, follow_symlinks=False)
+                if pid != os.getpid() or owned_lock != (held.st_dev, held.st_ino):
+                    raise ValueError('官方锁 PID 仍存活，不能确认恢复：' + str(pid))
+
+    def _compare_archive(self, directory, state):
+        archive = self._snapshot_archive(state)
+        if os.path.realpath(archive) != os.path.abspath(archive):
+            raise ValueError('备份归档路径经过软链接')
+        excluded = {'node_modules', '.git', '.cache', '__pycache__', '.pnpm-store'}
+        actual = {}
+        for base, dirs, files in os.walk(directory, topdown=True, followlinks=False):
+            dirs[:] = sorted(item for item in dirs if item not in excluded)
+            for item in list(dirs) + sorted(files):
+                if item in excluded:
+                    continue
+                path = os.path.join(base, item)
+                relative = os.path.relpath(path, directory)
+                info = os.lstat(path)
+                if stat.S_ISLNK(info.st_mode):
+                    actual[relative] = ('link', stat.S_IMODE(info.st_mode), os.readlink(path))
+                    if item in dirs:
+                        dirs.remove(item)
+                elif stat.S_ISDIR(info.st_mode):
+                    actual[relative] = ('dir', stat.S_IMODE(info.st_mode), '')
+                elif stat.S_ISREG(info.st_mode):
+                    actual[relative] = ('file', stat.S_IMODE(info.st_mode), self.digest(path))
+                else:
+                    raise ValueError('实际插件包含无法比较的文件类型：' + relative)
+        expected = {}
+        with tarfile.open(archive, 'r:gz') as package:
+            for member in package:
+                if member.name.rstrip('/') == 'package':
+                    if not member.isdir() or stat.S_IMODE(os.stat(directory).st_mode) != member.mode & 0o7777:
+                        raise ValueError('插件根目录类型或权限与备份不一致')
+                    continue
+                if not member.name.startswith('package/'):
+                    raise ValueError('备份归档路径异常')
+                relative = member.name[len('package/'):].rstrip('/')
+                if not relative or relative in expected or any(part in ('', '.', '..') for part in relative.split('/')):
+                    raise ValueError('备份归档路径重复或异常')
+                if member.isfile():
+                    with package.extractfile(member) as stream:
+                        digest = hashlib.sha256()
+                        for chunk in iter(lambda: stream.read(65536), b''):
+                            digest.update(chunk)
+                    value = ('file', member.mode & 0o7777, digest.hexdigest())
+                elif member.isdir():
+                    value = ('dir', member.mode & 0o7777, '')
+                elif member.issym():
+                    value = ('link', member.mode & 0o7777, member.linkname)
+                else:
+                    raise ValueError('备份归档文件类型异常')
+                expected[relative] = value
+        if not expected or actual != expected:
+            raise ValueError('实际插件文件、内容、类型或权限与备份不一致，保持事务阻断')
+        return len(expected)
+
+    def _reconcile_check(self, key, owned_lock=None):
+        if not isinstance(key, str) or not re.fullmatch('[a-f0-9]{32}', key):
+            raise ValueError('回查需要精确的 32 位事务 ID')
+        work = self.path('plugin-transactions/' + key)
+        for relative in ('', 'backup', 'operation.json', 'backup/state.json'):
+            path = os.path.join(work, relative) if relative else work
+            if os.path.realpath(path) != os.path.abspath(path) or not os.path.exists(path):
+                raise ValueError('事务或备份路径缺失/经过软链接，不能确认恢复')
+        operation = self.read(os.path.join(work, 'operation.json'), {})
+        state = self.read(os.path.join(work, 'backup/state.json'), {})
+        if not isinstance(operation, dict) or operation.get('phase') not in (
+                'installing', 'uncertain', 'recovery-required', 'restoring', 'verified', 'restored'):
+            raise ValueError('该事务阶段不能通过旧态回查恢复')
+        name = operation.get('name')
+        required = {'dependencyGroups', 'enabled', 'sourcePresent', 'disabledMarker',
+                    'disabledMarkerContent', 'originalDirectory', 'existed', 'version'}
+        if not self.builtin.valid_name(name) or not isinstance(state, dict) \
+                or state.get('schema') != 2 or state.get('name') != name or not required.issubset(state) \
+                or not state.get('existed'):
+            raise ValueError('备份状态不完整或不是已有插件的旧态，需人工处理')
+        self._reconcile_processes(owned_lock)
+        if os.path.lexists(os.path.join(work, 'previous-history')):
+            raise ValueError('事务中存在待归位的历史，需人工处理')
+        directory = self.g['resolve_profile_plugin_dir'](name)
+        original = state.get('originalDirectory')
+        if not isinstance(original, str) or not os.path.isabs(original) or not directory \
+                or os.path.realpath(directory) != os.path.realpath(original):
+            raise ValueError('profile 实际包路径与备份旧路径不一致')
+        pkg = self.g['plugin_package'](directory)
+        if pkg.get('name') != name or str(pkg.get('version', '')) != state.get('version'):
+            raise ValueError('实际插件包名/版本与备份不一致')
+        doc = self.builtin.read_manifest() or {}
+        groups = {section: doc[section][name] for section in
+                  ('dependencies', 'devDependencies', 'optionalDependencies') if name in (doc.get(section) or {})}
+        bundles = doc.get('dsh', {}).get('profile', {}).get('bundles', [])
+        if groups != state['dependencyGroups'] or (name in bundles) != state['enabled'] \
+                or bundles.count(name) > 1:
+            raise ValueError('profile 依赖或启用状态与备份不一致')
+        sources = self._sources()
+        if (name in sources) != state['sourcePresent'] or \
+                (state['sourcePresent'] and sources[name] != state.get('source')):
+            raise ValueError('插件来源与备份不一致')
+        marker = self.builtin.marker_path(name)
+        if os.path.realpath(os.path.dirname(marker)) != os.path.abspath(os.path.dirname(marker)) \
+                or os.path.islink(marker) or os.path.lexists(marker) != state['disabledMarker']:
+            raise ValueError('插件禁用标记与备份不一致或路径异常')
+        if state['disabledMarker']:
+            if not os.path.isfile(marker):
+                raise ValueError('插件禁用标记类型异常')
+            with open(marker, 'rb') as stream:
+                if base64.b64encode(stream.read()).decode('ascii') != state['disabledMarkerContent']:
+                    raise ValueError('插件禁用标记内容与备份不一致')
+        count = self._compare_archive(directory, state)
+        self._reconcile_processes(owned_lock)
+        return work, operation, {'name': name, 'version': state['version'], 'filesCompared': count,
+                'legacySnapshot': True, 'scope': '目标插件归档、依赖、启用、来源和禁用标记；不证明无关 profile 字段'}
+
+    def reconcile(self, key, commit=False):
+        """默认纯回查；显式确认只解除该事务阻断，不安装、清锁或改写 profile。"""
+        if commit:
+            with self.builtin.operation_lock():
+                # 与官方 writer 使用同一 O_EXCL PID 锁。已有锁即拒绝，不接管或清除死锁。
+                profile = self.local(self.builtin.PROFILE)
+                if os.path.realpath(profile) != os.path.abspath(profile):
+                    raise ValueError('profile 路径经过软链接，不能确认恢复')
+                lock = os.path.join(profile, 'package.json.lock')
+                try:
+                    descriptor = os.open(lock, os.O_WRONLY | os.O_CREAT | os.O_EXCL |
+                                         getattr(os, 'O_NOFOLLOW', 0), 0o600)
+                except FileExistsError as error:
+                    raise ValueError('官方锁仍存在；仅可只读回查，请交由官方安全接管死锁后再显式确认') from error
+                owned = os.fstat(descriptor)
+                identity = (owned.st_dev, owned.st_ino)
+                try:
+                    os.write(descriptor, (str(os.getpid()) + '\n').encode('ascii'))
+                    os.fsync(descriptor)
+                    work, operation, evidence = self._reconcile_check(key, owned_lock=identity)
+                    self._record_operation(work, operation, 'restored', reconciled=evidence)
+                finally:
+                    os.close(descriptor)
+                    try:
+                        current = os.stat(lock, follow_symlinks=False)
+                        if (current.st_dev, current.st_ino) == identity and not os.path.islink(lock):
+                            with open(lock, encoding='ascii') as stream:
+                                own_content = stream.read(64)
+                            if own_content == str(os.getpid()) + '\n':
+                                os.unlink(lock)
+                    except FileNotFoundError:
+                        pass
+        else:
+            work, operation, evidence = self._reconcile_check(key)
+        self.g['result']('ok', '已确认备份旧态并解除该事务阻断；快照保留' if commit else
+                         '备份旧态一致；只读回查通过，显式 --restore-confirmed 才解除阻断',
+                         transaction=key, restored=commit, evidence=evidence)
+        return 0
 
     def _record_operation(self, work, operation, phase, strict=True, **details):
         operation.update(details)
@@ -380,6 +574,7 @@ class Lifecycle:
             raise ValueError('安装前快照未完成，未执行官方安装：' + str(error) + '；事务：' + work) from error
         self._record_operation(work, operation, 'installing')
         try:
+            self.g['_official_transaction'] = work
             raw = self.g['cmd_official_add'](spec, name, str(version))
             active, pkg = self._verify_profile(name, version)
             self._record_operation(work, operation, 'verified')
@@ -398,6 +593,7 @@ class Lifecycle:
             if previous.get('existed'):
                 self._commit_history(name, backup, work)
         except Exception as error:
+            self.g.pop('_official_transaction', None)
             if self._uncertain(error):
                 self._record_operation(work, operation, 'uncertain', strict=False, error=str(error))
                 raise type(error)(str(error) + '；快照已保留，需先回查，禁止自动恢复或重做；事务：' + work) from error
@@ -429,6 +625,7 @@ class Lifecycle:
                                    + '；快照和原历史已保留；事务：' + work) from error
             self._record_operation(work, operation, 'restored', strict=False)
             raise ValueError(str(error) + '；已恢复安装前的插件和状态；事务快照保留于：' + work) from error
+        self.g.pop('_official_transaction', None)
         self._record_operation(work, operation, 'committed', strict=False)
         result = dict(raw) if isinstance(raw, dict) else {'result': raw}
         result.update(name=name, version=str(pkg.get('version', '')))
