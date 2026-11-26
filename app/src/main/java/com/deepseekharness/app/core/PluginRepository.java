@@ -158,13 +158,10 @@ public final class PluginRepository extends AndroidViewModel {
     }
 
     public void refresh() {
-        submit("正在同步插件状态…", proot -> {
-            String output = proot.registerBuiltinPlugins();
-            if (output.contains("FAIL") || output.contains("ERROR:"))
-                throw new IOException(shortError(output));
-            return output.contains("PARTIAL") ? "部分内置插件待修复，请检查环境"
-                    : "插件状态已同步；启用、禁用或安装后请到启动页重启 Web";
-        });
+        // submit 完成时统一调用 loadItems；刷新列表不注册或修复插件。
+        // 未完成安装事务只应限制变更，仍需允许读取现状以便回查。
+        submit("正在读取插件状态…", proot ->
+                "插件状态已同步；启用、禁用或安装后请到启动页重启 Web");
     }
 
     public void install(PluginSource source) {

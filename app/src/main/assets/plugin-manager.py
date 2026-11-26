@@ -10,6 +10,8 @@ import json
 import os
 import re
 import shutil
+import signal
+import time
 import ssl
 import stat
 import subprocess
@@ -826,6 +828,50 @@ class OfficialInstallUncertain(ValueError):
     """命令超时不代表其子进程已经停止；回查前不得启动第二次安装。"""
 
 
+def run_official_command(args, *, timeout, cwd, env, **unused):
+    """官方 writer 独占新会话；仅收束本次创建的进程组，绝不按名称杀进程。"""
+    process = subprocess.Popen(args, cwd=cwd, env=env, stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE, text=True, start_new_session=True,
+                               close_fds=True)
+    work = globals().get('_official_transaction')
+    try:
+        if work:
+            write_json(os.path.join(work, 'writer.json'), {'pid': process.pid,
+                       'processGroup': process.pid, 'command': args, 'startedAt': int(time.time())})
+        stdout, stderr = process.communicate(timeout=timeout)
+        return subprocess.CompletedProcess(args, process.returncode, stdout, stderr)
+    except BaseException as error:
+        # Popen 的 PID 是本次新 session/group 的 leader；当前父进程不在这个组。
+        # 在 reap leader 之前发信号，避免 PID 复用后误杀其他会话。
+        if process.pid <= 1 or process.pid == os.getpgrp():
+            raise OfficialInstallUncertain('官方命令进程组无法安全确认，需人工回查') from error
+        for sig, grace in ((signal.SIGTERM, 2), (signal.SIGKILL, 2)):
+            try:
+                os.killpg(process.pid, sig)
+            except ProcessLookupError:
+                break
+            except OSError:
+                # 清理失败仍必须保留 uncertain；不能改用全局进程名清理。
+                continue
+            deadline = time.monotonic() + grace
+            while time.monotonic() < deadline:
+                try:
+                    os.killpg(process.pid, 0)
+                except ProcessLookupError:
+                    break
+                time.sleep(0.05)
+        try:
+            process.communicate(timeout=2)
+        except (subprocess.TimeoutExpired, OSError):
+            # 逃离本组的子进程可能仍持有管道；不能无限等待，也不扩大杀进程范围。
+            for stream in (process.stdout, process.stderr):
+                if stream:
+                    stream.close()
+        if isinstance(error, subprocess.TimeoutExpired):
+            raise OfficialInstallUncertain('官方命令超时，已对本次进程组执行有界清理；结果仍需回查，禁止重做') from error
+        raise
+
+
 def cmd_official_add(spec, expected_name, expected_version=""):
     """通过官方 dsh plugin add 安装单个 bundle，并回查 profile 提交结果。"""
     if not isinstance(spec, str) or not spec.strip() or len(spec) > 2048 \
@@ -835,7 +881,7 @@ def cmd_official_add(spec, expected_name, expected_version=""):
         raise ValueError("官方插件名称无效")
     env = dict(os.environ, DSH_HOME=local(DSH_HOME))
     try:
-        process = subprocess.run(
+        process = run_official_command(
             ["dsh", "plugin", "--profile", "web", "add", spec.strip()],
             cwd=local(builtin.PROFILE), env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             text=True, timeout=600,
@@ -940,11 +986,14 @@ def cmd_delete(name):
         if name in deps:
             try:
                 env = dict(os.environ, DSH_HOME=local(DSH_HOME))
-                removed = subprocess.run(["dsh", "plugin", "--profile", "web", "remove", name],
+                removed = run_official_command(["dsh", "plugin", "--profile", "web", "remove", name],
                                          cwd=local(os.path.join(DSH_HOME, 'profiles', 'web')), env=env,
                                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=120)
-            except subprocess.TimeoutExpired as error:
-                raise ValueError("官方卸载超时，尚未清理插件文件，请核对状态后重试") from error
+            except (OfficialInstallUncertain, subprocess.TimeoutExpired) as error:
+                work = managed_directory("plugin-transactions/" + uuid.uuid4().hex)
+                operation = {'name': name, 'action': 'remove', 'createdAt': int(time.time())}
+                lifecycle()._record_operation(work, operation, 'uncertain', strict=False, error=str(error))
+                raise OfficialInstallUncertain("官方卸载超时，尚未清理插件文件；结果需人工回查，禁止重做；事务：" + work) from error
             if removed.returncode != 0:
                 detail = (removed.stderr or removed.stdout or '').strip()[-1200:]
                 raise ValueError("官方卸载失败，保留插件文件：" + (detail or str(removed.returncode)))
@@ -1110,31 +1159,6 @@ def cmd_list():
     items = []
     updates = lifecycle().read(lifecycle().path('plugin-updates.json'), {})
 
-    # 自动清理历史 PatchToggle 在 cordis.patch.yml 中留下的残留区块
-    patch_file = local(os.path.join(DSH_HOME, "profiles", "web", "cordis.patch.yml"))
-    if os.path.isfile(patch_file):
-        try:
-            # CLI main 已持有 operation_lock；flock 不能在此用新 fd 重入。
-            builtin.assert_no_pending_plugin_transactions()
-            with open(patch_file, "r", encoding="utf-8") as pf:
-                content = pf.read()
-            if "# >>> DSHA managed" in content:
-                lines_clean = []
-                in_block = False
-                for line in content.splitlines(True):
-                    if "# >>> DSHA managed" in line:
-                        in_block = True
-                        continue
-                    if "# <<< DSHA managed" in line:
-                        in_block = False
-                        continue
-                    if not in_block:
-                        lines_clean.append(line)
-                with open(patch_file, "w", encoding="utf-8") as pf:
-                    pf.write("".join(lines_clean))
-        except Exception:
-            pass
-
     for name in names:
         if not builtin.valid_name(name):
             continue
@@ -1202,8 +1226,9 @@ def cmd_npm(package, *, consume=None):
 
 
 def main():
-    os.makedirs(local(DSH_HOME), exist_ok=True)
     args = sys.argv[1:]
+    if args and args[0] not in ('list', 'reconcile'):
+        os.makedirs(local(DSH_HOME), exist_ok=True)
     try:
         if args[0] == "inspect" and len(args) == 2:
             return lifecycle().inspect(args[1])
@@ -1236,9 +1261,12 @@ def main():
             return cmd_github(*args[1:])
         if args[0] == "release" and len(args) == 4:
             return cmd_release(*args[1:])
+        if args and args[0] == "reconcile" and len(args) in (2, 3):
+            if len(args) == 3 and args[2] != '--restore-confirmed':
+                raise ValueError('回查只支持事务ID及可选 --restore-confirmed')
+            return lifecycle().reconcile(args[1], commit=len(args) == 3)
         if args[0] == "list":
-            with builtin.operation_lock():
-                return cmd_list()
+            return cmd_list()
         raise ValueError("不支持的插件操作")
     except urllib.error.HTTPError as error:
         hint = {403: "访问受限或 GitHub API 额度已用完", 404: "链接或指定版本不存在",

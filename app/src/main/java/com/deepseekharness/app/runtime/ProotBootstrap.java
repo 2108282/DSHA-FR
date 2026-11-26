@@ -125,7 +125,8 @@ public class ProotBootstrap {
 
     /** 内置插件注册脚本（rootfs 烘焙的四个内置插件 → web profile），资产名。 */
     public static final String BUILTIN_REGISTER_SCRIPT = "register-builtin-plugins.py";
-    private static final Object PLUGIN_SCRIPT_LOCK = new Object();
+    private static final java.util.concurrent.locks.ReentrantLock PLUGIN_SCRIPT_LOCK =
+            new java.util.concurrent.locks.ReentrantLock();
 
     /**
      * 幂等：把内置插件注册脚本注入 rootfs 并运行，把 dsh-device-shell-guide 等四个
@@ -164,26 +165,45 @@ public class ProotBootstrap {
         return yaml.replaceAll("(?s)# >>> DSHA managed[^\n]*\n.*?# <<< DSHA managed <<<(?:\n|$)", "").trim();
     }
 
-    /** 注入注册脚本（幂等覆盖）并按需带参数运行。 */
+    /** 原子注入与执行分开；安装期间只读列表不应等待整个安装过程。 */
     private String runBuiltinScript(String extraArgs) {
-        synchronized (PLUGIN_SCRIPT_LOCK) {
-        if (!isEnvironmentReady()) return "ENV_NOT_READY";
-        if (!ensureBundledPython()) return "ERROR: Ubuntu Python 环境未就绪";
+        String prepared = preparePluginScripts(false);
+        if (!prepared.isEmpty()) return prepared;
+        String cmd = "python3 /root/.dsh/" + BUILTIN_REGISTER_SCRIPT
+                + (extraArgs.isEmpty() ? "" : " " + extraArgs) + " 2>&1";
+        return execAndRead(cmd, 90_000);
+    }
+
+    private String preparePluginScripts(boolean includeManager) {
+        boolean acquired = false;
         try {
-            String script = readAssetString(BUILTIN_REGISTER_SCRIPT);
-            if (script.isEmpty()) return "ASSET_MISSING:" + BUILTIN_REGISTER_SCRIPT;
-            String b64 = Base64.encodeToString(script.getBytes(
-                    java.nio.charset.StandardCharsets.UTF_8), Base64.NO_WRAP);
-            String cmd = "set -e; mkdir -p /root/.dsh; "
-                    + "printf '%s' '" + b64 + "' | base64 -d > /root/.dsh/" + BUILTIN_REGISTER_SCRIPT + "; "
-                    + "chmod +x /root/.dsh/" + BUILTIN_REGISTER_SCRIPT + "; "
-                    + "python3 /root/.dsh/" + BUILTIN_REGISTER_SCRIPT
-                    + (extraArgs.isEmpty() ? "" : " " + extraArgs) + " 2>&1";
-            return execAndRead(cmd, 90_000);
+            acquired = PLUGIN_SCRIPT_LOCK.tryLock(30, TimeUnit.SECONDS);
+            if (!acquired) return "ERROR: 插件脚本正在同步，请稍后刷新";
+            if (!isEnvironmentReady()) return "ENV_NOT_READY";
+            if (!ensureBundledPython()) return "ERROR: Ubuntu Python 环境未就绪";
+            String common = readAssetString(BUILTIN_REGISTER_SCRIPT);
+            if (common.isEmpty()) return "ASSET_MISSING:" + BUILTIN_REGISTER_SCRIPT;
+            if (!injectPluginScript(BUILTIN_REGISTER_SCRIPT, common, true))
+                return "ERROR: 无法同步插件注册脚本";
+            if (includeManager) {
+                String lifecycle = readAssetString(PLUGIN_LIFECYCLE_SCRIPT);
+                if (lifecycle.isEmpty()) return "ASSET_MISSING:" + PLUGIN_LIFECYCLE_SCRIPT;
+                String manager = readAssetString(PLUGIN_MANAGER_SCRIPT);
+                if (manager.isEmpty()) return "ASSET_MISSING:" + PLUGIN_MANAGER_SCRIPT;
+                if (!injectPluginScript(PLUGIN_LIFECYCLE_SCRIPT, lifecycle, false))
+                    return "ERROR: 无法同步插件生命周期脚本";
+                if (!injectPluginScript(PLUGIN_MANAGER_SCRIPT, manager, true))
+                    return "ERROR: 无法同步插件管理脚本";
+            }
+            return "";
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return "ERROR: 插件脚本同步等待已中断";
         } catch (Throwable e) {
-            Log.w("DSHA", "内置插件脚本执行失败: " + SensitiveData.redact(String.valueOf(e)));
+            Log.w("DSHA", "插件脚本同步失败: " + SensitiveData.redact(String.valueOf(e)));
             return "ERROR: " + SensitiveData.redact(String.valueOf(e));
-        }
+        } finally {
+            if (acquired) PLUGIN_SCRIPT_LOCK.unlock();
         }
     }
 
@@ -217,33 +237,17 @@ public class ProotBootstrap {
      *                  {@code github owner repo 'branch/subdir'}
      */
     public String runPluginManager(String extraArgs) {
-        synchronized (PLUGIN_SCRIPT_LOCK) {
-            if (!isEnvironmentReady()) return "ENV_NOT_READY";
-            if (!ensureBundledPython()) return "ERROR: Ubuntu Python 环境未就绪";
-            try {
-                String script = readAssetString(PLUGIN_MANAGER_SCRIPT);
-                if (script.isEmpty()) return "ASSET_MISSING:" + PLUGIN_MANAGER_SCRIPT;
-                String common = readAssetString(BUILTIN_REGISTER_SCRIPT);
-                if (common.isEmpty()) return "ASSET_MISSING:" + BUILTIN_REGISTER_SCRIPT;
-                String lifecycle = readAssetString(PLUGIN_LIFECYCLE_SCRIPT);
-                if (lifecycle.isEmpty()) return "ASSET_MISSING:" + PLUGIN_LIFECYCLE_SCRIPT;
-
-                if (!injectPluginScript(BUILTIN_REGISTER_SCRIPT, common, true))
-                    return "ERROR: 无法同步插件注册脚本";
-                if (!injectPluginScript(PLUGIN_LIFECYCLE_SCRIPT, lifecycle, false))
-                    return "ERROR: 无法同步插件生命周期脚本";
-                if (!injectPluginScript(PLUGIN_MANAGER_SCRIPT, script, true))
-                    return "ERROR: 无法同步插件管理脚本";
-
-                String cmd = "python3 /root/.dsh/" + PLUGIN_MANAGER_SCRIPT
-                        + (extraArgs == null || extraArgs.isEmpty() ? "" : " " + extraArgs) + " 2>&1";
-                // 下载、多个插件依赖安装和导出可能较慢，脚本内部仍有单次网络/依赖超时。
-                return execAndRead(cmd, 600_000);
-            } catch (Throwable e) {
-                Log.w("DSHA", "插件管理脚本执行失败: " + SensitiveData.redact(String.valueOf(e)));
-                return "ERROR: " + SensitiveData.redact(String.valueOf(e));
-            }
+        String prepared = preparePluginScripts(true);
+        if (!prepared.isEmpty()) return prepared;
+        String cmd = "python3 /root/.dsh/" + PLUGIN_MANAGER_SCRIPT
+                + (extraArgs == null || extraArgs.isEmpty() ? "" : " " + extraArgs) + " 2>&1";
+        // 锁仅用于脚本注入；变更互斥由 Python 的 operation_lock 负责。
+        // 给内部安装、必要恢复和进程组清理留出时间，避免外层抢先中止事务记录。
+        String output = execAndRead(cmd, PluginCommandPolicy.timeoutMs(extraArgs));
+        if (output.startsWith("ERROR: 命令执行超时(")) {
+            return output.replace("，已强杀", "；插件操作结果未确认，请回查事务，勿直接重试");
         }
+        return output;
     }
 
     /** 把本地文件推入容器（containerPath 为容器内绝对路径，如 /root/.dsh/import-upload.bin）。 */

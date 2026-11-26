@@ -7,6 +7,9 @@ import json
 import os
 import shutil
 import sys
+import signal
+import subprocess
+import time
 from pathlib import Path
 import tarfile
 import tempfile
@@ -68,7 +71,10 @@ class PluginTestBase(unittest.TestCase):
         self.home = self.root / "root/.dsh"
         self.home.mkdir(parents=True)
         self.command_calls = []
-        self.commands = patch.object(self.manager.subprocess, 'run', side_effect=self.fake_command)
+        self.real_official_command = self.manager.run_official_command
+        self.commands = patch.object(self.manager, 'run_official_command', side_effect=self.fake_command)
+        self.external_commands = patch.object(self.manager.subprocess, 'run', side_effect=AssertionError('测试禁止真实外部命令'))
+        self.external_commands.start()
         self.commands.start()
         self.network = patch.object(self.manager.urllib.request, 'urlopen', side_effect=AssertionError('测试禁止真实网络'))
         self.network.start()
@@ -135,6 +141,7 @@ class PluginTestBase(unittest.TestCase):
             self.capture.__exit__(None, None, None)
             self.network.stop()
             self.commands.stop()
+            self.external_commands.stop()
             self.env.stop()
             self.temp.cleanup()
         finally:
@@ -220,6 +227,10 @@ class PluginManagerTest(PluginTestBase):
         self.assertTrue(Path(self.manager.builtin.marker_path(name)).exists())
         self.assertEqual(original, self.manager.builtin.read_manifest())
         self.assertIn(name, json.loads(sources.read_text()))
+        # 返回异常后的卸载事务保持阻断；fixture 已证明清单未变，显式模拟人工确认。
+        for record in (self.home / 'plugin-transactions').glob('*/operation.json'):
+            operation = json.loads(record.read_text()); operation['phase'] = 'restored'
+            record.write_text(json.dumps(operation))
         self.manager.cmd_delete(name)
         self.assertFalse((self.home / "plugin-src" / name).exists())
         self.assertFalse(Path(self.manager.builtin.marker_path(name)).exists())
@@ -611,7 +622,7 @@ class PluginSafetyRegressionTest(PluginTestBase):
             with self.subTest(outcome=outcome):
                 response = self.manager.subprocess.CompletedProcess([], 1 if outcome == 'failed' else 0, '', 'stop-profile')
                 error = self.manager.subprocess.TimeoutExpired('dsh', 120) if outcome == 'timeout' else None
-                with patch.object(self.manager.subprocess, 'run', side_effect=error, return_value=response):
+                with patch.object(self.manager, 'run_official_command', side_effect=error, return_value=response):
                     with self.assertRaises(ValueError): self.manager.cmd_delete('dsh-demo')
                 self.assertEqual(before, self.manager.builtin.read_manifest())
                 self.assertTrue((source / 'index.js').is_file())
@@ -755,7 +766,7 @@ class OfficialInstallTransactionTest(PluginTestBase):
             with tarfile.open(state['archive']) as archive:
                 self.assertEqual(old_bytes, archive.extractfile('package/old-only.txt').read())
             return self.fake_command(args, **kwargs)
-        with patch.object(self.manager.subprocess, 'run', side_effect=checked_add):
+        with patch.object(self.manager, 'run_official_command', side_effect=checked_add):
             outcome = life.install_package('dsh-demo@2.0.0', 'dsh-demo', '2.0.0', source='npm:dsh-demo@2.0.0')
         self.assertEqual('2.0.0', self.installed_version())
         self.assertFalse(legacy.exists())
@@ -834,7 +845,7 @@ class OfficialInstallTransactionTest(PluginTestBase):
             if args[5] == 'dsh-demo@3.0.0':
                 return self.manager.subprocess.CompletedProcess(args, 1, '', 'partial installation failed')
             return result
-        with patch.object(self.manager.subprocess, 'run', side_effect=fail_new):
+        with patch.object(self.manager, 'run_official_command', side_effect=fail_new):
             with self.assertRaisesRegex(ValueError, '已恢复'):
                 life.install_package('dsh-demo@3.0.0', 'dsh-demo', '3.0.0', source='npm:dsh-demo@3.0.0')
         self.assertEqual('2.0.0', self.installed_version())
@@ -851,7 +862,7 @@ class OfficialInstallTransactionTest(PluginTestBase):
                 pkg = json.loads(metadata.read_text()); pkg['version'] = '999.0.0'
                 metadata.write_text(json.dumps(pkg))
             return result
-        with patch.object(self.manager.subprocess, 'run', side_effect=wrong_version):
+        with patch.object(self.manager, 'run_official_command', side_effect=wrong_version):
             with self.assertRaisesRegex(ValueError, '版本'):
                 self.manager.lifecycle().install_package('dsh-demo@2.0.0', 'dsh-demo', '2.0.0')
         self.assertEqual('1.0.0', self.installed_version())
@@ -859,7 +870,7 @@ class OfficialInstallTransactionTest(PluginTestBase):
 
     def test_timeout_preserves_snapshot_without_retry_or_cleanup(self):
         legacy = self.legacy()
-        with patch.object(self.manager.subprocess, 'run', side_effect=self.manager.subprocess.TimeoutExpired('dsh', 600)) as command:
+        with patch.object(self.manager, 'run_official_command', side_effect=self.manager.subprocess.TimeoutExpired('dsh', 600)) as command:
             with self.assertRaisesRegex(self.manager.OfficialInstallUncertain, '回查'):
                 self.manager.lifecycle().install_package('dsh-demo@2.0.0', 'dsh-demo', '2.0.0')
         self.assertEqual(1, command.call_count)
@@ -871,7 +882,7 @@ class OfficialInstallTransactionTest(PluginTestBase):
         life.install_package('dsh-demo@1.0.0', 'dsh-demo', '1.0.0')
         life.install_package('dsh-demo@2.0.0', 'dsh-demo', '2.0.0')
         failed = self.manager.subprocess.CompletedProcess([], 1, '', 'disk full')
-        with patch.object(self.manager.subprocess, 'run', return_value=failed):
+        with patch.object(self.manager, 'run_official_command', return_value=failed):
             with self.assertRaisesRegex(RuntimeError, '恢复未完成'):
                 life.install_package('dsh-demo@3.0.0', 'dsh-demo', '3.0.0')
         self.assertEqual('1.0.0', life.history_info('dsh-demo')['version'])
@@ -1082,7 +1093,7 @@ class OfficialInstallTransactionTest(PluginTestBase):
     def test_unfinished_transaction_blocks_subsequent_install_and_rollback(self):
         self.legacy()
         life = self.manager.lifecycle()
-        with patch.object(self.manager.subprocess, 'run', side_effect=self.manager.subprocess.TimeoutExpired('dsh', 600)):
+        with patch.object(self.manager, 'run_official_command', side_effect=self.manager.subprocess.TimeoutExpired('dsh', 600)):
             with self.assertRaises(self.manager.OfficialInstallUncertain):
                 life.install_package('dsh-demo@2.0.0', 'dsh-demo', '2.0.0')
         with self.assertRaisesRegex(ValueError, '未完成|不确定'):
@@ -1153,12 +1164,12 @@ class OfficialInstallTransactionTest(PluginTestBase):
                 with patch.object(self.manager.builtin, 'operation_lock', guarded), \
                         patch.object(self.manager.sys, 'argv', [str(ASSET), 'list']):
                     self.assertEqual(0, self.manager.main())
-                self.assertEqual(1, calls)
-                self.assertEqual(1, maximum)
+                self.assertEqual(0, calls)
+                self.assertEqual(0, maximum)
                 self.assertEqual(0, depth)
                 listing = json.loads(self.out.getvalue().split('PLUGIN_RESULT: ')[-1])
                 self.assertTrue(any(item['name'] == 'dsh-demo' for item in listing['items']))
-                self.assertEqual(content if pending else b'# user prefix\n# user suffix\n', patch_file.read_bytes())
+                self.assertEqual(content, patch_file.read_bytes())
                 self.assertEqual([], self.command_calls)
 
     def test_uncertain_transaction_blocks_all_mutators_but_list_remains_read_only(self):
@@ -1175,7 +1186,7 @@ class OfficialInstallTransactionTest(PluginTestBase):
         incoming = self.package(self.root / 'blocked-update', version='2.0.0')
         new_plugin = self.package(self.root / 'blocked-new', 'dsh-new')
         life = self.manager.lifecycle()
-        with patch.object(self.manager.subprocess, 'run', side_effect=self.manager.subprocess.TimeoutExpired('dsh', 600)):
+        with patch.object(self.manager, 'run_official_command', side_effect=self.manager.subprocess.TimeoutExpired('dsh', 600)):
             with self.assertRaises(self.manager.OfficialInstallUncertain):
                 life.install_package('dsh-demo@2.0.0', 'dsh-demo', '2.0.0')
         operations = list((self.home / 'plugin-transactions').glob('*/operation.json'))
@@ -1236,6 +1247,132 @@ class OfficialInstallTransactionTest(PluginTestBase):
         self.assertEqual(archive, self.manager.local(archive))
         self.assertTrue(Path(archive).is_file())
         self.assertTrue(self.manager.container_path(archive).startswith('/root/.dsh/plugin-archives/'))
+
+
+    def pending_fixture(self):
+        self.legacy()
+        life = self.manager.lifecycle()
+        with patch.object(self.manager, 'run_official_command',
+                          side_effect=self.manager.subprocess.TimeoutExpired('dsh', 600)):
+            with self.assertRaises(self.manager.OfficialInstallUncertain):
+                life.install_package('dsh-demo@2.0.0', 'dsh-demo', '2.0.0')
+        work = next((self.home / 'plugin-transactions').iterdir())
+        return life, work
+
+    def test_reconcile_read_only_then_explicit_commit_preserves_backup(self):
+        life, work = self.pending_fixture()
+        lock = self.home / 'profiles/web/package.json.lock'
+        lock.write_text('1073741824\n')
+        before = self.tree_state(self.home)
+        self.assertEqual(0, life.reconcile(work.name))
+        self.assertEqual(before, self.tree_state(self.home))
+        self.assertEqual('uncertain', json.loads((work / 'operation.json').read_text())['phase'])
+        with self.assertRaisesRegex(ValueError, '官方锁仍存在'):
+            life.reconcile(work.name, commit=True)
+        self.assertEqual(before, self.tree_state(self.home))
+        # 测试 fixture 人工清理已证明死亡的锁；生产恢复由官方 dead-lock takeover 处理。
+        lock.unlink()
+        self.assertEqual(0, life.reconcile(work.name, commit=True))
+        self.assertFalse(lock.exists())
+        self.assertEqual('restored', json.loads((work / 'operation.json').read_text())['phase'])
+        self.assertTrue((work / 'backup/state.json').exists())
+        self.manager.builtin.assert_no_pending_plugin_transactions()
+
+    def test_reconcile_refuses_live_lock_and_malformed_pid(self):
+        life, work = self.pending_fixture()
+        lock = self.home / 'profiles/web/package.json.lock'
+        for content in (str(os.getpid()) + '\n', '0', '-1', 'bad', '1073741824 extra'):
+            with self.subTest(content=content):
+                lock.write_text(content)
+                before = self.tree_state(self.home)
+                with self.assertRaisesRegex(ValueError, 'PID|锁'):
+                    life.reconcile(work.name, commit=True)
+                self.assertEqual(before, self.tree_state(self.home))
+
+    def test_reconcile_refuses_live_pnpm_even_without_profile_lock(self):
+        life, work = self.pending_fixture()
+        writer = subprocess.Popen(['pnpm', '-c', 'import time; time.sleep(30)'], executable=sys.executable)
+        try:
+            before = self.tree_state(self.home)
+            with self.assertRaisesRegex(ValueError, '活进程'):
+                life.reconcile(work.name, commit=True)
+            self.assertEqual(before, self.tree_state(self.home))
+        finally:
+            writer.terminate(); writer.wait(timeout=3)
+
+    def test_reconcile_refuses_same_version_file_and_profile_state_changes(self):
+        life, work = self.pending_fixture()
+        legacy = self.home / 'plugin-src/dsh-demo'
+        original_manifest = self.manager.builtin.read_manifest()
+        for change in ('content', 'extra', 'mode', 'dependency', 'enabled', 'marker', 'source'):
+            with self.subTest(change=change):
+                payload = legacy / 'index.js'
+                old_content, old_mode = payload.read_bytes(), payload.stat().st_mode & 0o777
+                if change == 'content': payload.write_bytes(b'changed same-version code')
+                elif change == 'extra': (legacy / 'extra.txt').write_text('extra')
+                elif change == 'mode': payload.chmod(old_mode ^ 0o100)
+                elif change == 'dependency':
+                    doc = json.loads(json.dumps(original_manifest)); doc['dependencies']['dsh-demo'] = '2.0.0'
+                    self.manager.builtin.write_manifest(doc)
+                elif change == 'enabled':
+                    doc = json.loads(json.dumps(original_manifest)); doc['dsh']['profile']['bundles'].remove('dsh-demo')
+                    self.manager.builtin.write_manifest(doc)
+                elif change == 'marker': self.marker('dsh-demo')
+                elif change == 'source':
+                    self.manager.write_json(str(self.home / 'plugin-sources.json'), {'dsh-demo': 'changed-source'})
+                before = self.tree_state(self.home)
+                with self.assertRaises(ValueError): life.reconcile(work.name, commit=True)
+                self.assertEqual(before, self.tree_state(self.home))
+                payload.write_bytes(old_content); payload.chmod(old_mode)
+                if (legacy / 'extra.txt').exists(): (legacy / 'extra.txt').unlink()
+                marker = Path(self.manager.builtin.marker_path('dsh-demo'))
+                if marker.exists(): marker.unlink()
+                self.manager.builtin.write_manifest(original_manifest)
+                self.manager.write_json(str(self.home / 'plugin-sources.json'), {'dsh-demo': 'npm:dsh-demo@1.0.0'})
+
+    def test_list_never_acquires_lock_or_creates_missing_history(self):
+        self.legacy()
+        history = self.home / 'plugin-history'
+        self.assertFalse(history.exists())
+        import fcntl
+        with open(self.home / '.plugins.lock', 'a') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            before = self.tree_state(self.home)
+            with patch.object(self.manager.builtin, 'operation_lock', side_effect=AssertionError('list must not lock')), \
+                    patch.object(self.manager.sys, 'argv', [str(ASSET), 'list']):
+                self.assertEqual(0, self.manager.main())
+            self.assertEqual(before, self.tree_state(self.home))
+        self.assertFalse(history.exists())
+
+    def test_actual_timeout_reaps_owned_child_group(self):
+        pidfile = self.root / 'children.json'
+        # 模拟 dsh -> pnpm -> git；后两级忽略 TERM，必须最终由本次 group 的 KILL 收束。
+        script = self.root / 'writer.py'
+        script.write_text("""import json, os, signal, sys, time
+signal.signal(signal.SIGTERM, signal.SIG_IGN)
+child = os.fork()
+if child == 0:
+    grandchild = os.fork()
+    if grandchild == 0:
+        time.sleep(30)
+    else:
+        with open(sys.argv[1], 'w') as out: json.dump([os.getpid(), grandchild], out)
+        time.sleep(30)
+else:
+    time.sleep(30)
+""")
+        started = time.monotonic()
+        with self.assertRaises(self.manager.OfficialInstallUncertain):
+            self.real_official_command([sys.executable, str(script), str(pidfile)], timeout=0.5,
+                                       cwd=str(self.root), env=dict(os.environ))
+        self.assertLess(time.monotonic() - started, 7)
+        self.assertTrue(pidfile.exists())
+        for pid in json.loads(pidfile.read_text()):
+            try:
+                state = Path('/proc/' + str(pid) + '/stat').read_text().split(') ', 1)[1].split()[0]
+            except FileNotFoundError:
+                continue
+            self.assertEqual('Z', state, '超时后的子孙进程不得仍运行')
 
 
 if __name__ == "__main__":
