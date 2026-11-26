@@ -54,7 +54,7 @@ public final class PluginSource {
 
     /**
      * 仅返回无需解析来源内容即可确定的官方安装规格。
-     * GitHub 分支和子目录必须由后端先解析到 commit SHA，再将同一 SHA 用于预览和安装。
+     * GitHub 链接由后端下载并解析；确认后将已校验的预览归档交给官方安装器。
      */
     public String officialSpec() {
         return npm;

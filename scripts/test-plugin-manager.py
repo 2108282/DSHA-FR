@@ -288,21 +288,14 @@ class PluginManagerTest(PluginTestBase):
         self.assertEqual("partial", last["status"])
         self.assertEqual(["dsh-good"], last["installed"])
 
-    def test_default_branch_is_pinned_for_official_install(self):
-        revision = "b" * 40
-        def response(url):
-            if url.endswith("/repos/owner/repo"):
-                return io.BytesIO(json.dumps({"default_branch": "main"}).encode())
-            if url.endswith("/commits/main"):
-                return io.BytesIO(json.dumps({"sha": revision}).encode())
-            raise AssertionError(url)
-        with patch.object(self.manager, "open_url", side_effect=response), \
+    def test_default_branch_downloads_head_without_github_api(self):
+        with patch.object(self.manager, "open_url", side_effect=AssertionError("仓库直链不应查询 GitHub API")) as lookup, \
                 patch.object(self.manager, "cmd_download", return_value=0) as download:
-            self.manager.cmd_github("owner", "repo")
-        self.assertEqual("https://codeload.github.com/owner/repo/tar.gz/" + revision,
-                         download.call_args.args[0])
-        self.assertEqual("git+https://github.com/owner/repo.git#" + revision,
-                         download.call_args.kwargs["official_spec"])
+            self.assertEqual(0, self.manager.cmd_github("owner", "repo"))
+        lookup.assert_not_called()
+        self.assertEqual(("https://codeload.github.com/owner/repo/tar.gz/HEAD", "",
+                          "https://github.com/owner/repo"), download.call_args.args)
+        self.assertEqual({}, download.call_args.kwargs)
 
     def test_slash_branch_resolves_requested_commit_and_subdirectory(self):
         responses = []
@@ -312,14 +305,25 @@ class PluginManagerTest(PluginTestBase):
             if url.endswith("feature%2Fandroid"):
                 return io.BytesIO(json.dumps({"sha": revision}).encode())
             raise self.manager.urllib.error.HTTPError(url, 404, "missing", {}, None)
+        consume = object()
         with patch.object(self.manager, "open_url", side_effect=response), \
                 patch.object(self.manager, "cmd_download", return_value=0) as download:
-            self.manager.cmd_github("owner", "repo", "feature/android/packages/demo")
-            args = download.call_args.args
-            self.assertEqual("https://codeload.github.com/owner/repo/tar.gz/" + revision, args[0])
-            self.assertEqual("packages/demo", args[1])
-            self.assertEqual("git+https://github.com/owner/repo.git#" + revision + "&path:packages/demo",
-                             download.call_args.kwargs["official_spec"])
+            self.assertEqual(0, self.manager.cmd_github("owner", "repo", "feature/android/packages/demo", consume=consume))
+        self.assertEqual(("https://codeload.github.com/owner/repo/tar.gz/" + revision, "packages/demo",
+                          "https://github.com/owner/repo/tree/feature/android/packages/demo"), download.call_args.args)
+        self.assertEqual({"consume": consume}, download.call_args.kwargs)
+        self.assertEqual([
+            "https://api.github.com/repos/owner/repo/commits/feature%2Fandroid%2Fpackages%2Fdemo",
+            "https://api.github.com/repos/owner/repo/commits/feature%2Fandroid%2Fpackages",
+            "https://api.github.com/repos/owner/repo/commits/feature%2Fandroid"], responses)
+
+    def test_missing_branch_does_not_fall_back_to_head(self):
+        missing = self.manager.urllib.error.HTTPError("https://api.github.com", 404, "missing", {}, None)
+        with patch.object(self.manager, "open_url", side_effect=missing), \
+                patch.object(self.manager, "cmd_download") as download:
+            with self.assertRaisesRegex(ValueError, "分支或标签不存在"):
+                self.manager.cmd_github("owner", "repo", "missing/branch")
+        download.assert_not_called()
 
     def test_github_zip_uses_official_download_and_preserves_ref(self):
         rewrite = self.manager.archive_download_url
@@ -446,6 +450,80 @@ class PluginLifecycleTest(PluginTestBase):
             preview = life.inspect(request, False)
             (Path(life.preview_path(preview['previewId'])) / 'archive').write_bytes(b'changed')
             with self.assertRaises(ValueError): life.install_preview(preview['previewId'])
+
+    def test_github_subdirectory_preview_official_install_and_branch_update(self):
+        life = self.manager.lifecycle()
+        source = 'https://github.com/owner/repo/tree/feature/android/packages/demo'
+        command = 'github owner repo feature/android/packages/demo'
+        revision = 'a' * 40
+        payloads = {}
+        for version in ('1.0.0', '2.0.0'):
+            selected = self.package(self.root / ('selected-' + version), version=version)
+            metadata = self.manager.read_json(selected / 'package.json')
+            metadata['repository'] = {'url': 'https://github.com/other/wrong-repository'}
+            (selected / 'package.json').write_text(json.dumps(metadata), encoding='utf-8')
+            sibling = self.package(self.root / ('sibling-' + version), name='dsh-other', version=version)
+            data = io.BytesIO()
+            with zipfile.ZipFile(data, 'w') as archive:
+                for root, prefix in ((selected, 'repo/packages/demo/'), (sibling, 'repo/packages/other/')):
+                    for file in root.iterdir():
+                        archive.writestr(prefix + file.name, file.read_bytes())
+            payloads[version] = data.getvalue()
+        remote = {'version': '1.0.0'}
+        requests = []
+        def response(request, **kwargs):
+            url = request.full_url
+            requests.append(url)
+            if url == 'https://api.github.com/repos/owner/repo/commits/feature%2Fandroid':
+                body = json.dumps({'sha': revision}).encode()
+            elif url == 'https://codeload.github.com/owner/repo/tar.gz/' + revision:
+                body = payloads[remote['version']]
+            else:
+                raise self.manager.urllib.error.HTTPError(url, 404, 'missing', {}, None)
+            result = io.BytesIO(body)
+            result.url = url
+            result.headers = {'Content-Length': str(len(body))}
+            return result
+        with patch.object(self.manager, 'register_plugin', side_effect=AssertionError('禁止旧安装器')), \
+                patch.object(self.manager, 'cmd_import', side_effect=AssertionError('禁止旧安装器')), \
+                patch.object(self.manager.urllib.request, 'urlopen', side_effect=response):
+            preview = life.inspect({'command': command}, False)
+            self.assertEqual('', preview['officialSpec'])
+            self.assertEqual(source, preview['source'])
+            self.assertEqual(['dsh-demo'], [item['name'] for item in preview['items']])
+            self.assertEqual([], self.command_calls)
+            for version, key in (('1.0.0', preview['previewId']), ('2.0.0', None)):
+                if key is None:
+                    remote['version'] = version
+                    life.check_updates('dsh-demo')
+                    state = self.manager.read_json(self.home / 'plugin-updates.json')['dsh-demo']
+                    self.assertTrue(state['available'])
+                    self.assertEqual(version, state['latestVersion'])
+                    key = state['previewId']
+                before = len(requests)
+                self.assertEqual(0, life.install_preview(key))
+                self.assertEqual(before, len(requests), '确认安装不能再次下载 GitHub 源')
+                self.assertTrue(self.command_calls[-1][5].startswith('file:'))
+                self.assertEqual(source, self.manager.read_json(self.home / 'plugin-sources.json')['dsh-demo'])
+                self.assertEqual(command, life.source_command('dsh-demo'))
+                self.assertEqual(version, self.manager.read_json(Path(self.manager.resolve_profile_plugin_dir('dsh-demo')) / 'package.json')['version'])
+                self.assertNotIn('dsh-other', self.manager.builtin.read_manifest()['dependencies'])
+            life.check_updates('dsh-demo')
+            self.assertFalse(self.manager.read_json(self.home / 'plugin-updates.json')['dsh-demo']['available'])
+
+    def test_legacy_git_preview_uses_checked_archive_and_keeps_branch_source(self):
+        life = self.manager.lifecycle()
+        archive = self.archive()
+        preview = life.inspect({'command': 'file ' + str(archive),
+                                'officialSpec': 'git+https://github.com/owner/repo.git#' + 'a' * 40}, False)
+        source = 'https://github.com/owner/repo/tree/release/plugin'
+        preview['source'] = source
+        life.write(os.path.join(life.preview_path(preview['previewId']), 'preview.json'), preview)
+        with patch.object(self.manager, 'open_url', side_effect=AssertionError('不能重新下载旧 Git 预览')), \
+                patch.object(self.manager, 'cmd_import', side_effect=AssertionError('禁止旧安装器')):
+            self.assertEqual(0, life.install_preview(preview['previewId']))
+        self.assertTrue(self.command_calls[-1][5].startswith('file:'))
+        self.assertEqual(source, self.manager.read_json(self.home / 'plugin-sources.json')['dsh-demo'])
 
     def test_failed_preview_install_cleans_staged_archive(self):
         archive = self.archive(version='1.0.0')
