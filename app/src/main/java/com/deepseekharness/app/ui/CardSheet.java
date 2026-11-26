@@ -13,20 +13,8 @@ final class CardSheet {
     page.root.applyDialogPalette(palette.primaryColor, palette.isMonetActive);
     MonetEngine.applyToViewTree(page.root, palette);
     page.scroll.setFillViewport(false);
-    page.scroll.setLayoutParams(new LinearLayout.LayoutParams(-1, -2));
-    FrameLayout container =
-        new FrameLayout(context) {
-          @Override
-          protected void onMeasure(int widthSpec, int heightSpec) {
-            int limit = Math.round(getResources().getDisplayMetrics().heightPixels * .86f);
-            if (View.MeasureSpec.getMode(heightSpec) != View.MeasureSpec.UNSPECIFIED)
-              limit = Math.min(limit, View.MeasureSpec.getSize(heightSpec));
-            super.onMeasure(
-                widthSpec, View.MeasureSpec.makeMeasureSpec(limit, View.MeasureSpec.AT_MOST));
-          }
-        };
-    container.addView(page.root, new FrameLayout.LayoutParams(-1, -2));
-    return new DshaDialogBuilder(context).setView(container).create();
+    page.scroll.setLayoutParams(new LinearLayout.LayoutParams(-1, -2, 1f));
+    return new DshaDialogBuilder(context).setView(page.root).create();
   }
 
   private static int dp(Context context, int value) {

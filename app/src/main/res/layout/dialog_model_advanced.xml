@@ -69,34 +69,48 @@
             </LinearLayout>
         </LinearLayout>
 
-        <!-- 2. 等宽 JSON 编辑框 -->
-        <EditText
-            android:id="@+id/edit_dialog_advanced_json"
+        <!-- 正文独立滚动，窗口随输入法缩小时为固定操作区留出高度。 -->
+        <androidx.core.widget.NestedScrollView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            android:background="@drawable/bg_input"
-            android:gravity="top|start"
-            android:hint="{}"
-            android:importantForAutofill="no"
-            android:inputType="textMultiLine|textNoSuggestions"
-            android:minLines="7"
-            android:maxLines="15"
-            android:padding="12dp"
-            android:scrollbars="vertical"
-            android:textColor="@color/text"
-            android:textSize="13sp"
-            android:typeface="monospace" />
+            android:layout_weight="1"
+            android:overScrollMode="never"
+            android:scrollbars="vertical">
 
-        <!-- 错误提示文本 -->
-        <TextView
-            android:id="@+id/tv_dialog_advanced_error"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:textColor="@color/err"
-            android:textSize="12sp"
-            android:visibility="gone" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+                <!-- 2. 等宽 JSON 编辑框 -->
+                <EditText
+                    android:id="@+id/edit_dialog_advanced_json"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:background="@drawable/bg_input"
+                    android:gravity="top|start"
+                    android:hint="{}"
+                    android:importantForAutofill="no"
+                    android:inputType="textMultiLine|textNoSuggestions"
+                    android:minLines="7"
+                    android:maxLines="15"
+                    android:padding="12dp"
+                    android:scrollbars="vertical"
+                    android:textColor="@color/text"
+                    android:textSize="13sp"
+                    android:typeface="monospace" />
+
+                <!-- 错误提示文本 -->
+                <TextView
+                    android:id="@+id/tv_dialog_advanced_error"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:textColor="@color/err"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
+            </LinearLayout>
+        </androidx.core.widget.NestedScrollView>
 
         <!-- 3. 底部操作按钮 -->
         <LinearLayout

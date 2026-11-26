@@ -10,6 +10,7 @@ import android.graphics.drawable.RippleDrawable;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
+import android.widget.ScrollView;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.Button;
@@ -17,6 +18,7 @@ import android.widget.TextView;
 
 import androidx.appcompat.app.AlertDialog;
 import androidx.core.graphics.ColorUtils;
+import androidx.core.widget.NestedScrollView;
 
 import com.deepseekharness.app.R;
 
@@ -40,13 +42,12 @@ public class DshaDialogBuilder extends AlertDialog.Builder {
     } else {
       customView = view;
     }
+    // Existing XML cards need the same finite height budget as generated cards.
+    if (customView != null) customView = constrainHeight(customView);
     return super.setView(customView);
   }
 
-  private View wrapInCard(View content) {
-    float density = context.getResources().getDisplayMetrics().density;
-    int inset = Math.round(16 * density);
-    int innerPadding = Math.round(20 * density);
+  private View constrainHeight(View content) {
     FrameLayout frame = new FrameLayout(context) {
       @Override
       protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
@@ -58,15 +59,48 @@ public class DshaDialogBuilder extends AlertDialog.Builder {
             View.MeasureSpec.makeMeasureSpec(maxHeight, View.MeasureSpec.AT_MOST));
       }
     };
+    frame.setClipChildren(false);
+    frame.setClipToPadding(false);
+    frame.addView(content, new FrameLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    return frame;
+  }
+
+  private View wrapInCard(View content) {
+    int inset = dp(context, 16);
+    int innerPadding = dp(context, 20);
+    FrameLayout frame = new FrameLayout(context);
+    frame.setClipChildren(false);
+    frame.setClipToPadding(false);
     frame.setPadding(inset, inset, inset, inset);
     ModernCardView card = new ModernCardView(context);
     card.setOrientation(ModernCardView.VERTICAL);
     card.setPadding(innerPadding, innerPadding, innerPadding, innerPadding);
+    // Plain forms (SSH password / pairing code) also need a scrollable body.
+    // Keep existing scroll containers intact instead of nesting a second one.
+    if (!containsScrollContainer(content)) {
+      NestedScrollView scroll = new NestedScrollView(context);
+      scroll.setFillViewport(false);
+      scroll.addView(content, new FrameLayout.LayoutParams(
+          ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+      content = scroll;
+    }
     card.addView(content, new android.widget.LinearLayout.LayoutParams(
-        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
     frame.addView(card, new FrameLayout.LayoutParams(
         ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
     return frame;
+  }
+
+  private static boolean containsScrollContainer(View view) {
+    if (view instanceof ScrollView || view instanceof NestedScrollView) return true;
+    if (view instanceof ViewGroup) {
+      ViewGroup group = (ViewGroup) view;
+      for (int i = 0; i < group.getChildCount(); i++) {
+        if (containsScrollContainer(group.getChildAt(i))) return true;
+      }
+    }
+    return false;
   }
 
   @Override
@@ -93,6 +127,9 @@ public class DshaDialogBuilder extends AlertDialog.Builder {
     if (window != null) {
       window.setWindowAnimations(R.style.Animation_DSHA_Dialog);
       if (isCustomView) {
+        window.setSoftInputMode(
+            (window.getAttributes().softInputMode & ~WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST)
+                | WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         window.setLayout(
             WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT);
