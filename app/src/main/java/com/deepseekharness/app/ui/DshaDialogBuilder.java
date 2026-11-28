@@ -9,7 +9,9 @@ import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.RippleDrawable;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.CompoundButton;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.view.Window;
 import android.view.WindowManager;
@@ -22,7 +24,11 @@ import androidx.core.widget.NestedScrollView;
 
 import com.deepseekharness.app.R;
 
-/** Common entry point for application dialogs: window shape, Monet accents and custom card views. */
+/**
+ * Common entry point for application dialogs: window shape, Monet accents and custom card views.
+ * Vertical cards use a heading, body and trailing action sections; bodies without an existing
+ * scroll container are made scrollable here so individual dialogs need no overflow workaround.
+ */
 public class DshaDialogBuilder extends AlertDialog.Builder {
 
   private final Context context;
@@ -42,8 +48,11 @@ public class DshaDialogBuilder extends AlertDialog.Builder {
     } else {
       customView = view;
     }
-    // Existing XML cards need the same finite height budget as generated cards.
-    if (customView != null) customView = constrainHeight(customView);
+    if (customView != null) {
+      prepareCardLayout(customView);
+      // Existing XML cards need the same finite height budget as generated cards.
+      customView = constrainHeight(customView);
+    }
     return super.setView(customView);
   }
 
@@ -90,6 +99,65 @@ public class DshaDialogBuilder extends AlertDialog.Builder {
     frame.addView(card, new FrameLayout.LayoutParams(
         ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
     return frame;
+  }
+
+  private void prepareCardLayout(View view) {
+    // Only unwrap the single-child inset frames around the outer dialog card.
+    // Never traverse forms, lists or an existing scrolling body for inner cards.
+    if (view instanceof ScrollView || view instanceof NestedScrollView) return;
+    if (view instanceof ModernCardView) {
+      prepareCardBody((ModernCardView) view);
+      return;
+    }
+    if (view instanceof FrameLayout) {
+      FrameLayout frame = (FrameLayout) view;
+      if (frame.getChildCount() == 1) prepareCardLayout(frame.getChildAt(0));
+    }
+  }
+
+  private void prepareCardBody(ModernCardView card) {
+    if (card.getOrientation() != LinearLayout.VERTICAL || containsScrollContainer(card)) return;
+
+    int actionStart = card.getChildCount();
+    while (actionStart > 0 && isActionSection(card.getChildAt(actionStart - 1))) {
+      actionStart--;
+    }
+    // App cards put their heading first and one or more action rows last.
+    // Cards without that structure (e.g. a loading indicator) stay unchanged.
+    if (actionStart == card.getChildCount() || actionStart < 2) return;
+
+    LinearLayout body = new LinearLayout(context);
+    body.setOrientation(LinearLayout.VERTICAL);
+    int bodyCount = actionStart - 1;
+    for (int i = 0; i < bodyCount; i++) {
+      View child = card.getChildAt(1);
+      ViewGroup.LayoutParams params = child.getLayoutParams();
+      card.removeViewAt(1);
+      body.addView(child, params);
+    }
+    NestedScrollView scroll = new NestedScrollView(context);
+    scroll.setFillViewport(false);
+    scroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
+    scroll.setVerticalScrollBarEnabled(true);
+    scroll.addView(body, new FrameLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    // wrap_content keeps short dialogs compact; weight lets long bodies shrink
+    // under the shared height limit while headings and actions retain their size.
+    card.addView(scroll, 1, new LinearLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+  }
+
+  private static boolean isActionSection(View view) {
+    // RadioButton/CheckBox are form fields despite inheriting from Button.
+    if (view instanceof CompoundButton) return false;
+    if (view instanceof Button) return true;
+    if (!(view instanceof LinearLayout)) return false;
+    LinearLayout group = (LinearLayout) view;
+    if (group.getChildCount() == 0) return false;
+    for (int i = 0; i < group.getChildCount(); i++) {
+      if (!isActionSection(group.getChildAt(i))) return false;
+    }
+    return true;
   }
 
   private static boolean containsScrollContainer(View view) {
